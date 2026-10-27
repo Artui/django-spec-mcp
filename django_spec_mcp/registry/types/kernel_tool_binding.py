@@ -94,6 +94,14 @@ class KernelToolBinding:
 
     Never the spec's own ``permissions``: those are the kernel's, and
     ``dispatch`` asks them itself."""
+    unguarded: bool = field(default=False, init=False)
+    """Whether a call runs the spec without a permission check.
+
+    Set only by the registrar, when it registers a spec declaring
+    ``permissions=None`` with ``REQUIRE_TOOL_PERMISSIONS`` off, so nothing can set
+    it at construction: a binding built by hand stays unmarked, and the kernel's
+    dispatch refuses its unguarded spec
+    (``test_a_handbuilt_unguarded_kernel_tool_is_never_called``)."""
 
     def __post_init__(self) -> None:
         # Each conjunct is held by a case of

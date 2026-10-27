@@ -36,7 +36,7 @@ def read_kernel_resource(
         result = dispatch(
             binding.spec,
             principal=principal,
-            grant=unguarded_grant(binding.spec, principal),
+            grant=unguarded_grant(binding, principal),
             arguments=coerce_flat(binding.spec.parameters(), variables),
             pool_seeds=context.pool_seeds,
             call_context=call_context(

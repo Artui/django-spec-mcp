@@ -83,18 +83,26 @@ def principal_of(user: Any) -> Any:
     return AnonymousUser() if user is None else user
 
 
-def unguarded_grant(spec: Any, principal: Any) -> Grant | None:
-    """The ``Grant`` an unguarded kernel spec is dispatched under, or ``None``.
+def unguarded_grant(binding: Any, principal: Any) -> Grant | None:
+    """The ``Grant`` an unguarded kernel binding is dispatched under, or ``None``.
 
-    A spec declaring ``permissions=None`` registers only with
-    ``REQUIRE_TOOL_PERMISSIONS`` off (``check_kernel_spec_guarded``), and is then
-    called without a permission check: the kernel's dispatch refuses such a
-    spec on its own, so the call carries a grant bound to this spec and
-    ``principal``, which must be the very principal the call dispatches with.
-    A guarded spec never gets one, so its checks always run
+    Only a binding the registrar marked ``unguarded`` gets one: ``register_tool``,
+    ``register_tools`` and ``register_resource`` mark a spec declaring
+    ``permissions=None`` when they register it with ``REQUIRE_TOOL_PERMISSIONS``
+    off (``check_kernel_spec_guarded``), and it is then called without a
+    permission check. The kernel's dispatch refuses such a spec on its own, so
+    the call carries a grant bound to this spec and ``principal``, which must be
+    the very principal the call dispatches with.
+
+    The mark is read rather than ``spec.permissions``, so a binding built by hand
+    and passed straight to ``server.tools.register`` or
+    ``server.resources.register`` never gets a grant, whatever the setting, and
+    the kernel refuses its unguarded spec at dispatch
+    (``test_a_handbuilt_unguarded_kernel_tool_is_never_called``). A guarded spec
+    is never marked, so its checks always run
     (``test_a_guarded_kernel_tool_still_refuses_with_the_setting_off``).
     """
-    return Grant(spec, principal) if spec.permissions is None else None
+    return Grant(binding.spec, principal) if binding.unguarded else None
 
 
 def carry_token(request: Any, token: Any) -> Any:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from django_service_specs import SelectorSpec
@@ -27,6 +27,14 @@ class KernelResourceBinding(ResourceBinding[Any]):
     spec: SelectorSpec
     scopes: tuple[str, ...] | None = None
     """See ``KernelToolBinding.scopes``."""
+    unguarded: bool = field(default=False, init=False)
+    """Whether a call runs the spec without a permission check.
+
+    Set only by the registrar, when it registers a spec declaring
+    ``permissions=None`` with ``REQUIRE_TOOL_PERMISSIONS`` off, so nothing can set
+    it at construction: a binding built by hand stays unmarked, and the kernel's
+    dispatch refuses its unguarded spec
+    (``test_a_handbuilt_unguarded_kernel_resource_is_never_read``)."""
 
 
 __all__ = ["KernelResourceBinding"]

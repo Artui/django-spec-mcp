@@ -810,9 +810,12 @@ class MCPServer:
         )
         # The spec's own permissions are the tool's guard; the scope gate on
         # ``binding.permissions`` is not one, so it is not what is counted.
-        check_kernel_spec_guarded(
+        if check_kernel_spec_guarded(
             binding.name, binding.spec, require=self._config.require_tool_permissions
-        )
+        ):
+            # Only this warning earns the spec its per-call grant; a binding
+            # passed straight to ``tools.register`` is never marked.
+            object.__setattr__(binding, "unguarded", True)
         check_tool_description_present(
             binding.name, binding.description, require=self._config.require_tool_descriptions
         )
@@ -1553,9 +1556,10 @@ class MCPServer:
         )
         check_completions_declared(f"Resource {name!r}", binding.completions, template_variables)
         # The spec's own permissions are the guard, as for ``register_tool``.
-        check_kernel_spec_guarded(
+        if check_kernel_spec_guarded(
             binding.name, spec, require=self._config.require_tool_permissions, kind="resource"
-        )
+        ):
+            object.__setattr__(binding, "unguarded", True)
         self._resources.register(binding)
         return binding
 

@@ -957,9 +957,13 @@ What changes against the drf-services tools:
   it off, the tool or resource registers with one `UnguardedToolWarning` and
   every call runs without a permission check, under a kernel `Grant` minted for
   that spec and the calling principal. A spec with permissions of its own is
-  never granted: its checks run whatever the setting says. An operation open to
-  every caller declares `[Unrestricted()]` instead. The scope gate does not
-  count as a guard.
+  never granted: its checks run whatever the setting says. Only the
+  registration methods grant: a `KernelToolBinding` or `KernelResourceBinding`
+  built by hand and passed to `server.tools.register` or
+  `server.resources.register` is never granted, whatever the setting, so the
+  kernel refuses its unguarded spec at the call and the operation does not run.
+  An operation open to every caller declares `[Unrestricted()]` instead. The
+  scope gate does not count as a guard.
 - **Registration refuses what a kernel tool cannot mean**: a spec that is not a
   kernel spec (`TypeError`), `paginate=` / `max_page_size=` on a service tool or
   a `RETRIEVE`, `invalidates=` on a selector tool, a `task_policy=` other than

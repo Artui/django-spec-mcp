@@ -59,7 +59,7 @@ async def run_kernel_tool_async(
         result = await adispatch(
             binding.spec,
             principal=principal,
-            grant=unguarded_grant(binding.spec, principal),
+            grant=unguarded_grant(binding, principal),
             arguments=dispatched,
             pool_seeds=context.pool_seeds,
             unknown_arguments=binding.unknown_arguments,
