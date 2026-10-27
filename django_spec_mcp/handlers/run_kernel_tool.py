@@ -44,8 +44,11 @@ def run_kernel_tool(
         arguments=arguments,
         config=context.config,
         conventions=context.conventions,
-        prior=prior,
-        context=context,
+        # A selector asks for nothing, as a drf-services selector does not: a
+        # request for input from one is a service error, not a round trip
+        # (``test_a_kernel_selector_ignores_a_round_trip``).
+        prior=None if binding.is_selector else prior,
+        context=None if binding.is_selector else context,
         span=otel_span,
     )
     try:

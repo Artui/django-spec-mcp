@@ -16,9 +16,9 @@ from django_spec_mcp.handlers.handle_tools_call import _forbidden, _render, _spa
 from django_spec_mcp.handlers.input_dispatch import (
     ask_for_input,
     refusal_result,
-    resolve_prior_input,
 )
 from django_spec_mcp.handlers.invalidation_dispatch import announce_invalidations_async
+from django_spec_mcp.handlers.resolve_call_input import resolve_call_input
 from django_spec_mcp.handlers.run_kernel_tool_async import run_kernel_tool_async
 from django_spec_mcp.handlers.runs_on_kernel import runs_on_kernel
 from django_spec_mcp.handlers.selector_tool_dispatch import (
@@ -176,7 +176,7 @@ async def _dispatch_tool_call_async(
         # See the sync sibling: a retry's answers become ordinary arguments
         # before anything else looks at them, and a declined one is answered
         # after the rate limit.
-        prior: ResolvedInput = resolve_prior_input(params, binding.name, arguments_raw, context)
+        prior: ResolvedInput = resolve_call_input(binding, params, arguments_raw, context)
         # See the sync sibling: applied again, since the merge takes any key.
         answered = apply_tool_server_arguments(binding, prior.arguments)
 
