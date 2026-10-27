@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from django_service_specs import UNSET, base_pool
 from rest_framework.exceptions import PermissionDenied
@@ -12,6 +12,8 @@ from django_spec_mcp._compat.utils import arun_selector_sync_safe
 from django_spec_mcp.auth.permissions.utils import DispatchShape
 from django_spec_mcp.handlers.guard_resource_object import guard_resource_object
 from django_spec_mcp.handlers.handle_tools_call import _span_attrs
+from django_spec_mcp.handlers.read_kernel_resource_async import read_kernel_resource_async
+from django_spec_mcp.handlers.runs_on_kernel import runs_on_kernel
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import (
     check_permissions,
@@ -24,6 +26,7 @@ from django_spec_mcp.handlers.utils import (
 from django_spec_mcp.output.build_resource_contents import build_resource_contents
 from django_spec_mcp.output.enforce_result_bytes import enforce_result_bytes
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 
 
@@ -93,6 +96,12 @@ async def handle_resources_read_async(
                 data={"retryAfter": retry_after},
             )
 
+        # A kernel resource reads through the kernel from here, the scope gate
+        # and the rate limits above having answered for it as for any other.
+        if runs_on_kernel(binding):
+            return await read_kernel_resource_async(
+                cast(KernelResourceBinding, binding), uri, vars_, context
+            )
         # See the sync sibling: URI-template variables ride on ``view.kwargs``,
         # and ``auth`` beside ``user`` keeps the caller.
         offline = shape.build(

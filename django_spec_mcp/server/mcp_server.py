@@ -24,12 +24,16 @@ from django_service_specs import (
     UnsetType,
     kernel_spec,
 )
+from django_service_specs import SelectorSpec as KernelSelectorSpec
+from django_service_specs import ServiceSpec as KernelServiceSpec
 from rest_framework.serializers import Serializer
 from rest_framework_services import ArgumentBinding, OfflineContract, PolymorphicServiceSpec
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 from rest_framework_services.types.validate_channel_names import validate_channel_names
 
+from django_spec_mcp.adapters.kernel_selector_to_resource import kernel_selector_to_resource
+from django_spec_mcp.adapters.kernel_spec_to_tool import kernel_spec_to_tool
 from django_spec_mcp.adapters.selector_to_resource import selector_to_resource
 from django_spec_mcp.adapters.selector_to_tool import selector_spec_to_tool
 from django_spec_mcp.adapters.service_to_tool import service_spec_to_tool
@@ -63,6 +67,8 @@ from django_spec_mcp.protocol.types.tool_result import ToolResult
 from django_spec_mcp.registry.prompt_registry import PromptRegistry
 from django_spec_mcp.registry.resource_registry import ResourceRegistry
 from django_spec_mcp.registry.tool_registry import ToolRegistry
+from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
+from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from django_spec_mcp.registry.types.prompt_binding import PromptBinding
 from django_spec_mcp.registry.types.query_param import QueryParam
 from django_spec_mcp.registry.types.resource_binding import ResourceBinding
@@ -642,6 +648,160 @@ class MCPServer:
         self._tools.register(binding)
         return binding
 
+    def register_tool(
+        self,
+        spec: KernelServiceSpec | KernelSelectorSpec,
+        *,
+        name: str,
+        description: str | None = None,
+        title: str | None = None,
+        icons: tuple[Icon, ...] = (),
+        annotations: dict[str, Any] | None = None,
+        meta: dict[str, Any] | None = None,
+        ui: UIToolMeta | None = None,
+        output_format: OutputFormat | str = OutputFormat.JSON,
+        content_kind: ToolContentKind = ToolContentKind.TEXT,
+        content_mime_type: str | None = None,
+        include_structured_content: bool | None = None,
+        include_output_schema: bool | None = None,
+        task_policy: TaskPolicy = TaskPolicy.FORBIDDEN,
+        invalidates: tuple[str, ...] | list[str] = (),
+        paginate: bool = False,
+        max_page_size: int | None | UnsetType = UNSET,
+        max_result_bytes: int | None | UnsetType = UNSET,
+        dispatch_timeout: float | None | UnsetType = UNSET,
+        always_listed: bool = False,
+        rate_limits: list[Any] | None = None,
+        scopes: tuple[str, ...] | None = None,
+        unknown_arguments: UnknownArguments = UnknownArguments.REJECT,
+        server_arguments: ServerArguments | None = None,
+    ) -> KernelToolBinding:
+        """Register a kernel spec as a tool: a ``ServiceSpec`` or a ``SelectorSpec``.
+
+        ``spec`` is a ``django_service_specs`` spec, and its class says which kind
+        of tool this is. A service tool's arguments are the spec's parameters at
+        the top level of ``arguments``, as the kernel's ``spec_input_schema``
+        advertises them; a selector tool reads, and a ``LIST`` one paginates
+        under ``paginate=True``. The call runs through the kernel's ``dispatch``
+        / ``adispatch``, which asks the spec's own ``permissions`` of the
+        principal the auth backend resolved for the request.
+
+        Anything that is not a kernel spec is refused with a ``TypeError``,
+        including a drf-services spec, which ``register_service_tool`` and
+        ``register_selector_tool`` take. A knob of the other kind of tool is
+        refused: ``paginate`` / ``max_page_size`` on a service tool,
+        ``invalidates`` on a selector tool.
+
+        ``scopes`` are the OAuth scopes the caller's token must carry, every one
+        of them; a token missing one is answered ``-32006`` with the missing
+        scopes in ``requiredScopes``. ``scopes=()`` is refused, since it would
+        read as a gate and admit every caller. The scope gate is a transport
+        check and does not count as the tool's guard for
+        ``REQUIRE_TOOL_PERMISSIONS``, which reads the spec's own
+        ``permissions``.
+
+        ``task_policy`` other than ``FORBIDDEN`` is refused: the task path does
+        not run a kernel spec yet. Every other knob means what it means on
+        ``register_service_tool`` / ``register_selector_tool``.
+
+        A refusal from ``dispatch`` is answered as the drf-services path answers
+        its counterpart: ``NotPermitted`` and ``PrincipalUnavailable`` as
+        ``-32006``, ``InvalidArguments``, ``ServiceValidationError`` and a bare
+        ``DispatchError`` as the ``validation_error`` result, an
+        ``AdditionalInputRequired`` as MRTR's ``input_required``, and any other
+        ``ServiceError`` as the ``service_error`` result.
+        """
+        ui_meta = build_ui_tool_meta(
+            name=name,
+            ui=ui,
+            meta=meta,
+            resources=self._resources,
+            include_structured_content=include_structured_content,
+            default_structured_content=self._config.include_structured_content,
+        )
+        binding = kernel_spec_to_tool(
+            spec,
+            name=name,
+            description=description,
+            title=title,
+            icons=icons,
+            annotations=annotations,
+            meta=merge_meta(ui_meta, meta),
+            output_format=OutputFormat.coerce(output_format),
+            content_kind=content_kind,
+            content_mime_type=content_mime_type,
+            include_structured_content=include_structured_content,
+            include_output_schema=include_output_schema,
+            task_policy=task_policy,
+            invalidates=tuple(invalidates),
+            paginate=paginate,
+            max_page_size=max_page_size,
+            max_result_bytes=max_result_bytes,
+            dispatch_timeout=dispatch_timeout,
+            always_listed=always_listed,
+            rate_limits=tuple(rate_limits or ()),
+            scopes=scopes,
+            unknown_arguments=unknown_arguments,
+            server_arguments=server_arguments,
+        )
+        # The spec's own permissions are the tool's guard; the scope gate on
+        # ``binding.permissions`` is not one, so it is not what is counted.
+        check_tool_permissions_declared(
+            binding.name,
+            () if binding.spec.permissions is None else tuple(binding.spec.permissions),
+            require=self._config.require_tool_permissions,
+        )
+        check_tool_description_present(
+            binding.name, binding.description, require=self._config.require_tool_descriptions
+        )
+        resolve_structured_output(
+            include_output_schema_override=binding.include_output_schema,
+            include_structured_content_override=binding.include_structured_content,
+            binding_name=binding.name,
+            default_output_schema=self._config.include_output_schema,
+            default_structured_content=self._config.include_structured_content,
+        )
+        self._tools.register(binding)
+        return binding
+
+    def register_tools(
+        self,
+        registry: SpecRegistry,
+        *,
+        overrides: Mapping[str, Mapping[str, Any]] | None = None,
+    ) -> tuple[KernelToolBinding, ...]:
+        """Register every kernel spec in a ``SpecRegistry`` as a tool, in order.
+
+        Each entry registers through ``register_tool`` under its registry name,
+        with the knobs ``overrides`` holds under that name, so an entry and a
+        direct ``register_tool`` of the same spec are the same tool. An
+        ``overrides`` key the registry does not hold raises ``ValueError``, as
+        a typo rather than a no-op, and an entry that is not a kernel
+        ``ServiceSpec`` or ``SelectorSpec`` is refused as ``register_tool``
+        refuses it.
+
+        Not to be confused with the module function
+        ``django_spec_mcp.registry.register_tools.register_tools``, which takes
+        ``ToolDefinition`` entries of drf-services specs.
+
+        Returns the bindings in registration order.
+        """
+        override_map = dict(overrides or {})
+        unknown = sorted(name for name in override_map if name not in registry)
+        if unknown:
+            raise ValueError(
+                f"overrides name specs not in this SpecRegistry: {unknown}. "
+                f"Registered names: {sorted(entry.name for entry in registry.all())}."
+            )
+        return tuple(
+            self.register_tool(
+                cast(KernelServiceSpec | KernelSelectorSpec, entry.spec),
+                name=entry.name,
+                **dict(override_map.get(entry.name, {})),
+            )
+            for entry in registry.all()
+        )
+
     def register_specs(
         self,
         registry: SpecRegistry,
@@ -1115,10 +1275,12 @@ class MCPServer:
 
     def register_resource(
         self,
+        spec: KernelSelectorSpec | None = None,
+        /,
         *,
         name: str,
         uri_template: str,
-        selector: SelectorSpec,
+        selector: SelectorSpec | None = None,
         description: str | None = None,
         title: str | None = None,
         icons: tuple[Icon, ...] = (),
@@ -1132,6 +1294,7 @@ class MCPServer:
         always_listed: bool = False,
         cache_ttl_ms: int | UnsetType = UNSET,
         completions: dict[str, Callable[..., Any]] | None = None,
+        scopes: tuple[str, ...] | None = None,
     ) -> ResourceBinding:
         """Register a ``SelectorSpec`` as an MCP resource.
 
@@ -1168,7 +1331,52 @@ class MCPServer:
         A resource with no permissions at all is refused for the same reason a
         tool is — see ``REQUIRE_TOOL_PERMISSIONS``. The same selector exposed
         as a resource is as reachable as it is exposed as a tool.
+
+        **A kernel spec, passed positionally**, takes the other form:
+        ``register_resource(spec, uri_template=..., name=...)`` with a
+        ``django_service_specs`` ``RETRIEVE`` ``SelectorSpec``. The read runs it
+        through the kernel's ``dispatch`` / ``adispatch``, with the
+        URI-template variables as its arguments, so the spec's ``reads`` name
+        them and its presenter renders the row. ``scopes`` gate it as they gate
+        ``register_tool``. The knobs of the ``selector=`` form that the spec
+        declares for itself, or that a presented row fixes (``selector``,
+        ``output_serializer``, ``permissions``, ``mime_type`` and
+        ``encoding``), are refused beside a positional spec, as ``scopes`` is
+        beside ``selector=``.
         """
+        if spec is not None:
+            return self._register_kernel_resource(
+                spec,
+                name=name,
+                uri_template=uri_template,
+                description=description,
+                title=title,
+                icons=icons,
+                rate_limits=rate_limits,
+                annotations=annotations,
+                meta=meta,
+                always_listed=always_listed,
+                cache_ttl_ms=cache_ttl_ms,
+                completions=completions,
+                scopes=scopes,
+                drf_services_knobs={
+                    "selector": selector is not None,
+                    "output_serializer": output_serializer is not None,
+                    "permissions": permissions is not None,
+                    "mime_type": mime_type != "application/json",
+                    "encoding": encoding is not ResourceEncoding.JSON,
+                },
+            )
+        if selector is None:
+            raise TypeError(
+                f"Resource {name!r}: register_resource takes a kernel SelectorSpec "
+                "positionally or a drf-services one as selector=; it was given neither."
+            )
+        if scopes is not None:
+            raise TypeError(
+                f"Resource {name!r}: scopes= belongs to the kernel form, "
+                "register_resource(spec, ...); the selector= form takes permissions=."
+            )
         binding = selector_to_resource(
             name=name,
             uri_template=uri_template,
@@ -1209,6 +1417,69 @@ class MCPServer:
         check_tool_permissions_declared(
             binding.name,
             binding.permissions,
+            require=self._config.require_tool_permissions,
+            kind="resource",
+        )
+        self._resources.register(binding)
+        return binding
+
+    def _register_kernel_resource(
+        self,
+        spec: KernelSelectorSpec,
+        *,
+        name: str,
+        uri_template: str,
+        description: str | None,
+        title: str | None,
+        icons: tuple[Icon, ...],
+        rate_limits: list[Any] | None,
+        annotations: dict[str, Any] | None,
+        meta: dict[str, Any] | None,
+        always_listed: bool,
+        cache_ttl_ms: int | UnsetType,
+        completions: dict[str, Callable[..., Any]] | None,
+        scopes: tuple[str, ...] | None,
+        drf_services_knobs: Mapping[str, bool],
+    ) -> KernelResourceBinding:
+        """``register_resource``'s kernel form, past the split on its first argument.
+
+        ``drf_services_knobs`` says, per knob of the ``selector=`` form, whether
+        the call passed it, and each one passed is named in the refusal.
+        """
+        passed = sorted(knob for knob, given in drf_services_knobs.items() if given)
+        if passed:
+            raise TypeError(
+                f"Resource {name!r}: {', '.join(passed)} belong to the selector= form of "
+                "register_resource; a kernel SelectorSpec declares its own selector, "
+                "presenter and permissions."
+            )
+        binding = kernel_selector_to_resource(
+            spec,
+            name=name,
+            uri_template=uri_template,
+            description=description,
+            title=title,
+            icons=icons,
+            rate_limits=tuple(rate_limits or ()),
+            annotations=annotations,
+            meta=merge_meta(meta),
+            always_listed=always_listed,
+            cache_ttl_ms=cache_ttl_ms,
+            completions=completions,
+            scopes=scopes,
+        )
+        template_variables: tuple[str, ...] = _template_variables(uri_template)
+        validate_channel_names(
+            label=f"Resource {name!r}",
+            kind="uri_template variable",
+            declarations=tuple(UrlKwarg(name=variable) for variable in template_variables),
+            reserved=self._pool_seeds.names | RESOURCE_EDGE_SEEDS,
+        )
+        check_completions_declared(f"Resource {name!r}", binding.completions, template_variables)
+        # The spec's own permissions are the guard, as for ``register_tool``.
+        check_tool_permissions_declared(
+            binding.name,
+            () if spec.permissions is None else tuple(spec.permissions),
             require=self._config.require_tool_permissions,
             kind="resource",
         )

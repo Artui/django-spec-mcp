@@ -22,7 +22,7 @@ filtering ``dispatch_spec`` already applies.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from django_service_specs import (
     DEFAULT_POOL_SEEDS,
@@ -40,6 +40,8 @@ from rest_framework_services import (
 
 from django_spec_mcp.adapters.utils import _overlaid_field_names
 from django_spec_mcp.config.types.mcp_config import MCPConfig
+from django_spec_mcp.handlers.call_kernel_tool import call_kernel_tool
+from django_spec_mcp.handlers.runs_on_kernel import runs_on_kernel
 from django_spec_mcp.handlers.selector_tool_dispatch import enforce_object_permissions
 from django_spec_mcp.handlers.utils import (
     apply_tool_server_arguments,
@@ -55,6 +57,7 @@ from django_spec_mcp.output.error_tool_result import build_error_tool_result
 from django_spec_mcp.output.resolve_structured_output import resolve_structured_output
 from django_spec_mcp.output.tool_result import build_tool_result
 from django_spec_mcp.protocol.types.tool_result import ToolResult
+from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
 from django_spec_mcp.registry.types.tool_binding import ToolBinding
 from django_spec_mcp.schema.types.agent_conventions import AgentConventions
@@ -62,7 +65,7 @@ from django_spec_mcp.types.reserved_post_fetch_keys import RESERVED_POST_FETCH_K
 
 
 def call_spec_tool(
-    binding: ToolBinding | SelectorToolBinding,
+    binding: ToolBinding | SelectorToolBinding | KernelToolBinding,
     arguments: dict[str, Any],
     *,
     user: Any,
@@ -95,6 +98,19 @@ def call_spec_tool(
     # The binding's ``server_arguments`` in place before anything below reads
     # the arguments, as on the wire (``apply_tool_server_arguments``).
     arguments = apply_tool_server_arguments(binding, arguments)
+    # A kernel binding dispatches through the kernel from here, the server
+    # arguments being the one step both paths share.
+    if runs_on_kernel(binding):
+        return call_kernel_tool(
+            cast(KernelToolBinding, binding),
+            arguments,
+            user=user,
+            request=request,
+            config=config,
+            conventions=conventions,
+            pool_seeds=pool_seeds,
+        )
+    binding = cast(ToolBinding | SelectorToolBinding, binding)
     spec = binding.spec
     # The request and view the call runs with, from the shape the wire builds
     # its own from, so ``request.data`` holds neither a URL kwarg nor a

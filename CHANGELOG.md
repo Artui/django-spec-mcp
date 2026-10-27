@@ -11,6 +11,24 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+### Added
+
+- **Kernel specs register as tools and resources.** `MCPServer.register_tool(spec, *, name, ...)`
+  takes a `django_service_specs` `ServiceSpec` or `SelectorSpec`, and the spec's
+  class decides whether it is a service tool or a selector tool;
+  `MCPServer.register_tools(registry, *, overrides=)` registers every entry of a
+  kernel `SpecRegistry`; and `register_resource` takes a `RETRIEVE` spec
+  positionally, beside its `selector=` form. The call runs through the kernel's
+  `dispatch` / `adispatch` with the token's user as the principal and the request,
+  carrying the token as `request.mcp_token`, in `call_context`; the advertised
+  schemas are the kernel's, so a service tool's arguments sit at the top level
+  with no `data` key. Each kernel refusal is answered as the drf-services path
+  answers its counterpart. `scopes=` gates a tool or resource on every scope it
+  names, answering `-32006` with `requiredScopes`. Registration refuses a spec
+  that is not a kernel spec, a knob of the other kind of tool, `scopes=()`,
+  `UnknownArguments.PASSTHROUGH` and, for now, any `task_policy` but the default.
+  The drf-services registration methods are unchanged.
+
 ### Changed
 
 - **`django-service-specs` 0.18.0 is the floor.** Its root holds every kernel name

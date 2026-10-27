@@ -19,6 +19,8 @@ from django_spec_mcp.handlers.input_dispatch import (
     resolve_prior_input,
 )
 from django_spec_mcp.handlers.invalidation_dispatch import announce_invalidations_async
+from django_spec_mcp.handlers.run_kernel_tool_async import run_kernel_tool_async
+from django_spec_mcp.handlers.runs_on_kernel import runs_on_kernel
 from django_spec_mcp.handlers.selector_tool_dispatch import (
     dispatch_selector_tool_async,
     enforce_object_permissions,
@@ -225,7 +227,14 @@ async def _run_service_tool_async(
     context: MCPCallContext,
     otel_span: Any,
 ) -> dict[str, Any] | JsonRpcError:
-    """Async sibling of ``handle_tools_call._run_service_tool``."""
+    """Async sibling of ``handle_tools_call._run_service_tool``.
+
+    A kernel binding leaves for ``run_kernel_tool_async``, as in the sync sibling.
+    """
+    if runs_on_kernel(binding):
+        return await run_kernel_tool_async(
+            binding, params, arguments_raw, prior, context, otel_span
+        )
     # See the sync sibling: URL kwargs route through the view, not the params,
     # and the split runs inside the ``try`` so a missing ``required=True``
     # kwarg reaches the ``isError`` mapping instead of escaping.

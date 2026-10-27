@@ -23,3 +23,20 @@ def get_invoice(*, pk: int) -> Invoice:
 def list_invoices() -> list[Invoice]:
     """Return every invoice."""
     return list(Invoice.objects.all())
+
+
+def record_invoice(*, number: str, amount_cents: int = 0) -> Invoice:
+    """Create an invoice from the validated values the kernel passes by name.
+
+    The kernel twin of ``create_invoice``: a kernel service receives each
+    validated value as its own keyword rather than one ``data`` mapping.
+    """
+    return Invoice.objects.create(number=number, amount_cents=amount_cents)
+
+
+def invoice_by_pk(*, pk: int) -> Invoice | None:
+    """Return the invoice ``pk`` names, or ``None``, which the kernel reports as not found.
+
+    The kernel twin of ``get_invoice``, which raises a ``ServiceError`` instead.
+    """
+    return Invoice.objects.filter(pk=pk).first()
