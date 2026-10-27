@@ -29,11 +29,14 @@ from collections.abc import Iterable
 from typing import Any
 
 from django_service_specs import Affordance, base_pool, operation_affordances
+from django_service_specs import unmet_operation_affordance as kernel_unmet_affordance
 from rest_framework_services import build_offline_context, unmet_operation_affordance
 from rest_framework_services.types.service_spec import ServiceSpec
 
+from django_spec_mcp.handlers.kernel_utils import call_context, carry_token, principal_of
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.registry.tool_registry import ToolBindingLike
+from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 
 
 def offered_tools(
@@ -90,19 +93,50 @@ def _answer(
     **One pool per pass, built only when first needed.** Most tools declare no
     condition, so a pass over them builds nothing; the first binding that does
     builds the pool every later one is asked against, since the seeds are the
-    same for every tool in one request.
+    same for every tool in one request. A kernel tool's pool is built apart,
+    because its call builds a different one (``_kernel_unmet``).
     """
     pool: dict[str, Any] | None = None
+    kernel_pool: dict[str, Any] | None = None
     answers: list[tuple[ToolBindingLike, Affordance | None]] = []
     for binding in bindings:
-        gating: tuple[ServiceSpec[Any, Any, Any], ...] = _asked_specs(binding)
+        gating: tuple[Any, ...] = _asked_specs(binding)
         if not gating:
             answers.append((binding, None))
+            continue
+        if isinstance(binding, KernelToolBinding):
+            if kernel_pool is None:
+                kernel_pool = base_pool(
+                    user=principal_of(context.token.user), seeds=context.pool_seeds
+                )
+            answers.append((binding, _kernel_unmet(binding, kernel_pool, context)))
             continue
         if pool is None:
             pool = _list_time_pool(context)
         answers.append((binding, _first_unmet(gating, pool, context.pool_seeds.reserved)))
-    return answers, pool is not None
+    return answers, pool is not None or kernel_pool is not None
+
+
+def _kernel_unmet(
+    binding: KernelToolBinding, pool: dict[str, Any], context: MCPCallContext
+) -> Affordance | None:
+    """The first unmet operation condition of a kernel tool, asked as its call asks it.
+
+    A kernel condition has no ``request`` seed: it reads the call's
+    ``call_context``, which the call builds per tool, with the transport's
+    request carrying the token and the tool's name as ``action``. So the
+    shared pool is the kernel's ``base_pool`` for the principal the call
+    dispatches with, and each tool's own context is handed beside it, as the
+    kernel's ``unmet_operation_affordance`` takes it. Handed the drf-services
+    pool instead, a condition reading ``call_context["request"]`` raised at
+    list time (``test_the_condition_sees_the_context_and_user_a_call_would``).
+    """
+    return kernel_unmet_affordance(
+        binding.spec,
+        pool,
+        reserved=context.pool_seeds.reserved,
+        call_context=call_context(carry_token(context.http_request, context.token), binding.name),
+    )
 
 
 def _asked_specs(binding: ToolBindingLike) -> tuple[ServiceSpec[Any, Any, Any], ...]:
