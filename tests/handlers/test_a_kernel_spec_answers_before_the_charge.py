@@ -11,9 +11,7 @@ grant, so the checks are asked once.
 
 Asked here of every kernel route that charges or creates work: ``tools/call``
 on both handlers and in process, a task-shaped tool, ``resources/read`` on both
-handlers, and what a check reading ``arguments`` sees. The xfails this
-replaced, in ``test_missing_required_argument.py`` and the two
-``test_an_answer_is_judged_on_*`` files, now pass there.
+handlers, and what a check reading ``arguments`` sees.
 """
 
 from __future__ import annotations
@@ -357,14 +355,16 @@ async def test_a_caller_the_spec_refuses_gets_no_task(is_async: bool) -> None:
 
 @_ASYNC
 async def test_a_caller_the_spec_admits_gets_a_task(is_async: bool) -> None:
+    check = _Counted(admits=True)
     limit = _CountingLimit()
-    server, executor = _task_server(_Counted(admits=True), limit)
+    server, executor = _task_server(check, limit)
 
     out = await _call(server, {"pk": 1}, is_async=is_async, declares_tasks=True)
 
     assert out["resultType"] == "task", out
     assert len(executor.enqueued) == 1
     assert limit.consumed == 1
+    assert check.asked == 1
 
 
 # ---------- resources/read ----------
