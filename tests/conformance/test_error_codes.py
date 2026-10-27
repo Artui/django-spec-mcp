@@ -30,6 +30,9 @@ from tests.testapp.urlconf_for import urlconf_for
 pytestmark = pytest.mark.django_db(transaction=True)
 
 
+# Changed by design: the original's denial was DRF's ``IsAuthenticated`` on a
+# drf-services spec, asserted only as "not -32002" with an HTTP 403; this is a
+# kernel ``PermissionCheck``, whose ``NotPermitted`` the wire maps to -32006.
 class _IsAuthenticated(PermissionCheck):
     def has_permission(self, principal: Any, spec: Any) -> bool:
         return bool(principal.is_authenticated)

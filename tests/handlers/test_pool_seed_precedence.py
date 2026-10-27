@@ -222,6 +222,11 @@ def test_a_uri_template_variable_named_user_cannot_replace_the_caller(read: Any)
     """The kernel's argument check refuses ``user`` as undeclared, and a refusal
     with no JSON-RPC answer is raised on to the transport's internal error, so the
     selector never runs under the name the URI carried."""
+    # Changed by design: the original ran the selector with the caller's own
+    # ``user`` and the URI's value dropped. The kernel declares no such read, so
+    # the argument check refuses the hand-built binding outright: the outcome
+    # that matters, that the selector never runs under the URI's name, holds
+    # either way, and an error is the louder way to hold it.
     ran.clear()
     with pytest.raises(InvalidArguments) as refused:
         read({"uri": "notes://victim/1"}, _ctx(_server(), resources=_handbuilt_notes()))

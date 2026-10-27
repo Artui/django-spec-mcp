@@ -214,10 +214,14 @@ def bound_unpaginated_rows(
 
     One row past the ceiling is read, so "exactly at the ceiling" is told from
     "over it", and read as a **slice**, so a QuerySet bounds the fetch in SQL
-    and its result cache is what the presenter then iterates
     (``test_the_ceiling_bounds_the_fetch_and_not_just_the_payload``). That is
     the point of doing this before presenting rather than leaning on the byte
     ceiling, which measures a payload already fetched and presented in full.
+    Under the ceiling the window itself is what the presenter then iterates: a
+    QuerySet's slice has its result cache filled, so the table is read once
+    (``test_a_queryset_under_the_ceiling_is_read_once``), and a generator the
+    window read has spent is served from the window, not as empty
+    (``test_a_generator_under_the_ceiling_is_served_whole``).
     Synchronous, because the slice runs the query; the async caller runs it off
     the event loop.
 

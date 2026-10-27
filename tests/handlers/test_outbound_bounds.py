@@ -207,6 +207,52 @@ def test_the_ceiling_bounds_the_fetch_and_not_just_the_payload(
 
 
 @pytest.mark.django_db
+def test_a_queryset_under_the_ceiling_is_read_once(django_assert_num_queries: Any) -> None:
+    """Under the ceiling the window read to tell "over" from "at" is what gets
+    presented: handing the QuerySet back instead would read the table a second time."""
+    _seed(2)
+    server = _server()
+    _register(server)
+    with django_assert_num_queries(1):
+        out = _call(server, {}, build_mcp_config(max_page_size=5))
+    assert [row["number"] for row in out["structuredContent"]] == ["INV-0", "INV-1"]
+
+
+def test_a_generator_under_the_ceiling_is_served_whole() -> None:
+    """A generator is spent by the window read, so the rows served must be the
+    window itself: handing the generator back would present an empty result."""
+    server = _server()
+    _register(
+        server,
+        SelectorSpec(
+            kind=SelectorKind.LIST, selector=lambda: (row for row in _rows()), permissions=OPEN
+        ),
+    )
+    out = _call(server, {}, build_mcp_config(max_page_size=10))
+    assert out["structuredContent"] == _rows()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("binding", "server_bound", "served"),
+    [(10, 2, 5), (2, 100, None)],
+    ids=["binding-raises-the-ceiling", "binding-lowers-the-ceiling"],
+)
+def test_the_binding_max_page_size_overrides_the_servers_on_an_unpaginated_list(
+    binding: int, server_bound: int, served: int | None
+) -> None:
+    """The row ceiling is the binding's ``max_page_size``, deferring to the server's."""
+    _seed(5)
+    server = _server()
+    _register(server, max_page_size=binding)
+    out = _call(server, {}, build_mcp_config(max_page_size=server_bound))
+    if served is None:
+        assert f"{binding} row ceiling" in tool_error(out)["message"]
+    else:
+        assert len(out["structuredContent"]) == served
+
+
+@pytest.mark.django_db
 @pytest.mark.parametrize(
     ("binding", "server_bound"), [(None, 2), (UNSET, None)], ids=["binding-none", "server-none"]
 )
@@ -223,11 +269,19 @@ def test_a_disabled_ceiling_serves_an_unpaginated_list_whole(
 @pytest.mark.django_db
 @pytest.mark.parametrize(
     "selector",
-    [_rows, lambda: Invoice.objects, lambda: (row for row in _rows())],
-    ids=["sequence", "manager", "generator"],
+    [
+        _rows,
+        lambda: Invoice.objects,
+        lambda: (row for row in _rows()),
+        lambda: {"a": 1, "b": 2, "c": 3},
+        lambda: "abcdef",
+    ],
+    ids=["sequence", "manager", "generator", "mapping", "string"],
 )
 def test_any_list_result_is_bounded_by_the_same_ceiling(selector: Any) -> None:
-    """A plain sequence, a generator and a Manager are bounded as a QuerySet is."""
+    """A plain sequence, a generator, a Manager, a mapping and a string are bounded
+    as a QuerySet is: the kernel presents a ``LIST`` by iterating whatever the
+    selector returned, so a mapping counts its keys and a string its characters."""
     _seed(3)
     server = _server()
     _register(server, SelectorSpec(kind=SelectorKind.LIST, selector=selector, permissions=OPEN))

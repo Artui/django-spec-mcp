@@ -243,6 +243,9 @@ def test_a_service_error_becomes_a_tool_error() -> None:
 
 
 def test_a_spec_permission_denial_propagates() -> None:
+    # Changed by design: the original raised DRF's ``PermissionDenied``; a kernel
+    # check refuses with the kernel's ``NotPermitted``, which the wire maps to its
+    # own code. Both are a fault the caller maps, and neither is a tool result.
     server = _server()
     server.register_tool(
         ServiceSpec(service=lambda: {}, permissions=[_DenyAll()], atomic=False), name="t.create"
