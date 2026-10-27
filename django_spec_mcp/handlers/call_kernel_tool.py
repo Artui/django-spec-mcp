@@ -51,7 +51,7 @@ def call_kernel_tool(
         result = dispatch(
             binding.spec,
             principal=principal,
-            grant=unguarded_grant(binding, principal),
+            grant=unguarded_grant(binding, principal, config),
             arguments=dispatched,
             pool_seeds=pool_seeds,
             unknown_arguments=binding.unknown_arguments,

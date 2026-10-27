@@ -83,7 +83,7 @@ def principal_of(user: Any) -> Any:
     return AnonymousUser() if user is None else user
 
 
-def unguarded_grant(binding: Any, principal: Any) -> Grant | None:
+def unguarded_grant(binding: Any, principal: Any, config: MCPConfig) -> Grant | None:
     """The ``Grant`` an unguarded kernel binding is dispatched under, or ``None``.
 
     Only a binding the registrar marked ``unguarded`` gets one: ``register_tool``
@@ -103,8 +103,15 @@ def unguarded_grant(binding: Any, principal: Any) -> Grant | None:
     (``test_a_handbuilt_unguarded_kernel_tool_is_never_called``). A guarded spec
     is never marked, so its checks always run
     (``test_a_guarded_kernel_tool_still_refuses_with_the_setting_off``).
+
+    The setting is read again at the call, from the server answering it: a
+    binding one server marked and another server, with the setting on, holds
+    in its registry is not granted there
+    (``test_a_marked_binding_is_not_granted_by_a_server_with_the_setting_on``).
     """
-    return Grant(binding.spec, principal) if binding.unguarded else None
+    if binding.unguarded and not config.require_tool_permissions:
+        return Grant(binding.spec, principal)
+    return None
 
 
 def carry_token(request: Any, token: Any) -> Any:

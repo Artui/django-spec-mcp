@@ -27,6 +27,8 @@ from django_service_specs import (
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
+from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
+from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from django_spec_mcp.server.utils import UnguardedToolWarning
 from tests.kernel_client import KernelClient
 from tests.testapp.auth_backend import HeaderAuthBackend
@@ -143,4 +145,47 @@ def test_the_setting_on_refuses_an_unguarded_kernel_spec(kind: str) -> None:
                 SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda: None),
                 name="open.read",
                 uri_template="open://",
+            )
+
+
+def test_a_marked_binding_is_not_granted_by_a_server_with_the_setting_on(client: Client) -> None:
+    ran: list[bool] = []
+    lenient = _server(require=False)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UnguardedToolWarning)
+        marked = lenient.register_tool(
+            ServiceSpec(service=lambda: ran.append(True)), name="open.write", description="Write."
+        )
+    assert marked.unguarded is True
+    strict = _server(require=True)
+    strict.tools.register(marked)
+    with pytest.raises(ImproperlyConfigured, match="declares no permissions"):
+        strict.call_tool("open.write", {}, user=None)
+    with override_settings(ROOT_URLCONF=urlconf_for(strict, is_async=False)):
+        kernel = KernelClient(client)
+        kernel.initialize()
+        assert kernel.call("open.write")["error"]["code"] == -32603
+    assert ran == []
+
+
+@pytest.mark.parametrize("kind", ["tool", "resource"])
+def test_the_unguarded_mark_cannot_be_set_at_construction(kind: str) -> None:
+    with pytest.raises(TypeError, match="unexpected keyword argument 'unguarded'"):
+        if kind == "tool":
+            KernelToolBinding(
+                name="open.write",
+                description="Write.",
+                spec=ServiceSpec(service=lambda: None),
+                **{"unguarded": True},
+            )
+        else:
+            spec = SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda: None)
+            KernelResourceBinding(
+                name="open.read",
+                uri_template="open://",
+                description="Read.",
+                selector=spec.selector,
+                kind=SelectorKind.RETRIEVE,
+                spec=spec,
+                **{"unguarded": True},
             )
