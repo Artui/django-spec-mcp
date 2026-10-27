@@ -155,8 +155,11 @@ def test_the_spec_reads_the_token_off_its_request(mount: None, client: Client) -
         ({"page": "3", "limit": "2"}, 3, [{"n": 4}]),
         ({"page": True, "limit": "lots"}, 1, [{"n": 0}, {"n": 1}]),
         ({"page": None}, 1, [{"n": 0}, {"n": 1}]),
+        # ``True`` is an ``int``: read as one, it would be a limit of 1 and
+        # five pages.
+        ({"page": 2, "limit": True}, 2, [{"n": 2}, {"n": 3}]),
     ],
-    ids=["ints", "numeric-strings", "unreadable", "absent"],
+    ids=["ints", "numeric-strings", "unreadable", "absent", "bool-limit"],
 )
 def test_a_paginated_tool_serves_one_clamped_page(
     mount: None, client: Client, arguments: dict[str, Any], page: int, items: list[Any]
@@ -353,3 +356,17 @@ def test_required_scopes_lists_every_declared_scope(client: Client) -> None:
     with override_settings(ROOT_URLCONF=urlconf_for(server)):
         body = _caller(client, scopes="read").call("pair")
     assert body["error"]["data"] == {"requiredScopes": ["read", "write"]}
+
+
+def test_a_kernel_resource_serves_its_meta(client: Client) -> None:
+    server = MCPServer(name="t", auth_backend=HeaderAuthBackend())
+    server.register_resource(
+        SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda: {"ok": 1}, permissions=OPEN),
+        name="flagged",
+        uri_template="flagged://",
+        meta={"example.com/tier": "gold"},
+    )
+    with override_settings(ROOT_URLCONF=urlconf_for(server)):
+        read = _caller(client).post("resources/read", {"uri": "flagged://"}).json()
+    (contents,) = read["result"]["contents"]
+    assert contents["_meta"] == {"example.com/tier": "gold"}

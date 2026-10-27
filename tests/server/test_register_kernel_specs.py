@@ -273,3 +273,36 @@ def test_a_bare_string_scope_is_one_scope() -> None:
         ["billing"],
         ["billing"],
     ]
+
+
+def test_a_guarded_kernel_spec_registers_under_require_tool_permissions() -> None:
+    """The spec's own permissions are what the guard check reads: a guarded
+    tool and resource are accepted, unguarded ones refused."""
+    server = _server(require_tool_permissions=True)
+    assert server.register_tool(_service(), name="guarded").name == "guarded"
+    assert (
+        server.register_resource(
+            _selector(SelectorKind.RETRIEVE), name="guarded", uri_template="g://{pk}"
+        ).name
+        == "guarded"
+    )
+    with pytest.raises(ImproperlyConfigured, match="registered with no permissions"):
+        server.register_resource(
+            SelectorSpec(
+                kind=SelectorKind.RETRIEVE,
+                selector=invoice_by_pk,
+                reads=Parameters([Parameter("pk", "integer", required=True)]),
+            ),
+            name="unguarded",
+            uri_template="u://{pk}",
+        )
+
+
+def test_a_kernel_resource_refuses_a_completion_for_no_variable() -> None:
+    with pytest.raises(ImproperlyConfigured, match="completions name argument"):
+        _server().register_resource(
+            _selector(SelectorKind.RETRIEVE),
+            name="r",
+            uri_template="r://{pk}",
+            completions={"nope": lambda value: ["1"]},
+        )
