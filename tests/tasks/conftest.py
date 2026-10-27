@@ -2,6 +2,10 @@
 
 The executors here are the point of the seam: neither imports a queue, and the
 package never learns which one it got.
+
+The ``server`` fixture and ``slow_service`` are drf-services', since every tool on
+that server carries a ``task_policy`` a kernel spec does not take yet. They live
+in ``fixtures_drfs.py`` until the deletion and are re-exported here.
 """
 
 from __future__ import annotations
@@ -9,15 +13,13 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from rest_framework_services.types.service_spec import ServiceSpec
 
-from django_spec_mcp import MCPServer, TaskPolicy
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
-from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
+from tests.tasks.fixtures_drfs import server, slow_service
 
 
 class RecordingExecutor:
@@ -48,10 +50,6 @@ class BrokenExecutor:
         raise RuntimeError("broker unreachable")
 
 
-def slow_service(**_: Any) -> dict[str, str]:
-    return {"done": "yes"}
-
-
 @pytest.fixture
 def store() -> InMemoryTaskStore:
     return InMemoryTaskStore()
@@ -60,29 +58,6 @@ def store() -> InMemoryTaskStore:
 @pytest.fixture
 def executor(store: InMemoryTaskStore) -> RecordingExecutor:
     return RecordingExecutor(store)
-
-
-@pytest.fixture
-def server(store: InMemoryTaskStore, executor: RecordingExecutor) -> MCPServer:
-    built = MCPServer(
-        name="tasks-fixture",
-        auth_backend=AllowAnyBackend(),
-        session_store=InMemorySessionStore(),
-        task_store=store,
-        task_executor=executor,
-    )
-    for name, policy in (
-        ("tasks.optional", TaskPolicy.OPTIONAL),
-        ("tasks.required", TaskPolicy.REQUIRED),
-        ("tasks.inline", TaskPolicy.FORBIDDEN),
-    ):
-        built.register_service_tool(
-            name=name,
-            description="x",
-            spec=ServiceSpec(service=slow_service, atomic=False),
-            task_policy=policy,
-        )
-    return built
 
 
 def context(
@@ -112,3 +87,14 @@ def context(
         task_executor=server.task_executor,
         config=server._config,
     )
+
+
+__all__ = [
+    "BrokenExecutor",
+    "RecordingExecutor",
+    "context",
+    "executor",
+    "server",
+    "slow_service",
+    "store",
+]
