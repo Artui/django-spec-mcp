@@ -29,6 +29,7 @@ from django_service_specs import (
     PermissionCheck,
     SelectorKind,
     SelectorSpec,
+    ServiceNotFound,
     Unrestricted,
 )
 
@@ -38,6 +39,7 @@ from django_spec_mcp.auth.permissions.types.mcp_permission import MCPPermission
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_completion_complete import handle_completion_complete
 from django_spec_mcp.handlers.handle_initialize import handle_initialize
+from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
@@ -378,6 +380,31 @@ def test_a_kernel_resources_scope_gate_answers_before_its_spec() -> None:
     assert result.code == -32006
     assert result.data == {"requiredScopes": ["invoices:read"]}
     assert check.asked == 0
+
+
+class _RaisesNotFound(PermissionCheck):
+    """A kernel check that answers by raising a ``ServiceError``, as one may."""
+
+    def has_permission(self, principal: Any, spec: Any) -> bool:
+        raise ServiceNotFound("no such tenant")
+
+
+def test_a_check_raising_a_service_error_fails_the_completion_as_the_read() -> None:
+    # ``authorize`` lets a check's ``ServiceError`` through, and the read
+    # raises it on to the transport's internal error; the completion does the
+    # same rather than answering with a refusal the read would not give.
+    server = _server()
+    server.register_resource(
+        _invoice(_RaisesNotFound()),
+        name="invoice",
+        uri_template="invoices://{pk}",
+        completions={"pk": lambda: ["1"]},
+    )
+
+    with pytest.raises(ServiceNotFound):
+        _complete(server, _INVOICE_PK)
+    with pytest.raises(ServiceNotFound):
+        handle_resources_read({"uri": "invoices://1"}, _ctx(server))
 
 
 def test_a_kernel_resource_admitting_the_caller_completes() -> None:

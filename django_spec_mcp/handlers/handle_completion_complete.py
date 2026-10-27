@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from itertools import islice
 from typing import Any
 
-from django_service_specs import RESERVED_POOL_SEEDS, DispatchError, ServiceError, authorize
+from django_service_specs import RESERVED_POOL_SEEDS, DispatchError, authorize
 from rest_framework_services import build_offline_context, resolve_callable_kwargs
 from rest_framework_services.dispatch.utils import DROPPED_EDGE_SEEDS
 
@@ -264,7 +264,10 @@ def _refused_by_the_spec(target: _CompletionTarget, context: MCPCallContext) -> 
             ),
             pool_seeds=context.pool_seeds,
         )
-    except (DispatchError, ServiceError) as exc:
+    # ``DispatchError`` alone: a ``ServiceError`` a check raises leaves
+    # ``authorize`` and propagates, as ``resource_refusal`` re-raises it on the
+    # read (test_a_check_raising_a_service_error_fails_the_completion_as_the_read).
+    except DispatchError as exc:
         return resource_refusal(
             exc,
             KernelRefusalScene(

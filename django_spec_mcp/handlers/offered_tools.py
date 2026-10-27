@@ -114,6 +114,10 @@ def _answer(
         if pool is None:
             pool = _list_time_pool(context)
         answers.append((binding, _first_unmet(gating, pool, context.pool_seeds.reserved)))
+    # A pool is built only for a binding that asks a condition, so either one
+    # built means the listing is this caller's: the drfs half is held by
+    # test_offered_tools_drfs.py::test_a_listing_that_asked_a_condition_is_private,
+    # the kernel half by test_offered_tools.py's test of the same name.
     return answers, pool is not None or kernel_pool is not None
 
 

@@ -14,7 +14,7 @@ a seed, and ``partial`` relaxes what the Validator requires.
 Not carried: a service declaring ``serializer`` receiving the bound DRF
 serializer. A kernel Validator hands the service its validated values, and
 there is no serializer to bind. The lookup key declared again by the body is
-asked in its kernel form: refused when the spec is built.
+asked in its kernel form: refused when the tool is registered.
 
 The original is kept beside this file as ``test_instance_selector_tools_drfs.py``.
 """
@@ -124,15 +124,11 @@ async def test_the_service_receives_the_resolved_row(is_async: bool) -> None:
     assert invoice.number == "new"
 
 
-def test_a_lookup_key_the_validator_also_declares_is_refused_when_the_spec_is_built() -> None:
-    # A body field cannot name the row the target lookup resolves.
-    with pytest.raises(ImproperlyConfigured, match="pk"):
-        ServiceSpec(
-            service=_rename_invoice,
-            validator=DataclassValidator(_Rename),
-            instance_selector_spec=_lookup(),
-            permissions=OPEN,
-        ).parameters()
+def test_a_lookup_key_the_validator_also_declares_is_refused_at_registration() -> None:
+    # A body field cannot name the row the target lookup resolves. The spec
+    # itself builds; registering it asks its parameters, which refuse the pair.
+    with pytest.raises(ImproperlyConfigured, match=r"\['pk'\] are declared by two sources"):
+        _server(validator=DataclassValidator(_Rename))
 
 
 def _strict_get(*, pk: int) -> Invoice:
@@ -191,27 +187,27 @@ def test_the_lookups_shaping_reaches_the_row() -> None:
 
 
 def test_the_lookups_kwargs_provider_scopes_the_row() -> None:
-    # The provider narrows the lookup to sent invoices, so an unsent row is
-    # not found however the caller names it.
-    invoice = Invoice.objects.create(number="orig", sent=False)
+    # The provider fills ``only_sent``, which no read declares, so the lookup
+    # finds a sent row, refuses an unsent one, and a caller naming the value
+    # is refused for an argument the tool does not take.
+    unsent = Invoice.objects.create(number="unsent", sent=False)
+    sent = Invoice.objects.create(number="sent", sent=True)
 
     def scoped(*, pk: int, only_sent: bool) -> QuerySet[Invoice]:
         return Invoice.objects.filter(pk=pk, sent=only_sent)
 
     server = _server(
-        instance_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            selector=scoped,
-            reads=Parameters(
-                (Parameter("pk", "integer", required=True), Parameter("only_sent", "boolean"))
-            ),
-            kwargs=lambda: {"only_sent": True},
-        )
+        instance_selector_spec=_lookup(scoped, kwargs=lambda: {"only_sent": True}),
     )
 
-    out = server.call_tool("invoices.rename", {"pk": invoice.pk, "number": "x"}, user=None)
+    def call(**arguments: Any) -> dict[str, Any]:
+        return server.call_tool("invoices.rename", arguments, user=None).to_dict()
 
-    assert tool_error(out.to_dict())["type"] == "not_found"
+    assert call(pk=sent.pk, number="x")["structuredContent"] == {"number": "x"}
+    assert tool_error(call(pk=unsent.pk, number="x"))["type"] == "not_found"
+    refused = tool_error(call(pk=unsent.pk, number="x", only_sent=False))
+    assert refused["type"] == "validation_error"
+    assert "only_sent" in refused["detail"]
 
 
 class _RecordingValidator(DataclassValidator):
