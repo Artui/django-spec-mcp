@@ -5,8 +5,8 @@ from collections.abc import Mapping
 from typing import Any
 from urllib.parse import urlsplit
 
-from rest_framework_mcp.constants import ToolContentKind
-from rest_framework_mcp.protocol.types.tool_content_block import ToolContentBlock
+from django_spec_mcp.constants import ToolContentKind
+from django_spec_mcp.protocol.types.tool_content_block import ToolContentBlock
 
 # RFC 3986 §3.1 scheme syntax. A resource link is a URI a host resolves, so it
 # must be absolute; a bare string is not a link.
@@ -49,7 +49,7 @@ def build_content_blocks(
     well-formed response.
 
     ``TEXT`` never reaches this function;
-    [`build_tool_result`][rest_framework_mcp.output.tool_result.build_tool_result]
+    [`build_tool_result`][django_spec_mcp.output.tool_result.build_tool_result]
     handles it directly, along with the ``OutputFormat`` rendering only text blocks
     have."""
     if content_kind is ToolContentKind.RESOURCE_LINK:

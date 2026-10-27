@@ -1,4 +1,4 @@
-"""Adapter-layer helpers shared by the service / selector / chain adapters.
+"""Adapter-layer helpers shared by the service / selector adapters.
 
 The ``validate_*`` functions run at adapter time — *before* the binding lands
 in a registry — so a configuration mistake surfaces during application startup
@@ -27,22 +27,22 @@ from rest_framework_dataclasses.serializers import DataclassSerializer
 from rest_framework_services.dispatch.utils import DROPPED_EDGE_SEEDS
 from rest_framework_services.types.validate_channel_names import validate_channel_names
 
-from rest_framework_mcp.constants import (
+from django_spec_mcp.constants import (
     RESERVED_POOL_SEEDS,
     RESERVED_POST_FETCH_KEYS,
     TOOL_EDGE_SEEDS,
     ArgumentBinding,
 )
-from rest_framework_mcp.registry.types.query_param import QueryParam
-from rest_framework_mcp.registry.types.selector_tool_binding import SelectorToolBinding
-from rest_framework_mcp.registry.types.tool_binding import ToolBinding
-from rest_framework_mcp.registry.types.url_kwarg import UrlKwarg
-from rest_framework_mcp.schema.input_schema import build_input_schema
-from rest_framework_mcp.schema.service_tool_schema import (
+from django_spec_mcp.registry.types.query_param import QueryParam
+from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
+from django_spec_mcp.registry.types.tool_binding import ToolBinding
+from django_spec_mcp.registry.types.url_kwarg import UrlKwarg
+from django_spec_mcp.schema.input_schema import build_input_schema
+from django_spec_mcp.schema.service_tool_schema import (
     build_service_tool_input_schema,
     declared_service_input,
 )
-from rest_framework_mcp.schema.utils import (
+from django_spec_mcp.schema.utils import (
     caller_fields,
     declares_default,
     laid_back_inputs,
@@ -57,14 +57,14 @@ def validate_serializer_shapes(
 ) -> None:
     """Fail-fast at registration time on a serializer no MCP path can use.
 
-    Run by the three tool adapters and, for its output alone, by the resource
+    Run by the two tool adapters and, for its output alone, by the resource
     adapter.
 
     **Input** must be ``None``, a DRF ``Serializer`` subclass or a dataclass type.
     That is the one rule every consumer of it shares: drf-services'
     ``build_input_serializer_from_data`` refuses anything else at dispatch, its
     ``serializer_to_json_schema`` refuses it at schema derivation, and
-    this package's own ``build_validated_input_serializer`` (the chain path)
+    this package's own ``build_validated_input_serializer`` (the selector path)
     reads ``.fields`` off whatever it builds.
 
     **Output** must be ``None``, a DRF ``BaseSerializer`` subclass or a dataclass
@@ -1232,12 +1232,11 @@ def merge_tool_annotations(
     A tool's mutation profile is known from its kind, so the standard MCP hints
     are stamped here rather than hand-set downstream:
 
-    - ``read_only=True`` (selector tools, and chains whose every step is a
-      selector) → ``{"readOnlyHint": True}``. ``destructiveHint`` /
+    - ``read_only=True`` (selector tools) → ``{"readOnlyHint": True}``. ``destructiveHint`` /
       ``idempotentHint`` are deliberately *not* emitted — the MCP spec defines
       them as meaningful only when ``readOnlyHint`` is false — so ``idempotent``
       is ignored here.
-    - ``read_only=False`` (service tools, and chains with any service step) →
+    - ``read_only=False`` (service tools) →
       ``{"readOnlyHint": False, "destructiveHint": True}``. A mutation is
       destructive by default.
 
@@ -1248,8 +1247,7 @@ def merge_tool_annotations(
     ``false``, the MCP default. drf-services keeps ``None`` apart from
     ``False`` so that a transport publishing the fact never turns silence into
     a claim, which is why a declared ``False`` is published rather than
-    dropped. A chain passes nothing: being idempotent is a property of a whole
-    operation, and two idempotent steps in sequence need not be one.
+    dropped.
 
     Both conjuncts of the derivation are held by a test, because a deleted
     one leaves branch coverage at 100%:

@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from rest_framework_mcp.protocol.types.client_capabilities import ClientCapabilities
-from rest_framework_mcp.protocol.types.implementation import Implementation
+from django_spec_mcp.protocol.types.client_capabilities import ClientCapabilities
+from django_spec_mcp.protocol.types.implementation import Implementation
 
 
 @dataclass(frozen=True)

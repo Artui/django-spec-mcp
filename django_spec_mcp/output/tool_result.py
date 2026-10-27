@@ -4,14 +4,14 @@ from typing import Any
 
 from django_service_specs import UNSET
 
-from rest_framework_mcp.constants import OutputFormat, ToolContentKind
-from rest_framework_mcp.output.build_content_blocks import build_content_blocks
-from rest_framework_mcp.output.encode_json import encode_json
-from rest_framework_mcp.output.encode_toon import encode_toon
-from rest_framework_mcp.output.error_tool_result import build_error_tool_result
-from rest_framework_mcp.output.utils import toon_encoder
-from rest_framework_mcp.protocol.types.tool_content_block import ToolContentBlock
-from rest_framework_mcp.protocol.types.tool_result import ToolResult
+from django_spec_mcp.constants import OutputFormat, ToolContentKind
+from django_spec_mcp.output.build_content_blocks import build_content_blocks
+from django_spec_mcp.output.encode_json import encode_json
+from django_spec_mcp.output.encode_toon import encode_toon
+from django_spec_mcp.output.error_tool_result import build_error_tool_result
+from django_spec_mcp.output.utils import toon_encoder
+from django_spec_mcp.protocol.types.tool_content_block import ToolContentBlock
+from django_spec_mcp.protocol.types.tool_result import ToolResult
 
 
 def _is_uniform_list_of_objects(payload: Any) -> bool:
@@ -44,7 +44,7 @@ def build_tool_result(
     content_mime_type: str | None = None,
     binding_name: str | None = None,
 ) -> ToolResult:
-    """Build a [`ToolResult`][rest_framework_mcp.protocol.types.tool_result.ToolResult]
+    """Build a [`ToolResult`][django_spec_mcp.protocol.types.tool_result.ToolResult]
     for a successful (or tool-level error) call.
 
     Args:
@@ -76,8 +76,8 @@ def build_tool_result(
     ``ServiceSpec(allow_none=True)`` that returned ``None``. It is served as
     ``{}``, both as ``structuredContent`` and as the text block, because MCP
     requires structured content to be an object and asks the text block to
-    carry the same JSON. This is the one place the rule lives, so a selector, a
-    service and a chain answer it the same way on every entry point. The
+    carry the same JSON. This is the one place the rule lives, so a selector
+    and a service answer it the same way on every entry point. The
     advertised ``outputSchema`` of those tools admits the ``{}``
     (``build_output_schema(may_be_empty=...)``). A service with no re-read that
     returns ``None`` without declaring ``allow_none`` is served ``{}`` too,

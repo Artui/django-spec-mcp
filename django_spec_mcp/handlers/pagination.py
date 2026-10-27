@@ -58,7 +58,7 @@ def paginate(
     """
     if page_size < 1:
         raise ImproperlyConfigured(
-            f"REST_FRAMEWORK_MCP['PAGE_SIZE'] is {page_size}, so no listing can make "
+            f"SPEC_MCP['PAGE_SIZE'] is {page_size}, so no listing can make "
             "progress: every page would be empty and its nextCursor would point at "
             "the same offset forever. Set it to at least 1."
         )

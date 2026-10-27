@@ -4,19 +4,19 @@ from typing import Any
 
 from rest_framework_services import build_offline_context, resolve_callable_kwargs
 
-from rest_framework_mcp._compat.tracing import span
-from rest_framework_mcp.constants import JsonRpcErrorCode
-from rest_framework_mcp.handlers.handle_tools_call import _span_attrs
-from rest_framework_mcp.handlers.render_prompt_messages import normalize_render_result
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.handlers.utils import (
+from django_spec_mcp._compat.tracing import span
+from django_spec_mcp.constants import JsonRpcErrorCode
+from django_spec_mcp.handlers.handle_tools_call import _span_attrs
+from django_spec_mcp.handlers.render_prompt_messages import normalize_render_result
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.handlers.utils import (
     check_permissions,
     consume_rate_limits,
     prompt_shape,
 )
-from rest_framework_mcp.output.enforce_result_bytes import enforce_result_bytes
-from rest_framework_mcp.protocol.types.get_prompt_result import GetPromptResult
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.output.enforce_result_bytes import enforce_result_bytes
+from django_spec_mcp.protocol.types.get_prompt_result import GetPromptResult
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 
 
 def handle_prompts_get(
@@ -29,7 +29,7 @@ def handle_prompts_get(
     then dispatches the render callable via ``resolve_callable_kwargs`` so it can
     declare any subset of ``request`` / ``user`` plus its per-prompt arguments. Whatever
     it returns is normalised into a list of
-    [`PromptMessage`][rest_framework_mcp.protocol.types.prompt_message.PromptMessage].
+    [`PromptMessage`][django_spec_mcp.protocol.types.prompt_message.PromptMessage].
 
     The ``request`` / ``user`` seeds outrank the client's arguments, so a prompt
     argument named after one of them cannot stand in for the authenticated

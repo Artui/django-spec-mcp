@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from rest_framework_mcp.constants import NotificationKind
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.handlers.utils import check_permissions, resource_shape
-from rest_framework_mcp.subscriptions.types.subscription_filter import SubscriptionFilter
-from rest_framework_mcp.subscriptions.utils import (
+from django_spec_mcp.constants import NotificationKind
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.handlers.utils import check_permissions, resource_shape
+from django_spec_mcp.subscriptions.types.subscription_filter import SubscriptionFilter
+from django_spec_mcp.subscriptions.utils import (
     topic_for_kind,
     topic_for_resource,
     topic_for_task,
@@ -122,7 +122,7 @@ def _may_watch_task(task_id: str, context: MCPCallContext) -> bool:
     # Imported here rather than at module scope: ``handlers.tasks_utils`` reaches
     # the handler layer, which reaches back to this module through the trigger
     # path. The cycle is genuine, which is the documented exception.
-    from rest_framework_mcp.handlers.tasks_utils import owned_by_caller
+    from django_spec_mcp.handlers.tasks_utils import owned_by_caller
 
     store = context.tasks
     if store is None:

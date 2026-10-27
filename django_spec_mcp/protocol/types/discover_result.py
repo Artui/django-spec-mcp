@@ -3,9 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from rest_framework_mcp.constants import SERVER_INFO_META_KEY
-from rest_framework_mcp.protocol.types.implementation import Implementation
-from rest_framework_mcp.protocol.types.server_capabilities import ServerCapabilities
+from django_spec_mcp.constants import SERVER_INFO_META_KEY
+from django_spec_mcp.protocol.types.implementation import Implementation
+from django_spec_mcp.protocol.types.server_capabilities import ServerCapabilities
 
 
 @dataclass(frozen=True)
@@ -18,7 +18,7 @@ class DiscoverResult:
     skipped.
 
     Two shape differences from
-    [`InitializeResult`][rest_framework_mcp.protocol.types.initialize_result.InitializeResult],
+    [`InitializeResult`][django_spec_mcp.protocol.types.initialize_result.InitializeResult],
     neither cosmetic:
 
     - ``supportedVersions`` is a **list**, not a negotiated single version.

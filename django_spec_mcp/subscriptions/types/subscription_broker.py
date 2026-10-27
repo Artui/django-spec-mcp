@@ -17,7 +17,7 @@ class SubscriptionBroker(Protocol):
     them.
 
     **Topics are opaque strings** built by
-    ``rest_framework_mcp.subscriptions.utils`` — a resource URI, a task id, a
+    ``django_spec_mcp.subscriptions.utils`` — a resource URI, a task id, a
     notification kind. The broker never interprets them, so adding a new
     notification type needs no change here.
 

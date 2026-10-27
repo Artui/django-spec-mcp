@@ -405,7 +405,7 @@ def test_a_broken_meta_reads_as_legacy() -> None:
     the more confusing of the two failures, so ``from_params`` degrades to
     "legacy" and lets the legacy path have its say.
     """
-    from rest_framework_mcp.transport.types.request_metadata import RequestMetadata
+    from django_spec_mcp.transport.types.request_metadata import RequestMetadata
 
     assert RequestMetadata.from_params(None) is None
     assert RequestMetadata.from_params({"_meta": "not-a-mapping"}) is None
@@ -422,7 +422,7 @@ def test_a_broken_meta_reads_as_legacy() -> None:
 
 def test_client_info_is_projected_as_far_as_it_goes() -> None:
     """Self-reported and unverified, so a half-filled one is not rejected."""
-    from rest_framework_mcp.transport.types.request_metadata import RequestMetadata
+    from django_spec_mcp.transport.types.request_metadata import RequestMetadata
 
     partial = RequestMetadata.from_params(
         {

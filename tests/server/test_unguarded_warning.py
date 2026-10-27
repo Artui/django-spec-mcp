@@ -11,12 +11,11 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.permissions.scope_required import ScopeRequired
-from rest_framework_mcp.registry.types.chain_step import ChainStep
-from rest_framework_mcp.server.mcp_server import MCPServer
-from rest_framework_mcp.server.utils import UnguardedToolWarning
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.permissions.scope_required import ScopeRequired
+from django_spec_mcp.server.mcp_server import MCPServer
+from django_spec_mcp.server.utils import UnguardedToolWarning
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 
 
 def _server() -> MCPServer:
@@ -45,14 +44,6 @@ def test_unguarded_selector_tool_warns() -> None:
         )
 
 
-def test_unguarded_chain_tool_warns() -> None:
-    server = _server()
-    with pytest.warns(UnguardedToolWarning):
-        server.register_chain_tool(
-            name="x", steps=[ChainStep("s", ServiceSpec(service=_service, atomic=False))]
-        )
-
-
 def test_binding_permissions_silence_the_warning(recwarn: pytest.WarningsRecorder) -> None:
     server = _server()
     server.register_service_tool(
@@ -73,7 +64,7 @@ def test_spec_permission_classes_silence_the_warning(recwarn: pytest.WarningsRec
 
 
 def test_require_tool_permissions_refuses_registration(settings: Any) -> None:
-    settings.REST_FRAMEWORK_MCP = {"REQUIRE_TOOL_PERMISSIONS": True}
+    settings.SPEC_MCP = {"REQUIRE_TOOL_PERMISSIONS": True}
     server = _server()
     with pytest.raises(ImproperlyConfigured, match="no permissions"):
         server.register_service_tool(name="x", spec=ServiceSpec(service=_service, atomic=False))

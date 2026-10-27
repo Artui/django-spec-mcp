@@ -1,14 +1,14 @@
-from rest_framework_mcp.handlers.dispatch import dispatch
-from rest_framework_mcp.handlers.handle_initialize import handle_initialize
-from rest_framework_mcp.handlers.handle_ping import handle_ping
-from rest_framework_mcp.handlers.handle_resources_list import handle_resources_list
-from rest_framework_mcp.handlers.handle_resources_read import handle_resources_read
-from rest_framework_mcp.handlers.handle_resources_templates_list import (
+from django_spec_mcp.handlers.dispatch import dispatch
+from django_spec_mcp.handlers.handle_initialize import handle_initialize
+from django_spec_mcp.handlers.handle_ping import handle_ping
+from django_spec_mcp.handlers.handle_resources_list import handle_resources_list
+from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
+from django_spec_mcp.handlers.handle_resources_templates_list import (
     handle_resources_templates_list,
 )
-from rest_framework_mcp.handlers.handle_tools_call import handle_tools_call
-from rest_framework_mcp.handlers.handle_tools_list import handle_tools_list
-from rest_framework_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
+from django_spec_mcp.handlers.types.context import MCPCallContext
 
 __all__ = [
     "MCPCallContext",

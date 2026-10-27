@@ -2,16 +2,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from rest_framework_mcp.handlers.tasks_utils import (
+from django_spec_mcp.handlers.tasks_utils import (
     declares_tasks_extension,
     missing_capability_error,
     owned_by_caller,
     resolve_task_id,
     unknown_task_error,
 )
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.tasks.types.task_record import TaskRecord
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.tasks.types.task_record import TaskRecord
 
 
 def handle_tasks_get(
@@ -25,7 +25,7 @@ def handle_tasks_get(
     server asks for a sane cadence.
 
     The response is the task itself; which extra field it carries follows from the
-    status, and [`Task.to_dict`][rest_framework_mcp.protocol.types.task.Task.to_dict]
+    status, and [`Task.to_dict`][django_spec_mcp.protocol.types.task.Task.to_dict]
     owns that correspondence, so this handler never branches on status.
 
     ``resultType`` is ``"complete"``, not ``"task"``. The distinction is

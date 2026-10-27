@@ -4,11 +4,11 @@ from typing import Protocol, runtime_checkable
 
 from django.http import HttpRequest
 
-from rest_framework_mcp.auth.types.authorization_server_metadata import (
+from django_spec_mcp.auth.types.authorization_server_metadata import (
     AuthorizationServerMetadata,
 )
-from rest_framework_mcp.auth.types.protected_resource_metadata import ProtectedResourceMetadata
-from rest_framework_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.auth.types.protected_resource_metadata import ProtectedResourceMetadata
+from django_spec_mcp.auth.types.token_info import TokenInfo
 
 
 @runtime_checkable
@@ -22,10 +22,8 @@ class MCPAuthBackend(Protocol):
     ``/.well-known/oauth-protected-resource`` view (RFC 9728); the PRM ViewSet
     calls ``.to_dict()`` on the returned dataclass for the wire shape.
 
-    ``authorization_server_metadata`` is consumed by the optional
-    ``rest_framework_mcp.contrib.oauth`` mount. A backend that hosts no
-    authorization server raises ``NotImplementedError`` so the contrib
-    code can skip the AS endpoint matrix cleanly.
+    ``authorization_server_metadata`` describes the authorization server a
+    backend fronts. A backend that hosts none raises ``NotImplementedError``.
 
     Backends MUST be safe to instantiate without arguments — settings-driven
     configuration belongs inside the backend's own module.

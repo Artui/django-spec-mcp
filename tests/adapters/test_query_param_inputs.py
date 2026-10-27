@@ -31,11 +31,11 @@ from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 from typing_extensions import TypedDict
 
-from rest_framework_mcp import MCPServer, QueryParam
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.constants import ArgumentBinding
-from rest_framework_mcp.handlers.handle_tools_call import handle_tools_call
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp import MCPServer, QueryParam
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.constants import ArgumentBinding
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.handlers.test_query_params import _ctx
 from tests.testapp.models import Invoice
 

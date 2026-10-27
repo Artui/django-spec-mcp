@@ -1,17 +1,9 @@
 # Authentication
 
-`djangorestframework-mcp-server` is a **resource server**: it validates bearer tokens
+`django-spec-mcp` is a **resource server**: it validates bearer tokens
 that someone else issued. The library does not implement a token issuer (that's
 the job of an Authorization Server / IDP). It does ship two backends and the
 RFC 9728 metadata endpoint clients use to discover them.
-
-!!! tip "OAuth contrib mount"
-    The core `MCPServer.urls` exposes only the spec-mandated PRM endpoint.
-    For deployments that want the full discovery + DCR matrix without
-    fronting their own AS, `rest_framework_mcp.contrib.oauth.build_oauth_urlpatterns`
-    bundles RFC 8414 AS metadata, OIDC discovery, RFC 7591 Dynamic Client
-    Registration, and the alias paths different LLM hosts probe. See
-    [OAuth contrib mount](#oauth-contrib-mount) below.
 
 ## The pieces
 
@@ -38,8 +30,8 @@ minimal and includes a `_warning`. Don't ship this to production.
 Pass it when you build the server:
 
 ```python
-from rest_framework_mcp import MCPServer
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 
 server = MCPServer(name="dev", auth_backend=AllowAnyBackend())
 ```
@@ -60,7 +52,7 @@ request. Backends opt into that by implementing `check_configuration()`; one
 that needs no setup implements nothing and is left alone.
 
 ```bash
-pip install "djangorestframework-mcp-server[oauth]"
+pip install "django-spec-mcp[oauth]"
 ```
 
 ```python
@@ -71,7 +63,7 @@ INSTALLED_APPS = [
 
 # DjangoOAuthToolkitBackend is the default — a server with no auth_backend=
 # gets one. Pass it explicitly only to configure it.
-REST_FRAMEWORK_MCP = {
+SPEC_MCP = {
     "SERVER_INFO": {
         "resource": "https://example.com/mcp/",
         "authorization_servers": ["https://example.com/oauth/"],
@@ -106,7 +98,7 @@ The `SERVER_INFO` keys flow into both:
     `spec.permission_classes` (wrapped via `DRFPermissionAdapter`) and the
     per-binding `permissions=[...]` below gate a tool. Registering a tool
     with neither is **refused** — `ImproperlyConfigured` at registration.
-    Set `REST_FRAMEWORK_MCP["REQUIRE_TOOL_PERMISSIONS"] = False` to downgrade
+    Set `SPEC_MCP["REQUIRE_TOOL_PERMISSIONS"] = False` to downgrade
     that to an `UnguardedToolWarning` while migrating a large surface.
 
     The same check runs on `register_resource` and `register_prompt`: the
@@ -137,7 +129,7 @@ registration site — and would satisfy the unguarded-tool check that would
 otherwise have warned.
 
 ```python
-from rest_framework_mcp import MCPServer, ScopeRequired, DjangoPermRequired
+from django_spec_mcp import MCPServer, ScopeRequired, DjangoPermRequired
 from rest_framework_services.types.service_spec import ServiceSpec
 
 server.register_service_tool(
@@ -154,7 +146,7 @@ Custom permissions implement the [`MCPPermission`](reference/auth.md) Protocol:
 
 ```python
 from django.http import HttpRequest
-from rest_framework_mcp import TokenInfo
+from django_spec_mcp import TokenInfo
 
 
 class TenantMatches:
@@ -189,7 +181,7 @@ rather than rewriting it for MCP:
 
 ```python
 from rest_framework.permissions import DjangoModelPermissions
-from rest_framework_mcp import DRFPermissionAdapter
+from django_spec_mcp import DRFPermissionAdapter
 
 server.register_service_tool(
     name="invoices.create",
@@ -205,28 +197,18 @@ the same spec that backs your HTTP view governs the MCP binding
 without you restating the contract at the MCP call site.
 
 On every path that judges a tool call's adapters (`tools/call` on either
-handler, `acall_tool`, the pre-flight of a streamed call, a task's creation and
-a chain's up-front check), the adapter's stand-in is built from the same
+handler, `acall_tool`, the pre-flight of a streamed call, and a task's creation), the adapter's stand-in is built from the same
 values as the view the spec is dispatched with, so a class reads the same
 request in both checks: `request.data` is the call's arguments less its route
 and query values, `request.query_params` holds the declared `QueryParam`
 values, `view.kwargs` the URL kwargs, `view.action` the tool's name, and the
 method is `POST`. That is DRF's own layout, and the same on a service tool, a
 selector tool and the view `call_tool` dispatches with, though `call_tool`
-judges no adapter: it judges the spec's classes against that view alone. A
-chain judges each step's wrapped classes under the step's alias, and its own
-`permissions` under the tool's name, with the chain's arguments as
-`request.data`. Each check gets a `request.data` of its own, so a class
+judges no adapter: it judges the spec's classes against that view alone. Each check gets a `request.data` of its own, so a class
 writing into it reaches neither the next check nor the caller's `arguments`.
 `request.auth` is the token backend's payload (`None` from `call_tool` and
 `acall_tool`), set beside `request.user`, so a class such as `TokenHasScope`
 that reads `request.auth` first still sees the caller.
-
-A chain's `permissions` must begin with each step's `permission_classes`, each
-wrapped in a `DRFPermissionAdapter`, in step order, because that position is
-what tells a step's class from the chain's own. `register_chain_tool` lays them
-out so; a `ChainToolBinding` built by hand any other way is refused with
-`ImproperlyConfigured` when it is constructed.
 
 A `tools/call` retry whose `inputResponses` change any argument, the route, a
 query value or `request.data`, is judged again on the arguments the answers
@@ -270,9 +252,7 @@ binding's wrapped copy of each class has already asked it once, against a
 stand-in that sees the same request, so a call asks `has_permission` twice per
 class, a streamed call once more in its pre-flight, and a retry whose answers
 change the arguments once more again, on the arguments they produce.
-`call_tool`, which judges no stand-in, asks it once. A chain step does the
-same against its own view, before its `inputs` run and its target is looked
-up, and then runs only the object-level half on the target it resolved.
+`call_tool`, which judges no stand-in, asks it once.
 `resources/read` runs drf-services' `enforce_permissions`, both halves, on the
 selector's return. A `LIST` / collection
 result gets the class-level check only — object permissions are a per-row
@@ -287,7 +267,7 @@ operation-scope affordance refuses right now is the exception: `tools/list`
 leaves it out either way, because that condition cannot depend on the
 call's arguments — see
 [Concepts](concepts.md#a-tool-that-cannot-run-now-is-not-listed).) Set
-`REST_FRAMEWORK_MCP["FILTER_LISTINGS_BY_PERMISSIONS"] = True` to drop
+`SPEC_MCP["FILTER_LISTINGS_BY_PERMISSIONS"] = True` to drop
 bindings whose permissions deny the caller before paginating.
 
 This is **binding-level** gating — permissions are evaluated against a
@@ -371,7 +351,7 @@ Because enforcement needs a getter, it means bringing your own backend:
 `MCPServer(resource_url=...)` configures the default backend for *metadata*.
 
 ```python
-REST_FRAMEWORK_MCP = {
+SPEC_MCP = {
     "RESOURCE_URL": "https://example.com/mcp/",
     "SERVER_INFO": {
         "authorization_servers": ["https://example.com/oauth/"],
@@ -446,233 +426,6 @@ RFC 9728 marks REQUIRED, so the metadata carries a `_warning` saying why.
     `ENFORCE_AUDIENCE` is for and the check runs server-side. If you are writing
     your own verifier anywhere, validate the audience in it.
 
-## OAuth contrib mount
-
-`rest_framework_mcp.contrib.oauth.build_oauth_urlpatterns(*, server,
-include_dcr=False, include_aliases=True, include_openid_discovery=True)`
-returns URL patterns ready to mount alongside your server. It exposes the
-full set of discovery endpoints LLM hosts probe so MCP clients (Claude
-Desktop, Inspector, the various MCP-aware editors) can walk the auth
-flow without you running a separate AS-facing service:
-
-| Endpoint | Source |
-| --- | --- |
-| `/.well-known/oauth-authorization-server` | RFC 8414 AS metadata |
-| `/.well-known/openid-configuration` | OIDC discovery (alias / minimal payload) |
-| `/oauth/register/` (and aliases) | RFC 7591 Dynamic Client Registration (**deprecated**, see below) |
-| `/oauth/authorize/` | DOT's `AuthorizationView` (proxied so the user-adapter hook runs) |
-
-Aliases render the canonical payload — they are not HTTP redirects.
-
-!!! warning "Dynamic Client Registration is deprecated — on a published timetable"
-    MCP revision `2026-07-28` deprecated DCR in favour of [Client ID Metadata
-    Documents](#client-id-metadata-documents), and the specification's
-    deprecated-features registry gives it an earliest removal of *the first
-    revision released on or after 2027-07-28*. Deprecated is not removed: DCR is
-    still a `MAY` in the current revision, clients that speak it keep working,
-    and this endpoint is supported for as long as that holds. It is off twice
-    over by default — `include_dcr` and `dcr_enabled` — so nothing is exposed
-    until you ask for it.
-
-    **Turn on CIMD first, and then decide whether you still need this.** With
-    `CIMD_ENABLED = True` on DOT 3.4+, a client that can read
-    `client_id_metadata_document_supported` never reaches `/oauth/register/`:
-    the specification's registration priority order is pre-registration, then
-    CIMD, then DCR. What is left is the clients that cannot — a large share of
-    the MCP hosts in the field today have no CIMD implementation at all, and
-    several have no path in but DCR. Serving both is a supported answer until
-    the spec withdraws one of them. Nothing warns at runtime, deliberately: a
-    deployment that opted in twice is correctly configured, not mistaken.
-
-```python title="urls.py"
-from django.urls import path
-
-from invoices.mcp import server
-from rest_framework_mcp.contrib.oauth import build_oauth_urlpatterns
-
-urlpatterns = [
-    *build_oauth_urlpatterns(server=server, include_dcr=True),
-    path("mcp/", server.urls),
-]
-```
-
-DCR is gated by two knobs — defaults are deliberately conservative so an
-accidental mount doesn't auto-register clients:
-
-```python
-(
-    *build_oauth_urlpatterns(
-        server=server,
-        include_dcr=True,
-        dcr_enabled=True,
-        dcr_initial_access_token="share-this-with-trusted-clients",  # optional
-    ),
-)
-```
-
-When `dcr_enabled` is `False` the DCR endpoint refuses every request. When
-`dcr_initial_access_token` is set, POST requests must present it as a bearer —
-per RFC 7591 §3.
-
-Both are resolved when the patterns are built. Omit either to take
-`REST_FRAMEWORK_MCP["DCR_ENABLED"]` / `["DCR_INITIAL_ACCESS_TOKEN"]` as the
-default; pass them to let two mounts in one project gate DCR differently.
-
-### What a registration accepts and returns
-
-The endpoint speaks RFC 7591's vocabulary. `token_endpoint_auth_method` decides
-whether the client is public or confidential, and `grant_types` decides the
-grant — the two fields an interoperable client actually sends:
-
-```json title="POST /oauth/register/"
-{
-  "client_name": "Claude",
-  "redirect_uris": ["https://claude.ai/api/mcp/auth_callback"],
-  "grant_types": ["authorization_code", "refresh_token"],
-  "response_types": ["code"],
-  "token_endpoint_auth_method": "none"
-}
-```
-
-`token_endpoint_auth_method: none` registers a **public** client: no secret is
-issued, and it authenticates at the token endpoint with PKCE alone. That is the
-mode a host registering itself dynamically will ask for, and it is why `none`
-has to stay in `token_endpoint_auth_methods_supported`. `client_secret_basic`
-(the RFC's default when the field is omitted) and `client_secret_post` register
-a **confidential** client and return a `client_secret`.
-
-!!! note "Claude's custom connectors are no longer DCR-only"
-    An earlier version of this page said this flow "has no way to be handed a
-    pre-provisioned `client_id`, so DCR is its only path in". That is false as
-    of Anthropic's current connector documentation, which lists three
-    mechanisms: `oauth_cimd` (Client ID Metadata Documents), `oauth_dcr`
-    (RFC 7591), and Anthropic-held client credentials; the "Advanced settings"
-    panel on a custom connector also takes an OAuth Client ID and an optional
-    OAuth Client Secret, which is pre-registration.
-
-    What decides which one runs is your metadata, not the client: Claude selects
-    CIMD **only** when your AS metadata advertises both
-    `client_id_metadata_document_supported: true` *and* `none` in
-    `token_endpoint_auth_methods_supported`, and falls back to DCR if either is
-    missing. Anthropic's own guidance prefers CIMD over DCR for servers
-    expecting traffic, because DCR registers a fresh client on every new
-    connection. So advertise CIMD — see [the recommended
-    deployment](#the-documented-deployment-django-oauth-toolkit-with-cimd) — and
-    the fallback stops being reached.
-
-The registration above — a public client — comes back with no secret at all:
-
-```json title="201 Created"
-{
-  "client_id": "…",
-  "client_id_issued_at": 1753747200,
-  "client_name": "Claude",
-  "redirect_uris": ["https://claude.ai/api/mcp/auth_callback"],
-  "grant_types": ["authorization_code", "refresh_token"],
-  "response_types": ["code"],
-  "token_endpoint_auth_method": "none",
-  "client_type": "public",
-  "authorization_grant_type": "authorization-code"
-}
-```
-
-A confidential registration adds `client_secret` and `client_secret_expires_at`
-(`0`, meaning it does not expire). That secret is the plaintext, returned once
-and never recoverable afterwards — DOT hashes the stored column, so nothing can
-re-derive it.
-
-Every field in the response is the **resolved** value — what was actually
-registered — not an echo of what was asked for. RFC 7591 §3.2.1 lets an
-authorization server substitute any metadata value it likes, but obliges it to
-report what it settled on; a substitution the client is never told about is what
-turns a legal downgrade into an undiagnosable failure at the token endpoint.
-
-DOT's own `client_type` / `authorization_grant_type` spellings are still
-accepted as an escape hatch for callers that already speak DOT, and are echoed
-back alongside the RFC fields. Sending both vocabularies is fine when they
-agree; a contradiction (`token_endpoint_auth_method: none` with
-`client_type: confidential`) is a `400 invalid_client_metadata` rather than a
-silent winner. DOT models one grant per application, so `grant_types` may name
-at most one primary grant — `refresh_token` rides along and is not counted.
-
-### `authorization_code` is the only grant you can register here
-
-A dynamically registered client has **no owning user**: the row is created by an
-unauthenticated caller, with no consent screen and no review step. So the grant
-it may hold has to be one that cannot mint a token without a user at the other
-end, which leaves `authorization_code` (plus `refresh_token` riding along).
-`client_credentials`, `password` and `implicit` are refused with a
-`400 invalid_client_metadata`, in either vocabulary.
-
-`client_credentials` is the one that matters. Its token carries no user at all,
-and `ScopeRequired` tests only the token's scopes — so a token minted from a
-dynamically registered client-credentials application satisfies every
-scope-gated tool. With `DCR_ENABLED = True` and no initial access token (the
-default), that path starts at an unauthenticated `POST /oauth/register/`.
-`password` and `implicit` are removed from OAuth 2.1 outright.
-`grant_types_supported` in the metadata document never advertised any of the
-three.
-
-Machine-to-machine clients still belong in your deployment — create them through
-Django admin or a management command, where an owner and a review step exist.
-
-`response_types` is derived from the grant per RFC 7591 §2.1 rather than chosen
-independently: `authorization_code` → `["code"]`. Supply it to assert the same
-thing and it is accepted; supply something inconsistent and you get a `400`.
-
-### Redirect URIs
-
-`redirect_uris` must be absolute URIs, on a scheme the authorization server will
-actually redirect to — which is DOT's own
-`OAUTH2_PROVIDER["ALLOWED_REDIRECT_URI_SCHEMES"]`, `["http", "https"]` by
-default. A native client registering an RFC 8252 §7.1 private-use scheme
-(`com.example.app:/oauth2redirect`) needs that setting widened; it is the same
-list the authorization request is checked against, so a registration is refused
-only where the flow would have failed anyway.
-
-### ID tokens and `openid`
-
-If your DOT deployment sets `OIDC_ENABLED`, `openid` appears in `scopes_supported`
-and clients will request it. The exchange then routes through the OpenID grant and
-DOT tries to sign an ID token with the registered client's `algorithm`.
-
-Registration resolves that algorithm rather than leaving it unset:
-
-- `id_token_signed_response_alg: "RS256"` — honoured when
-  `OAUTH2_PROVIDER["OIDC_RSA_PRIVATE_KEY"]` is configured, and a `400` naming that
-  setting when it isn't.
-- **Omitted** — takes RS256 when the server has a key, and otherwise registers no
-  algorithm at all, which is the right outcome for a deployment not doing OIDC.
-- `id_token_signed_response_alg: "HS256"` — always refused. HS256 signs the ID
-  token with `client_secret`, and this endpoint leaves DOT's `hash_client_secret`
-  at its default, so the stored column holds a PBKDF2 digest rather than the
-  secret the client was handed. Signing with the digest produces a token whose
-  signature can never verify.
-- OIDC's `none` (an unsigned ID token) is not offered — DOT cannot mint one.
-
-`/.well-known/openid-configuration` reports
-`id_token_signing_alg_values_supported` derived from the same key, so it is empty
-on a server that cannot sign. **If you want ID tokens, configure
-`OIDC_RSA_PRIVATE_KEY`** — without it, clients that request `openid` register
-successfully and get no ID token.
-
-`scope` is checked against DOT's own scopes backend — the same set
-`validate_scopes` uses at authorize time, which by default is
-`OAUTH2_PROVIDER["SCOPES"]`. A registration naming a scope the server doesn't
-offer is a `400` with the offending values named, rather than a `201` followed
-by an `invalid_scope` a leg later with nothing linking the two. DOT stores no
-per-application scope, so the registration can only ever be checked against the
-global set, never narrowed to this client.
-
-RFC 7591 fields the server doesn't understand (`contacts`, `logo_uri`, `jwks`, …)
-are ignored, which §2 requires.
-
-The contrib mount also surfaces AS metadata, so `AllowAnyBackend`
-deployments (which have no AS) return `501 Not Implemented` on the AS
-metadata endpoints rather than serving a fake payload. Use
-`DjangoOAuthToolkitBackend` (or another backend that implements
-`authorization_server_metadata()`) in production.
-
 ## The documented deployment: django-oauth-toolkit with CIMD
 
 This is the configuration this project recommends and tests against. Everything
@@ -735,7 +488,7 @@ OAUTH2_PROVIDER = {
     "CIMD_REGISTRATION_PERMISSION_CLASSES": ("oauth2_provider.cimd.AllowAllCIMDPermission",),
 }
 
-REST_FRAMEWORK_MCP = {
+SPEC_MCP = {
     "RESOURCE_URL": "https://example.com/mcp/",
     "ALLOWED_ORIGINS": ["https://app.example.com"],
     # The specification requires a resource server to validate that a token was
@@ -754,7 +507,7 @@ REST_FRAMEWORK_MCP = {
 
 !!! warning "Install the extra"
     `DjangoOAuthToolkitBackend` is the default backend, and mounting refuses
-    without DOT: `pip install "djangorestframework-mcp-server[oauth]"`. The
+    without DOT: `pip install "django-spec-mcp[oauth]"`. The
     refusal happens while the URLConf is imported, so `manage.py check` catches
     it before a request ever arrives. The extra pulls
     `django-oauth-toolkit>=3.4`, so the two settings above are always available;
@@ -823,9 +576,9 @@ re-registering.
 
 The deprecation has a date attached: the specification's deprecated-features
 registry gives DCR an earliest removal of *the first revision released on or
-after 2027-07-28*. Until then both mechanisms are legal to serve, and [the
-contrib mount](#oauth-contrib-mount) explains why serving both is usually the
-right call rather than a hedge.
+after 2027-07-28*. Until then both mechanisms are legal to serve, and serving
+both is usually the right call rather than a hedge: a client that cannot speak
+CIMD often has no path in but DCR.
 
 **DOT implements this natively from 3.4.0.** Set `CIMD_ENABLED = True` and DOT
 advertises it in AS metadata, resolves URL-shaped client IDs, fetches and

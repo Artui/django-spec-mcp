@@ -26,16 +26,16 @@ from rest_framework.permissions import AllowAny
 from rest_framework_services.types.selector_spec import SelectorSpec
 from typing_extensions import TypedDict, Unpack
 
-from rest_framework_mcp import MCPServer, UrlKwarg
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.constants import UnknownArguments
-from rest_framework_mcp.handlers.handle_tools_call import handle_tools_call
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.registry.prompt_registry import PromptRegistry
-from rest_framework_mcp.registry.resource_registry import ResourceRegistry
-from rest_framework_mcp.registry.tool_registry import ToolRegistry
-from rest_framework_mcp.registry.types.selector_tool_binding import SelectorToolBinding
+from django_spec_mcp import MCPServer, UrlKwarg
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.constants import UnknownArguments
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.registry.prompt_registry import PromptRegistry
+from django_spec_mcp.registry.resource_registry import ResourceRegistry
+from django_spec_mcp.registry.tool_registry import ToolRegistry
+from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
 
 
 def _ctx(*, tools: ToolRegistry) -> MCPCallContext:

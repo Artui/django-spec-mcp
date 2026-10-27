@@ -66,7 +66,7 @@ The view can also fetch fresh data itself. `mcpApp.callTool("list_invoices",
 `tools/call` endpoint, permissions and all. The rest of the surface —
 `onToolInput`, `onToolCancelled`, `onHostContext`, `onTeardown`,
 `requestDisplayMode`, `sendMessage`, `openLink`, `hostContext` — is documented
-on [`build_app_document`][rest_framework_mcp.ui.build_app_document.build_app_document].
+on [`build_app_document`][django_spec_mcp.ui.build_app_document.build_app_document].
 
 ## 2. The tool
 

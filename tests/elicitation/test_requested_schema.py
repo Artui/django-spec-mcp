@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 
-from rest_framework_mcp.elicitation.build_requested_schema import build_requested_schema
+from django_spec_mcp.elicitation.build_requested_schema import build_requested_schema
 
 
 def test_the_properties_are_wrapped_in_the_objects_the_spec_expects() -> None:

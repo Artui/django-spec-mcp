@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from rest_framework_mcp.protocol.types.prompt_message import PromptMessage
+from django_spec_mcp.protocol.types.prompt_message import PromptMessage
 
 
 @dataclass(frozen=True)

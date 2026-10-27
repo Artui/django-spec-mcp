@@ -4,8 +4,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from rest_framework_mcp.constants import UIPermission
-from rest_framework_mcp.registry.types.ui_csp import UICsp
+from django_spec_mcp.constants import UIPermission
+from django_spec_mcp.registry.types.ui_csp import UICsp
 
 
 @dataclass(frozen=True)
@@ -20,7 +20,7 @@ class UIResourceMeta:
 
     Attributes:
         csp: Origins the view needs; see
-            [`UICsp`][rest_framework_mcp.registry.types.ui_csp.UICsp].
+            [`UICsp`][django_spec_mcp.registry.types.ui_csp.UICsp].
         permissions: Browser capabilities the view would use. The host decides
             whether to grant them.
         domain: A stable identity for the view's origin, letting a host group

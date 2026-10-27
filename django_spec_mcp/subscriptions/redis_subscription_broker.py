@@ -24,20 +24,20 @@ def _resolve_async_redis() -> Any:
 
 AsyncRedis: Any = _resolve_async_redis()
 
-_DEFAULT_CHANNEL_PREFIX: str = "drf-mcp:sub"
+_DEFAULT_CHANNEL_PREFIX: str = "spec-mcp:sub"
 _NAMESPACE_DIGEST_CHARS: int = 12
 
 
 class RedisSubscriptionBroker:
     """Cross-process topic fan-out over Redis pub/sub. **The deployable one.**
 
-    [`InMemorySubscriptionBroker`][rest_framework_mcp.subscriptions.in_memory_subscription_broker.InMemorySubscriptionBroker]
+    [`InMemorySubscriptionBroker`][django_spec_mcp.subscriptions.in_memory_subscription_broker.InMemorySubscriptionBroker]
     delivers to nobody once the publisher and the subscriber's stream land on
     different workers, and does so
     silently, so anything past one worker wants this:
 
         from redis.asyncio import Redis
-        from rest_framework_mcp.subscriptions.redis_subscription_broker import (
+        from django_spec_mcp.subscriptions.redis_subscription_broker import (
             RedisSubscriptionBroker,
         )
 
@@ -80,7 +80,7 @@ class RedisSubscriptionBroker:
         if AsyncRedis is None:  # pragma: no cover - exercised by the no-extras smoke job
             raise ImportError(
                 "RedisSubscriptionBroker requires the `redis` package. "
-                'Install with `pip install "djangorestframework-mcp-server[redis]"`.'
+                'Install with `pip install "django-spec-mcp[redis]"`.'
             )
         self._client: Any = client
         self._prefix: str = (

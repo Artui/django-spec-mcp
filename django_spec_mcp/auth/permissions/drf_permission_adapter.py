@@ -7,13 +7,13 @@ from django.http import HttpRequest
 from rest_framework.permissions import BasePermission
 from rest_framework_services.types.offline_context import OfflineContext
 
-from rest_framework_mcp.auth.permissions.utils import DispatchShape
-from rest_framework_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.auth.permissions.utils import DispatchShape
+from django_spec_mcp.auth.types.token_info import TokenInfo
 
 
 class DRFPermissionAdapter:
     """Bridge a DRF ``BasePermission`` class into the
-    [`MCPPermission`][rest_framework_mcp.auth.permissions.types.mcp_permission.MCPPermission]
+    [`MCPPermission`][django_spec_mcp.auth.permissions.types.mcp_permission.MCPPermission]
     Protocol.
 
     ``ServiceSpec`` / ``SelectorSpec`` carry ``permission_classes`` as DRF
@@ -85,7 +85,7 @@ class DRFPermissionAdapter:
         # Held as given, because the copies that keep a permission's writes
         # off the caller's mappings and out of the next check are made
         # elsewhere: ``DispatchShape.build`` copies ``kwargs`` into a fresh view
-        # for every build, and ``dispatch_shape`` and ``chain_shape`` copy
+        # for every build, and ``dispatch_shape`` copies
         # ``data`` into each shape, one per check, which a split declaring
         # nothing once handed back as the caller's own ``arguments``
         # (``test_a_permission_writing_request_data_reaches_neither_the_next_check_nor_the_caller``).

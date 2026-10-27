@@ -19,7 +19,7 @@ def _resolve_otel_trace() -> Any:
 _otel_trace: Any = _resolve_otel_trace()
 
 # Follows the package's import path so OTel collectors group spans coherently.
-_TRACER_NAME: str = "rest_framework_mcp"
+_TRACER_NAME: str = "django_spec_mcp"
 
 
 class _NoopSpan:

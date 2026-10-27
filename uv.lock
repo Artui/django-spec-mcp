@@ -575,12 +575,6 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
-filter = [
-    { name = "django-filter" },
-]
-jwt = [
-    { name = "djangorestframework-simplejwt" },
-]
 oauth = [
     { name = "django-oauth-toolkit" },
 ]
@@ -589,9 +583,6 @@ otel = [
 ]
 redis = [
     { name = "redis" },
-]
-spectacular = [
-    { name = "drf-spectacular" },
 ]
 test = [
     { name = "jsonschema", extra = ["format-nongpl"] },
@@ -606,7 +597,6 @@ dev = [
     { name = "django-oauth-toolkit" },
     { name = "django-restql" },
     { name = "django-stubs" },
-    { name = "djangorestframework-simplejwt" },
     { name = "djangorestframework-stubs" },
     { name = "drf-spectacular" },
     { name = "fakeredis" },
@@ -633,21 +623,18 @@ docs = [
 [package.metadata]
 requires-dist = [
     { name = "django", specifier = ">=4.2" },
-    { name = "django-filter", marker = "extra == 'filter'", specifier = ">=23" },
     { name = "django-oauth-toolkit", marker = "extra == 'oauth'", specifier = ">=3.4" },
     { name = "django-service-specs", specifier = ">=0.14.0" },
     { name = "djangorestframework", specifier = ">=3.14" },
     { name = "djangorestframework-dataclasses", specifier = ">=1.3.1" },
     { name = "djangorestframework-services", specifier = ">=0.59.0" },
-    { name = "djangorestframework-simplejwt", marker = "extra == 'jwt'", specifier = ">=5.3.1" },
-    { name = "drf-spectacular", marker = "extra == 'spectacular'", specifier = ">=0.27" },
     { name = "jsonschema", extras = ["format-nongpl"], marker = "extra == 'test'", specifier = ">=4.0.1" },
     { name = "opentelemetry-api", marker = "extra == 'otel'", specifier = ">=1.27" },
     { name = "python-toon", marker = "extra == 'toon'", specifier = ">=0.1.3" },
     { name = "redis", marker = "extra == 'redis'", specifier = ">=5.0.1" },
     { name = "typing-extensions", specifier = ">=4.6" },
 ]
-provides-extras = ["filter", "jwt", "oauth", "otel", "redis", "spectacular", "test", "toon"]
+provides-extras = ["oauth", "otel", "redis", "test", "toon"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -655,7 +642,6 @@ dev = [
     { name = "django-oauth-toolkit", specifier = ">=3.4" },
     { name = "django-restql", specifier = ">=0.18" },
     { name = "django-stubs", specifier = ">=5.0" },
-    { name = "djangorestframework-simplejwt", specifier = ">=5.3.1" },
     { name = "djangorestframework-stubs", specifier = ">=3.15" },
     { name = "drf-spectacular", specifier = ">=0.27" },
     { name = "fakeredis", specifier = ">=2.20.1" },
@@ -747,20 +733,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/c2/ca/1fa1c5b43e7f9b0169edef9ec8c63571d8d24b60381d07a0b5d18d0b328b/djangorestframework_services-0.59.0.tar.gz", hash = "sha256:2f62b803262e96ae4293a025af71a296fd7806d71df4a2754c681fcf3206e753", size = 1134344, upload-time = "2026-10-22T16:21:38.142Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/eb/af/488b65c067b7cbe74bddf18031ce310c04418ccf495c8e19a00433fb1bb5/djangorestframework_services-0.59.0-py3-none-any.whl", hash = "sha256:a1abde23715bd25ee7b22f69a6dbd99f123ed1c48df1c75642c5dfc260b5f16d", size = 393953, upload-time = "2026-10-22T16:21:36.414Z" },
-]
-
-[[package]]
-name = "djangorestframework-simplejwt"
-version = "5.5.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "django" },
-    { name = "djangorestframework" },
-    { name = "pyjwt" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/a8/27/2874a325c11112066139769f7794afae238a07ce6adf96259f08fd37a9d7/djangorestframework_simplejwt-5.5.1.tar.gz", hash = "sha256:e72c5572f51d7803021288e2057afcbd03f17fe11d484096f40a460abc76e87f", size = 101265, upload-time = "2025-07-21T16:52:25.026Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/60/94/fdfb7b2f0b16cd3ed4d4171c55c1c07a2d1e3b106c5978c8ad0c15b4a48b/djangorestframework_simplejwt-5.5.1-py3-none-any.whl", hash = "sha256:2c30f3707053d384e9f315d11c2daccfcb548d4faa453111ca19a542b732e469", size = 107674, upload-time = "2025-07-21T16:52:07.493Z" },
 ]
 
 [[package]]
@@ -1543,18 +1515,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/c3/b2/bc9c9196916376152d655522fdcebac55e66de6603a76a02bca1b6414f6c/pygments-2.20.0.tar.gz", hash = "sha256:6757cd03768053ff99f3039c1a36d6c0aa0b263438fcab17520b30a303a82b5f", size = 4955991, upload-time = "2026-03-29T13:29:33.898Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f4/7e/a72dd26f3b0f4f2bf1dd8923c85f7ceb43172af56d63c7383eb62b332364/pygments-2.20.0-py3-none-any.whl", hash = "sha256:81a9e26dd42fd28a23a2d169d86d7ac03b46e2f8b59ed4698fb4785f946d0176", size = 1231151, upload-time = "2026-03-29T13:29:30.038Z" },
-]
-
-[[package]]
-name = "pyjwt"
-version = "2.15.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "typing-extensions", marker = "python_full_version < '3.11'" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/02/a5/5197bfd06417837ac079921c66fa6393f1dea3557272a263cebfef69e432/pyjwt-2.15.0.tar.gz", hash = "sha256:b11c5f9791d7bf51c2b39a81ed669f6b2dbbd669df2942f6c60167e9e3d1abe4", size = 120513, upload-time = "2026-09-23T16:56:00.689Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/e8/55/40e45bf052ee8ee12a4dfd785519660f8effa7b065442b91646ec6828619/pyjwt-2.15.0-py3-none-any.whl", hash = "sha256:7a3742debf6b879e912dbb9819ceec1594be812452b78c5f2e2dfc56564954f8", size = 33680, upload-time = "2026-09-23T16:55:59.241Z" },
 ]
 
 [[package]]

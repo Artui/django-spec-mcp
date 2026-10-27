@@ -22,8 +22,8 @@ from django_service_specs import SelectorKind
 from rest_framework.permissions import AllowAny
 from rest_framework_services import ArgumentBinding, SelectorSpec, ServiceSpec
 
-from rest_framework_mcp import MCPServer, QueryParam, UrlKwarg
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp import MCPServer, QueryParam, UrlKwarg
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 
 _EDGE_NAMES = ["request", "view", "serializer"]
 

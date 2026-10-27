@@ -4,8 +4,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from rest_framework_mcp.constants import ResultType
-from rest_framework_mcp.elicitation.types.elicit_request import ElicitRequest
+from django_spec_mcp.constants import ResultType
+from django_spec_mcp.elicitation.types.elicit_request import ElicitRequest
 
 
 @dataclass(frozen=True)
@@ -36,7 +36,7 @@ class InputRequiredResult:
 
     request_state: str | None = None
     """Opaque to the client, signed by us. See
-    ``rest_framework_mcp.elicitation.sign_request_state``."""
+    ``django_spec_mcp.elicitation.sign_request_state``."""
 
     def __post_init__(self) -> None:
         if not self.input_requests and self.request_state is None:
@@ -49,7 +49,7 @@ class InputRequiredResult:
         """The wire object, ``resultType`` included.
 
         Stamped here rather than left to
-        [`JsonRpcResponse`][rest_framework_mcp.protocol.types.json_rpc_response.JsonRpcResponse],
+        [`JsonRpcResponse`][django_spec_mcp.protocol.types.json_rpc_response.JsonRpcResponse],
         which defaults every result to ``complete`` and steps aside only for one that
         has already named itself."""
         out: dict[str, Any] = {"resultType": ResultType.INPUT_REQUIRED.value}

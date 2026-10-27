@@ -15,7 +15,7 @@ class DispatchShape:
 
     A spec's ``permission_classes`` are judged twice on ``tools/call``: by the
     binding's wrapped
-    [`DRFPermissionAdapter`][rest_framework_mcp.auth.permissions.drf_permission_adapter.DRFPermissionAdapter],
+    [`DRFPermissionAdapter`][django_spec_mcp.auth.permissions.drf_permission_adapter.DRFPermissionAdapter],
     against a stand-in, and by ``enforce_permissions``, against the request and
     view the spec is dispatched with. Both are built by ``build``, from one of
     these, so the stand-in cannot see another request than the dispatch view
@@ -50,8 +50,8 @@ class DispatchShape:
         ``data`` is seeded rather than parsed, and ``view.kwargs`` is a fresh
         ``dict`` per build, which a permission writing into it cannot carry
         into the next check. ``data`` is seeded as given, so the shape is
-        where it is copied: ``dispatch_shape`` and ``chain_shape`` each hand a
-        check a ``data`` of its own.
+        where it is copied: ``dispatch_shape`` hands each check a ``data`` of
+        its own.
 
         **``auth`` is set beside ``user``, and has to be.** DRF resolves
         ``request.auth`` lazily: reading it on a request that has never

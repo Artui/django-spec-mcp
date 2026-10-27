@@ -15,10 +15,10 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import DjangoPermRequired, MCPServer, ScopeRequired
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp import DjangoPermRequired, MCPServer, ScopeRequired
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 
 
 def _server() -> MCPServer:
@@ -139,7 +139,7 @@ def test_a_gate_only_permission_denies_at_dispatch_as_well_as_in_listings() -> N
     """
     from django.http import HttpRequest
 
-    from rest_framework_mcp.handlers.utils import check_permissions
+    from django_spec_mcp.handlers.utils import check_permissions
 
     class _GateOnly:
         def has_permission(self, request: Any, token: Any) -> bool:

@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from rest_framework_mcp.ui.build_app_document import build_app_document
+from django_spec_mcp.ui.build_app_document import build_app_document
 
 BODY = '<div id="rows">Waiting.</div>'
 

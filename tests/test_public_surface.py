@@ -2,13 +2,13 @@
 
 ``__all__`` is a claim, and nothing else checks it. A name listed but never
 imported passes lint, passes types, passes the whole suite — and fails for the
-first person who writes ``from rest_framework_mcp.contrib.oauth import <name>``,
+first person who writes ``from django_spec_mcp.handlers import <name>``,
 which is exactly the spelling the docs teach. It also breaks ``import *``
 outright, with an ``AttributeError`` naming a symbol that plainly exists one
 file away.
 
-That happened here: ``check_oauth_url_shadowing`` sat in the OAuth package's
-``__all__`` with no import beside it.
+That happened here: an OAuth helper sat in its subpackage's ``__all__`` with
+no import beside it.
 
 **Checked statically, against the source, rather than with ``hasattr`` on the
 imported module** — and the difference is the whole test. Importing
@@ -27,9 +27,9 @@ import pathlib
 
 import pytest
 
-import rest_framework_mcp
+import django_spec_mcp
 
-PACKAGE_ROOT = pathlib.Path(rest_framework_mcp.__file__).parent
+PACKAGE_ROOT = pathlib.Path(django_spec_mcp.__file__).parent
 
 
 def _bound_names(tree: ast.Module) -> set[str]:
@@ -86,7 +86,7 @@ SOURCES = _sources()
 def test_the_scan_found_the_package() -> None:
     """Guards the guard: an empty scan would make every check below vacuous."""
     assert len(SOURCES) > 50
-    assert any(name == "contrib/oauth/__init__.py" for name, _, _ in SOURCES)
+    assert any(name == "handlers/__init__.py" for name, _, _ in SOURCES)
 
 
 @pytest.mark.parametrize(

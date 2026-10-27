@@ -10,13 +10,13 @@ normalise an empty binding bundle to ``None``.
 
 from __future__ import annotations
 
-from rest_framework_mcp.protocol.types.prompt import Prompt
-from rest_framework_mcp.protocol.types.resource import Resource
-from rest_framework_mcp.protocol.types.resource_contents import ResourceContents
-from rest_framework_mcp.protocol.types.resource_template import ResourceTemplate
-from rest_framework_mcp.protocol.types.tool import Tool
-from rest_framework_mcp.protocol.types.tool_content_block import ToolContentBlock
-from rest_framework_mcp.protocol.types.tool_result import ToolResult
+from django_spec_mcp.protocol.types.prompt import Prompt
+from django_spec_mcp.protocol.types.resource import Resource
+from django_spec_mcp.protocol.types.resource_contents import ResourceContents
+from django_spec_mcp.protocol.types.resource_template import ResourceTemplate
+from django_spec_mcp.protocol.types.tool import Tool
+from django_spec_mcp.protocol.types.tool_content_block import ToolContentBlock
+from django_spec_mcp.protocol.types.tool_result import ToolResult
 
 META = {"example.com/flavour": {"colour": "teal"}}
 

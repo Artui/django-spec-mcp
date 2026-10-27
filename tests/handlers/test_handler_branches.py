@@ -11,20 +11,20 @@ from rest_framework.permissions import BasePermission
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.constants import JsonRpcErrorCode
-from rest_framework_mcp.handlers.handle_resources_read import handle_resources_read
-from rest_framework_mcp.handlers.handle_tools_call import handle_tools_call
-from rest_framework_mcp.handlers.handle_tools_call_async import handle_tools_call_async
-from rest_framework_mcp.handlers.handle_tools_list import handle_tools_list
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.handlers.utils import check_permissions
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.registry.prompt_registry import PromptRegistry
-from rest_framework_mcp.registry.resource_registry import ResourceRegistry
-from rest_framework_mcp.registry.tool_registry import ToolRegistry
-from rest_framework_mcp.registry.types.resource_binding import ResourceBinding
-from rest_framework_mcp.registry.types.tool_binding import ToolBinding
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.constants import JsonRpcErrorCode
+from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
+from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.handlers.utils import check_permissions
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.registry.prompt_registry import PromptRegistry
+from django_spec_mcp.registry.resource_registry import ResourceRegistry
+from django_spec_mcp.registry.tool_registry import ToolRegistry
+from django_spec_mcp.registry.types.resource_binding import ResourceBinding
+from django_spec_mcp.registry.types.tool_binding import ToolBinding
 from tests.utils import tool_error
 
 
@@ -283,7 +283,7 @@ def test_tools_call_omits_structured_content_when_global_disabled(settings) -> N
     # Disabling structuredContent also requires disabling outputSchema —
     # advertising the schema while suppressing the content is a spec
     # violation that ``resolve_structured_output`` rejects.
-    settings.REST_FRAMEWORK_MCP = {
+    settings.SPEC_MCP = {
         "INCLUDE_STRUCTURED_CONTENT": False,
         "INCLUDE_OUTPUT_SCHEMA": False,
     }
@@ -305,7 +305,7 @@ def test_tools_call_omits_structured_content_when_global_disabled(settings) -> N
 def test_tools_call_per_binding_override_forces_off_when_global_on(settings) -> None:
     # Per-binding override must drop the schema in lockstep — otherwise
     # the resolver raises at request time.
-    settings.REST_FRAMEWORK_MCP = {"INCLUDE_STRUCTURED_CONTENT": True}
+    settings.SPEC_MCP = {"INCLUDE_STRUCTURED_CONTENT": True}
 
     def svc() -> dict[str, Any]:
         return {"a": 1}
@@ -326,7 +326,7 @@ def test_tools_call_per_binding_override_forces_off_when_global_on(settings) -> 
 
 
 def test_tools_call_per_binding_override_forces_on_when_global_off(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {"INCLUDE_STRUCTURED_CONTENT": False}
+    settings.SPEC_MCP = {"INCLUDE_STRUCTURED_CONTENT": False}
 
     def svc() -> dict[str, Any]:
         return {"a": 1}
@@ -380,7 +380,7 @@ def test_tools_list_drops_output_schema_when_global_setting_disabled(settings) -
     """``INCLUDE_OUTPUT_SCHEMA=False`` server-wide suppresses the schema for all bindings."""
     from rest_framework import serializers as drf_serializers
 
-    settings.REST_FRAMEWORK_MCP = {"INCLUDE_OUTPUT_SCHEMA": False}
+    settings.SPEC_MCP = {"INCLUDE_OUTPUT_SCHEMA": False}
 
     class _Ser(drf_serializers.Serializer):
         a = drf_serializers.IntegerField()
@@ -447,7 +447,7 @@ def test_tools_list_emits_output_schema_when_structured_content_enabled() -> Non
 
 def test_service_tool_with_merge_binding_spreads_args_to_callable_params() -> None:
     """``ArgumentBinding.SPREAD_AUTHOR_WINS`` lets a service declare individual params."""
-    from rest_framework_mcp.constants import ArgumentBinding
+    from django_spec_mcp.constants import ArgumentBinding
 
     def svc(*, project_id: str, expand: bool = False) -> dict[str, Any]:
         return {"pid": project_id, "expand": expand}
@@ -470,7 +470,7 @@ def test_service_tool_with_merge_binding_spreads_args_to_callable_params() -> No
 
 def test_service_tool_merge_pool_seeds_cannot_be_overridden_by_client() -> None:
     """Reserved pool-seed keys (``user`` / ``request`` / ``data``) are stripped from spread."""
-    from rest_framework_mcp.constants import ArgumentBinding
+    from django_spec_mcp.constants import ArgumentBinding
 
     received: dict[str, Any] = {}
 

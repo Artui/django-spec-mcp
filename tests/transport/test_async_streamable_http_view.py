@@ -9,15 +9,15 @@ from django import VERSION as DJANGO_VERSION
 from django.http import HttpRequest
 from django.test import AsyncClient, RequestFactory, override_settings
 
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.config.build_mcp_config import build_mcp_config
-from rest_framework_mcp.registry.resource_registry import ResourceRegistry
-from rest_framework_mcp.registry.tool_registry import ToolRegistry
-from rest_framework_mcp.transport.async_streamable_http_viewset import (
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.config.build_mcp_config import build_mcp_config
+from django_spec_mcp.registry.resource_registry import ResourceRegistry
+from django_spec_mcp.registry.tool_registry import ToolRegistry
+from django_spec_mcp.transport.async_streamable_http_viewset import (
     ASYNC_STREAMABLE_HTTP_ACTION_MAP,
     AsyncStreamableHttpViewSet,
 )
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.testapp.mcp import build_server
 from tests.testapp.urlconf_for import urlconf_for
 from tests.utils import nested_past_the_decoders_limit_here, on_a_bounded_stack
@@ -151,7 +151,7 @@ async def test_async_get_without_broker_returns_405() -> None:
     """When no broker is wired, GET is 405 (spec-compliant fallback)."""
     factory = RequestFactory()
     request = factory.get("/mcp/")
-    from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+    from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 
     view = AsyncStreamableHttpViewSet.as_view(
         ASYNC_STREAMABLE_HTTP_ACTION_MAP,
@@ -469,7 +469,7 @@ async def test_async_initialize_with_unsupported_version_is_rejected(
 ) -> None:
     """Parity with the sync transport: a header naming a version this server
     does not speak is a mismatch on every method, ``initialize`` included."""
-    settings.REST_FRAMEWORK_MCP = {
+    settings.SPEC_MCP = {
         "ALLOWED_ORIGINS": ["*"],
         "PROTOCOL_VERSIONS": ["2025-11-25"],
         "SERVER_INFO": {},
@@ -537,7 +537,7 @@ async def test_async_request_with_no_params_field(async_urlconf) -> None:
 
 async def test_acall_invokes_async_function_directly() -> None:
     """``acall`` skips the thread hop when the callable is already async."""
-    from rest_framework_mcp._compat.acall import acall
+    from django_spec_mcp._compat.acall import acall
 
     async def aproduce(x: int) -> int:
         return x * 2
@@ -546,7 +546,7 @@ async def test_acall_invokes_async_function_directly() -> None:
 
 
 async def test_acall_invokes_sync_function_via_thread() -> None:
-    from rest_framework_mcp._compat.acall import acall
+    from django_spec_mcp._compat.acall import acall
 
     def produce(x: int) -> int:
         return x * 2
@@ -563,8 +563,8 @@ async def test_async_dispatch_routes_exceptions_through_handle_exception() -> No
     """
     from rest_framework.exceptions import APIException
 
-    from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-    from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+    from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+    from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 
     class _RaisingViewSet(AsyncStreamableHttpViewSet):
         async def handle_jsonrpc(self, request):  # noqa: ARG002
@@ -656,8 +656,8 @@ async def test_async_permission_denial_is_403_with_a_scope_challenge() -> None:
     """
     from rest_framework_services.types.service_spec import ServiceSpec
 
-    from rest_framework_mcp import MCPServer, ScopeRequired
-    from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+    from django_spec_mcp import MCPServer, ScopeRequired
+    from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 
     def _noop() -> dict[str, str]:
         return {}

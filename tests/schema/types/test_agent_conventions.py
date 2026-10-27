@@ -14,9 +14,9 @@ from dataclasses import fields
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 
-from rest_framework_mcp import AgentConventions
-from rest_framework_mcp.schema import HANDLE_DESCRIPTION, PAGED_QUERY_PARAM_SCOPE
-from rest_framework_mcp.schema.types import agent_conventions
+from django_spec_mcp import AgentConventions
+from django_spec_mcp.schema import HANDLE_DESCRIPTION, PAGED_QUERY_PARAM_SCOPE
+from django_spec_mcp.schema.types import agent_conventions
 
 _FIELDS = [field.name for field in fields(AgentConventions)]
 

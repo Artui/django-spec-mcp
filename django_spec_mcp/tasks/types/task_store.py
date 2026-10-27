@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from rest_framework_mcp.tasks.types.task_record import TaskRecord
+from django_spec_mcp.tasks.types.task_record import TaskRecord
 
 
 @runtime_checkable
@@ -12,9 +12,9 @@ class TaskStore(Protocol):
     **Unlike ``SessionStore``, an in-process implementation is not deployable.** A
     session only has to be recognised by the process that minted it, while a task is
     created by a web worker and finished by a *different* process. So
-    [`InMemoryTaskStore`][rest_framework_mcp.tasks.in_memory_task_store.InMemoryTaskStore]
+    [`InMemoryTaskStore`][django_spec_mcp.tasks.in_memory_task_store.InMemoryTaskStore]
     is a development and test convenience, and
-    [`DjangoCacheTaskStore`][rest_framework_mcp.tasks.django_cache_task_store.DjangoCacheTaskStore]
+    [`DjangoCacheTaskStore`][django_spec_mcp.tasks.django_cache_task_store.DjangoCacheTaskStore]
     is the default.
 
     Four operations, no more:
@@ -34,7 +34,7 @@ class TaskStore(Protocol):
 
     **No locking, deliberately.** Last write wins, and the guard against a
     finished task being reopened lives in
-    ``rest_framework_mcp.tasks.transition_task`` — one rule in one place
+    ``django_spec_mcp.tasks.transition_task`` — one rule in one place
     beats four backends implementing compare-and-swap differently.
     """
 

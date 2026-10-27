@@ -13,18 +13,18 @@ from typing import Any
 import pytest
 from django.core.cache import cache
 
-from rest_framework_mcp import MCPServer
-from rest_framework_mcp.constants import TaskStatus
-from rest_framework_mcp.handlers.handle_tools_call import handle_tools_call
-from rest_framework_mcp.protocol.types.task import Task
-from rest_framework_mcp.tasks.django_cache_task_store import DjangoCacheTaskStore
-from rest_framework_mcp.tasks.in_memory_task_store import InMemoryTaskStore
-from rest_framework_mcp.tasks.report_task_progress import (
+from django_spec_mcp import MCPServer
+from django_spec_mcp.constants import TaskStatus
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.protocol.types.task import Task
+from django_spec_mcp.tasks.django_cache_task_store import DjangoCacheTaskStore
+from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
+from django_spec_mcp.tasks.report_task_progress import (
     _render_progress,
     report_task_progress,
 )
-from rest_framework_mcp.tasks.transition_task import transition_task
-from rest_framework_mcp.tasks.types.task_record import TaskRecord
+from django_spec_mcp.tasks.transition_task import transition_task
+from django_spec_mcp.tasks.types.task_record import TaskRecord
 from tests.tasks.conftest import RecordingExecutor, context
 from tests.tasks.test_task_lifecycle import _create, _register
 

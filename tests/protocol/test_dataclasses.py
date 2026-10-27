@@ -1,22 +1,22 @@
 from __future__ import annotations
 
-from rest_framework_mcp.constants import UI_EXTENSION_ID, JsonRpcErrorCode
-from rest_framework_mcp.protocol.parse_message import parse_message
-from rest_framework_mcp.protocol.types.client_capabilities import ClientCapabilities
-from rest_framework_mcp.protocol.types.implementation import Implementation
-from rest_framework_mcp.protocol.types.initialize_params import InitializeParams
-from rest_framework_mcp.protocol.types.initialize_result import InitializeResult
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.protocol.types.json_rpc_notification import JsonRpcNotification
-from rest_framework_mcp.protocol.types.json_rpc_request import JsonRpcRequest
-from rest_framework_mcp.protocol.types.json_rpc_response import JsonRpcResponse
-from rest_framework_mcp.protocol.types.resource import Resource
-from rest_framework_mcp.protocol.types.resource_contents import ResourceContents
-from rest_framework_mcp.protocol.types.resource_template import ResourceTemplate
-from rest_framework_mcp.protocol.types.server_capabilities import ServerCapabilities
-from rest_framework_mcp.protocol.types.tool import Tool
-from rest_framework_mcp.protocol.types.tool_content_block import ToolContentBlock
-from rest_framework_mcp.protocol.types.tool_result import ToolResult
+from django_spec_mcp.constants import UI_EXTENSION_ID, JsonRpcErrorCode
+from django_spec_mcp.protocol.parse_message import parse_message
+from django_spec_mcp.protocol.types.client_capabilities import ClientCapabilities
+from django_spec_mcp.protocol.types.implementation import Implementation
+from django_spec_mcp.protocol.types.initialize_params import InitializeParams
+from django_spec_mcp.protocol.types.initialize_result import InitializeResult
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.protocol.types.json_rpc_notification import JsonRpcNotification
+from django_spec_mcp.protocol.types.json_rpc_request import JsonRpcRequest
+from django_spec_mcp.protocol.types.json_rpc_response import JsonRpcResponse
+from django_spec_mcp.protocol.types.resource import Resource
+from django_spec_mcp.protocol.types.resource_contents import ResourceContents
+from django_spec_mcp.protocol.types.resource_template import ResourceTemplate
+from django_spec_mcp.protocol.types.server_capabilities import ServerCapabilities
+from django_spec_mcp.protocol.types.tool import Tool
+from django_spec_mcp.protocol.types.tool_content_block import ToolContentBlock
+from django_spec_mcp.protocol.types.tool_result import ToolResult
 
 
 def test_implementation_to_dict() -> None:
@@ -374,7 +374,7 @@ def test_parse_message_rejects_unknown_shape() -> None:
 def test_completion_emits_total_when_it_is_known() -> None:
     """``total`` is optional on the wire; the handler leaves it unset, but a
     consumer building a :class:`Completion` directly may know the count."""
-    from rest_framework_mcp.protocol.types.completion import Completion
+    from django_spec_mcp.protocol.types.completion import Completion
 
     assert Completion(values=("a",), total=42, has_more=True).to_dict() == {
         "values": ["a"],

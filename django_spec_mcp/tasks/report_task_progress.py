@@ -6,9 +6,9 @@ from typing import Any
 
 from django_service_specs import ProgressReporter
 
-from rest_framework_mcp.tasks.types.task_record import TaskRecord
-from rest_framework_mcp.tasks.types.task_store import TaskStore
-from rest_framework_mcp.tasks.utils import now_iso
+from django_spec_mcp.tasks.types.task_record import TaskRecord
+from django_spec_mcp.tasks.types.task_store import TaskStore
+from django_spec_mcp.tasks.utils import now_iso
 
 
 def report_task_progress(store: TaskStore, task_id: str) -> ProgressReporter:

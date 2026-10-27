@@ -1,6 +1,6 @@
 """Registration-time checks that a declared serializer is a shape MCP can use.
 
-``rest_framework_mcp.adapters.utils.validate_serializer_shapes`` runs from all
+``django_spec_mcp.adapters.utils.validate_serializer_shapes`` runs from all
 three tool adapters, before anything else reads the serializer, and from the
 resource adapter for its output alone (tested with the read path, in
 ``tests/handlers/test_resources_read_dataclass_output.py``). Without it a
@@ -26,15 +26,14 @@ from rest_framework import serializers as drf_serializers
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import ChainStep, MCPServer
-from rest_framework_mcp.adapters.chain_to_tool import chain_steps_to_tool
-from rest_framework_mcp.adapters.selector_to_tool import selector_spec_to_tool
-from rest_framework_mcp.adapters.service_to_tool import service_spec_to_tool
-from rest_framework_mcp.adapters.utils import validate_serializer_shapes
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.constants import ArgumentBinding
-from rest_framework_mcp.schema.input_schema import build_input_schema
-from rest_framework_mcp.schema.output_schema import build_output_schema
+from django_spec_mcp import MCPServer
+from django_spec_mcp.adapters.selector_to_tool import selector_spec_to_tool
+from django_spec_mcp.adapters.service_to_tool import service_spec_to_tool
+from django_spec_mcp.adapters.utils import validate_serializer_shapes
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.constants import ArgumentBinding
+from django_spec_mcp.schema.input_schema import build_input_schema
+from django_spec_mcp.schema.output_schema import build_output_schema
 
 
 class _Input(drf_serializers.Serializer):
@@ -177,61 +176,6 @@ def test_selector_adapter_refuses_output_serializer() -> None:
                 selector=lambda **_: [],
                 output_serializer=_NotASerializer,
             ),
-        )
-
-
-def _service_step(
-    alias: str, *, input_serializer: object = None, output_serializer: object = None
-) -> ChainStep:
-    return ChainStep(
-        alias,
-        ServiceSpec(
-            service=lambda **_: {},
-            atomic=False,
-            input_serializer=input_serializer,
-            output_selector_spec=(
-                SelectorSpec(kind=SelectorKind.RETRIEVE, output_serializer=output_serializer)
-                if output_serializer is not None
-                else None
-            ),
-        ),
-    )
-
-
-def test_chain_adapter_refuses_explicit_input_serializer() -> None:
-    with pytest.raises(ImproperlyConfigured, match=r"^chain tool 'c': input_serializer"):
-        chain_steps_to_tool(name="c", steps=(_service_step("a"),), input_serializer=_NotASerializer)
-
-
-def test_chain_adapter_refuses_input_serializer_inherited_from_first_step() -> None:
-    """A chain with no explicit input validates against its first step's."""
-    with pytest.raises(ImproperlyConfigured, match=r"^chain tool 'c': input_serializer"):
-        chain_steps_to_tool(name="c", steps=(_service_step("a", input_serializer=_NotASerializer),))
-
-
-def test_chain_adapter_refuses_the_output_steps_serializer() -> None:
-    with pytest.raises(ImproperlyConfigured, match=r"^chain tool 'c', step 'b': output"):
-        chain_steps_to_tool(
-            name="c",
-            steps=(_service_step("a"), _service_step("b", output_serializer=_NotASerializer)),
-        )
-
-
-def test_chain_adapter_ignores_a_step_serializer_that_never_renders() -> None:
-    """Only the output step renders, so only its serializer is held to the shape."""
-    binding = chain_steps_to_tool(
-        name="c",
-        steps=(_service_step("a", output_serializer=_NotASerializer), _service_step("b")),
-    )
-    assert binding.output_step.alias == "b"
-
-
-def test_chain_adapter_under_output_all_refuses_every_rendered_step() -> None:
-    with pytest.raises(ImproperlyConfigured, match=r"^chain tool 'c', step 'a': output"):
-        chain_steps_to_tool(
-            name="c",
-            steps=(_service_step("a", output_serializer=_NotASerializer), _service_step("b")),
-            output_all=True,
         )
 
 

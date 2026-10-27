@@ -4,7 +4,7 @@ from typing import Any
 
 from django.http import HttpRequest
 
-from rest_framework_mcp.auth.backends.django_oauth_toolkit_backend import (
+from django_spec_mcp.auth.backends.django_oauth_toolkit_backend import (
     DjangoOAuthToolkitBackend,
 )
 
@@ -113,7 +113,7 @@ def test_valid_token_with_no_scope(monkeypatch) -> None:
 
 def test_audience_mismatch_rejects_token(monkeypatch, settings) -> None:
     """RFC 8707: a token bound to a different resource is rejected."""
-    settings.REST_FRAMEWORK_MCP = {
+    settings.SPEC_MCP = {
         "RESOURCE_URL": "https://example.com/mcp/",
         "ENFORCE_AUDIENCE": True,
     }
@@ -128,7 +128,7 @@ def test_audience_mismatch_rejects_token(monkeypatch, settings) -> None:
 
 
 def test_audience_match_accepts_token(monkeypatch, settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {"RESOURCE_URL": "https://example.com/mcp/"}
+    settings.SPEC_MCP = {"RESOURCE_URL": "https://example.com/mcp/"}
     _patch_loader(
         monkeypatch,
         lambda _t: _FakeToken(
@@ -141,7 +141,7 @@ def test_audience_match_accepts_token(monkeypatch, settings) -> None:
 
 
 def test_audience_unset_skips_enforcement(monkeypatch, settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {}
+    settings.SPEC_MCP = {}
     _patch_loader(
         monkeypatch,
         lambda _t: _FakeToken(scope="read", user="alice", valid=True, resource=None),
@@ -151,7 +151,7 @@ def test_audience_unset_skips_enforcement(monkeypatch, settings) -> None:
 
 
 def test_audience_set_but_token_missing_resource_rejected(monkeypatch, settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {
+    settings.SPEC_MCP = {
         "RESOURCE_URL": "https://example.com/mcp/",
         "ENFORCE_AUDIENCE": True,
     }
@@ -164,7 +164,7 @@ def test_audience_set_but_token_missing_resource_rejected(monkeypatch, settings)
 
 
 def test_protected_resource_metadata_uses_settings(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {
+    settings.SPEC_MCP = {
         "SERVER_INFO": {
             "resource": "https://x/mcp",
             "authorization_servers": ["https://x/auth"],
@@ -185,7 +185,7 @@ def test_protected_resource_metadata_prefers_resource_url(settings) -> None:
     Single source of truth for the canonical URL so audience enforcement and
     PRM can never drift apart.
     """
-    settings.REST_FRAMEWORK_MCP = {
+    settings.SPEC_MCP = {
         "RESOURCE_URL": "https://canonical.example/mcp/",
         "SERVER_INFO": {"resource": "https://stale.example/mcp/"},
     }
@@ -194,7 +194,7 @@ def test_protected_resource_metadata_prefers_resource_url(settings) -> None:
 
 
 def test_protected_resource_metadata_omits_documentation_when_unset(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {"SERVER_INFO": {"resource": "https://x/mcp"}}
+    settings.SPEC_MCP = {"SERVER_INFO": {"resource": "https://x/mcp"}}
     md = DjangoOAuthToolkitBackend().protected_resource_metadata()
     assert md.resource_documentation is None
     # ``to_dict()`` drops the key entirely so the wire shape is clean.
@@ -202,7 +202,7 @@ def test_protected_resource_metadata_omits_documentation_when_unset(settings) ->
 
 
 def test_protected_resource_metadata_emits_documentation_when_set(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {
+    settings.SPEC_MCP = {
         "SERVER_INFO": {"resource": "https://x/mcp", "documentation": "https://x/docs"},
     }
     md = DjangoOAuthToolkitBackend().protected_resource_metadata()
@@ -211,7 +211,7 @@ def test_protected_resource_metadata_emits_documentation_when_set(settings) -> N
 
 def test_protected_resource_metadata_required_keys_present(settings) -> None:
     """RFC 9728 — the four keys clients rely on are always emitted."""
-    settings.REST_FRAMEWORK_MCP = {
+    settings.SPEC_MCP = {
         "RESOURCE_URL": "https://x/mcp/",
         "SERVER_INFO": {
             "authorization_servers": ["https://as.example/"],
@@ -231,7 +231,7 @@ def test_protected_resource_metadata_required_keys_present(settings) -> None:
 
 
 def test_www_authenticate_challenge_includes_metadata(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {
+    settings.SPEC_MCP = {
         "SERVER_INFO": {"resource_metadata_url": "https://x/.well-known/oauth-protected-resource"},
     }
     challenge = DjangoOAuthToolkitBackend().www_authenticate_challenge(
@@ -243,7 +243,7 @@ def test_www_authenticate_challenge_includes_metadata(settings) -> None:
 
 
 def test_www_authenticate_challenge_minimal(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {"SERVER_INFO": {}}
+    settings.SPEC_MCP = {"SERVER_INFO": {}}
     assert DjangoOAuthToolkitBackend().www_authenticate_challenge() == 'Bearer realm="mcp"'
 
 
@@ -252,7 +252,7 @@ def test_www_authenticate_challenge_minimal(settings) -> None:
 
 def test_authorization_server_metadata_shape(settings) -> None:
     """RFC 8414 payload derived from ``SERVER_INFO``."""
-    settings.REST_FRAMEWORK_MCP = {
+    settings.SPEC_MCP = {
         "SERVER_INFO": {
             "authorization_servers": ["https://issuer.example/oauth"],
             "scopes_supported": ["mcp:read", "mcp:write"],
@@ -271,7 +271,7 @@ def test_authorization_server_metadata_shape(settings) -> None:
 
 def test_authorization_server_metadata_missing_issuer_returns_empty_endpoints(settings) -> None:
     """No ``authorization_servers`` → empty issuer + endpoints, but valid JSON shape."""
-    settings.REST_FRAMEWORK_MCP = {"SERVER_INFO": {}}
+    settings.SPEC_MCP = {"SERVER_INFO": {}}
     md = DjangoOAuthToolkitBackend().authorization_server_metadata()
     assert md.issuer == ""
     assert md.authorization_endpoint == ""
@@ -279,7 +279,7 @@ def test_authorization_server_metadata_missing_issuer_returns_empty_endpoints(se
 
 
 def test_authorization_server_metadata_strips_trailing_slash_in_issuer(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {
+    settings.SPEC_MCP = {
         "SERVER_INFO": {"authorization_servers": ["https://issuer.example/oauth/"]},
     }
     md = DjangoOAuthToolkitBackend().authorization_server_metadata()
@@ -291,7 +291,7 @@ def test_authorization_server_metadata_strips_trailing_slash_in_issuer(settings)
 
 
 def test_explicit_resource_url_wins_over_the_global_setting(monkeypatch, settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {"RESOURCE_URL": "https://example.com/public/mcp/"}
+    settings.SPEC_MCP = {"RESOURCE_URL": "https://example.com/public/mcp/"}
     _patch_loader(
         monkeypatch,
         lambda _t: _FakeToken(
@@ -309,7 +309,7 @@ def test_a_token_for_one_server_is_rejected_by_another(monkeypatch, settings) ->
     resource, so a token minted for the public server sailed through the
     internal one — defeating the mechanism meant to prevent exactly that.
     """
-    settings.REST_FRAMEWORK_MCP = {}
+    settings.SPEC_MCP = {}
     _patch_loader(
         monkeypatch,
         lambda _t: _FakeToken(
@@ -333,7 +333,7 @@ def test_a_token_for_one_server_is_rejected_by_another(monkeypatch, settings) ->
 
 
 def test_protected_resource_metadata_is_per_backend(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {"RESOURCE_URL": "https://example.com/public/mcp/"}
+    settings.SPEC_MCP = {"RESOURCE_URL": "https://example.com/public/mcp/"}
     internal = DjangoOAuthToolkitBackend(
         resource_url="https://example.com/internal/mcp/",
         scopes_supported=["internal:read"],
@@ -347,7 +347,7 @@ def test_challenge_points_at_this_servers_metadata(settings) -> None:
     """The PRM endpoint mounts under each server's own prefix, so the 401's
     resource_metadata pointer has to be derived per server — taken from the
     global SERVER_INFO it could only ever be right for one of them."""
-    settings.REST_FRAMEWORK_MCP = {}
+    settings.SPEC_MCP = {}
     internal = DjangoOAuthToolkitBackend(resource_url="https://example.com/internal/mcp/")
     challenge = internal.www_authenticate_challenge()
     assert (
@@ -357,7 +357,7 @@ def test_challenge_points_at_this_servers_metadata(settings) -> None:
 
 
 def test_explicit_metadata_url_overrides_the_derived_one(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {}
+    settings.SPEC_MCP = {}
     backend = DjangoOAuthToolkitBackend(
         resource_url="https://example.com/internal/mcp/",
         resource_metadata_url="https://cdn.example/prm.json",
@@ -368,5 +368,5 @@ def test_explicit_metadata_url_overrides_the_derived_one(settings) -> None:
 
 
 def test_no_resource_url_means_no_metadata_pointer(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {}
+    settings.SPEC_MCP = {}
     assert "resource_metadata" not in DjangoOAuthToolkitBackend().www_authenticate_challenge()

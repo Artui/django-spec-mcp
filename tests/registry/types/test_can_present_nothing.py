@@ -19,7 +19,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp.registry.types.utils import can_present_nothing
+from django_spec_mcp.registry.types.utils import can_present_nothing
 from tests.testapp.models import Invoice
 from tests.testapp.serializers import InvoiceOutputSerializer
 

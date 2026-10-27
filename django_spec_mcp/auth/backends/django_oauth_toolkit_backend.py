@@ -9,13 +9,13 @@ from django.apps import apps
 from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest
 
-from rest_framework_mcp.auth.audience import audience_matches
-from rest_framework_mcp.auth.types.authorization_server_metadata import (
+from django_spec_mcp.auth.audience import audience_matches
+from django_spec_mcp.auth.types.authorization_server_metadata import (
     AuthorizationServerMetadata,
 )
-from rest_framework_mcp.auth.types.protected_resource_metadata import ProtectedResourceMetadata
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.conf import get_setting
+from django_spec_mcp.auth.types.protected_resource_metadata import ProtectedResourceMetadata
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.conf import get_setting
 
 # The attribute an access token is expected to carry its RFC 8707 resource on.
 # Named once so the startup check and the default getter cannot drift.
@@ -35,9 +35,9 @@ class DjangoOAuthToolkitBackend:
     """Resource-server adapter for ``django-oauth-toolkit`` (DOT).
 
     Validates the bearer token using DOT's own validators, then projects the result into
-    a [`TokenInfo`][rest_framework_mcp.auth.types.token_info.TokenInfo].
+    a [`TokenInfo`][django_spec_mcp.auth.types.token_info.TokenInfo].
     ``oauth2_provider`` is imported lazily inside the method bodies because it is an
-    optional extra (``pip install "djangorestframework-mcp-server[oauth]"``): importing
+    optional extra (``pip install "django-spec-mcp[oauth]"``): importing
     this module without DOT is fine, and the ``ImportError`` fires only when a request
     actually reaches authentication.
 
@@ -168,7 +168,7 @@ class DjangoOAuthToolkitBackend:
         """Refuse at mount time if DOT cannot serve a request, rather than at the first one.
 
         Implements the opt-in
-        :class:`~rest_framework_mcp.auth.types.self_checking.SelfChecking`
+        :class:`~django_spec_mcp.auth.types.self_checking.SelfChecking`
         protocol. The import stays lazy everywhere else on purpose -- see the
         class docstring -- and this does not change that: an in-process server
         is never mounted, so it is never called.
@@ -194,7 +194,7 @@ class DjangoOAuthToolkitBackend:
             raise ImproperlyConfigured(
                 "DjangoOAuthToolkitBackend is mounted but `django-oauth-toolkit` is "
                 "not installed, so every request to this endpoint would fail. "
-                'Install it via `pip install "djangorestframework-mcp-server[oauth]"`, '
+                'Install it via `pip install "django-spec-mcp[oauth]"`, '
                 "or pass a different auth_backend= to MCPServer(...). "
                 "This is the default backend, so a server built without an explicit "
                 "auth_backend= reaches it."
@@ -225,7 +225,7 @@ class DjangoOAuthToolkitBackend:
         except ImportError as exc:  # pragma: no cover - exercised by smoke job with DOT absent
             raise ImportError(
                 "DjangoOAuthToolkitBackend requires `django-oauth-toolkit`. "
-                'Install it via `pip install "djangorestframework-mcp-server[oauth]"` '
+                'Install it via `pip install "django-spec-mcp[oauth]"` '
                 "or pass a different auth_backend= to MCPServer(...)."
             ) from exc
 
@@ -273,8 +273,8 @@ class DjangoOAuthToolkitBackend:
                 "DjangoOAuthToolkitBackend: audience enforcement is on but no resource "
                 "URL is configured, so there is nothing for a token's resource to match "
                 "and every request would be rejected. Set resource_url= (or "
-                "REST_FRAMEWORK_MCP['RESOURCE_URL']), or turn off "
-                "REST_FRAMEWORK_MCP['ENFORCE_AUDIENCE']."
+                "SPEC_MCP['RESOURCE_URL']), or turn off "
+                "SPEC_MCP['ENFORCE_AUDIENCE']."
             )
         if has_custom_getter:
             return
@@ -298,7 +298,7 @@ class DjangoOAuthToolkitBackend:
             "audience_getter= to read the audience from wherever it actually lives (a JWT "
             "claim, a gateway header), swap OAUTH2_PROVIDER['ACCESS_TOKEN_MODEL'] for one "
             f"carrying a {_RESOURCE_FIELD!r} field, or turn off "
-            "REST_FRAMEWORK_MCP['ENFORCE_AUDIENCE'] and keep resource_url= for metadata only."
+            "SPEC_MCP['ENFORCE_AUDIENCE'] and keep resource_url= for metadata only."
         )
 
     def _warn_if_enforcement_is_available(self) -> None:
@@ -345,7 +345,7 @@ class DjangoOAuthToolkitBackend:
             "deployment could enforce it. The MCP 2026-07-28 spec makes that validation a "
             "MUST for a resource server, and without it a token minted for another resource "
             "on the same authorization server is accepted here. Set "
-            "REST_FRAMEWORK_MCP['ENFORCE_AUDIENCE'] = True, or silence "
+            "SPEC_MCP['ENFORCE_AUDIENCE'] = True, or silence "
             "UnenforcedAudienceWarning if this server is deliberately unenforced.",
             UnenforcedAudienceWarning,
             stacklevel=3,
@@ -366,7 +366,7 @@ class DjangoOAuthToolkitBackend:
                 if self._resource_url
                 else (
                     "No resource URL is configured, so `resource` is empty. Set "
-                    "REST_FRAMEWORK_MCP['RESOURCE_URL'] or MCPServer(resource_url=...)."
+                    "SPEC_MCP['RESOURCE_URL'] or MCPServer(resource_url=...)."
                 )
             ),
         )
@@ -375,8 +375,8 @@ class DjangoOAuthToolkitBackend:
         """Return the RFC 8414 metadata payload for the DOT-hosted authorization server.
 
         Endpoints are built from this backend's first ``authorization_servers``
-        entry plus the endpoint paths, which default to the ``contrib.oauth``
-        mount convention (``/oauth/authorize/``, ``/oauth/token/``,
+        entry plus the endpoint paths, which default to a conventional
+        authorization-server mount (``/oauth/authorize/``, ``/oauth/token/``,
         ``/oauth/register/``) and are constructor arguments for a project that
         mounts DOT somewhere else.
 
@@ -396,15 +396,9 @@ class DjangoOAuthToolkitBackend:
         deliberate on two counts.
 
         Structurally it is the only answer available here. Whether the endpoint
-        accepts registrations is decided per *mount*:
-        ``build_oauth_urlpatterns(dcr_enabled=...)`` resolves it into
-        ``as_view(...)``, and ``REST_FRAMEWORK_MCP['DCR_ENABLED']`` is only that
-        argument's default. This backend never sees the argument, so gating the
-        advertisement on the global would withdraw a working endpoint from any
-        deployment that enables DCR at the mount — the flow that exists so two
-        mounts in one project can differ. A client that registers against a
-        disabled endpoint gets an immediate, well-formed ``403
-        invalid_request``, not a hang.
+        accepts registrations is decided by the authorization server the project
+        mounts, which this backend never sees, so gating the advertisement here
+        would withdraw a working endpoint from any deployment that enables it.
 
         By protocol the advertisement also costs a modern client nothing. The
         ``2026-07-28`` registration priority order is pre-registration, then
@@ -465,7 +459,7 @@ def _cimd_enabled() -> bool:
 def _derive_metadata_url(resource_url: str | None) -> str | None:
     """Point a 401 challenge at *this* server's PRM endpoint.
 
-    [`MCPServer`][rest_framework_mcp.server.mcp_server.MCPServer] mounts the metadata
+    [`MCPServer`][django_spec_mcp.server.mcp_server.MCPServer] mounts the metadata
     view under its own prefix, so a server whose canonical URL is
     ``https://x/internal/mcp/`` serves it at
     ``https://x/internal/mcp/.well-known/oauth-protected-resource``."""

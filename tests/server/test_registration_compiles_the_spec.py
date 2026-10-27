@@ -22,8 +22,8 @@ from django_service_specs import FieldMarking, SelectorKind
 from rest_framework.permissions import AllowAny
 from rest_framework_services import QueryParam, SelectorSpec, ServiceSpec
 
-from rest_framework_mcp import ChainStep, MCPServer
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 
 _NESTED_PRECONDITIONS = "output_selector_spec declares preconditions"
 
@@ -120,20 +120,3 @@ def test_a_specs_read_named_after_a_seed_is_refused_in_this_packages_words() -> 
         server.register_selector_tool(name="sel", spec=spec)
 
     assert server.tools.get("sel") is None
-
-
-def test_a_chain_step_drf_services_cannot_compile_is_refused_at_registration() -> None:
-    # Every chain step's spec is compiled by the same listing pass.
-    server = _server()
-
-    with pytest.raises(ImproperlyConfigured, match=_NESTED_PRECONDITIONS) as caught:
-        server.register_chain_tool(
-            name="flow",
-            steps=[
-                ChainStep(alias="first", spec=_good_service_spec()),
-                ChainStep(alias="second", spec=_refused_service_spec()),
-            ],
-        )
-
-    assert str(caught.value).startswith("Tool 'flow': ")
-    assert server.tools.get("flow") is None

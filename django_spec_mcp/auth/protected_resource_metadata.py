@@ -8,7 +8,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
 
-from rest_framework_mcp.auth.types.auth_backend import MCPAuthBackend
+from django_spec_mcp.auth.types.auth_backend import MCPAuthBackend
 
 
 @method_decorator(never_cache, name="dispatch")
@@ -16,7 +16,7 @@ class ProtectedResourceMetadataViewSet(ViewSet):
     """RFC 9728 OAuth 2.0 Protected Resource Metadata endpoint.
 
     Mounted at ``/.well-known/oauth-protected-resource`` by
-    [`MCPServer`][rest_framework_mcp.server.mcp_server.MCPServer]. Single-action ViewSet
+    [`MCPServer`][django_spec_mcp.server.mcp_server.MCPServer]. Single-action ViewSet
     — the canonical GET is wired as ``list`` via
     ``ProtectedResourceMetadataViewSet.as_view({"get": "list"}, auth_backend=...)`` so
     the URL conf doesn't need a router. The payload comes from the instance-scoped
@@ -25,7 +25,7 @@ class ProtectedResourceMetadataViewSet(ViewSet):
 
     DRF authentication and permissions are deliberately open: PRM is a public discovery
     endpoint, and the MCP transport owns its own auth pipeline through
-    [`MCPAuthBackend`][rest_framework_mcp.auth.types.auth_backend.MCPAuthBackend]. The
+    [`MCPAuthBackend`][django_spec_mcp.auth.types.auth_backend.MCPAuthBackend]. The
     renderer is pinned to JSON because the payload shape is RFC-defined."""
 
     authentication_classes = ()

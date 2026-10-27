@@ -3,14 +3,14 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
-from rest_framework_mcp.auth.principal_for_token import principal_for_token
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.constants import TaskStatus
-from rest_framework_mcp.protocol.types.task import Task
-from rest_framework_mcp.tasks.types.task_executor import TaskExecutor
-from rest_framework_mcp.tasks.types.task_record import TaskRecord
-from rest_framework_mcp.tasks.types.task_store import TaskStore
-from rest_framework_mcp.tasks.utils import new_task_id, now_iso
+from django_spec_mcp.auth.principal_for_token import principal_for_token
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.constants import TaskStatus
+from django_spec_mcp.protocol.types.task import Task
+from django_spec_mcp.tasks.types.task_executor import TaskExecutor
+from django_spec_mcp.tasks.types.task_record import TaskRecord
+from django_spec_mcp.tasks.types.task_store import TaskStore
+from django_spec_mcp.tasks.utils import new_task_id, now_iso
 
 
 def create_task(

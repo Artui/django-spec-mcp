@@ -35,21 +35,21 @@ from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 from typing_extensions import TypedDict
 
-from rest_framework_mcp import AgentConventions, ChainStep, MCPServer, UrlKwarg
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.config.build_mcp_config import build_mcp_config
-from rest_framework_mcp.constants import ArgumentBinding, JsonRpcErrorCode, UnknownArguments
-from rest_framework_mcp.handlers.handle_tools_call import handle_tools_call
-from rest_framework_mcp.handlers.handle_tools_call_async import handle_tools_call_async
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.registry.types.tool_binding import ToolBinding
-from rest_framework_mcp.schema.utils import required_arguments
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp import AgentConventions, MCPServer, UrlKwarg
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.config.build_mcp_config import build_mcp_config
+from django_spec_mcp.constants import ArgumentBinding, JsonRpcErrorCode, UnknownArguments
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.registry.types.tool_binding import ToolBinding
+from django_spec_mcp.schema.utils import required_arguments
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.conftest import post_jsonrpc
 from tests.testapp.models import Invoice
-from tests.testapp.serializers import InvoiceInputSerializer, InvoiceOutputSerializer
+from tests.testapp.serializers import InvoiceOutputSerializer
 from tests.testapp.urlconf_for import urlconf_for
 from tests.utils import tool_error
 
@@ -136,10 +136,6 @@ def _rename_all(*, collection: Any, data: dict[str, Any]) -> dict[str, int]:
     return {"renamed": collection.update(number=data["number"])}
 
 
-def _echo(*, data: Any) -> Any:
-    return {"count": len(data)}
-
-
 def _first_invoice_pk() -> dict[str, Any]:
     # Untyped: nothing says which keys it fills.
     return {"pk": Invoice.objects.order_by("pk").values_list("pk", flat=True).first()}
@@ -181,11 +177,6 @@ def _server(**kwargs: Any) -> MCPServer:
             input_serializer=_NumberInput,
             collection_selector_spec=SelectorSpec(kind=SelectorKind.LIST, selector=_by_ids),
         ),
-    )
-    server.register_chain_tool(
-        name="chain",
-        input_serializer=InvoiceInputSerializer,
-        steps=[ChainStep("made", ServiceSpec(service=_echo, atomic=False))],
     )
     return server
 
@@ -273,9 +264,6 @@ def _refused(out: Any) -> dict[str, Any]:
         ("rename", {"number": "INV-2"}, {"pk": _REQUIRED}, _missing),
         # A service tool's collection lookup.
         ("rename_all", {"number": "INV-2"}, {"ids": _REQUIRED}, _missing),
-        # A chain advertises its input serializer, which answers for itself, in
-        # its own words: the missing-argument sentence is the selectors' check.
-        ("chain", {"amount_cents": 1}, {"number": _REQUIRED}, _refused),
     ],
 )
 async def test_a_missing_argument_is_a_validation_error_result(

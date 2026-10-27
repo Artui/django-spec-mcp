@@ -16,8 +16,8 @@ from rest_framework import serializers
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import MCPServer
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 
 
 class OrderSerializer(serializers.Serializer):
@@ -36,12 +36,6 @@ CANCEL_ORDER: ServiceSpec[Any, Any, Any] = ServiceSpec(
 ``books_closed``."""
 
 DECLARED_CODES: list[str] = ["already_shipped", "books_closed"]
-
-ARCHIVE_ORDER: ServiceSpec[Any, Any, Any] = ServiceSpec(service=lambda **_: None, atomic=False)
-"""Declares no conditions, so every row answers ``{"available": true}`` without its
-answer being read off the row. That makes it the one declaration a chain can
-render: a chain step computes no answers, and registration refuses a rendered step
-whose declaration would need them."""
 
 
 def order_selector_spec(kind: SelectorKind, **overrides: Any) -> SelectorSpec[Any, Any]:

@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from rest_framework_mcp.constants import JsonRpcErrorCode
-from rest_framework_mcp.handlers.is_binding_listable import is_binding_listable
-from rest_framework_mcp.handlers.pagination import paginate
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.handlers.utils import catalog_cache_hints
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.protocol.types.resource import Resource
+from django_spec_mcp.constants import JsonRpcErrorCode
+from django_spec_mcp.handlers.is_binding_listable import is_binding_listable
+from django_spec_mcp.handlers.pagination import paginate
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.handlers.utils import catalog_cache_hints
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.protocol.types.resource import Resource
 
 
 def handle_resources_list(

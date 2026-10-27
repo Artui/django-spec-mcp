@@ -15,14 +15,14 @@ from django_service_specs import SelectorKind
 from rest_framework import permissions as drf_permissions
 from rest_framework_services.types.selector_spec import SelectorSpec
 
-from rest_framework_mcp import MCPServer
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.constants import JsonRpcErrorCode
-from rest_framework_mcp.handlers.handle_tools_call_async import handle_tools_call_async
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.constants import JsonRpcErrorCode
+from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.testapp.models import Invoice
 from tests.testapp.serializers import InvoiceOutputSerializer
 from tests.utils import tool_error
@@ -120,7 +120,7 @@ async def test_async_translates_service_error_with_recording(settings) -> None:
     """``RECORD_SERVICE_EXCEPTIONS=True`` on the async path."""
     from django_service_specs import ServiceError
 
-    settings.REST_FRAMEWORK_MCP = {
+    settings.SPEC_MCP = {
         "REQUIRE_TOOL_PERMISSIONS": False,
         "RECORD_SERVICE_EXCEPTIONS": True,
     }

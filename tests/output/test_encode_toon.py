@@ -5,7 +5,7 @@ import sys
 
 import pytest
 
-from rest_framework_mcp.output.encode_toon import encode_toon
+from django_spec_mcp.output.encode_toon import encode_toon
 
 
 def test_encode_toon_falls_back_to_json_when_extra_missing(monkeypatch) -> None:

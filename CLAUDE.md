@@ -1,4 +1,4 @@
-# Repo conventions for `djangorestframework-mcp-server`
+# Repo conventions for `django-spec-mcp`
 
 This file is the single source of truth for how to write code in this package.
 Rules are non-negotiable unless flagged as a heuristic.
@@ -8,7 +8,7 @@ Rules are non-negotiable unless flagged as a heuristic.
 1. **One exported class or function per file.** File name = `snake_case` of the symbol.
    `MCPServer` → `mcp_server.py`; `resolve_callable_kwargs` → `resolve_callable_kwargs.py`,
    or live in a sibling `utils.py` if used by several files in the same package.
-   **Exception:** `rest_framework_mcp/constants.py` is the package's single home for
+   **Exception:** `django_spec_mcp/constants.py` is the package's single home for
    enums and constant-like module-level values (`OutputFormat`, `JsonRpcErrorCode`,
    `ArgumentBinding`, `JSONRPC_VERSION`, reserved-key sets, etc.) and is the only
    file allowed to export multiple symbols. New enums and shared constants go there,
@@ -30,10 +30,10 @@ Rules are non-negotiable unless flagged as a heuristic.
    annotations. We support Python 3.10+, so no `match` statements and no PEP 695
    `type` statements.
 8. **Absolute imports only.** Imports are ordered stdlib → third-party → first-party
-   (`rest_framework_mcp`). Within each block, alphabetical.
+   (`django_spec_mcp`). Within each block, alphabetical.
 9. **NEVER use relative imports.** `from . import x`, `from .foo import bar`, and any
    other dotted-relative form is forbidden everywhere in the package, including
-   `__init__.py`. Always write the full absolute path (`from rest_framework_mcp.foo
+   `__init__.py`. Always write the full absolute path (`from django_spec_mcp.foo
    import bar`).
 10. **Types and functionality live in separate sub-packages.** When a directory
     contains *both* type declarations (dataclasses, Protocols, frozen wire-shape
@@ -191,26 +191,12 @@ covered.
 | --- | --- |
 | Service tools (`call_spec_tool.py`, `handle_tools_call*.py`) | `dispatch_spec` |
 | Selector tools (`selector_tool_dispatch.py`) | `dispatch_spec` |
-| Chain steps (`chain_tool_dispatch.py`) | **direct** `run_service` / `run_selector` |
 | `resources/read` (`handle_resources_read*.py`) | **direct** `run_selector` |
 | `prompts/get` (`handle_prompts_get*.py`) | **direct** call of `render` |
 | `completion/complete` (`handle_completion_complete.py`) | **direct** call of the completer |
 
-The three direct paths are direct for structural reasons, not by neglect:
+The direct paths are direct for structural reasons, not by neglect:
 
-- **Chain steps.** A chain owns the transaction (`binding.atomic`), the argument
-  binding, and the pool each step receives — `inputs(ctx)` returns the callable's
-  kwargs, which is not the flat client `params` mapping `dispatch_spec` takes. What
-  `dispatch_spec` would have contributed is therefore run explicitly per step:
-  the class-level half of `permission_classes` through `enforce_permissions`
-  before `inputs(ctx)` and the lookup, the object-level half through
-  `enforce_object_permissions` on the resolved target, a service's `affordances`
-  through `enforce_affordances`, and the spec's `preconditions`, in that order. The
-  affordances were once the missing one: a service refused as a tool of its own ran
-  and succeeded as a chain step. What a chain does **not** reproduce is computing the
-  answers a rendered selector spec's `affordances` need, because that step is not
-  part of drf-services' public surface; `ChainToolBinding` refuses at registration a
-  rendered step whose declaration would need them, rather than failing every call.
 - **`resources/read`.** A `ResourceBinding` holds a bare selector callable, not the
   spec it was lifted from, so there is no spec to dispatch. It composes
   `base_serializer_context` for rendering and resolves the output declaration
@@ -231,19 +217,19 @@ The three direct paths are direct for structural reasons, not by neglect:
 upstream helper it stands in for. A direct path that quietly grows a private copy of
 something `dispatch_spec` does is the drift this section exists to prevent.
 
-Delegating is load-bearing, not tidiness. The selector and chain paths once had their
-own renderer + context resolver "for transport-shaped equivalence", and the two copies
-drifted: they bound serializer-context providers positionally where the sister repo
+Delegating is load-bearing, not tidiness. The selector path once had its own
+renderer + context resolver "for transport-shaped equivalence", and the copy
+drifted: it bound serializer-context providers positionally where the sister repo
 binds by name (a `TypeError` for any provider not leading with `view, request`), and
-they never applied DRF's baseline context (a `KeyError: 'request'` for any serializer
+it never applied DRF's baseline context (a `KeyError: 'request'` for any serializer
 reading it). Both were consumer-reported. If a path needs something rendering doesn't
 give it, extend `render_spec_output` upstream rather than growing a second copy here.
 
 ## Tests
 
-- `make test` runs pytest with `--cov=rest_framework_mcp --cov-fail-under=100` (line +
+- `make test` runs pytest with `--cov=django_spec_mcp --cov-fail-under=100` (line +
   branch). Restructure rather than reach for `# pragma: no cover`.
-- Test layout mirrors the source tree under `tests/`. `rest_framework_mcp/foo/bar.py`
+- Test layout mirrors the source tree under `tests/`. `django_spec_mcp/foo/bar.py`
   → `tests/foo/test_bar.py`.
 - `tests/testapp/` houses the minimal Django app + sample `MCPServer` factory used by
   the end-to-end suite. Tests must build a fresh server per scenario when they need
@@ -254,12 +240,12 @@ give it, extend `render_spec_output` upstream rather than growing a second copy 
 
 ## Lint and types
 
-- `make lint` runs `ruff check .` + `ty check rest_framework_mcp`. CI fails on either.
+- `make lint` runs `ruff check .` + `ty check django_spec_mcp`. CI fails on either.
 - `ruff format` is the source of truth for layout. `make format` writes, `make
   format-check` verifies.
 - Pre-commit runs `make lint-fix`, `make format`, `make type-check`. Commits must be
   clean before push — never `--no-verify`.
-- `ty` is scoped to `rest_framework_mcp/` only (not tests). For attributes provided by
+- `ty` is scoped to `django_spec_mcp/` only (not tests). For attributes provided by
   Django/DRF MRO that ty can't resolve, declare them as `attr: Any` on the class with a
   comment naming the parent. For unresolvable `super()` calls into DRF mixins, use
   `# ty: ignore[unresolved-attribute]` at the call site.
@@ -286,7 +272,7 @@ Change a rule here and change the config with it, or they drift apart again.
   absent.
 - The `transport/` layer must not import from `server/` (one-way dependency: server
   composes transport, never the other way).
-- `rest_framework_mcp.exceptions` would be the framework-agnostic boundary if introduced
+- `django_spec_mcp.exceptions` would be the framework-agnostic boundary if introduced
   later — do not import from `rest_framework` inside it.
 
 ## Branching
@@ -305,7 +291,7 @@ The release pipeline is **merge-to-main triggered**, not tag-triggered.
 [`scripts/release-publish.sh`](scripts/release-publish.sh) is the single source
 of truth for the flow and behaves as follows:
 
-1. Extract the version from `rest_framework_mcp/version.py` (the
+1. Extract the version from `django_spec_mcp/version.py` (the
    single source of truth; `pyproject.toml` declares `dynamic = ["version"]`
    and hatchling reads the value from `version.py` at build time).
 2. Check whether `vX.Y.Z` already exists locally or on origin. **If yes →
@@ -339,7 +325,7 @@ configuration lives in `[tool.bumpversion]` in `pyproject.toml`.
 # 1. On a release branch, make sure CHANGELOG.md has the entries you want
 #    to ship under ## [Unreleased]. Then bump:
 make release-bump VERSION=0.3.0
-# This rewrites rest_framework_mcp/version.py (the single source of
+# This rewrites django_spec_mcp/version.py (the single source of
 # truth — pyproject.toml is dynamic and reads from it at build time),
 # promotes the [Unreleased] block under a dated [0.3.0] section, and
 # rewrites the link footer — all driven by the [[tool.bumpversion.files]]
@@ -369,7 +355,7 @@ pushing.
 These steps need to happen once before the first release will succeed:
 
 1. **PyPI Trusted Publisher** — sign in to PyPI, open the project settings,
-   add a "Pending" publisher pointing at `Artui/djangorestframework-mcp-server`,
+   add a "Pending" publisher pointing at `Artui/django-spec-mcp`,
    workflow `release.yml`, environment `pypi`. Promote it to a real publisher
    after the project exists on PyPI.
 2. **GitHub Environment** — create a `pypi` environment under

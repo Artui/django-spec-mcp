@@ -12,7 +12,7 @@
 Before 0.25.0 this package emitted **nothing** — no logger anywhere, in a
 library that terminates a wire protocol, authenticates every request and
 rejects requests for four distinct reasons. It now logs under the
-`rest_framework_mcp` namespace, one logger per module, configured like any
+`django_spec_mcp` namespace, one logger per module, configured like any
 other library:
 
 ```python title="settings.py"
@@ -21,7 +21,7 @@ LOGGING = {
     "disable_existing_loggers": False,
     "handlers": {"console": {"class": "logging.StreamHandler"}},
     "loggers": {
-        "rest_framework_mcp": {"level": "INFO", "handlers": ["console"]},
+        "django_spec_mcp": {"level": "INFO", "handlers": ["console"]},
     },
 }
 ```
@@ -66,7 +66,7 @@ trace noise.
 ## Install
 
 ```bash
-pip install "djangorestframework-mcp-server[otel]"
+pip install "django-spec-mcp[otel]"
 ```
 
 `opentelemetry-api` is the only declared dep. You bring your own SDK and
@@ -77,7 +77,7 @@ backend you're using (OTLP, Jaeger, Tempo, …).
 
 OTel auto-discovers the global `TracerProvider` you configure in your app
 startup. The MCP package doesn't install one — it just calls
-`opentelemetry.trace.get_tracer("rest_framework_mcp")` at span time.
+`opentelemetry.trace.get_tracer("django_spec_mcp")` at span time.
 
 ```python title="myproject/asgi.py"
 from opentelemetry import trace
@@ -128,7 +128,7 @@ The MCP package keeps the surface minimal in v1:
   attached to the span, opt in:
 
     ```python
-    REST_FRAMEWORK_MCP = {
+    SPEC_MCP = {
         "RECORD_SERVICE_EXCEPTIONS": True,
     }
     ```

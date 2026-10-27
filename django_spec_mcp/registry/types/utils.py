@@ -15,7 +15,7 @@ from rest_framework_services import can_present_nothing as spec_can_present_noth
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp.constants import ToolContentKind
+from django_spec_mcp.constants import ToolContentKind
 
 _MEDIA_KINDS: frozenset[ToolContentKind] = frozenset({ToolContentKind.IMAGE, ToolContentKind.AUDIO})
 
@@ -76,17 +76,14 @@ def rendered_kind(spec: ServiceSpec[Any, Any, Any] | SelectorSpec[Any, Any]) -> 
       return as the set the declaration names (``kind="list"``), refusing a
       return that is not one. Anything else is a single object. The selector is
       not read: ``test_a_list_output_spec_with_no_selector_renders_and_advertises_a_list``
-      fails for a service tool and a chain alike if it is. The guard is one
+      fails for a service tool if it is. The guard is one
       ``and``-chain, so each conjunct is held by a row of
       ``test_the_rendered_kind_is_the_one_dispatch_gives``: ``no-output-spec``
       (``nested is not None``) and ``retrieve-output-no-re-read`` (the kind).
 
-    One answer read by both halves of a tool -- each binding's ``rendered_kind``,
-    which picks the advertised ``outputSchema`` shape, and the chain renderer,
-    which picks ``many`` -- because they were once answered separately. Only a
-    selector tool's schema was kind-aware, so every other ``LIST`` output
-    advertised one object while serving an array, and a chain rendered a
-    service step's ``LIST`` re-fetch as a single object and failed.
+    Each binding's ``rendered_kind`` reads it, which picks the advertised
+    ``outputSchema`` shape. Only a selector tool's schema was once kind-aware, so
+    every other ``LIST`` output advertised one object while serving an array.
     """
     if isinstance(spec, SelectorSpec):
         return spec.kind
@@ -119,9 +116,7 @@ def can_present_nothing(spec: ServiceSpec[Any, Any, Any] | SelectorSpec[Any, Any
 
     What stays this server's is what it does with the answer, and where it
     asks: the schema keeps its root an object and admits ``{}`` rather than
-    ``null`` (``build_output_schema``), and a chain asks of its output step's
-    spec, and answers ``False`` under ``output_all``, whose ``{alias:
-    rendered}`` object is never ``None`` (``ChainToolBinding``).
+    ``null`` (``build_output_schema``).
     """
     return spec_can_present_nothing(spec)
 

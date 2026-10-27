@@ -4,18 +4,18 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from rest_framework_mcp.constants import ArgumentBinding, OutputFormat, UnknownArguments
+from django_spec_mcp.constants import ArgumentBinding, OutputFormat, UnknownArguments
 
 
 @dataclass(frozen=True)
 class ServiceDefaults:
     """Per-kind defaults for
-    [`register_tools`][rest_framework_mcp.registry.register_tools.register_tools] over
+    [`register_tools`][django_spec_mcp.registry.register_tools.register_tools] over
     service definitions.
 
     ``None`` is the "no override" sentinel: only non-``None`` values are applied as
     defaults to the matching
-    [`MCPServer.register_service_tool`][rest_framework_mcp.server.mcp_server.MCPServer.register_service_tool]
+    [`MCPServer.register_service_tool`][django_spec_mcp.server.mcp_server.MCPServer.register_service_tool]
     call, and a per-definition value always wins.
 
     That includes the tri-state fields, where ``None`` on the registration

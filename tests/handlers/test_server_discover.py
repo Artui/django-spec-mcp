@@ -9,13 +9,13 @@ from django_service_specs import SelectorKind
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import MCPServer, ResourceEncoding
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.config.build_mcp_config import build_mcp_config
-from rest_framework_mcp.handlers.dispatch import dispatch
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp import MCPServer, ResourceEncoding
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.config.build_mcp_config import build_mcp_config
+from django_spec_mcp.handlers.dispatch import dispatch
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 
 
 def _server(**config: Any) -> MCPServer:
@@ -104,20 +104,20 @@ def test_discover_is_public_even_when_listings_are_filtered() -> None:
 
 def test_every_result_carries_the_complete_discriminator() -> None:
     """Stamped in the response envelope, so no handler can forget it."""
-    from rest_framework_mcp.protocol.types.json_rpc_response import JsonRpcResponse
+    from django_spec_mcp.protocol.types.json_rpc_response import JsonRpcResponse
 
     body = JsonRpcResponse(id=1, result={"tools": []}).to_dict()
     assert body["result"]["resultType"] == "complete"
 
 
 def test_a_non_dict_result_passes_through_untouched() -> None:
-    from rest_framework_mcp.protocol.types.json_rpc_response import JsonRpcResponse
+    from django_spec_mcp.protocol.types.json_rpc_response import JsonRpcResponse
 
     assert JsonRpcResponse(id=1, result=[1, 2]).to_dict()["result"] == [1, 2]
 
 
 def test_a_handler_supplied_result_type_wins() -> None:
-    from rest_framework_mcp.protocol.types.json_rpc_response import JsonRpcResponse
+    from django_spec_mcp.protocol.types.json_rpc_response import JsonRpcResponse
 
     body = JsonRpcResponse(id=1, result={"resultType": "input_required"}).to_dict()
     assert body["result"]["resultType"] == "input_required"
@@ -195,5 +195,5 @@ def test_discover_falls_back_to_the_settings_identity() -> None:
     info = dispatch("server/discover", None, ctx)["_meta"]["io.modelcontextprotocol/serverInfo"]
     # The test settings configure SERVER_INFO, which is exactly the source
     # this path is meant to reach for.
-    assert info["name"].startswith("djangorestframework-mcp-server")
+    assert info["name"].startswith("django-spec-mcp")
     assert info["name"] != "t"

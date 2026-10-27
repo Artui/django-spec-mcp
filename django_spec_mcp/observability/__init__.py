@@ -1,11 +1,11 @@
 """The package's logger namespace and its logging conventions.
 
-**Namespace.** ``rest_framework_mcp.<module>``, via ``getLogger(__name__)`` at
+**Namespace.** ``django_spec_mcp.<module>``, via ``getLogger(__name__)`` at
 each site, so a project configures it through Django ``LOGGING`` like any other
 library:
 
     LOGGING = {
-        "loggers": {"rest_framework_mcp": {"level": "INFO", "handlers": ["console"]}},
+        "loggers": {"django_spec_mcp": {"level": "INFO", "handlers": ["console"]}},
     }
 
 **What is logged where.** ``ERROR``, with the traceback, for an exception a
@@ -28,7 +28,7 @@ consumer domain data and may be anything at all.
 
 from __future__ import annotations
 
-from rest_framework_mcp.observability.get_logger import get_logger
-from rest_framework_mcp.observability.session_fingerprint import session_fingerprint
+from django_spec_mcp.observability.get_logger import get_logger
+from django_spec_mcp.observability.session_fingerprint import session_fingerprint
 
 __all__ = ["get_logger", "session_fingerprint"]

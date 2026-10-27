@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from rest_framework_mcp.auth.principal_for_token import principal_for_token
-from rest_framework_mcp.constants import TASKS_EXTENSION_ID, JsonRpcErrorCode
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.tasks.types.task_record import TaskRecord
+from django_spec_mcp.auth.principal_for_token import principal_for_token
+from django_spec_mcp.constants import TASKS_EXTENSION_ID, JsonRpcErrorCode
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.tasks.types.task_record import TaskRecord
 
 
 def declares_tasks_extension(context: MCPCallContext) -> bool:

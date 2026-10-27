@@ -5,8 +5,8 @@ import json
 import pytest
 from fakeredis import FakeAsyncRedis, FakeServer
 
-from rest_framework_mcp.transport.redis_sse_replay_buffer import RedisSSEReplayBuffer
-from rest_framework_mcp.transport.types.sse_replay_buffer import SSEReplayBuffer
+from django_spec_mcp.transport.redis_sse_replay_buffer import RedisSSEReplayBuffer
+from django_spec_mcp.transport.types.sse_replay_buffer import SSEReplayBuffer
 
 
 def _client() -> FakeAsyncRedis:
@@ -98,7 +98,7 @@ async def test_every_write_asks_redis_to_trim_approximately_at_max_events(
     buf = RedisSSEReplayBuffer(client, max_events=7)
     await buf.record("s", {"n": 1})
     await buf.record("s", {"n": 2})
-    key = "drf-mcp:sse-replay:s"
+    key = "spec-mcp:sse-replay:s"
     assert sent == [
         ["XADD", key, "MAXLEN", "~", "7", "*", "data", '{"n": 1}'],
         ["XADD", key, "MAXLEN", "~", "7", "*", "data", '{"n": 2}'],
@@ -122,7 +122,7 @@ async def test_trimming_keeps_the_newest_max_events_and_bounds_the_rest() -> Non
     """
     client = _client()
     buf = RedisSSEReplayBuffer(client, max_events=2)
-    key = "drf-mcp:sse-replay:s"
+    key = "spec-mcp:sse-replay:s"
     recorded: list[tuple[str, object]] = []
     # The cap turns a stream that is never trimmed into a failure rather than
     # a hang; Redis's default node is a tenth of it.
@@ -163,7 +163,7 @@ async def test_the_margin_over_max_events_stays_under_a_node_of_bytes(pad: int) 
     """
     client = _client()
     buf = RedisSSEReplayBuffer(client, max_events=2)
-    key = "drf-mcp:sse-replay:s"
+    key = "spec-mcp:sse-replay:s"
     event = {"pad": "x" * pad}
     event_bytes = len(json.dumps(event))
     for _ in range(300):
@@ -213,10 +213,10 @@ def test_invalid_max_events_rejected() -> None:
 
 async def test_import_error_when_redis_absent(monkeypatch) -> None:
     """The constructor surfaces a clear error when ``redis`` isn't installed."""
-    import rest_framework_mcp.transport.redis_sse_replay_buffer as mod
+    import django_spec_mcp.transport.redis_sse_replay_buffer as mod
 
     monkeypatch.setattr(mod, "AsyncRedis", None)
-    with pytest.raises(ImportError, match="djangorestframework-mcp-server\\[redis\\]"):
+    with pytest.raises(ImportError, match="django-spec-mcp\\[redis\\]"):
         RedisSSEReplayBuffer(client=object())
 
 
@@ -227,7 +227,7 @@ async def test_a_recorded_stream_carries_an_expiry() -> None:
     client = _client()
     buf = RedisSSEReplayBuffer(client, ttl_seconds=120)
     await buf.record("s", {"n": 1})
-    ttl = await client.ttl("drf-mcp:sse-replay:s")
+    ttl = await client.ttl("spec-mcp:sse-replay:s")
     assert 0 < ttl <= 120
     await client.aclose()
 
@@ -237,9 +237,9 @@ async def test_the_expiry_is_renewed_by_every_write() -> None:
     client = _client()
     buf = RedisSSEReplayBuffer(client, ttl_seconds=120)
     await buf.record("s", {"n": 1})
-    await client.expire("drf-mcp:sse-replay:s", 5)
+    await client.expire("spec-mcp:sse-replay:s", 5)
     await buf.record("s", {"n": 2})
-    assert await client.ttl("drf-mcp:sse-replay:s") > 5
+    assert await client.ttl("spec-mcp:sse-replay:s") > 5
     await client.aclose()
 
 
@@ -248,7 +248,7 @@ async def test_the_expiry_can_be_disabled() -> None:
     buf = RedisSSEReplayBuffer(client, ttl_seconds=None)
     await buf.record("s", {"n": 1})
     # ``-1`` is Redis for "the key exists and never expires".
-    assert await client.ttl("drf-mcp:sse-replay:s") == -1
+    assert await client.ttl("spec-mcp:sse-replay:s") == -1
     await client.aclose()
 
 

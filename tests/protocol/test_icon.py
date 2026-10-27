@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 
-from rest_framework_mcp import Icon, IconTheme
+from django_spec_mcp import Icon, IconTheme
 
 
 def test_minimal_icon_emits_only_src() -> None:

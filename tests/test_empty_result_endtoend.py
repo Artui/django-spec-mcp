@@ -33,14 +33,14 @@ from rest_framework.permissions import AllowAny
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import ChainStep, MCPServer
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.handlers.handle_tools_call import handle_tools_call
-from rest_framework_mcp.handlers.handle_tools_list import handle_tools_list
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.testing import assert_tool_result_conforms
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.testing import assert_tool_result_conforms
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.testapp.models import Invoice
 from tests.testapp.serializers import InvoiceOutputSerializer
 from tests.testapp.urlconf_for import urlconf_for
@@ -131,11 +131,6 @@ def _server(session_store: Any = None) -> MCPServer:
         ),
     )
     server.register_service_tool(name="invoices.archive", spec=archive)
-    server.register_chain_tool(
-        name="invoices.archive_chain",
-        steps=[ChainStep("archive", archive, inputs=lambda ctx: {"data": ctx.args})],
-        permissions=[],
-    )
     # The same service with no re-read selector: it returns the row it changed.
     send = ServiceSpec(
         service=_archive,
@@ -145,11 +140,6 @@ def _server(session_store: Any = None) -> MCPServer:
         output_selector_spec=_no_reread(),
     )
     server.register_service_tool(name="invoices.send", spec=send)
-    server.register_chain_tool(
-        name="invoices.send_chain",
-        steps=[ChainStep("send", send, inputs=lambda ctx: {"data": ctx.args})],
-        permissions=[],
-    )
     server.register_service_tool(
         name="invoices.void",
         spec=ServiceSpec(
@@ -186,9 +176,6 @@ def _server(session_store: Any = None) -> MCPServer:
         output_selector_spec=_no_reread(),
     )
     server.register_service_tool(name="tasks.touch", spec=touch)
-    server.register_chain_tool(
-        name="tasks.touch_chain", steps=[ChainStep("touch", touch)], permissions=[]
-    )
     # django-ag-ui's typed bridge fixture, reproduced: its code-mode stub reads
     # this schema as the tool's return type.
     server.register_service_tool(
@@ -309,26 +296,6 @@ def test_a_service_declaring_allow_none_serves_an_empty_object_its_schema_admits
 
 
 @pytest.mark.django_db
-def test_a_chain_whose_output_step_declares_allow_none_admits_an_empty_object() -> None:
-    # A chain's output step is judged as the same spec registered as a tool.
-    server = _server()
-
-    result = _wire(server, "tasks.touch_chain", {})
-
-    _assert_admits_nothing(_tool(server, "tasks.touch_chain"), result)
-
-
-@pytest.mark.django_db
-def test_a_chain_whose_output_step_presents_nothing_is_an_empty_object() -> None:
-    server = _server()
-    Invoice.objects.create(number="INV-1")
-
-    result = _wire(server, "invoices.archive_chain", {"number": "INV-1"})
-
-    _assert_empty_and_conforming(_tool(server, "invoices.archive_chain"), result)
-
-
-@pytest.mark.django_db
 def test_a_found_row_still_conforms_and_a_partial_row_does_not() -> None:
     server = _server()
     Invoice.objects.create(number="INV-1")
@@ -355,9 +322,7 @@ def test_a_retrieve_that_cannot_present_nothing_keeps_its_schema_strict() -> Non
 # ---------- tools that cannot present nothing keep a strict schema ----------
 
 
-@pytest.mark.parametrize(
-    "name", ["invoices.send", "invoices.send_chain", "invoices.void", "sums.add"]
-)
+@pytest.mark.parametrize("name", ["invoices.send", "invoices.void", "sums.add"])
 def test_a_service_with_no_output_reread_keeps_its_schema_strict(name: str) -> None:
     # With no re-read selector the service's own return renders, so nothing
     # filters a row away. ``invoices.void`` returns ``None`` regardless, and is
@@ -394,7 +359,7 @@ def test_a_typed_service_with_no_reread_lists_the_exact_strict_schema() -> None:
     }
 
 
-@pytest.mark.parametrize("name", ["invoices.find", "invoices.archive", "invoices.archive_chain"])
+@pytest.mark.parametrize("name", ["invoices.find", "invoices.archive"])
 def test_a_tool_that_can_present_nothing_moves_required_into_the_any_of(name: str) -> None:
     schema = _tool(_server(), name)["outputSchema"]
 

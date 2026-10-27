@@ -13,7 +13,7 @@ class InMemorySSEBroker:
 
     State is instance-scoped, so multiple servers in one process share none of it.
     Multi-process deployments need an out-of-process backend — see
-    [`RedisSSEBroker`][rest_framework_mcp.transport.redis_sse_broker.RedisSSEBroker]
+    [`RedisSSEBroker`][django_spec_mcp.transport.redis_sse_broker.RedisSSEBroker]
     (the ``[redis]`` extra).
 
     One subscriber per session: re-subscribing replaces the previous queue, and

@@ -1,11 +1,11 @@
-"""Tests for ``rest_framework_mcp.constants`` — the package's enum + constant home."""
+"""Tests for ``django_spec_mcp.constants`` — the package's enum + constant home."""
 
 from __future__ import annotations
 
 import pytest
 from rest_framework_services.dispatch.utils import DROPPED_EDGE_SEEDS, EDGE_SEEDS
 
-from rest_framework_mcp.constants import (
+from django_spec_mcp.constants import (
     JSONRPC_VERSION,
     RESERVED_POOL_SEEDS,
     RESERVED_POST_FETCH_KEYS,

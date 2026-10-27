@@ -1,11 +1,11 @@
 # Testing
 
 Helpers for a **consumer's** test suite, shipped in the wheel and importable
-from `rest_framework_mcp.testing`. Nothing here is imported by the package at
+from `django_spec_mcp.testing`. Nothing here is imported by the package at
 runtime, and the dependency they need is an extra:
 
 ```bash
-pip install "djangorestframework-mcp-server[test]"
+pip install "django-spec-mcp[test]"
 ```
 
 ## Does a result match the schema the server advertised?
@@ -35,7 +35,7 @@ single key.
 and formats included, and names each disagreement:
 
 ```python
-from rest_framework_mcp.testing import assert_tool_result_conforms
+from django_spec_mcp.testing import assert_tool_result_conforms
 
 page = server.list_tools(user=user)
 tool = next(entry for entry in page["tools"] if entry["name"] == "invoices.list")
@@ -73,4 +73,4 @@ advertisement is the wrong default; the existing on/off knob plus per-binding
 overrides is the right shape. Verification was the missing piece, not
 compulsion.
 
-::: rest_framework_mcp.testing.assert_tool_result_conforms.assert_tool_result_conforms
+::: django_spec_mcp.testing.assert_tool_result_conforms.assert_tool_result_conforms

@@ -19,7 +19,7 @@ from rest_framework import serializers
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp.adapters.selector_to_resource import selector_to_resource
+from django_spec_mcp.adapters.selector_to_resource import selector_to_resource
 
 
 def _rows(user: Any = None) -> list[dict[str, Any]]:

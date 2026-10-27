@@ -29,23 +29,21 @@ from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 from rest_framework_services.types.validate_channel_names import validate_channel_names
 
-from rest_framework_mcp.adapters.chain_to_tool import chain_steps_to_tool
-from rest_framework_mcp.adapters.selector_to_resource import selector_to_resource
-from rest_framework_mcp.adapters.selector_to_tool import selector_spec_to_tool
-from rest_framework_mcp.adapters.service_to_tool import service_spec_to_tool
-from rest_framework_mcp.adapters.ui_to_resource import ui_view_to_resource
-from rest_framework_mcp.adapters.utils import merge_meta, validate_selector_parameter_names
-from rest_framework_mcp.auth.backends.django_oauth_toolkit_backend import (
+from django_spec_mcp.adapters.selector_to_resource import selector_to_resource
+from django_spec_mcp.adapters.selector_to_tool import selector_spec_to_tool
+from django_spec_mcp.adapters.service_to_tool import service_spec_to_tool
+from django_spec_mcp.adapters.ui_to_resource import ui_view_to_resource
+from django_spec_mcp.adapters.utils import merge_meta, validate_selector_parameter_names
+from django_spec_mcp.auth.backends.django_oauth_toolkit_backend import (
     DjangoOAuthToolkitBackend,
 )
-from rest_framework_mcp.auth.protected_resource_metadata import ProtectedResourceMetadataViewSet
-from rest_framework_mcp.auth.types.auth_backend import MCPAuthBackend
-from rest_framework_mcp.auth.types.self_checking import SelfChecking
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.check_removed_settings import check_removed_settings
-from rest_framework_mcp.config.build_mcp_config import build_mcp_config
-from rest_framework_mcp.config.types.mcp_config import MCPConfig
-from rest_framework_mcp.constants import (
+from django_spec_mcp.auth.protected_resource_metadata import ProtectedResourceMetadataViewSet
+from django_spec_mcp.auth.types.auth_backend import MCPAuthBackend
+from django_spec_mcp.auth.types.self_checking import SelfChecking
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.config.build_mcp_config import build_mcp_config
+from django_spec_mcp.config.types.mcp_config import MCPConfig
+from django_spec_mcp.constants import (
     JSONRPC_VERSION,
     RESOURCE_EDGE_SEEDS,
     RESOURCE_UPDATED_METHOD,
@@ -58,37 +56,35 @@ from rest_framework_mcp.constants import (
     ToolContentKind,
     UnknownArguments,
 )
-from rest_framework_mcp.handlers.call_spec_tool import call_spec_tool
-from rest_framework_mcp.handlers.handle_tools_call_async import handle_tools_call_async
-from rest_framework_mcp.handlers.handle_tools_list import handle_tools_list
-from rest_framework_mcp.handlers.listable_tool_bindings import listable_tool_bindings
-from rest_framework_mcp.handlers.offered_tools import (
+from django_spec_mcp.handlers.call_spec_tool import call_spec_tool
+from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
+from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
+from django_spec_mcp.handlers.listable_tool_bindings import listable_tool_bindings
+from django_spec_mcp.handlers.offered_tools import (
     declares_operation_conditions,
     unavailable_tools,
 )
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.output.resolve_structured_output import resolve_structured_output
-from rest_framework_mcp.protocol.build_server_info import build_server_info
-from rest_framework_mcp.protocol.types.icon import Icon
-from rest_framework_mcp.protocol.types.implementation import Implementation
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.protocol.types.prompt_argument import PromptArgument
-from rest_framework_mcp.protocol.types.tool_result import ToolResult
-from rest_framework_mcp.registry.prompt_registry import PromptRegistry
-from rest_framework_mcp.registry.resource_registry import ResourceRegistry
-from rest_framework_mcp.registry.tool_registry import ToolRegistry
-from rest_framework_mcp.registry.types.chain_step import ChainStep
-from rest_framework_mcp.registry.types.chain_tool_binding import ChainToolBinding
-from rest_framework_mcp.registry.types.prompt_binding import PromptBinding
-from rest_framework_mcp.registry.types.query_param import QueryParam
-from rest_framework_mcp.registry.types.resource_binding import ResourceBinding
-from rest_framework_mcp.registry.types.selector_tool_binding import SelectorToolBinding
-from rest_framework_mcp.registry.types.tool_binding import ToolBinding
-from rest_framework_mcp.registry.types.ui_resource_meta import UIResourceMeta
-from rest_framework_mcp.registry.types.ui_tool_meta import UIToolMeta
-from rest_framework_mcp.registry.types.url_kwarg import UrlKwarg
-from rest_framework_mcp.schema.types.agent_conventions import AgentConventions
-from rest_framework_mcp.server.utils import (
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.output.resolve_structured_output import resolve_structured_output
+from django_spec_mcp.protocol.build_server_info import build_server_info
+from django_spec_mcp.protocol.types.icon import Icon
+from django_spec_mcp.protocol.types.implementation import Implementation
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.protocol.types.prompt_argument import PromptArgument
+from django_spec_mcp.protocol.types.tool_result import ToolResult
+from django_spec_mcp.registry.prompt_registry import PromptRegistry
+from django_spec_mcp.registry.resource_registry import ResourceRegistry
+from django_spec_mcp.registry.tool_registry import ToolRegistry
+from django_spec_mcp.registry.types.prompt_binding import PromptBinding
+from django_spec_mcp.registry.types.query_param import QueryParam
+from django_spec_mcp.registry.types.resource_binding import ResourceBinding
+from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
+from django_spec_mcp.registry.types.tool_binding import ToolBinding
+from django_spec_mcp.registry.types.ui_resource_meta import UIResourceMeta
+from django_spec_mcp.registry.types.ui_tool_meta import UIToolMeta
+from django_spec_mcp.registry.types.url_kwarg import UrlKwarg
+from django_spec_mcp.schema.types.agent_conventions import AgentConventions
+from django_spec_mcp.server.utils import (
     build_ui_tool_meta,
     check_completions_declared,
     check_list_pagination_declared,
@@ -96,30 +92,30 @@ from rest_framework_mcp.server.utils import (
     check_tool_description_present,
     check_tool_permissions_declared,
 )
-from rest_framework_mcp.subscriptions.types.subscription_broker import SubscriptionBroker
-from rest_framework_mcp.subscriptions.utils import (
+from django_spec_mcp.subscriptions.types.subscription_broker import SubscriptionBroker
+from django_spec_mcp.subscriptions.utils import (
     topic_for_kind,
     topic_for_resource,
 )
-from rest_framework_mcp.tasks.build_worker_token import build_worker_token
-from rest_framework_mcp.tasks.django_cache_task_store import DjangoCacheTaskStore
-from rest_framework_mcp.tasks.run_task import run_task as _run_task
-from rest_framework_mcp.tasks.types.task_executor import TaskExecutor
-from rest_framework_mcp.tasks.types.task_record import TaskRecord
-from rest_framework_mcp.tasks.types.task_store import TaskStore
-from rest_framework_mcp.transport.async_streamable_http_viewset import (
+from django_spec_mcp.tasks.build_worker_token import build_worker_token
+from django_spec_mcp.tasks.django_cache_task_store import DjangoCacheTaskStore
+from django_spec_mcp.tasks.run_task import run_task as _run_task
+from django_spec_mcp.tasks.types.task_executor import TaskExecutor
+from django_spec_mcp.tasks.types.task_record import TaskRecord
+from django_spec_mcp.tasks.types.task_store import TaskStore
+from django_spec_mcp.transport.async_streamable_http_viewset import (
     ASYNC_STREAMABLE_HTTP_ACTION_MAP,
     AsyncStreamableHttpViewSet,
 )
-from rest_framework_mcp.transport.django_cache_session_store import DjangoCacheSessionStore
-from rest_framework_mcp.transport.in_memory_sse_broker import InMemorySSEBroker
-from rest_framework_mcp.transport.streamable_http_viewset import (
+from django_spec_mcp.transport.django_cache_session_store import DjangoCacheSessionStore
+from django_spec_mcp.transport.in_memory_sse_broker import InMemorySSEBroker
+from django_spec_mcp.transport.streamable_http_viewset import (
     STREAMABLE_HTTP_ACTION_MAP,
     StreamableHttpViewSet,
 )
-from rest_framework_mcp.transport.types.session_store import SessionStore
-from rest_framework_mcp.transport.types.sse_broker import SSEBroker
-from rest_framework_mcp.transport.types.sse_replay_buffer import SSEReplayBuffer
+from django_spec_mcp.transport.types.session_store import SessionStore
+from django_spec_mcp.transport.types.sse_broker import SSEBroker
+from django_spec_mcp.transport.types.sse_replay_buffer import SSEReplayBuffer
 
 
 class MCPServer:
@@ -166,8 +162,8 @@ class MCPServer:
         )
 
     Every spec the server runs receives the seeds (tools over either
-    transport, ``call_tool`` / ``acall_tool``, task workers, chain steps and
-    resource reads), every operation condition it asks is asked with them,
+    transport, ``call_tool`` / ``acall_tool``, task workers and resource
+    reads), every operation condition it asks is asked with them,
     ``tools/list`` availability included, and a registered name is reserved: a
     client argument cannot occupy it, and a ``UrlKwarg``, ``QueryParam`` or
     URI-template variable naming it is refused at registration.
@@ -175,7 +171,7 @@ class MCPServer:
     What the server tells a model in its own words -- the handle description and
     line, a paged tool's scope sentence, the missing-argument message -- is
     ``conventions=``, an
-    [`AgentConventions`][rest_framework_mcp.schema.types.agent_conventions.AgentConventions].
+    [`AgentConventions`][django_spec_mcp.schema.types.agent_conventions.AgentConventions].
     Change one sentence and keep the rest:
 
         server = MCPServer(
@@ -208,7 +204,6 @@ class MCPServer:
         conventions: AgentConventions | None = None,
         url_namespace: str = "mcp",
     ) -> None:
-        check_removed_settings()
         # Identity is resolved once, here, so the instance is the single source
         # of truth on the wire. Every unset kwarg defers to ``SERVER_INFO`` —
         # including ``icons=()``, which is "unset" and not a way to suppress
@@ -516,8 +511,9 @@ class MCPServer:
 
         Filtering **and ordering** are declared on the spec, not here: set
         ``SelectorSpec.filter_set`` and both the HTTP and MCP transports honour
-        it, ordering included via an ``OrderingFilter``. It requires the
-        ``[filter]`` extra (``django-filter``), and schema generation raises a
+        it, ordering included via an ``OrderingFilter``. It requires
+        ``django-filter``, which drf-services installs as its
+        ``[filter]`` extra, and schema generation raises a
         clear ``ImportError`` without it. ``paginate`` stays here, being an MCP
         pipeline mechanic with no spec analogue.
 
@@ -744,138 +740,6 @@ class MCPServer:
                 )
         return tuple(bindings)
 
-    def register_chain_tool(
-        self,
-        *,
-        name: str,
-        steps: list[ChainStep] | tuple[ChainStep, ...],
-        description: str | None = None,
-        title: str | None = None,
-        icons: tuple[Icon, ...] = (),
-        display_name: str | None = None,
-        display_description: str | None = None,
-        input_serializer: type | None = None,
-        atomic: bool = True,
-        output_alias: str | None = None,
-        output_all: bool = False,
-        output_format: OutputFormat | str = OutputFormat.JSON,
-        content_kind: ToolContentKind = ToolContentKind.TEXT,
-        invalidates: tuple[str, ...] | list[str] = (),
-        task_policy: TaskPolicy = TaskPolicy.FORBIDDEN,
-        content_mime_type: str | None = None,
-        permissions: list[Any] | None = None,
-        rate_limits: list[Any] | None = None,
-        annotations: dict[str, Any] | None = None,
-        meta: dict[str, Any] | None = None,
-        agent_contract: OfflineContract | None = None,
-        ui: UIToolMeta | None = None,
-        include_structured_content: bool | None = None,
-        include_output_schema: bool | None = None,
-        unknown_arguments: UnknownArguments = UnknownArguments.REJECT,
-        always_listed: bool = False,
-        max_result_bytes: int | None | UnsetType = UNSET,
-        dispatch_timeout: float | None | UnsetType = UNSET,
-    ) -> ChainToolBinding:
-        """Register an ordered sequence of specs as a single MCP tool.
-
-        Each [`ChainStep`][rest_framework_mcp.registry.types.chain_step.ChainStep]
-        wraps a ``ServiceSpec`` (write) or ``SelectorSpec`` (read) and binds
-        its result to an alias. A step's ``inputs`` callable reads the
-        validated tool arguments (``ctx.args``) and any prior step's output
-        (``ctx[alias]``) to build that step's call kwargs, so one tool call can
-        express ``retrieve x → write y → write z``.
-
-        ``atomic=True`` runs the whole sequence inside one
-        ``transaction.atomic()``: any step raising a ``ServiceError`` /
-        ``ServiceValidationError`` rolls back every prior write and the
-        JSON-RPC error carries ``failedStep``.
-
-        The advertised ``inputSchema`` is ``input_serializer`` when set,
-        otherwise the first step's serializer. The response is the
-        ``output_alias`` step's rendered output (default: the last step), or
-        ``{alias: rendered}`` for every serializer-bearing step when
-        ``output_all=True``.
-
-        Each step's ``spec.permission_classes`` are AND-combined with the
-        chain-level ``permissions`` and judged up front, each step's against a
-        stand-in carrying its alias, so a step permission refusing on the
-        chain's arguments blocks the whole chain before any step runs. Each
-        step judges them again against its own view before its ``inputs`` run
-        and its target is looked up, and only the object-level half on the
-        target it resolves.
-
-        Chains deliberately do not run the selector post-fetch pipeline
-        (filter / order / paginate); for that, expose the selector as its
-        own ``register_selector_tool``.
-
-        ``meta`` is the generic ``_meta`` bundle for this tool's
-        ``tools/list`` entry, and ``ui`` links it to an interactive view —
-        both as on ``register_service_tool``.
-
-        ``agent_contract`` is the same carrier the two spec registrars take, and
-        a chain's only route to it: a chain has no registry entry to inherit
-        from. Only its ``field_audiences`` apply -- a chain declares its
-        arguments through its steps.
-        """
-        _refuse_retired_unknown_arguments(name, unknown_arguments)
-        ui_meta = build_ui_tool_meta(
-            name=name,
-            ui=ui,
-            meta=meta,
-            resources=self._resources,
-            include_structured_content=include_structured_content,
-            default_structured_content=self._config.include_structured_content,
-        )
-        binding = chain_steps_to_tool(
-            name=name,
-            field_audiences=(agent_contract or OfflineContract()).field_audiences,
-            steps=tuple(steps),
-            description=description,
-            title=title,
-            icons=icons,
-            display_name=display_name,
-            display_description=display_description,
-            input_serializer=input_serializer,
-            atomic=atomic,
-            output_alias=output_alias,
-            output_all=output_all,
-            output_format=OutputFormat.coerce(output_format),
-            content_kind=content_kind,
-            task_policy=task_policy,
-            invalidates=tuple(invalidates),
-            content_mime_type=content_mime_type,
-            permissions=check_permissions_shape(f"MCP binding {name!r}", permissions),
-            rate_limits=tuple(rate_limits or ()),
-            annotations=annotations,
-            meta=merge_meta(ui_meta, meta),
-            include_structured_content=include_structured_content,
-            include_output_schema=include_output_schema,
-            unknown_arguments=unknown_arguments,
-            always_listed=always_listed,
-            max_result_bytes=max_result_bytes,
-            dispatch_timeout=dispatch_timeout,
-        )
-        check_tool_permissions_declared(
-            binding.name, binding.permissions, require=self._config.require_tool_permissions
-        )
-        check_tool_description_present(
-            binding.name, binding.description, require=self._config.require_tool_descriptions
-        )
-        # Per binding, and eagerly, so a spec-violating pair fails at import
-        # time rather than on the first ``tools/call``. A server-wide "schema
-        # on, content off" is legal when every binding overrides it back on,
-        # so checking the globals alone would be wrong.
-        resolve_structured_output(
-            include_output_schema_override=binding.include_output_schema,
-            include_structured_content_override=binding.include_structured_content,
-            binding_name=binding.name,
-            default_output_schema=self._config.include_output_schema,
-            default_structured_content=self._config.include_structured_content,
-        )
-        _compile_specs(binding.name, tuple(step.spec for step in binding.steps))
-        self._tools.register(binding)
-        return binding
-
     # ----- transport-neutral invocation -----
 
     def call_tool(
@@ -891,7 +755,7 @@ class MCPServer:
         The transport-neutral entry point: hand a tool ``name``, a flat ``arguments``
         dict (the role ``request.data`` / query params play on HTTP) and the acting
         ``user``, and get back the same
-        [`ToolResult`][rest_framework_mcp.protocol.types.tool_result.ToolResult] the
+        [`ToolResult`][django_spec_mcp.protocol.types.tool_result.ToolResult] the
         wire handlers build. An in-process consumer calls this instead of
         re-implementing dispatch.
 
@@ -906,8 +770,7 @@ class MCPServer:
         MCP-only ``input_serializer`` — nor the transport-level MCP permissions
         and rate limits. A ``FilterSet``'s ordering is not one of those extras:
         it is applied here with the rest of the filtering. For those, and for tool listing, use
-        ``acall_tool`` / ``list_tools``. Chain tools orchestrate
-        several specs and raise ``TypeError`` here.
+        ``acall_tool`` / ``list_tools``.
 
         Raises ``KeyError`` when no tool is registered under ``name``.
         """
@@ -943,7 +806,7 @@ class MCPServer:
         ``additionalProperties`` policy), the same per-caller listing-permission filter
         (``FILTER_LISTINGS_BY_PERMISSIONS``) and the same opaque-cursor pagination —
         pass the returned ``nextCursor`` back for the next page. A
-        [`JsonRpcError`][rest_framework_mcp.protocol.types.json_rpc_error.JsonRpcError]
+        [`JsonRpcError`][django_spec_mcp.protocol.types.json_rpc_error.JsonRpcError]
         signals a bad cursor.
 
         ``scopes`` are the caller's granted scopes; pass them so a
@@ -1004,8 +867,7 @@ class MCPServer:
 
         Maps each omitted tool's name to the operation-scope ``Affordance`` whose
         condition is unmet: its ``code`` and its ``reason``, the sentence written
-        for people and models alike. For a chain it is the first unmet one in step
-        order. The answer comes from the same pass ``tools/list`` makes, over the
+        for people and models alike. The answer comes from the same pass ``tools/list`` makes, over the
         same tools the caller may see (``FILTER_LISTINGS_BY_PERMISSIONS``
         included), so a name is here exactly when the listing omits it, and a
         tool hidden from this caller is never named with its reason.
@@ -1058,10 +920,10 @@ class MCPServer:
         The in-process twin of a ``tools/call`` request: routes through the same async
         handler the wire uses, so the transport-level MCP permissions and rate limits,
         the selector post-fetch pipeline (filter / order / paginate), a selector
-        binding's MCP-only ``input_serializer``, chain tools and the output format all
+        binding's MCP-only ``input_serializer`` and the output format all
         apply — everything ``call_tool`` omits. Returns the wire's result payload (a
         ``dict`` carrying ``content`` / ``structuredContent`` / ``isError``), or a
-        [`JsonRpcError`][rest_framework_mcp.protocol.types.json_rpc_error.JsonRpcError]
+        [`JsonRpcError`][django_spec_mcp.protocol.types.json_rpc_error.JsonRpcError]
         for a protocol fault (unknown tool, malformed ``arguments`` shape, denied
         permission).
 
@@ -1196,7 +1058,7 @@ class MCPServer:
         **A URI, not a template.** Publish the concrete URI that changed, and
         the collection URI too if watchers of the collection should hear about
         it — matching is exact, deliberately (see
-        [`topic_for_resource`][rest_framework_mcp.subscriptions.utils.topic_for_resource]).
+        [`topic_for_resource`][django_spec_mcp.subscriptions.utils.topic_for_resource]).
 
         **Publish after the transaction commits.** Inside
         ``transaction.atomic()`` this announces a change that may still roll
@@ -1414,14 +1276,14 @@ class MCPServer:
         no context.
 
         ``ui=`` is the typed
-        [`UIResourceMeta`][rest_framework_mcp.registry.types.ui_resource_meta.UIResourceMeta]
+        [`UIResourceMeta`][django_spec_mcp.registry.types.ui_resource_meta.UIResourceMeta]
         — CSP origins, browser permissions, publisher ``domain``, border preference —
         which serialises into ``_meta`` under the extension's key. ``meta=`` remains
         available for *other* extensions; passing both ``ui=`` and that same key inside
         ``meta=`` raises, rather than letting one silently win.
 
         The result is an ordinary
-        [`ResourceBinding`][rest_framework_mcp.registry.types.resource_binding.ResourceBinding],
+        [`ResourceBinding`][django_spec_mcp.registry.types.resource_binding.ResourceBinding],
         so it shares one URI namespace with data resources (a collision raises as
         always), appears in ``resources/list``, and honours ``permissions`` /
         ``always_listed``. Views default to **unguarded** — the MCP session is already
@@ -1487,7 +1349,7 @@ class MCPServer:
         ``render`` receives the prompt arguments as kwargs (plus ``request`` and
         ``user`` if it declares them) and returns either a string, a list of strings, a
         list of
-        [`PromptMessage`][rest_framework_mcp.protocol.types.prompt_message.PromptMessage],
+        [`PromptMessage`][django_spec_mcp.protocol.types.prompt_message.PromptMessage],
         or a coroutine yielding any of those — the dispatch layer normalises the result.
 
         ``request`` and ``user`` are seeded **over** the client's arguments at
@@ -1877,7 +1739,7 @@ class MCPServer:
         subscriber per session: re-subscribing replaces the old queue silently.
 
         With a
-        [`SSEReplayBuffer`][rest_framework_mcp.transport.types.sse_replay_buffer.SSEReplayBuffer]
+        [`SSEReplayBuffer`][django_spec_mcp.transport.types.sse_replay_buffer.SSEReplayBuffer]
         configured the payload is recorded *before* publishing, so the frame carries an
         event ID the SSE generator emits on the wire (``id: <id>\\ndata:
         <payload>\\n\\n``) and a later reconnect with ``Last-Event-ID`` drains what it
@@ -1992,7 +1854,7 @@ def _compile_specs(name: str, specs: tuple[ServiceSpec | SelectorSpec, ...]) -> 
     ``preconditions``, a ``reads`` entry named after a seed. Nothing compiled at
     registration, so the first read did, and on ``tools/list`` that read is the
     operation-condition pass (``operation_affordances``) over every service
-    tool's spec and every chain step's: one such spec took the listing down for
+    tool's spec: one such spec took the listing down for
     every tool on the server. The kernel's own ``SpecRegistry.register``
     compiles at registration for the same reason.
 
@@ -2000,9 +1862,8 @@ def _compile_specs(name: str, specs: tuple[ServiceSpec | SelectorSpec, ...]) -> 
     package's own refusals run first and keep their wording where both would
     refuse: a selector tool with no selector, a serializer handed as an
     instance, a ``QueryParam`` named like a lookup parameter. Compiled first,
-    drf-services' wording answered each of those. ``test_a_service_tool_drf_services_cannot_compile_is_refused_at_registration``,
-    ``test_a_selector_tool_drf_services_cannot_compile_is_refused_at_registration``
-    and ``test_a_chain_step_drf_services_cannot_compile_is_refused_at_registration``
+    drf-services' wording answered each of those. ``test_a_service_tool_drf_services_cannot_compile_is_refused_at_registration``
+    and ``test_a_selector_tool_drf_services_cannot_compile_is_refused_at_registration``
     each fail without their call.
 
     This compiles the variant ``kernel_spec`` answers, which is the one the
@@ -2013,7 +1874,7 @@ def _compile_specs(name: str, specs: tuple[ServiceSpec | SelectorSpec, ...]) -> 
     drf-services' message names the spec's kind and callable, never the tool,
     so the refusal is raised again prefixed ``Tool {name!r}:``, which is what a
     server registering many tools needs to find the one at fault. Each of the
-    three tests above asserts the prefix.
+    two tests above asserts the prefix.
     """
     for spec in specs:
         try:
@@ -2220,16 +2081,15 @@ def _refuse_retired_unknown_arguments(name: str, unknown_arguments: UnknownArgum
     The sibling of ``_refuse_retired_argument_binding``. drf-services 0.58.0
     retired the member and kept it importable: an argument the spec does not
     declare never reaches the callable, so its ``dispatch_spec`` raises
-    ``ValueError`` for it on every call, and a chain, which validates its
-    arguments here rather than through ``dispatch_spec``, raises the same words
-    (``handlers.utils.validate_input_against_serializer``). Registering it
+    ``ValueError`` for it on every call, and a selector's own validation raises
+    the same words (``handlers.utils.validate_input_against_serializer``).
+    Registering it
     anyway would ship a tool that lists and then fails each call, so the refusal
-    is here, ahead of the binding, where startup reads it. All three tool
+    is here, ahead of the binding, where startup reads it. Both tool
     registrars call it, and every route through this server (the decorators,
     ``register_specs`` overrides, ``register_tools`` with its defaults) reaches
-    one of them; ``test_register_service_tool_refuses_it``,
-    ``test_register_selector_tool_refuses_it`` and
-    ``test_register_chain_tool_refuses_it`` each fail without their call. A
+    one of them; ``test_register_service_tool_refuses_it`` and
+    ``test_register_selector_tool_refuses_it`` each fail without their call. A
     binding built by hand and handed to ``tools.register`` skips the
     registrars, and so this check: the per-call refusals still answer it.
     """

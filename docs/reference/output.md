@@ -9,7 +9,7 @@ advertises `outputSchema` must return conforming `structuredContent`**, while
 the reverse is allowed — so they are not a single switch.
 
 Both are on by default, server-wide via
-`REST_FRAMEWORK_MCP["INCLUDE_STRUCTURED_CONTENT"]` and
+`SPEC_MCP["INCLUDE_STRUCTURED_CONTENT"]` and
 `["INCLUDE_OUTPUT_SCHEMA"]`, and per tool via `include_structured_content=` and
 `include_output_schema=` at registration. The asymmetric rule is enforced:
 `include_output_schema=True` with `include_structured_content=False` raises at
@@ -26,7 +26,7 @@ for when to turn either off, and
 schema an agent sees — field markings project the payload and the advertised
 `outputSchema` from the same declaration.
 
-::: rest_framework_mcp.constants.OutputFormat
-::: rest_framework_mcp.output.encode_json.encode_json
-::: rest_framework_mcp.output.encode_toon.encode_toon
-::: rest_framework_mcp.output.tool_result.build_tool_result
+::: django_spec_mcp.constants.OutputFormat
+::: django_spec_mcp.output.encode_json.encode_json
+::: django_spec_mcp.output.encode_toon.encode_toon
+::: django_spec_mcp.output.tool_result.build_tool_result

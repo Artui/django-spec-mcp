@@ -9,11 +9,11 @@ from typing import Any
 from django.http import StreamingHttpResponse
 from django_service_specs import ProgressReporter
 
-from rest_framework_mcp.constants import INTERNAL_ERROR_MESSAGE, JSONRPC_VERSION, JsonRpcErrorCode
-from rest_framework_mcp.observability import get_logger
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.protocol.types.json_rpc_response import JsonRpcResponse
-from rest_framework_mcp.transport.sse_response import format_event, keepalive_interval_seconds
+from django_spec_mcp.constants import INTERNAL_ERROR_MESSAGE, JSONRPC_VERSION, JsonRpcErrorCode
+from django_spec_mcp.observability import get_logger
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.protocol.types.json_rpc_response import JsonRpcResponse
+from django_spec_mcp.transport.sse_response import format_event, keepalive_interval_seconds
 
 _PROGRESS_METHOD: str = "notifications/progress"
 

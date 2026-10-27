@@ -33,7 +33,7 @@ from django.core.exceptions import ImproperlyConfigured
 from django.test import RequestFactory
 from django.utils import timezone
 
-from rest_framework_mcp.auth.backends.django_oauth_toolkit_backend import (
+from django_spec_mcp.auth.backends.django_oauth_toolkit_backend import (
     DjangoOAuthToolkitBackend,
 )
 
@@ -103,7 +103,7 @@ def test_a_real_token_authenticates_with_a_resource_url_configured(settings) -> 
     token. The result was a 401 for every request and hosts reporting the
     server as having no tools.
     """
-    settings.REST_FRAMEWORK_MCP = {"RESOURCE_URL": RESOURCE_URL}
+    settings.SPEC_MCP = {"RESOURCE_URL": RESOURCE_URL}
     token = _issue_token()
 
     backend = DjangoOAuthToolkitBackend(resource_url=RESOURCE_URL)
@@ -117,7 +117,7 @@ def test_a_real_token_authenticates_with_a_resource_url_configured(settings) -> 
 @pytest.mark.django_db
 def test_metadata_still_advertises_the_resource_it_authenticates_for(settings) -> None:
     """The impossible choice is gone: publish valid metadata *and* authenticate."""
-    settings.REST_FRAMEWORK_MCP = {"RESOURCE_URL": RESOURCE_URL}
+    settings.SPEC_MCP = {"RESOURCE_URL": RESOURCE_URL}
     token = _issue_token()
     backend = DjangoOAuthToolkitBackend(resource_url=RESOURCE_URL)
 
@@ -140,7 +140,7 @@ def test_stock_dot_at_the_declared_floor_can_enforce(settings) -> None:
     test. The refusal is covered where it is still reachable:
     `test_enforcement_refuses_a_swapped_model_without_a_resource`.
     """
-    settings.REST_FRAMEWORK_MCP = {"RESOURCE_URL": RESOURCE_URL, "ENFORCE_AUDIENCE": True}
+    settings.SPEC_MCP = {"RESOURCE_URL": RESOURCE_URL, "ENFORCE_AUDIENCE": True}
 
     assert _dot_has_resource_indicators(), (
         "stock AccessToken has no 'resource' field, so the installed DOT is "
@@ -152,7 +152,7 @@ def test_stock_dot_at_the_declared_floor_can_enforce(settings) -> None:
 
 
 def test_enforcement_with_no_resource_url_refuses_to_start(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {"ENFORCE_AUDIENCE": True}
+    settings.SPEC_MCP = {"ENFORCE_AUDIENCE": True}
     with pytest.raises(ImproperlyConfigured, match="nothing for a token's resource to match"):
         DjangoOAuthToolkitBackend()
 
@@ -182,7 +182,7 @@ def test_enforcement_starts_when_the_token_model_carries_a_resource(monkeypatch,
     monkeypatch.setattr(
         "oauth2_provider.models.get_access_token_model", lambda: _TokenModel, raising=True
     )
-    settings.REST_FRAMEWORK_MCP = {"RESOURCE_URL": RESOURCE_URL, "ENFORCE_AUDIENCE": True}
+    settings.SPEC_MCP = {"RESOURCE_URL": RESOURCE_URL, "ENFORCE_AUDIENCE": True}
 
     backend = DjangoOAuthToolkitBackend()
     assert backend.protected_resource_metadata().to_dict()["resource"] == RESOURCE_URL
@@ -190,14 +190,14 @@ def test_enforcement_starts_when_the_token_model_carries_a_resource(monkeypatch,
 
 def test_enforcement_starts_with_an_explicit_audience_getter(settings) -> None:
     """The supported way to enforce: say where the audience actually lives."""
-    settings.REST_FRAMEWORK_MCP = {"RESOURCE_URL": RESOURCE_URL, "ENFORCE_AUDIENCE": True}
+    settings.SPEC_MCP = {"RESOURCE_URL": RESOURCE_URL, "ENFORCE_AUDIENCE": True}
     backend = DjangoOAuthToolkitBackend(audience_getter=lambda _token: RESOURCE_URL)
     assert backend.protected_resource_metadata().to_dict()["resource"] == RESOURCE_URL
 
 
 @pytest.mark.django_db
 def test_an_explicit_getter_can_reject(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {"RESOURCE_URL": RESOURCE_URL, "ENFORCE_AUDIENCE": True}
+    settings.SPEC_MCP = {"RESOURCE_URL": RESOURCE_URL, "ENFORCE_AUDIENCE": True}
     token = _issue_token()
     backend = DjangoOAuthToolkitBackend(audience_getter=lambda _token: "https://elsewhere/mcp/")
     assert backend.authenticate(_request(token)) is None
@@ -209,7 +209,7 @@ def test_an_empty_resource_url_means_unset_not_enforced_against_empty(settings) 
     It was "not None", so it won the argument check, then no token could
     match the empty string.
     """
-    settings.REST_FRAMEWORK_MCP = {"RESOURCE_URL": RESOURCE_URL}
+    settings.SPEC_MCP = {"RESOURCE_URL": RESOURCE_URL}
     backend = DjangoOAuthToolkitBackend(resource_url="")
     body = backend.protected_resource_metadata().to_dict()
     assert body["resource"] == ""
@@ -218,7 +218,7 @@ def test_an_empty_resource_url_means_unset_not_enforced_against_empty(settings) 
 
 def test_unconfigured_metadata_says_why_resource_is_empty(settings) -> None:
     """RFC 9728 makes `resource` REQUIRED, so an empty one needs explaining."""
-    settings.REST_FRAMEWORK_MCP = {}
+    settings.SPEC_MCP = {}
     body = DjangoOAuthToolkitBackend().protected_resource_metadata().to_dict()
     assert body["resource"] == ""
     assert "RESOURCE_URL" in body["_warning"]
@@ -249,6 +249,6 @@ def test_enforcement_refuses_a_swapped_model_without_a_resource(monkeypatch, set
         _meta = _Meta()
 
     monkeypatch.setattr("oauth2_provider.models.get_access_token_model", lambda: _NoResourceToken)
-    settings.REST_FRAMEWORK_MCP = {"RESOURCE_URL": RESOURCE_URL, "ENFORCE_AUDIENCE": True}
+    settings.SPEC_MCP = {"RESOURCE_URL": RESOURCE_URL, "ENFORCE_AUDIENCE": True}
     with pytest.raises(ImproperlyConfigured, match="no 'resource' field"):
         DjangoOAuthToolkitBackend()

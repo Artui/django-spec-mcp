@@ -10,13 +10,13 @@ from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest
 from django.test import Client, RequestFactory
 
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.config.build_mcp_config import build_mcp_config
-from rest_framework_mcp.registry.prompt_registry import PromptRegistry
-from rest_framework_mcp.registry.resource_registry import ResourceRegistry
-from rest_framework_mcp.registry.tool_registry import ToolRegistry
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
-from rest_framework_mcp.transport.streamable_http_viewset import (
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.config.build_mcp_config import build_mcp_config
+from django_spec_mcp.registry.prompt_registry import PromptRegistry
+from django_spec_mcp.registry.resource_registry import ResourceRegistry
+from django_spec_mcp.registry.tool_registry import ToolRegistry
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp.transport.streamable_http_viewset import (
     STREAMABLE_HTTP_ACTION_MAP,
     StreamableHttpViewSet,
     _reject_awaitable_token,

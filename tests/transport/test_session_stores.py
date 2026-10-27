@@ -5,8 +5,8 @@ import warnings
 import pytest
 from django.core.cache.backends.base import CacheKeyWarning
 
-from rest_framework_mcp.transport.django_cache_session_store import DjangoCacheSessionStore
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp.transport.django_cache_session_store import DjangoCacheSessionStore
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 
 
 def test_in_memory_store_lifecycle() -> None:
@@ -45,7 +45,7 @@ def test_django_cache_store_legacy_boolean_value_is_ownerless() -> None:
     # treats them as ownerless so the client re-initializes.
     from django.core.cache import cache
 
-    cache.set("drf-mcp:session:legacy-id", True, timeout=60)
+    cache.set("spec-mcp:session:legacy-id", True, timeout=60)
     store = DjangoCacheSessionStore()
     assert store.exists("legacy-id")
     assert store.owner("legacy-id") is None
@@ -116,7 +116,7 @@ class TestSessionExpiryWindows:
         from django.test import override_settings
 
         store = DjangoCacheSessionStore(namespace="nocap", ttl_seconds=1000)
-        with override_settings(REST_FRAMEWORK_MCP={"SESSION_MAX_AGE_SECONDS": None}):
+        with override_settings(SPEC_MCP={"SESSION_MAX_AGE_SECONDS": None}):
             uncapped = DjangoCacheSessionStore(namespace="nocap", ttl_seconds=1000)
         assert uncapped._max_age_seconds is None  # noqa: SLF001
         sid = uncapped.create(principal_id="alice")

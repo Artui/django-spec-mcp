@@ -1,4 +1,4 @@
-# Migrating to `djangorestframework-mcp-server`
+# Migrating to `django-spec-mcp`
 
 This page covers two common starting points: a hand-rolled Django MCP
 server (often a single `View` that hand-parses JSON-RPC) and a
@@ -125,7 +125,7 @@ Replace the custom view with a single `MCPServer` instance:
 from django_service_specs import SelectorKind
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
-from rest_framework_mcp import MCPServer
+from django_spec_mcp import MCPServer
 
 server = MCPServer(name="invoicing")
 
@@ -178,10 +178,10 @@ Once the new endpoint passes Inspector / your end-to-end suite, delete:
 ## From `fastapi-mcp`
 
 `fastapi-mcp` decorates FastAPI route handlers and exposes them as MCP
-tools. The migration to `djangorestframework-mcp-server` is mostly
+tools. The migration to `django-spec-mcp` is mostly
 mechanical because both packages think in terms of "callable + schema":
 
-| `fastapi-mcp`                                              | `djangorestframework-mcp-server`                                       |
+| `fastapi-mcp`                                              | `django-spec-mcp`                                       |
 |------------------------------------------------------------|------------------------------------------------------------------------|
 | `@mcp.tool` on a FastAPI handler                           | `register_service_tool(...)` or `@server.service_tool`                  |
 | Pydantic input model                                       | DRF `Serializer` (or `@dataclass` — the package generates the schema)   |
@@ -189,7 +189,7 @@ mechanical because both packages think in terms of "callable + schema":
 | `@mcp.resource("uri://{var}")`                             | `register_resource(uri_template="uri://{var}", selector=SelectorSpec(...))` |
 | `@mcp.prompt`                                              | `register_prompt(name=..., render=...)`                                 |
 | FastAPI's dependency injection (`request`, `db`, etc.)     | The kwarg pool — declare the kwargs you need on the callable; `resolve_callable_kwargs` handles the rest |
-| Streamable-HTTP transport implemented inside `fastapi-mcp` | Implemented inside `djangorestframework-mcp-server`; same wire shape   |
+| Streamable-HTTP transport implemented inside `fastapi-mcp` | Implemented inside `django-spec-mcp`; same wire shape   |
 
 ### Mapping example
 
@@ -205,7 +205,7 @@ async def create_invoice(data: InvoiceInputModel) -> InvoiceOutputModel:
 ```
 
 ```python
-# djangorestframework-mcp-server
+# django-spec-mcp
 async def create_invoice(*, data: dict) -> Invoice:
     return await Invoice.objects.acreate(
         number=data["number"],
@@ -263,7 +263,7 @@ concretely (`Any` doesn't introspect — see
 
 ## Worked example to copy from
 
-[`examples/invoicing/`](https://github.com/Artui/djangorestframework-mcp-server/tree/main/examples/invoicing)
+[`examples/invoicing/`](https://github.com/Artui/django-spec-mcp/tree/main/examples/invoicing)
 is a full Django project that exercises `register_service_tool`,
 `register_selector_tool` (with `FilterSet`, ordering, pagination),
 `register_resource` (templated URI), and `register_prompt`. It's a

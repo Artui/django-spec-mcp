@@ -23,16 +23,16 @@ from rest_framework_services.dispatch.utils import refuse_retired_modes
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import MCPServer
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.constants import UnknownArguments
-from rest_framework_mcp.handlers.handle_tools_call import handle_tools_call
-from rest_framework_mcp.handlers.handle_tools_list import handle_tools_list
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.handlers.utils import validate_input_against_serializer
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.constants import UnknownArguments
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.handlers.utils import validate_input_against_serializer
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.utils import tool_error
 
 
@@ -487,12 +487,13 @@ def test_no_input_serializer_short_circuits_policy(policy: UnknownArguments) -> 
 
 
 @pytest.mark.parametrize("serializer", [_OneFieldInput, None], ids=["serializer", "none"])
-def test_a_chain_under_passthrough_raises_as_drf_services_dispatch_does(
+def test_the_read_path_under_passthrough_raises_as_drf_services_dispatch_does(
     serializer: type | None,
 ) -> None:
-    """A chain validates its arguments here and never calls ``dispatch_spec``, so
-    this validator is the one place a retired ``PASSTHROUGH`` can be refused on
-    that path. Without the refusal it would run as ``IGNORE`` without a word."""
+    """A selector binding validates its arguments here rather than through
+    ``dispatch_spec``, so a binding built by hand with a retired ``PASSTHROUGH``
+    is refused here. Without the refusal it would run as ``IGNORE`` without a
+    word."""
     with pytest.raises(ValueError) as caught:
         validate_input_against_serializer(
             {"known": "ok", "extra": 1},

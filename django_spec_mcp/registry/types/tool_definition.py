@@ -8,26 +8,26 @@ from django_service_specs import ServerArguments
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp.constants import (
+from django_spec_mcp.constants import (
     ArgumentBinding,
     OutputFormat,
     ToolKind,
     UnknownArguments,
 )
-from rest_framework_mcp.registry.types.query_param import QueryParam
-from rest_framework_mcp.registry.types.url_kwarg import UrlKwarg
+from django_spec_mcp.registry.types.query_param import QueryParam
+from django_spec_mcp.registry.types.url_kwarg import UrlKwarg
 
 
 @dataclass(frozen=True)
 class ToolDefinition:
     """Declarative description of a single tool, fed to
-    [`register_tools`][rest_framework_mcp.registry.register_tools.register_tools].
+    [`register_tools`][django_spec_mcp.registry.register_tools.register_tools].
 
     A transport-agnostic container for the kwargs that would otherwise be passed to
-    [`MCPServer.register_service_tool`][rest_framework_mcp.server.mcp_server.MCPServer.register_service_tool]
+    [`MCPServer.register_service_tool`][django_spec_mcp.server.mcp_server.MCPServer.register_service_tool]
     or
-    [`MCPServer.register_selector_tool`][rest_framework_mcp.server.mcp_server.MCPServer.register_selector_tool],
-    plus a [`ToolKind`][rest_framework_mcp.constants.ToolKind] discriminator selecting
+    [`MCPServer.register_selector_tool`][django_spec_mcp.server.mcp_server.MCPServer.register_selector_tool],
+    plus a [`ToolKind`][django_spec_mcp.constants.ToolKind] discriminator selecting
     between them at dispatch time.
 
     Construct via ``service`` / ``selector``, which enforce the
@@ -37,11 +37,11 @@ class ToolDefinition:
     kwarg.
 
     Every per-call kwarg defaults to ``None``, which
-    [`register_tools`][rest_framework_mcp.registry.register_tools.register_tools] reads
+    [`register_tools`][django_spec_mcp.registry.register_tools.register_tools] reads
     as "no override" — letting a
-    [`SelectorDefaults`][rest_framework_mcp.registry.types.selector_defaults.SelectorDefaults]
+    [`SelectorDefaults`][django_spec_mcp.registry.types.selector_defaults.SelectorDefaults]
     /
-    [`ServiceDefaults`][rest_framework_mcp.registry.types.service_defaults.ServiceDefaults]
+    [`ServiceDefaults`][django_spec_mcp.registry.types.service_defaults.ServiceDefaults]
     supply the value, and falling back to the registration method's own default when
     neither does."""
 
@@ -101,7 +101,7 @@ class ToolDefinition:
 
     server_arguments: ServerArguments | None = None
     """Declared arguments the server answers for, as on
-    [`register_service_tool`][rest_framework_mcp.server.mcp_server.MCPServer.register_service_tool]:
+    [`register_service_tool`][django_spec_mcp.server.mcp_server.MCPServer.register_service_tool]:
     a bound value the caller cannot replace, and names withheld from the caller.
     Per tool, so neither ``SelectorDefaults`` nor ``ServiceDefaults`` carries it."""
 

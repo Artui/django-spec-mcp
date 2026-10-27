@@ -3,8 +3,8 @@ from __future__ import annotations
 import pytest
 from rest_framework.permissions import BasePermission, IsAuthenticated
 
-from rest_framework_mcp.auth.permissions.drf_permission_adapter import DRFPermissionAdapter
-from rest_framework_mcp.auth.permissions.wrap_spec_permissions import wrap_spec_permissions
+from django_spec_mcp.auth.permissions.drf_permission_adapter import DRFPermissionAdapter
+from django_spec_mcp.auth.permissions.wrap_spec_permissions import wrap_spec_permissions
 
 
 class _Custom(BasePermission):

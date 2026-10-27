@@ -12,6 +12,17 @@ from rest_framework.permissions import AllowAny
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
+from django_spec_mcp import (
+    AgentConventions,
+    ArgumentBinding,
+    MCPServer,
+    PromptArgument,
+    PromptMessage,
+    QueryParam,
+)
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.permissions.drf_permission_adapter import DRFPermissionAdapter
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from invoices.filters import InvoiceFilterSet
 from invoices.models import Invoice
 from invoices.selectors import (
@@ -35,17 +46,6 @@ from invoices.services import (
     mark_invoice_sent,
     set_invoice_amount,
 )
-from rest_framework_mcp import (
-    AgentConventions,
-    ArgumentBinding,
-    MCPServer,
-    PromptArgument,
-    PromptMessage,
-    QueryParam,
-)
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.permissions.drf_permission_adapter import DRFPermissionAdapter
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
 
 
 def build_server() -> MCPServer:

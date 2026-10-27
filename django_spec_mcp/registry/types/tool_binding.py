@@ -24,17 +24,17 @@ from rest_framework_services.dispatch.utils import resolve_unknown_arguments
 from rest_framework_services.types.affordance_declarer import AffordanceDeclarer
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp.constants import (
+from django_spec_mcp.constants import (
     ArgumentBinding,
     OutputFormat,
     TaskPolicy,
     ToolContentKind,
     UnknownArguments,
 )
-from rest_framework_mcp.protocol.types.icon import Icon
-from rest_framework_mcp.registry.types.query_param import QueryParam
-from rest_framework_mcp.registry.types.url_kwarg import UrlKwarg
-from rest_framework_mcp.registry.types.utils import (
+from django_spec_mcp.protocol.types.icon import Icon
+from django_spec_mcp.registry.types.query_param import QueryParam
+from django_spec_mcp.registry.types.url_kwarg import UrlKwarg
+from django_spec_mcp.registry.types.utils import (
     can_present_nothing,
     rendered_kind,
     validate_content_kind,
@@ -165,7 +165,7 @@ class ToolBinding(Generic[InputT, ResultT, ExtraT]):
     """What this tool's payload becomes in the result's ``content`` array. ``TEXT``
     renders JSON per ``output_format``; the other kinds project it into an image / audio
     / resource-link block. See
-    [`ToolContentKind`][rest_framework_mcp.constants.ToolContentKind]."""
+    [`ToolContentKind`][django_spec_mcp.constants.ToolContentKind]."""
 
     content_mime_type: str | None = None
     """The media type for an ``IMAGE`` / ``AUDIO`` ``content_kind``.
@@ -176,7 +176,7 @@ class ToolBinding(Generic[InputT, ResultT, ExtraT]):
     """Whether calling this tool hands back a task handle instead of a result.
     The choice lives on the binding because the extension makes the *server*
     the sole decider and gives the client no way to ask. See
-    [`TaskPolicy`][rest_framework_mcp.constants.TaskPolicy]."""
+    [`TaskPolicy`][django_spec_mcp.constants.TaskPolicy]."""
 
     invalidates: tuple[str, ...] = ()
     """URI templates naming the resources a successful call changed.

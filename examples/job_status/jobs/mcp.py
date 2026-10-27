@@ -8,13 +8,13 @@ from rest_framework.permissions import AllowAny
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from jobs.models import Job
 from jobs.selectors import get_job, list_jobs
 from jobs.serializers import JobOutputSerializer, StartJobInputSerializer
 from jobs.services import start_job
-from rest_framework_mcp import MCPServer
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
 
 
 class JobFilterSet(django_filters.FilterSet):

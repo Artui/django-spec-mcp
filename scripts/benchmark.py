@@ -39,12 +39,12 @@ from django.test import Client  # noqa: E402
 from rest_framework import serializers  # noqa: E402
 from rest_framework_services.types.service_spec import ServiceSpec  # noqa: E402
 
-from rest_framework_mcp import MCPServer  # noqa: E402
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend  # noqa: E402
-from rest_framework_mcp.auth.types.token_info import TokenInfo  # noqa: E402
-from rest_framework_mcp.handlers.handle_tools_call import handle_tools_call  # noqa: E402
-from rest_framework_mcp.handlers.types.context import MCPCallContext  # noqa: E402
-from rest_framework_mcp.transport.in_memory_session_store import (  # noqa: E402
+from django_spec_mcp import MCPServer  # noqa: E402
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend  # noqa: E402
+from django_spec_mcp.auth.types.token_info import TokenInfo  # noqa: E402
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call  # noqa: E402
+from django_spec_mcp.handlers.types.context import MCPCallContext  # noqa: E402
+from django_spec_mcp.transport.in_memory_session_store import (  # noqa: E402
     InMemorySessionStore,
 )
 

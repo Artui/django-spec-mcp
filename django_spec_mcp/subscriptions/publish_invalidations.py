@@ -5,9 +5,9 @@ from typing import Any
 from asgiref.sync import async_to_sync
 from django.db import transaction
 
-from rest_framework_mcp.constants import JSONRPC_VERSION, RESOURCE_UPDATED_METHOD
-from rest_framework_mcp.subscriptions.types.subscription_broker import SubscriptionBroker
-from rest_framework_mcp.subscriptions.utils import topic_for_resource
+from django_spec_mcp.constants import JSONRPC_VERSION, RESOURCE_UPDATED_METHOD
+from django_spec_mcp.subscriptions.types.subscription_broker import SubscriptionBroker
+from django_spec_mcp.subscriptions.utils import topic_for_resource
 
 
 def publish_invalidations(broker: SubscriptionBroker | None, uris: tuple[str, ...]) -> None:

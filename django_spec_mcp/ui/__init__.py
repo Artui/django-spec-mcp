@@ -6,6 +6,6 @@ reason: the bridge's failure modes are all silent, and one of them is
 unrecoverable. See ``bridge.js``.
 """
 
-from rest_framework_mcp.ui.build_app_document import build_app_document
+from django_spec_mcp.ui.build_app_document import build_app_document
 
 __all__ = ["build_app_document"]

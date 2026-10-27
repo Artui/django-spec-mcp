@@ -3,20 +3,19 @@ from __future__ import annotations
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import DEFAULT_POOL_SEEDS, PoolSeeds, check_server_arguments
 
-from rest_framework_mcp.registry.types.chain_tool_binding import ChainToolBinding
-from rest_framework_mcp.registry.types.selector_tool_binding import SelectorToolBinding
-from rest_framework_mcp.registry.types.tool_binding import ToolBinding
+from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
+from django_spec_mcp.registry.types.tool_binding import ToolBinding
 
 # Deliberately a union rather than a shared base class, so each binding stays a
 # frozen dataclass with its own structure. ``tools/list`` and ``tools/call``
 # discriminate at dispatch time.
-ToolBindingLike = ToolBinding | SelectorToolBinding | ChainToolBinding
+ToolBindingLike = ToolBinding | SelectorToolBinding
 
 
 class ToolRegistry:
     """Name to tool binding lookup.
 
-    Holds service, selector and chain bindings in one namespace, rejecting
+    Holds service and selector bindings in one namespace, rejecting
     duplicates loudly so a misconfigured project surfaces the conflict at
     registration rather than silently shadowing a tool.
 
@@ -75,18 +74,14 @@ def _refuse_server_arguments_that_cannot_hold(
     and callable; this adds the tool's name, which is what a server binding
     many tools needs to find the one at fault.
 
-    One arc to coverage, so each condition names its holder. A chain tool
-    carries none, its steps being specs of their own: without the first,
-    every chain registration fails on the missing attribute
-    (``test_chain_of_only_selectors_is_read_only``). A binding that binds
-    nothing is not asked, because the kernel's check assembles the spec's
-    parameters, and the assembly refuses declarations the registration does
-    not: without the second, a target lookup's filter named like an
-    ``input_serializer`` field is refused here as two sources of one
+    A binding that binds nothing is not asked, because the kernel's check
+    assembles the spec's parameters, and the assembly refuses declarations the
+    registration does not: without the guard, a target lookup's filter named
+    like an ``input_serializer`` field is refused here as two sources of one
     parameter, where it registers and fails each call
     (``test_a_lookup_filter_named_like_a_field_is_left_to_the_kernel``).
     """
-    if isinstance(binding, ChainToolBinding) or not binding.server_arguments.names():
+    if not binding.server_arguments.names():
         return
     try:
         check_server_arguments(binding.spec, binding.server_arguments, pool_seeds=pool_seeds)

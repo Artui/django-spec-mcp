@@ -27,13 +27,13 @@ from rest_framework_dataclasses.serializers import DataclassSerializer
 from rest_framework_services.dispatch.utils import DROPPED_EDGE_SEEDS, declared_input_keys
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp._compat.reject_awaitable import reject_awaitable
-from rest_framework_mcp.auth.permissions.drf_permission_adapter import DRFPermissionAdapter
-from rest_framework_mcp.auth.permissions.utils import DispatchShape
-from rest_framework_mcp.auth.rate_limits.types.mcp_rate_limit import MCPRateLimit
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.config.types.mcp_config import MCPConfig
-from rest_framework_mcp.constants import (
+from django_spec_mcp._compat.reject_awaitable import reject_awaitable
+from django_spec_mcp.auth.permissions.drf_permission_adapter import DRFPermissionAdapter
+from django_spec_mcp.auth.permissions.utils import DispatchShape
+from django_spec_mcp.auth.rate_limits.types.mcp_rate_limit import MCPRateLimit
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.config.types.mcp_config import MCPConfig
+from django_spec_mcp.constants import (
     MODERN_PROTOCOL_VERSIONS,
     RESERVED_POOL_SEEDS,
     RESERVED_POST_FETCH_KEYS,
@@ -43,21 +43,20 @@ from rest_framework_mcp.constants import (
     OutputFormat,
     UnknownArguments,
 )
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.observability.get_logger import get_logger
-from rest_framework_mcp.output.enforce_result_bytes import enforce_result_bytes
-from rest_framework_mcp.output.error_tool_result import build_error_tool_result
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.protocol.types.tool_result import ToolResult
-from rest_framework_mcp.registry.types.chain_tool_binding import ChainToolBinding
-from rest_framework_mcp.registry.types.prompt_binding import PromptBinding
-from rest_framework_mcp.registry.types.query_param import QueryParam
-from rest_framework_mcp.registry.types.resource_binding import ResourceBinding
-from rest_framework_mcp.registry.types.selector_tool_binding import SelectorToolBinding
-from rest_framework_mcp.registry.types.tool_binding import ToolBinding
-from rest_framework_mcp.registry.types.url_kwarg import UrlKwarg
-from rest_framework_mcp.schema.types.agent_conventions import AgentConventions
-from rest_framework_mcp.schema.utils import declares_default, end_sentence, required_arguments
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.observability.get_logger import get_logger
+from django_spec_mcp.output.enforce_result_bytes import enforce_result_bytes
+from django_spec_mcp.output.error_tool_result import build_error_tool_result
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.protocol.types.tool_result import ToolResult
+from django_spec_mcp.registry.types.prompt_binding import PromptBinding
+from django_spec_mcp.registry.types.query_param import QueryParam
+from django_spec_mcp.registry.types.resource_binding import ResourceBinding
+from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
+from django_spec_mcp.registry.types.tool_binding import ToolBinding
+from django_spec_mcp.registry.types.url_kwarg import UrlKwarg
+from django_spec_mcp.schema.types.agent_conventions import AgentConventions
+from django_spec_mcp.schema.utils import declares_default, end_sentence, required_arguments
 
 logger = get_logger(__name__)
 
@@ -95,16 +94,12 @@ def apply_tool_server_arguments(binding: Any, arguments: dict[str, Any]) -> dict
     without the comparison a caller restating the bound value is logged
     (``test_a_caller_restating_the_bound_value_is_not_logged``).
 
-    A binding that binds nothing - and a chain tool, which carries no
-    ``server_arguments`` - gets its arguments back untouched, the same object,
-    without the kernel's rule being run. Also one arc: without the first
-    condition every chain call fails on the missing attribute
-    (``test_a_chain_tool_degrades_instead_of_asking``), and without the second
-    the kernel's rule runs for every tool
+    A binding that binds nothing gets its arguments back untouched, the same
+    object, without the kernel's rule being run
     (``test_a_tool_binding_nothing_never_reaches_the_kernels_rule``).
     """
-    server = getattr(binding, "server_arguments", None)
-    if server is None or not server.names():
+    server = binding.server_arguments
+    if not server.names():
         return arguments
     applied = apply_server_arguments(binding.spec, arguments, server)
     dropped = sorted(
@@ -257,18 +252,15 @@ def split_query_params(
     return params, values
 
 
-def binding_input_serializer(binding: SelectorToolBinding | ChainToolBinding) -> type | None:
-    """The serializer a selector or chain binding validates ``arguments`` against.
+def binding_input_serializer(binding: SelectorToolBinding) -> type | None:
+    """The serializer a selector binding validates ``arguments`` against.
 
-    A selector tool uses the MCP-only ``binding.input_serializer``, a chain tool
-    its ``resolved_input_serializer``. ``None`` means there is nothing to
+    The MCP-only ``binding.input_serializer``. ``None`` means there is nothing to
     validate against. A service tool is not asked: drf-services validates its
     ``spec.input_serializer`` and checks unknown arguments against the set the
     spec declares, with or without one.
     """
-    if isinstance(binding, SelectorToolBinding):
-        return binding.input_serializer
-    return binding.resolved_input_serializer
+    return binding.input_serializer
 
 
 def advertises_closed_schema(binding: Any) -> bool:
@@ -310,7 +302,7 @@ def advertises_closed_schema(binding: Any) -> bool:
     (``test_the_advertised_properties_are_the_keys_dispatch_admits``, over
     every binding and policy).
 
-    A **selector** or **chain** binding enforces ``REJECT`` in this package,
+    A **selector** binding enforces ``REJECT`` in this package,
     against its own input serializer (``build_validated_input_serializer``), so
     it is closed under ``REJECT`` with one to validate against, and open without
     one, where nothing checks the keys. The same two conjuncts, each held by its
@@ -337,8 +329,7 @@ def advertises_closed_items(binding: Any) -> bool:
 def takes_list_payload(binding: Any) -> bool:
     """Whether ``binding`` is a service tool whose spec validates a list (``many=True``).
 
-    Selector and chain bindings never do: a chain dispatches its steps itself, and
-    a selector spec has no ``many``.
+    Selector bindings never do: a selector spec has no ``many``.
     """
     spec: Any = getattr(binding, "spec", None)
     return isinstance(spec, ServiceSpec) and spec.many
@@ -359,7 +350,7 @@ def _enforces_unknown_keys(binding: Any) -> bool:
             and declared_input_keys(spec, serializer=None, argument_binding=argument_binding)
             is not None
         )
-    # Selector and chain bindings enforce the closed set in this package, via
+    # Selector bindings enforce the closed set in this package, via
     # ``build_validated_input_serializer``, which has nothing to check against
     # without a serializer.
     return (
@@ -424,7 +415,7 @@ def permission_verdict(perm: Any, result: Any, *, method: str, effect: str) -> A
     """A permission hook's answer, refusing one that must be awaited.
 
     Shared by ``check_permissions`` and
-    ``rest_framework_mcp.handlers.is_binding_listable.is_binding_listable``
+    ``django_spec_mcp.handlers.is_binding_listable.is_binding_listable``
     so the two places a consumer-supplied permission is consulted cannot drift on
     whether ``async def`` is allowed. It is not.
 
@@ -460,7 +451,7 @@ def check_permissions(
     the ``WWW-Authenticate`` header.
 
     **``shape`` is the request the check names**, and every
-    [`DRFPermissionAdapter`][rest_framework_mcp.auth.permissions.drf_permission_adapter.DRFPermissionAdapter]
+    [`DRFPermissionAdapter`][django_spec_mcp.auth.permissions.drf_permission_adapter.DRFPermissionAdapter]
     among ``permissions`` is judged against a copy whose stand-in is built from
     it, as the view the request dispatches with is. The ``tools/call`` paths
     pass one through ``judge_tool_permissions``: the arguments in
@@ -564,20 +555,6 @@ def dispatch_shape(
     )
 
 
-def chain_shape(arguments: dict[str, Any], action: str) -> DispatchShape:
-    """What a chain tool's request is built from, under one of its views' actions.
-
-    A chain declares no URL kwargs and no query params, so its request carries
-    every argument in ``data`` and an empty query string, which replaces the
-    endpoint's. One request serves the whole chain and each step's view names
-    the step: ``action`` is the step's alias there, and the tool's name on the
-    view its ``input_serializer`` is validated with.
-    """
-    # A copy for the reason ``dispatch_shape`` gives: uncopied, every step's
-    # stand-in and the chain's request were the caller's own ``arguments``.
-    return DispatchShape(data=dict(arguments), query_params={}, action=action)
-
-
 def resource_shape(binding: ResourceBinding, variables: Mapping[str, Any]) -> DispatchShape:
     """What a ``resources/read`` request and view are built from, for one URI.
 
@@ -621,44 +598,13 @@ def judge_tool_permissions(
     answer moves to), the streamed call's pre-flight and the check made before
     a task is created.
 
-    A chain has a view per step, so each step's wrapped classes are judged
-    under that step's alias. ``chain_to_tool`` lays ``binding.permissions`` out
-    as each step's wrapped ``permission_classes``, in step order, then the
-    chain-level ``permissions``, which are judged under the tool's name
-    (``test_a_chain_steps_stand_in_carries_the_steps_action``).
-    ``ChainToolBinding`` refuses a binding laid out otherwise where it is
-    built, since one judged here would be judged under another view's action,
-    and each step's own check against its real view still runs before its
-    lookup.
     """
-    if not isinstance(binding, ChainToolBinding):
-        return check_permissions(
-            binding.permissions,
-            context.http_request,
-            context.token,
-            shape=dispatch_shape(binding, arguments),
-        )
-    remaining: tuple[Any, ...] = binding.permissions
-    allowed: bool = True
-    required: list[str] = []
-    for step in binding.steps:
-        count: int = len(step.spec.permission_classes or ())
-        step_allowed, step_required = check_permissions(
-            remaining[:count],
-            context.http_request,
-            context.token,
-            shape=chain_shape(arguments, step.alias),
-        )
-        allowed = allowed and step_allowed
-        required.extend(step_required)
-        remaining = remaining[count:]
-    chain_allowed, chain_required = check_permissions(
-        remaining,
+    return check_permissions(
+        binding.permissions,
         context.http_request,
         context.token,
-        shape=chain_shape(arguments, binding.name),
+        shape=dispatch_shape(binding, arguments),
     )
-    return allowed and chain_allowed, required + chain_required
 
 
 def consume_rate_limits(
@@ -719,7 +665,7 @@ def build_validated_input_serializer(
 ) -> tuple[Any, drf_serializers.Serializer | None]:
     """Validate ``arguments``; return ``(validated, bound_serializer)``.
 
-    The validator for the read-shaped paths (selector tools and chain steps),
+    The validator for the read-shaped path (selector tools),
     where the input is a flat, instance-free arg map. Service-tool validation
     flows through drf-services' ``dispatch_spec`` instead.
 
@@ -731,10 +677,8 @@ def build_validated_input_serializer(
             Reserved pool seeds and post-fetch keys are always exempt: the
             dispatch pipeline owns them, so a client must not be able to poison
             them. ``PASSTHROUGH`` raises ``ValueError``, as drf-services' own
-            dispatch does for it, because a chain step is dispatched here rather
-            than through ``dispatch_spec`` and would otherwise run it as
-            ``IGNORE`` without a word. ``register_chain_tool`` refuses it first;
-            this answers a binding built by hand.
+            dispatch does for it, so a binding built by hand with it is not run
+            as ``IGNORE`` without a word.
         additional_known_keys: Widens the known set beyond the serializer's own
             fields; selector tools pass their filter / ordering / pagination keys.
         partial: Relaxes required-field validation. MCP has no HTTP method to
@@ -753,7 +697,7 @@ def build_validated_input_serializer(
             unknown input.
         ValueError: For ``UnknownArguments.PASSTHROUGH``, with or without a
             serializer
-            (``test_a_chain_under_passthrough_raises_as_drf_services_dispatch_does``).
+            (``test_the_read_path_under_passthrough_raises_as_drf_services_dispatch_does``).
     """
     if unknown_arguments is UnknownArguments.PASSTHROUGH:
         # drf-services' wording (``refuse_retired_modes``), so a project meets
@@ -972,10 +916,9 @@ def validation_error_result(
 
     Every argument-validation arm on the ``tools/call`` paths builds its result
     here -- the service tool handlers sync and async, the in-process
-    ``call_tool``, both selector tool siblings, and a chain's input -- so a
-    refused argument answers the same way whichever path served it. A failing
-    chain *step* adds ``failedStep`` and builds its own, and a refusal while
-    rendering goes through ``read_shaping_error_result``.
+    ``call_tool`` and both selector tool siblings -- so a refused argument
+    answers the same way whichever path served it. A refusal while rendering
+    goes through ``read_shaping_error_result``.
     """
     message: str
     if isinstance(exc, _MissingArguments):
@@ -997,9 +940,7 @@ def validation_error_result(
     )
 
 
-def service_error_result(
-    exc: ServiceError, *, detail: Mapping[str, Any] | None = None
-) -> ToolResult:
+def service_error_result(exc: ServiceError) -> ToolResult:
     """The ``isError`` tool result for a ``ServiceError`` a dispatch raised.
 
     ``type`` stays ``"service_error"`` for every member of the family, because
@@ -1018,12 +959,10 @@ def service_error_result(
     lies at every other call site.
 
     Every ``ServiceError`` arm builds its result here -- the service tool paths
-    sync and async, the in-process ``call_tool``, both selector tool siblings and
-    each chain step -- so a refusal answers the same way whichever path served
-    it. ``detail`` is merged in as ``build_error_tool_result`` merges it, which is
-    how a chain step adds ``failedStep`` beside the code.
+    sync and async, the in-process ``call_tool`` and both selector tool siblings
+    -- so a refusal answers the same way whichever path served it.
     """
-    error_detail: dict[str, Any] = dict(detail or {})
+    error_detail: dict[str, Any] = {}
     if isinstance(exc, ActionUnavailable):
         error_detail["code"] = exc.code
     return build_error_tool_result(exc.message, error_type="service_error", detail=error_detail)
@@ -1202,7 +1141,7 @@ def enforce_result_ceiling(result: Any, *, max_result_bytes: int | None, label: 
 
     Applied once per handler, to the finished result, so every dispatch path is covered
     by one check that sees what goes on the wire. A
-    [`JsonRpcError`][rest_framework_mcp.protocol.types.json_rpc_error.JsonRpcError]
+    [`JsonRpcError`][django_spec_mcp.protocol.types.json_rpc_error.JsonRpcError]
     passes through — rewriting it would change the envelope the client awaits."""
     if isinstance(result, JsonRpcError):
         return result
@@ -1235,7 +1174,6 @@ __all__ = [
     "apply_tool_server_arguments",
     "binding_input_serializer",
     "build_validated_input_serializer",
-    "chain_shape",
     "check_permissions",
     "consume_rate_limits",
     "dispatch_shape",

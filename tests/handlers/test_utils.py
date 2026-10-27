@@ -18,8 +18,8 @@ import pytest
 from django_service_specs import UNSET
 from rest_framework import serializers as drf_serializers
 
-from rest_framework_mcp import QueryParam, UrlKwarg
-from rest_framework_mcp.handlers.utils import (
+from django_spec_mcp import QueryParam, UrlKwarg
+from django_spec_mcp.handlers.utils import (
     same_arguments,
     split_query_params,
     split_url_kwargs,

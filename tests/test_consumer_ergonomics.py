@@ -12,20 +12,16 @@ import warnings
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
-from django.test import override_settings
 from rest_framework_services import ServiceSpec
 
-from rest_framework_mcp.auth.backends.django_oauth_toolkit_backend import (
+from django_spec_mcp.auth.backends.django_oauth_toolkit_backend import (
     DjangoOAuthToolkitBackend,
     MountedAuthorizationServerWarning,
 )
-from rest_framework_mcp.config.build_mcp_config import build_mcp_config
-from rest_framework_mcp.contrib.oauth.check_oauth_url_shadowing import (
-    check_oauth_url_shadowing,
-)
-from rest_framework_mcp.observability import get_logger, session_fingerprint
-from rest_framework_mcp.server.mcp_server import MCPServer
-from rest_framework_mcp.server.utils import UnguardedToolWarning
+from django_spec_mcp.config.build_mcp_config import build_mcp_config
+from django_spec_mcp.observability import get_logger, session_fingerprint
+from django_spec_mcp.server.mcp_server import MCPServer
+from django_spec_mcp.server.utils import UnguardedToolWarning
 
 
 class _AlwaysAllow:
@@ -128,68 +124,6 @@ class TestStructuredOutputCouplingAtRegistration:
         )
 
 
-class TestOAuthUrlShadowing:
-    """DOT 3.4.0 contests paths we serve, and first-match wins."""
-
-    @override_settings(ROOT_URLCONF="tests.testapp.urls")
-    def test_unmounted_paths_are_not_reported(self) -> None:
-        """Not serving the OAuth surface at all is a valid configuration."""
-        assert check_oauth_url_shadowing(warn=False) == []
-
-    @override_settings(ROOT_URLCONF="tests.testapp.shadowed_oauth_urls")
-    def test_foreign_views_on_our_paths_are_reported(self) -> None:
-        shadowed = check_oauth_url_shadowing(warn=False)
-        assert "/oauth/register/" in shadowed
-        assert "/.well-known/oauth-authorization-server" in shadowed
-
-    @override_settings(ROOT_URLCONF="tests.testapp.shadowed_oauth_urls")
-    def test_the_protected_resource_document_is_contested_too(self) -> None:
-        """The half the check used to miss, and the costlier half.
-
-        DOT 3.4.0 serves RFC 9728 protected-resource metadata and its own OIDC
-        discovery, and its documentation tells deployers to mount those at the
-        server root. Reading the wrong authorization-server document sends a
-        client to the wrong issuer, which fails visibly; reading the wrong
-        *protected-resource* document hands it the wrong ``resource``, so it
-        completes a flow and arrives with a token minted for something else.
-
-        The ``<path:...>`` component forms are asserted separately because they
-        swallow this package's alias paths, and a check listing only the
-        canonical URLs would report a clean bill of health while two of the
-        three mounted spellings answered from somewhere else.
-        """
-        shadowed = check_oauth_url_shadowing(warn=False)
-
-        assert "/.well-known/oauth-protected-resource" in shadowed
-        assert "/.well-known/oauth-protected-resource/mcp" in shadowed
-        assert "/.well-known/oauth-authorization-server/oauth" in shadowed
-        assert "/.well-known/openid-configuration" in shadowed
-
-    @override_settings(ROOT_URLCONF="tests.testapp.shadowed_oauth_urls")
-    def test_the_authorize_path_is_not_reported(self) -> None:
-        """Both packages serve it, and DOT owning it is the documented default.
-
-        ``include_authorize`` defaults off precisely so the consumer's own
-        ``include('oauth2_provider.urls')`` can own ``/oauth/authorize/``. A
-        report there would fire on a configuration working as designed, which
-        is why the contested set leaves it out on purpose rather than by
-        omission.
-        """
-        assert "/oauth/authorize/" not in check_oauth_url_shadowing(warn=False)
-
-    @override_settings(ROOT_URLCONF="tests.conformance.urls")
-    def test_our_own_views_on_those_paths_are_not_reported(self) -> None:
-        """The correctly-ordered mount is the case that must stay quiet."""
-        assert check_oauth_url_shadowing(warn=False) == []
-
-    @override_settings(ROOT_URLCONF="tests.testapp.shadowed_oauth_urls")
-    def test_the_default_is_to_warn_with_the_remedy(self, caplog) -> None:
-        """The remedy is mount *order*, so the message has to say so."""
-        with caplog.at_level(logging.WARNING, logger="rest_framework_mcp"):
-            check_oauth_url_shadowing()
-        assert any("first-match" in record.getMessage() for record in caplog.records)
-
-
 class TestUnguardedToolsAreRefusedByDefault:
     """The strict default, and the escape hatch that makes it shippable."""
 
@@ -200,7 +134,7 @@ class TestUnguardedToolsAreRefusedByDefault:
         subject is not permissions keep working. That override could otherwise
         mask a regression back to permissive, so assert the shipped value here.
         """
-        from rest_framework_mcp.conf import DEFAULTS
+        from django_spec_mcp.conf import DEFAULTS
 
         assert DEFAULTS["REQUIRE_TOOL_PERMISSIONS"] is True
 
@@ -234,7 +168,7 @@ class TestUnguardedToolsAreRefusedByDefault:
 
     def test_the_opt_out_downgrades_it_to_a_warning(self) -> None:
         server = MCPServer(name="t", config=build_mcp_config(require_tool_permissions=False))
-        with pytest.warns(UnguardedToolWarning, match="0.25.0"):
+        with pytest.warns(UnguardedToolWarning, match="by default it is an error"):
             server.register_service_tool(name="t.open", spec=_spec(), description="d")
 
 
@@ -253,7 +187,7 @@ class TestObservability:
 
     def test_the_namespace_is_configurable_as_one_tree(self) -> None:
         """A project silences or raises the whole package with one entry."""
-        assert get_logger("rest_framework_mcp.transport.x").name.startswith("rest_framework_mcp")
+        assert get_logger("django_spec_mcp.transport.x").name.startswith("django_spec_mcp")
 
     def test_a_rejected_session_names_its_exact_cause_server_side(self, caplog) -> None:
         """The no-oracle rule constrains the response, not the log.
@@ -265,13 +199,13 @@ class TestObservability:
         """
         from tests.transport.test_sessionless_legacy import _post_request, _view
 
-        with caplog.at_level(logging.WARNING, logger="rest_framework_mcp"):
+        with caplog.at_level(logging.WARNING, logger="django_spec_mcp"):
             _view(sessions=True)(_post_request("ping", session_id="made-up"))
         assert any("session-unknown" in record.getMessage() for record in caplog.records)
 
     def test_a_missing_session_logs_the_other_cause(self, caplog) -> None:
         from tests.transport.test_sessionless_legacy import _post_request, _view
 
-        with caplog.at_level(logging.WARNING, logger="rest_framework_mcp"):
+        with caplog.at_level(logging.WARNING, logger="django_spec_mcp"):
             _view(sessions=True)(_post_request("ping"))
         assert any("session-missing" in record.getMessage() for record in caplog.records)

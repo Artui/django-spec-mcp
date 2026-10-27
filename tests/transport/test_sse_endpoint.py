@@ -6,16 +6,16 @@ import json
 import pytest
 from django.test import AsyncClient, RequestFactory, override_settings
 
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.config.build_mcp_config import build_mcp_config
-from rest_framework_mcp.registry.resource_registry import ResourceRegistry
-from rest_framework_mcp.registry.tool_registry import ToolRegistry
-from rest_framework_mcp.transport.async_streamable_http_viewset import (
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.config.build_mcp_config import build_mcp_config
+from django_spec_mcp.registry.resource_registry import ResourceRegistry
+from django_spec_mcp.registry.tool_registry import ToolRegistry
+from django_spec_mcp.transport.async_streamable_http_viewset import (
     ASYNC_STREAMABLE_HTTP_ACTION_MAP,
     AsyncStreamableHttpViewSet,
 )
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
-from rest_framework_mcp.transport.in_memory_sse_broker import InMemorySSEBroker
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp.transport.in_memory_sse_broker import InMemorySSEBroker
 from tests.testapp.mcp import build_server
 from tests.testapp.urlconf_for import urlconf_for
 
@@ -115,7 +115,7 @@ async def test_resume_replays_buffered_events_then_live() -> None:
     store are all owned by the test — there's no race between recording the
     pre-reconnect events and the GET handler reading them.
     """
-    from rest_framework_mcp.transport.in_memory_sse_replay_buffer import (
+    from django_spec_mcp.transport.in_memory_sse_replay_buffer import (
         InMemorySSEReplayBuffer,
     )
 
@@ -162,7 +162,7 @@ async def test_resume_replays_buffered_events_then_live() -> None:
 
 async def test_delete_purges_replay_buffer() -> None:
     """DELETE on a session forgets buffered events so dead sessions don't accumulate."""
-    from rest_framework_mcp.transport.in_memory_sse_replay_buffer import (
+    from django_spec_mcp.transport.in_memory_sse_replay_buffer import (
         InMemorySSEReplayBuffer,
     )
 

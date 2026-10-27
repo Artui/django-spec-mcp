@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from rest_framework_mcp.constants import JSONRPC_VERSION, TASK_STATUS_METHOD
-from rest_framework_mcp.subscriptions.publish_invalidations import publish_after_commit
-from rest_framework_mcp.subscriptions.types.subscription_broker import SubscriptionBroker
-from rest_framework_mcp.subscriptions.utils import topic_for_task
-from rest_framework_mcp.tasks.types.task_record import TaskRecord
+from django_spec_mcp.constants import JSONRPC_VERSION, TASK_STATUS_METHOD
+from django_spec_mcp.subscriptions.publish_invalidations import publish_after_commit
+from django_spec_mcp.subscriptions.types.subscription_broker import SubscriptionBroker
+from django_spec_mcp.subscriptions.utils import topic_for_task
+from django_spec_mcp.tasks.types.task_record import TaskRecord
 
 
 def publish_task_status(broker: SubscriptionBroker | None, record: TaskRecord) -> None:

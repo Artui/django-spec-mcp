@@ -15,10 +15,10 @@ from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp.adapters.selector_to_resource import selector_to_resource
-from rest_framework_mcp.adapters.selector_to_tool import selector_spec_to_tool
-from rest_framework_mcp.adapters.service_to_tool import service_spec_to_tool
-from rest_framework_mcp.auth.permissions.drf_permission_adapter import DRFPermissionAdapter
+from django_spec_mcp.adapters.selector_to_resource import selector_to_resource
+from django_spec_mcp.adapters.selector_to_tool import selector_spec_to_tool
+from django_spec_mcp.adapters.service_to_tool import service_spec_to_tool
+from django_spec_mcp.auth.permissions.drf_permission_adapter import DRFPermissionAdapter
 
 
 class _Other(BasePermission):

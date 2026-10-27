@@ -16,15 +16,14 @@ from django.core.exceptions import ImproperlyConfigured
 from django.test import Client, override_settings
 from django_service_specs import SelectorKind
 from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import ChainStep, MCPServer
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.config.build_mcp_config import build_mcp_config
-from rest_framework_mcp.handlers.handle_initialize import handle_initialize
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
-from rest_framework_mcp.transport.negotiate_protocol_version import negotiate_protocol_version
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.config.build_mcp_config import build_mcp_config
+from django_spec_mcp.handlers.handle_initialize import handle_initialize
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp.transport.negotiate_protocol_version import negotiate_protocol_version
 
 MODERN = "2026-07-28"
 LEGACY = "2025-11-25"
@@ -97,10 +96,6 @@ def _selector() -> list[dict[str, str]]:
     return [{"ok": "1"}]
 
 
-def _service(**_: Any) -> dict[str, str]:
-    return {"ok": "1"}
-
-
 class _Denies:
     def has_permission(self, request: Any, token: Any) -> bool:
         return False
@@ -120,11 +115,6 @@ def _stream_server() -> MCPServer:
         description="x",
         spec=SelectorSpec(kind=SelectorKind.LIST, selector=_selector),
         paginate=True,
-    )
-    server.register_chain_tool(
-        name="s.chain",
-        description="x",
-        steps=[ChainStep(alias="one", spec=ServiceSpec(service=_service, atomic=False))],
     )
     server.register_resource(
         name="gated",
@@ -204,16 +194,6 @@ def test_a_denied_resource_read_keeps_its_403_even_with_a_progress_token(
 
 
 @pytest.mark.django_db(transaction=True)
-def test_a_chain_tool_is_not_given_a_stream_it_cannot_use(stream_urls: Any) -> None:
-    """A stream whose only event is the final response costs a connection and
-    buys nothing — the design's own argument, applied to itself."""
-    with override_settings(ROOT_URLCONF=stream_urls):
-        response = _post(Client(), "tools/call", {"name": "s.chain", "arguments": {}})
-    assert response.status_code == 200
-    assert response.headers["Content-Type"].startswith("application/json")
-
-
-@pytest.mark.django_db(transaction=True)
 def test_a_selector_tool_still_streams(stream_urls: Any) -> None:
     """The gate must not close on the paths that *can* report — that would
     silently remove the feature it exists to protect."""
@@ -248,7 +228,7 @@ def test_the_reporter_guards_its_counters_with_a_lock() -> None:
     thread — which is not a property of this class."""
     import asyncio
 
-    from rest_framework_mcp.transport.response_stream import _StreamReporter
+    from django_spec_mcp.transport.response_stream import _StreamReporter
 
     async def _build() -> Any:
         return _StreamReporter(
@@ -268,8 +248,8 @@ def test_the_reporter_guards_its_counters_with_a_lock() -> None:
 def test_a_tuple_of_resource_links_is_accepted() -> None:
     """A selector returning a tuple is producing the right shape; rejecting it
     with a message about the wrong shape read as nonsense."""
-    from rest_framework_mcp.constants import ToolContentKind
-    from rest_framework_mcp.output.build_content_blocks import build_content_blocks
+    from django_spec_mcp.constants import ToolContentKind
+    from django_spec_mcp.output.build_content_blocks import build_content_blocks
 
     blocks = build_content_blocks(
         ({"uri": "a://1", "name": "one"}, {"uri": "a://2", "name": "two"}),

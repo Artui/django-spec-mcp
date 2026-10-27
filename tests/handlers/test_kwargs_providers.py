@@ -18,17 +18,17 @@ from rest_framework.request import Request as DRFRequest
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.handlers.handle_resources_read import handle_resources_read
-from rest_framework_mcp.handlers.handle_resources_read_async import handle_resources_read_async
-from rest_framework_mcp.handlers.handle_tools_call import handle_tools_call
-from rest_framework_mcp.handlers.handle_tools_call_async import handle_tools_call_async
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.registry.prompt_registry import PromptRegistry
-from rest_framework_mcp.registry.resource_registry import ResourceRegistry
-from rest_framework_mcp.registry.tool_registry import ToolRegistry
-from rest_framework_mcp.registry.types.tool_binding import ToolBinding
-from rest_framework_mcp.server.mcp_server import MCPServer
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
+from django_spec_mcp.handlers.handle_resources_read_async import handle_resources_read_async
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.registry.prompt_registry import PromptRegistry
+from django_spec_mcp.registry.resource_registry import ResourceRegistry
+from django_spec_mcp.registry.tool_registry import ToolRegistry
+from django_spec_mcp.registry.types.tool_binding import ToolBinding
+from django_spec_mcp.server.mcp_server import MCPServer
 
 
 def _ctx(*, tools=None, resources=None) -> MCPCallContext:
@@ -125,8 +125,8 @@ async def test_async_service_spec_kwargs_provider_merged_into_pool() -> None:
 
 def test_register_resource_accepts_selector_spec() -> None:
     """A ``SelectorSpec`` flows through ``register_resource`` end-to-end."""
-    from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-    from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+    from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+    from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 
     server = MCPServer(
         name="t", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore()
@@ -147,8 +147,8 @@ def test_register_resource_accepts_selector_spec() -> None:
 
 def test_selector_spec_with_none_selector_is_rejected() -> None:
     """A spec with no concrete callable can't be dispatched — fail loudly."""
-    from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-    from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+    from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+    from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 
     server = MCPServer(
         name="t", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore()
@@ -165,8 +165,8 @@ def test_selector_spec_output_serializer_used_when_caller_omits() -> None:
     """The spec's ``output_serializer`` fills in when the caller doesn't pass one."""
     from rest_framework import serializers
 
-    from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-    from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+    from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+    from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 
     class OutSer(serializers.Serializer):
         pk = serializers.CharField()
@@ -189,8 +189,8 @@ def test_selector_spec_caller_output_serializer_wins() -> None:
     """Explicit caller arg trumps the spec's value (intentional override)."""
     from rest_framework import serializers
 
-    from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-    from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+    from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+    from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 
     class FromSpec(serializers.Serializer):
         pass
@@ -213,7 +213,7 @@ def test_selector_spec_caller_output_serializer_wins() -> None:
 
 def test_selector_spec_kwargs_provider_invoked_on_read() -> None:
     """``SelectorSpec.kwargs`` runs on every ``resources/read`` and merges into the pool."""
-    from rest_framework_mcp.registry.types.resource_binding import ResourceBinding
+    from django_spec_mcp.registry.types.resource_binding import ResourceBinding
 
     seen: dict[str, Any] = {}
 
@@ -247,7 +247,7 @@ def test_selector_spec_kwargs_provider_invoked_on_read() -> None:
 
 
 async def test_async_selector_spec_kwargs_provider_invoked_on_read() -> None:
-    from rest_framework_mcp.registry.types.resource_binding import ResourceBinding
+    from django_spec_mcp.registry.types.resource_binding import ResourceBinding
 
     def selector(*, pk: str, tenant_id: int) -> dict:
         return {"pk": pk, "tenant": tenant_id}
@@ -280,7 +280,7 @@ def test_resource_kwargs_provider_declaring_request_only_is_bound_by_name() -> N
     Forwarding ``(view, request)`` positionally raised ``TypeError`` for any
     provider that didn't lead with exactly those two parameters.
     """
-    from rest_framework_mcp.registry.types.resource_binding import ResourceBinding
+    from django_spec_mcp.registry.types.resource_binding import ResourceBinding
 
     seen: dict[str, Any] = {}
 
@@ -309,7 +309,7 @@ def test_resource_render_has_the_request_in_the_serializer_context() -> None:
     """A resource's ``output_serializer`` gets DRF's baseline context too."""
     from rest_framework import serializers
 
-    from rest_framework_mcp.registry.types.resource_binding import ResourceBinding
+    from django_spec_mcp.registry.types.resource_binding import ResourceBinding
 
     class _Out(serializers.Serializer):
         who = serializers.SerializerMethodField()
@@ -336,7 +336,7 @@ def test_resource_render_has_the_request_in_the_serializer_context() -> None:
 async def test_async_resource_render_has_the_request_in_the_serializer_context() -> None:
     from rest_framework import serializers
 
-    from rest_framework_mcp.registry.types.resource_binding import ResourceBinding
+    from django_spec_mcp.registry.types.resource_binding import ResourceBinding
 
     class _Out(serializers.Serializer):
         who = serializers.SerializerMethodField()
@@ -372,7 +372,7 @@ async def test_async_resource_render_has_the_request_in_the_serializer_context()
 async def test_async_list_resource_renders_a_lazy_queryset_off_loop() -> None:
     from rest_framework import serializers
 
-    from rest_framework_mcp.registry.types.resource_binding import ResourceBinding
+    from django_spec_mcp.registry.types.resource_binding import ResourceBinding
     from tests.testapp.models import Invoice
 
     await Invoice.objects.acreate(number="A", amount_cents=1)
@@ -400,7 +400,7 @@ async def test_async_list_resource_renders_a_lazy_queryset_off_loop() -> None:
 
 @pytest.mark.django_db(transaction=True)
 async def test_async_resource_kwargs_provider_may_query() -> None:
-    from rest_framework_mcp.registry.types.resource_binding import ResourceBinding
+    from django_spec_mcp.registry.types.resource_binding import ResourceBinding
     from tests.testapp.models import Invoice
 
     await Invoice.objects.acreate(number="A", amount_cents=1)
@@ -446,7 +446,7 @@ _ALICE = _IdentifiedUser("alice")
 
 def _declining_resource(provider: Any) -> ResourceRegistry:
     """A templated resource whose provider owns the same key the URI carries."""
-    from rest_framework_mcp.registry.types.resource_binding import ResourceBinding
+    from django_spec_mcp.registry.types.resource_binding import ResourceBinding
 
     resources = ResourceRegistry()
     resources.register(

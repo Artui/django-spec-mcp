@@ -4,7 +4,7 @@ import pytest
 from django.contrib.auth.models import AnonymousUser
 from django.http import HttpRequest
 
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 
 
 def test_authenticate_returns_anonymous_token() -> None:

@@ -8,9 +8,9 @@ reason, to a principal the listing hides it from.
 
 from __future__ import annotations
 
-from rest_framework_mcp.handlers.is_binding_listable import is_binding_listable
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.registry.tool_registry import ToolBindingLike
+from django_spec_mcp.handlers.is_binding_listable import is_binding_listable
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.registry.tool_registry import ToolBindingLike
 
 
 def listable_tool_bindings(context: MCPCallContext) -> list[ToolBindingLike]:

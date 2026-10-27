@@ -16,8 +16,8 @@ import pytest
 from django_service_specs import SelectorKind
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import MCPServer
-from rest_framework_mcp.testing import assert_tool_result_conforms
+from django_spec_mcp import MCPServer
+from django_spec_mcp.testing import assert_tool_result_conforms
 from tests.testapp.affordances import fresh_server, order_selector_spec
 
 

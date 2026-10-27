@@ -5,9 +5,9 @@ from typing import Any
 
 from django_service_specs import UNSET
 
-from rest_framework_mcp.output.encode_json import encode_json
-from rest_framework_mcp.protocol.types.tool_content_block import ToolContentBlock
-from rest_framework_mcp.protocol.types.tool_result import ToolResult
+from django_spec_mcp.output.encode_json import encode_json
+from django_spec_mcp.protocol.types.tool_content_block import ToolContentBlock
+from django_spec_mcp.protocol.types.tool_result import ToolResult
 
 
 def build_error_tool_result(
@@ -17,7 +17,7 @@ def build_error_tool_result(
     detail: Mapping[str, Any] | None = None,
 ) -> ToolResult:
     """Build an ``isError: true``
-    [`ToolResult`][rest_framework_mcp.protocol.types.tool_result.ToolResult] for a
+    [`ToolResult`][django_spec_mcp.protocol.types.tool_result.ToolResult] for a
     tool-level failure.
 
     Per the MCP spec, *execution* failures (business rules, validation of
@@ -33,8 +33,8 @@ def build_error_tool_result(
     tool's ``outputSchema``, which describes the *success* shape, so a strict
     client validating an error payload against it would reject the result.
 
-    ``detail`` is merged into the ``error`` object — per-field validation detail,
-    chain-tool ``failedStep`` markers, and the ``code`` a refused call carries
+    ``detail`` is merged into the ``error`` object — per-field validation detail
+    and the ``code`` a refused call carries
     (``handlers.utils.service_error_result`` adds it for an ``ActionUnavailable``).
     """
     error: dict[str, Any] = {"type": error_type, "message": message}

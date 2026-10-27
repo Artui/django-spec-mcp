@@ -92,8 +92,8 @@ jobs:
         run: uv run pytest
 
       # The sync above installs every optional extra, which is the one install
-      # shape most consumers never have. `pip install djangorestframework-mcp-
-      # server` resolves the base dependencies only, and this package's whole
+      # shape most consumers never have. `pip install django-spec-mcp`
+      # resolves the base dependencies only, and this package's whole
       # optional-extra contract — TOON, OAuth, redis, OTel imported lazily, so a
       # tool call never fails because an extra is absent — lives on that path.
       # tests.yml proves it against the committed lock in its `smoke-no-extras`
@@ -124,12 +124,12 @@ jobs:
                   "rest_framework",
               ],
               DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}},
-              REST_FRAMEWORK_MCP={"ALLOWED_ORIGINS": ["*"], "SERVER_INFO": {}},
+              SPEC_MCP={"ALLOWED_ORIGINS": ["*"], "SERVER_INFO": {}},
           )
           django.setup()
 
           from rest_framework.permissions import AllowAny
-          from rest_framework_mcp import MCPServer
+          from django_spec_mcp import MCPServer
           from rest_framework_services.types.service_spec import ServiceSpec
 
           # Constructing a bare server builds its own auth backend and session

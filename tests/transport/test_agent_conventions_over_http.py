@@ -15,7 +15,7 @@ from typing import Any
 import pytest
 from django.test import AsyncClient, Client, override_settings
 
-from rest_framework_mcp import AgentConventions
+from django_spec_mcp import AgentConventions
 from tests.testapp.conventions import conventions_server
 from tests.testapp.urlconf_for import urlconf_for
 from tests.utils import tool_error

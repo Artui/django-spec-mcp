@@ -18,13 +18,13 @@ from django_service_specs import SelectorKind, SpecRegistry
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_services import ArgumentBinding, SelectorSpec, ServiceSpec
 
-from rest_framework_mcp import (
+from django_spec_mcp import (
     SelectorDefaults,
     ServiceDefaults,
     ToolDefinition,
     register_tools,
 )
-from rest_framework_mcp.server.mcp_server import MCPServer
+from django_spec_mcp.server.mcp_server import MCPServer
 
 RETIRED = ArgumentBinding.SPREAD_CALLER_WINS
 # The refusal names both replacements and says why the member cannot come back.

@@ -13,9 +13,9 @@ from typing import Any
 from rest_framework.permissions import AllowAny
 from typing_extensions import TypedDict, Unpack
 
-from rest_framework_mcp import MCPServer
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.constants import ArgumentBinding, UnknownArguments
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.constants import ArgumentBinding, UnknownArguments
 
 server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
 

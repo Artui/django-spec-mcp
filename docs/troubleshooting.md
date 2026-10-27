@@ -24,7 +24,7 @@ this package.
 
 !!! warning "Application logs may be silent either way"
 
-    If your logging does not include `rest_framework_mcp` (see
+    If your logging does not include `django_spec_mcp` (see
     [Observability](observability.md)), the absence of log lines tells you
     *nothing* about whether the request arrived. Configure the logger before
     concluding anything from silence.
@@ -67,7 +67,7 @@ condition into an outage that needs a human. If yours does that, see below.
 Turn them off:
 
 ```python title="settings.py"
-REST_FRAMEWORK_MCP = {"SESSIONS_ENABLED": False}
+SPEC_MCP = {"SESSIONS_ENABLED": False}
 ```
 
 This is a **conformant mode, not a relaxation.** Both legacy revisions say a
@@ -104,12 +104,12 @@ ServiceSpec(service=create_invoice, permission_classes=[IsAuthenticated])
 To migrate a large surface gradually, downgrade it to a warning:
 
 ```python
-REST_FRAMEWORK_MCP = {"REQUIRE_TOOL_PERMISSIONS": False}
+SPEC_MCP = {"REQUIRE_TOOL_PERMISSIONS": False}
 ```
 
 !!! tip "If your tests assign the settings dict"
 
-    `settings.REST_FRAMEWORK_MCP = {...}` **replaces** the dict rather than
+    `settings.SPEC_MCP = {...}` **replaces** the dict rather than
     merging, so a project-level opt-out disappears inside any test that does
     that. Add the key to those literals too.
 
@@ -138,8 +138,7 @@ it must be a `Serializer` subclass or a dataclass type. An **output** serializer
 is only rendered, so any `BaseSerializer` subclass is accepted there, including
 DRF's read-only pattern that implements just `to_representation`. A dataclass
 is accepted on both sides: as output it renders through a `DataclassSerializer`
-built for it. For a chain tool the message names the step whose serializer was
-refused. A resource has only an output serializer, and it is held to the same
+built for it. A resource has only an output serializer, and it is held to the same
 rule.
 
 Such a tool used to register cleanly. Every call to it then failed, and `tools/list`
@@ -193,29 +192,6 @@ the same for an `instance_selector_spec` beside `many=True` or beside a
 collection lookup dispatch never calls the instance one, so the lookup would be
 declared and never run. Declare one target lookup, or drop `many=True`.
 
-### "declares many=True, so its input_serializer describes one item of a list"
-
-A chain with no `input_serializer` of its own validates and advertises its
-arguments as its first step's. On a `many=True` step that serializer describes one
-item, so the chain listed a single item as its arguments and handed the bulk
-service that one object. Give the chain its own `input_serializer`, and build the
-step's list from it in `inputs`:
-
-```python
-class BulkInvoiceInput(serializers.Serializer):
-    items = InvoiceSerializer(many=True)
-
-
-server.register_chain_tool(
-    name="invoices.bulk_create_and_notify",
-    input_serializer=BulkInvoiceInput,
-    steps=[
-        ChainStep("created", bulk_create_spec, inputs=lambda ctx: {"data": ctx.args["items"]}),
-        ChainStep("notified", notify_spec),
-    ],
-)
-```
-
 ## `ValueError` when registering a resource
 
 ### "sets ..., which the resource read path does not apply"
@@ -249,23 +225,6 @@ DjangoOAuthToolkitBackend(
     authorize_path="/custom/authorize/",
 )
 ```
-
-### Mount order against `oauth2_provider`
-
-django-oauth-toolkit 3.4.0 serves its own `register/` and
-`.well-known/oauth-authorization-server`. Django resolves first-match, so
-mounting DOT's urls **before** `build_oauth_urlpatterns(...)` means DOT answers
-those paths — silently, with different content.
-
-```python
-def test_our_oauth_routes_are_not_shadowed():
-    from rest_framework_mcp.contrib.oauth import check_oauth_url_shadowing
-
-    assert check_oauth_url_shadowing() == []
-```
-
-It is a function you call rather than a Django system check because this package
-is a library with no `AppConfig` — there is nowhere to register one.
 
 ## A tool result is too large for the client
 
@@ -302,7 +261,7 @@ Fixed in 0.49.0, which answers every such exception as JSON-RPC:
   other validation failure.
 - Anything else is a `-32603` whose message is `Internal error`, carrying the
   request's `id`, under HTTP `500`. The exception is logged at `ERROR` with its
-  traceback under `rest_framework_mcp.transport`; the text is not in the
+  traceback under `django_spec_mcp.transport`; the text is not in the
   response, so read the log.
 - A `PermissionDenied` (DRF's or Django's) is the exception: a permission
   class that refuses by raising, rather than returning `False`, is answered

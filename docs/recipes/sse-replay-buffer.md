@@ -4,7 +4,7 @@ The MCP transport supports the standard SSE
 [`Last-Event-ID`](https://html.spec.whatwg.org/multipage/server-sent-events.html#last-event-id)
 header so clients that drop a streaming connection can reconnect and
 receive the events they missed. This is **opt-in**: pass an
-[`SSEReplayBuffer`][rest_framework_mcp.transport.types.sse_replay_buffer.SSEReplayBuffer]
+[`SSEReplayBuffer`][django_spec_mcp.transport.types.sse_replay_buffer.SSEReplayBuffer]
 to `MCPServer(sse_replay_buffer=...)` and every
 event published via `await server.notify(...)` is recorded with a
 monotonic ID before fan-out, then replayed on the client's next GET if it
@@ -20,8 +20,8 @@ Suitable when you run a single ASGI worker. State lives on the buffer
 instance, sized to a fixed-cap `deque` per session.
 
 ```python title="myproject/mcp.py"
-from rest_framework_mcp import MCPServer
-from rest_framework_mcp.transport.in_memory_sse_replay_buffer import (
+from django_spec_mcp import MCPServer
+from django_spec_mcp.transport.in_memory_sse_replay_buffer import (
     InMemorySSEReplayBuffer,
 )
 
@@ -46,9 +46,9 @@ event and serve the replay request. The buffer is backed by a
 ```python title="myproject/mcp.py"
 from redis.asyncio import Redis
 
-from rest_framework_mcp import MCPServer
-from rest_framework_mcp.transport.redis_sse_broker import RedisSSEBroker
-from rest_framework_mcp.transport.redis_sse_replay_buffer import (
+from django_spec_mcp import MCPServer
+from django_spec_mcp.transport.redis_sse_broker import RedisSSEBroker
+from django_spec_mcp.transport.redis_sse_replay_buffer import (
     RedisSSEReplayBuffer,
 )
 

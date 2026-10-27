@@ -36,13 +36,13 @@ from django.http import HttpRequest
 from django_service_specs import SelectorKind
 from rest_framework_services.types.selector_spec import SelectorSpec
 
-from rest_framework_mcp import MCPServer
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.handlers.handle_tools_call import handle_tools_call
-from rest_framework_mcp.handlers.handle_tools_list import handle_tools_list
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.testapp.models import Invoice
 from tests.testapp.serializers import InvoiceOutputSerializer
 from tests.utils import tool_error
@@ -311,7 +311,7 @@ def test_a_selector_declared_sort_parameter_is_advertised_and_applied() -> None:
     """No ``filter_set`` anywhere: the callable's own parameter is the channel.
 
     Reflected into the ``inputSchema`` as a plain string and spread into the
-    selector's kwargs at dispatch, so a project without the ``[filter]`` extra
+    selector's kwargs at dispatch, so a project without ``django-filter``
     still ships an orderable tool. The FilterSet route is the better one where
     there is a FilterSet — this value reaches ``.order_by()`` with only whatever
     checking the selector itself does — but it is not the only one.

@@ -7,9 +7,9 @@ from typing import Any
 from django.core.cache import cache
 from django.http import HttpRequest
 
-from rest_framework_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.auth.types.token_info import TokenInfo
 
-_DEFAULT_KEY_PREFIX: str = "drf-mcp:rl"
+_DEFAULT_KEY_PREFIX: str = "spec-mcp:rl"
 
 
 def _default_key(request: HttpRequest, token: TokenInfo) -> str:

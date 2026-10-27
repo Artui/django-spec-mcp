@@ -15,11 +15,11 @@ import pytest
 from django_service_specs import SelectorKind, ServerArguments
 from rest_framework_services import SelectorSpec, UrlKwarg
 
-from rest_framework_mcp import MCPServer, TaskPolicy
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.handlers.handle_tools_call import handle_tools_call
-from rest_framework_mcp.handlers.handle_tools_call_async import handle_tools_call_async
-from rest_framework_mcp.tasks.in_memory_task_store import InMemoryTaskStore
+from django_spec_mcp import MCPServer, TaskPolicy
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
+from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from tests.tasks.conftest import RecordingExecutor, context
 from tests.utils import granting_route
 

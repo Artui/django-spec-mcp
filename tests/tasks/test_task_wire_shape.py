@@ -14,15 +14,15 @@ import pytest
 from django.test import override_settings
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import MCPServer, TaskPolicy
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.config.build_mcp_config import build_mcp_config
-from rest_framework_mcp.constants import JsonRpcErrorCode, TaskStatus
-from rest_framework_mcp.handlers.handle_tools_call_async import handle_tools_call_async
-from rest_framework_mcp.handlers.task_dispatch import maybe_create_task
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.protocol.types.task import Task
-from rest_framework_mcp.tasks.in_memory_task_store import InMemoryTaskStore
+from django_spec_mcp import MCPServer, TaskPolicy
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.config.build_mcp_config import build_mcp_config
+from django_spec_mcp.constants import JsonRpcErrorCode, TaskStatus
+from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
+from django_spec_mcp.handlers.task_dispatch import maybe_create_task
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.protocol.types.task import Task
+from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from tests.tasks.conftest import RecordingExecutor, context, slow_service
 
 
@@ -209,7 +209,7 @@ def test_an_explicit_value_wins_over_the_setting() -> None:
     assert build_mcp_config(task_ttl_ms=1_000).task_ttl_ms == 1_000
 
 
-@override_settings(REST_FRAMEWORK_MCP={"TASK_TTL_MS": None, "TASK_POLL_INTERVAL_MS": None})
+@override_settings(SPEC_MCP={"TASK_TTL_MS": None, "TASK_POLL_INTERVAL_MS": None})
 def test_none_in_settings_means_none_rather_than_unset() -> None:
     """Why these two cannot use the ``x if x is not None else setting`` shape
     the other scalars use: ``None`` is a configured answer here — "never

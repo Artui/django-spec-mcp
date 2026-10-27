@@ -7,7 +7,7 @@ from django_service_specs import AudienceProjection, SelectorKind
 from rest_framework_services import output_to_json_schema
 from rest_framework_services.types.affordance_declarer import AffordanceDeclarer
 
-from rest_framework_mcp.schema.agent_conventions import HANDLE_DESCRIPTION
+from django_spec_mcp.schema.agent_conventions import HANDLE_DESCRIPTION
 
 
 def build_output_schema(

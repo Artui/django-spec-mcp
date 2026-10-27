@@ -1,6 +1,6 @@
 """Registration-time checks for input_serializer ↔ callable parameter parity.
 
-``rest_framework_mcp.adapters.utils.validate_input_serializer_against_callable``
+``django_spec_mcp.adapters.utils.validate_input_serializer_against_callable``
 runs from both :func:`selector_spec_to_tool` and :func:`service_spec_to_tool`
 so that a config bug — a serializer field that the dispatched callable
 won't actually accept — surfaces at registration rather than the first
@@ -20,10 +20,10 @@ from rest_framework import serializers as drf_serializers
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp.adapters.selector_to_tool import selector_spec_to_tool
-from rest_framework_mcp.adapters.service_to_tool import service_spec_to_tool
-from rest_framework_mcp.adapters.utils import validate_input_serializer_against_callable
-from rest_framework_mcp.constants import ArgumentBinding
+from django_spec_mcp.adapters.selector_to_tool import selector_spec_to_tool
+from django_spec_mcp.adapters.service_to_tool import service_spec_to_tool
+from django_spec_mcp.adapters.utils import validate_input_serializer_against_callable
+from django_spec_mcp.constants import ArgumentBinding
 
 
 class _TwoField(drf_serializers.Serializer):
@@ -331,7 +331,7 @@ def test_trust_mode_skips_required_param_check_for_non_seed_params() -> None:
 
 def test_register_selector_tool_threads_spec_kwargs_provides() -> None:
     """Without the opt-in this would raise; with it, registration succeeds."""
-    from rest_framework_mcp.server.mcp_server import MCPServer
+    from django_spec_mcp.server.mcp_server import MCPServer
 
     server = MCPServer(name="t")
 

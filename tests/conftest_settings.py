@@ -46,7 +46,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.AutoField"
 # The auth backend and session store are collaborators, passed to MCPServer by
 # whoever builds it (see tests/testapp/mcp.py) rather than named here by dotted
 # path. What remains are scalars.
-REST_FRAMEWORK_MCP = {
+SPEC_MCP = {
     "ALLOWED_ORIGINS": ["*"],
     # The suite opts *out* of the strict default this package now ships.
     #
@@ -65,5 +65,5 @@ REST_FRAMEWORK_MCP = {
     # suite needs the opt-out, a consumer's may too — which is exactly why the
     # setting exists rather than the check being unconditional.
     "REQUIRE_TOOL_PERMISSIONS": False,
-    "SERVER_INFO": {"name": "djangorestframework-mcp-server-tests", "version": "0.0.0-test"},
+    "SERVER_INFO": {"name": "django-spec-mcp-tests", "version": "0.0.0-test"},
 }

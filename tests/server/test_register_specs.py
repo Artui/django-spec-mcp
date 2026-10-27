@@ -16,12 +16,12 @@ from rest_framework_services import PolymorphicServiceSpec, QueryParam
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.registry.types.selector_tool_binding import SelectorToolBinding
-from rest_framework_mcp.registry.types.tool_binding import ToolBinding
-from rest_framework_mcp.server.mcp_server import MCPServer
-from rest_framework_mcp.server.utils import UnguardedToolWarning
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
+from django_spec_mcp.registry.types.tool_binding import ToolBinding
+from django_spec_mcp.server.mcp_server import MCPServer
+from django_spec_mcp.server.utils import UnguardedToolWarning
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 
 
 def _make() -> MCPServer:
@@ -214,7 +214,7 @@ class TestSecurityGuardsStillApply:
             server.register_specs(registry)
 
     def test_require_tool_permissions_still_refuses(self, settings: Any) -> None:
-        settings.REST_FRAMEWORK_MCP = {"REQUIRE_TOOL_PERMISSIONS": True}
+        settings.SPEC_MCP = {"REQUIRE_TOOL_PERMISSIONS": True}
         registry = SpecRegistry()
         registry.register("refund_order", _service_spec(guarded=False))
 

@@ -2,17 +2,14 @@
 
 Both sides of one round trip: ``resolve_prior_input`` before the service
 runs, ``ask_for_input`` if it raises. Everything protocol-shaped is in
-``rest_framework_mcp.elicitation``; the composition lives here because
+``django_spec_mcp.elicitation``; the composition lives here because
 ``isError`` is the failure channel and only a tool result has one.
 
-**Service tools only.** Chain and selector tools deliberately do not reach this
-module, and ``AdditionalInputRequired`` from either degrades through the
-existing ``ServiceError`` arm to an ordinary ``isError`` result. A chain is the
-dangerous one: the exchange completes a call by *re-running it from the top*, so
-a chain that asked at step three would run steps one and two twice on the retry
-— unsafe without checkpointing, which is the tasks extension's problem. A
-selector is a read, and a read that needs the user to decide something is a tool
-wearing the wrong registration.
+**Service tools only.** Selector tools deliberately do not reach this module,
+and ``AdditionalInputRequired`` from one degrades through the existing
+``ServiceError`` arm to an ordinary ``isError`` result. A selector is a read,
+and a read that needs the user to decide something is a tool wearing the wrong
+registration.
 """
 
 from __future__ import annotations
@@ -22,22 +19,22 @@ from typing import Any
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import AdditionalInputRequired
 
-from rest_framework_mcp.auth.principal_for_token import principal_for_token
-from rest_framework_mcp.constants import ELICITATION_KEY, ElicitAction, JsonRpcErrorCode
-from rest_framework_mcp.elicitation.build_requested_schema import build_requested_schema
-from rest_framework_mcp.elicitation.can_ask_client import can_ask_client
-from rest_framework_mcp.elicitation.fingerprint_request import fingerprint_request
-from rest_framework_mcp.elicitation.read_elicit_answer import read_elicit_answer
-from rest_framework_mcp.elicitation.sign_request_state import sign_request_state
-from rest_framework_mcp.elicitation.types.elicit_answer import ElicitAnswer
-from rest_framework_mcp.elicitation.types.elicit_request import ElicitRequest
-from rest_framework_mcp.elicitation.types.input_required_result import InputRequiredResult
-from rest_framework_mcp.elicitation.types.request_state import RequestState
-from rest_framework_mcp.elicitation.types.resolved_input import ResolvedInput
-from rest_framework_mcp.elicitation.verify_request_state import verify_request_state
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.output.error_tool_result import build_error_tool_result
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.auth.principal_for_token import principal_for_token
+from django_spec_mcp.constants import ELICITATION_KEY, ElicitAction, JsonRpcErrorCode
+from django_spec_mcp.elicitation.build_requested_schema import build_requested_schema
+from django_spec_mcp.elicitation.can_ask_client import can_ask_client
+from django_spec_mcp.elicitation.fingerprint_request import fingerprint_request
+from django_spec_mcp.elicitation.read_elicit_answer import read_elicit_answer
+from django_spec_mcp.elicitation.sign_request_state import sign_request_state
+from django_spec_mcp.elicitation.types.elicit_answer import ElicitAnswer
+from django_spec_mcp.elicitation.types.elicit_request import ElicitRequest
+from django_spec_mcp.elicitation.types.input_required_result import InputRequiredResult
+from django_spec_mcp.elicitation.types.request_state import RequestState
+from django_spec_mcp.elicitation.types.resolved_input import ResolvedInput
+from django_spec_mcp.elicitation.verify_request_state import verify_request_state
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.output.error_tool_result import build_error_tool_result
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 
 TOOLS_CALL_METHOD: str = "tools/call"
 

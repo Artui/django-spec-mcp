@@ -1,8 +1,8 @@
-site_name: djangorestframework-mcp-server
+site_name: django-spec-mcp
 site_description: Expose djangorestframework-services services and selectors as a Model Context Protocol (MCP) server.
-site_url: https://artui.github.io/djangorestframework-mcp-server/
-repo_url: https://github.com/Artui/djangorestframework-mcp-server
-repo_name: Artui/djangorestframework-mcp-server
+site_url: https://artui.github.io/django-spec-mcp/
+repo_url: https://github.com/Artui/django-spec-mcp
+repo_name: Artui/django-spec-mcp
 edit_uri: edit/main/docs/
 
 theme:
@@ -106,7 +106,6 @@ nav:
       - Honor drf-spectacular annotations: recipes/drf-spectacular.md
       - Selector tool with FilterSet: recipes/selector-tool-with-filterset.md
       - Expose a polymorphic action as tools: recipes/polymorphic-action.md
-      - Chain specs into one tool: recipes/chain-tools.md
       - Render a DRF list as an interactive table: recipes/interactive-view.md
       - Register tools from a spec registry: recipes/register-from-spec-registry.md
       - Connect a Pydantic-AI agent: recipes/pydantic-ai-client.md

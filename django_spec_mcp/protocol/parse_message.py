@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from rest_framework_mcp.constants import JSONRPC_VERSION
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.protocol.types.json_rpc_message import JsonRpcMessage
-from rest_framework_mcp.protocol.types.json_rpc_notification import JsonRpcNotification
-from rest_framework_mcp.protocol.types.json_rpc_request import JsonRpcRequest
-from rest_framework_mcp.protocol.types.json_rpc_response import JsonRpcResponse
+from django_spec_mcp.constants import JSONRPC_VERSION
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.protocol.types.json_rpc_message import JsonRpcMessage
+from django_spec_mcp.protocol.types.json_rpc_notification import JsonRpcNotification
+from django_spec_mcp.protocol.types.json_rpc_request import JsonRpcRequest
+from django_spec_mcp.protocol.types.json_rpc_response import JsonRpcResponse
 
 
 def parse_message(payload: dict[str, Any]) -> JsonRpcMessage:

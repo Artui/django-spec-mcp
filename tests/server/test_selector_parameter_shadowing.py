@@ -27,9 +27,9 @@ from rest_framework_dataclasses.serializers import DataclassSerializer
 from rest_framework_services import OfflineContract, QueryParam
 from rest_framework_services.types.selector_spec import SelectorSpec
 
-from rest_framework_mcp import MCPServer, UrlKwarg
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp import MCPServer, UrlKwarg
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 
 _PAGINATION_WORDING = "belong to the read pipeline's pagination"
 _QUERY_PARAM_WORDING = "also declares as a QueryParam"

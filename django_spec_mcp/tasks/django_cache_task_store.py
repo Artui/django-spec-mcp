@@ -6,12 +6,12 @@ from typing import Any
 
 from django.core.cache import cache
 
-from rest_framework_mcp.constants import TaskStatus
-from rest_framework_mcp.protocol.types.task import Task
-from rest_framework_mcp.tasks.types.task_record import TaskRecord
-from rest_framework_mcp.tasks.utils import is_wellformed_task_id
+from django_spec_mcp.constants import TaskStatus
+from django_spec_mcp.protocol.types.task import Task
+from django_spec_mcp.tasks.types.task_record import TaskRecord
+from django_spec_mcp.tasks.utils import is_wellformed_task_id
 
-_KEY_PREFIX: str = "drf-mcp:task:"
+_KEY_PREFIX: str = "spec-mcp:task:"
 _NAMESPACE_DIGEST_CHARS: int = 12
 # Used when a task declares no TTL: Django's cache API has no "never expire"
 # every backend honours identically, and a task nobody polls would otherwise
@@ -25,10 +25,10 @@ class DjangoCacheTaskStore:
     Cross-process, which for tasks is not a nice-to-have: the web worker that
     creates a task and the worker that finishes it are different processes, so
     a store they do not share cannot work at all (see
-    [`InMemoryTaskStore`][rest_framework_mcp.tasks.in_memory_task_store.InMemoryTaskStore]).
+    [`InMemoryTaskStore`][django_spec_mcp.tasks.in_memory_task_store.InMemoryTaskStore]).
 
     **Namespacing** follows
-    [`DjangoCacheSessionStore`][rest_framework_mcp.transport.django_cache_session_store.DjangoCacheSessionStore]
+    [`DjangoCacheSessionStore`][django_spec_mcp.transport.django_cache_session_store.DjangoCacheSessionStore]
     exactly — the server's ``name``, hashed into the key prefix, so two servers in one
     project cannot read or overwrite each other's tasks. The digest is for key hygiene
     (``name`` is free-form; memcached rejects spaces and caps length), not secrecy.

@@ -4,7 +4,7 @@ The ``io.modelcontextprotocol/tasks`` extension. A task-eligible tool answers
 ``tools/call`` with a handle instead of a result; the work happens in a queue worker,
 and the client polls ``tasks/get`` until the status is terminal. The seam is
 deliberately narrow —
-[`TaskExecutor`][rest_framework_mcp.tasks.types.task_executor.TaskExecutor] has one
+[`TaskExecutor`][django_spec_mcp.tasks.types.task_executor.TaskExecutor] has one
 method taking one string — so Celery, RQ, Dramatiq or a thread pool all satisfy it and
 none of them is imported here.
 
@@ -17,13 +17,13 @@ point: task creation happens inside ``tools/call``, and workers call
 ``MCPServer.run_task``, which is the object that holds the registries.
 """
 
-from rest_framework_mcp.tasks.django_cache_task_store import DjangoCacheTaskStore
-from rest_framework_mcp.tasks.in_memory_task_store import InMemoryTaskStore
-from rest_framework_mcp.tasks.report_task_progress import report_task_progress
-from rest_framework_mcp.tasks.transition_task import transition_task
-from rest_framework_mcp.tasks.types.task_executor import TaskExecutor
-from rest_framework_mcp.tasks.types.task_record import TaskRecord
-from rest_framework_mcp.tasks.types.task_store import TaskStore
+from django_spec_mcp.tasks.django_cache_task_store import DjangoCacheTaskStore
+from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
+from django_spec_mcp.tasks.report_task_progress import report_task_progress
+from django_spec_mcp.tasks.transition_task import transition_task
+from django_spec_mcp.tasks.types.task_executor import TaskExecutor
+from django_spec_mcp.tasks.types.task_record import TaskRecord
+from django_spec_mcp.tasks.types.task_store import TaskStore
 
 __all__ = [
     "DjangoCacheTaskStore",

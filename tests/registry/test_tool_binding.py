@@ -4,7 +4,7 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp.registry.types.tool_binding import ToolBinding
+from django_spec_mcp.registry.types.tool_binding import ToolBinding
 
 
 def test_service_property_returns_spec_callable() -> None:

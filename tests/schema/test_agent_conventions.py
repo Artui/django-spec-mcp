@@ -6,7 +6,7 @@ from django_service_specs import FieldMarking
 from rest_framework import serializers
 from rest_framework_services import MARKING, build_audience_projection
 
-from rest_framework_mcp.schema.agent_conventions import append_agent_conventions
+from django_spec_mcp.schema.agent_conventions import append_agent_conventions
 from tests.testapp.serializers import AgentInvoiceSerializer, InvoiceOutputSerializer
 
 

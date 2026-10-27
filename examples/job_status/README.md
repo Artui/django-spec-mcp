@@ -46,7 +46,7 @@ job_status/
 
 ```bash
 cd examples/job_status
-uv pip install -e "../.." "../..[filter]"
+uv pip install -e "../.." django-filter
 python manage.py migrate
 
 # ASGI server so SSE works (uvicorn ships with the dev group)

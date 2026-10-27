@@ -4,7 +4,7 @@ The declaration is identical whichever transport carries it, so
 ``djangorestframework-services`` holds the single definition and every consumer
 imports it — a local copy is what let the reserved-name sets drift apart
 between packages. This import path is preserved permanently:
-``from rest_framework_mcp import UrlKwarg`` and
+``from django_spec_mcp import UrlKwarg`` and
 ``from rest_framework_services import UrlKwarg`` are the same class.
 """
 

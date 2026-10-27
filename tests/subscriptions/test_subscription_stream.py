@@ -14,13 +14,13 @@ from typing import Any
 
 import pytest
 
-from rest_framework_mcp import NotificationKind, SubscriptionFilter
-from rest_framework_mcp.constants import SUBSCRIPTION_ID_META_KEY
-from rest_framework_mcp.subscriptions.in_memory_subscription_broker import (
+from django_spec_mcp import NotificationKind, SubscriptionFilter
+from django_spec_mcp.constants import SUBSCRIPTION_ID_META_KEY
+from django_spec_mcp.subscriptions.in_memory_subscription_broker import (
     InMemorySubscriptionBroker,
 )
-from rest_framework_mcp.transport.subscription_stream import _stream as stream
-from rest_framework_mcp.transport.subscription_stream import (
+from django_spec_mcp.transport.subscription_stream import _stream as stream
+from django_spec_mcp.transport.subscription_stream import (
     build_subscription_stream,
     subscription_closed_response,
 )

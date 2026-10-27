@@ -3,14 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from typing import Any
 
-from rest_framework_mcp.constants import TaskStatus
-from rest_framework_mcp.protocol.types.task import Task
+from django_spec_mcp.constants import TaskStatus
+from django_spec_mcp.protocol.types.task import Task
 
 
 @dataclass(frozen=True)
 class TaskRecord:
     """What a store holds: the wire
-    [`Task`][rest_framework_mcp.protocol.types.task.Task] plus what a worker needs.
+    [`Task`][django_spec_mcp.protocol.types.task.Task] plus what a worker needs.
 
     A *superset* rather than a parallel type. The extra fields never reach the
     client — no task message has a slot for them — but they are why a task can
@@ -97,7 +97,7 @@ class TaskRecord:
 
     def with_task(self, **changes: Any) -> TaskRecord:
         """Return a copy with fields changed on the embedded
-        [`Task`][rest_framework_mcp.protocol.types.task.Task].
+        [`Task`][django_spec_mcp.protocol.types.task.Task].
 
         Saves every caller a nested ``replace(record, task=replace(record.task,
         ...))``.

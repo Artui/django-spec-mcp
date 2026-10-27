@@ -1,5 +1,5 @@
 /*
- * Drives `rest_framework_mcp/ui/bridge.js` against a fake host and a fake DOM,
+ * Drives `django_spec_mcp/ui/bridge.js` against a fake host and a fake DOM,
  * and prints one JSON object describing what each scenario did.
  *
  * The bridge is the one piece of this package that runs in someone else's

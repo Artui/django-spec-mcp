@@ -7,7 +7,7 @@ from types import MappingProxyType
 
 from django.core.exceptions import ImproperlyConfigured
 
-from rest_framework_mcp.schema.agent_conventions import (
+from django_spec_mcp.schema.agent_conventions import (
     HANDLE_DESCRIPTION,
     HANDLE_LINE,
     MISSING_ARGUMENTS,

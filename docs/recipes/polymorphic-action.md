@@ -21,7 +21,7 @@ API:
 
 ```python
 from rest_framework_services import PolymorphicServiceSpec, ServiceSpec
-from rest_framework_mcp import MCPServer
+from django_spec_mcp import MCPServer
 
 # The same spec you'd hand a viewset's `action_specs` on the HTTP side.
 moderate = PolymorphicServiceSpec(
@@ -61,5 +61,5 @@ server.register_service_tool(
 ```
 
 If several variants genuinely belong together as one atomic operation
-(retrieve-then-write, say), that's a *chain*, not a union — see
-[Chain several specs into one tool](chain-tools.md).
+(retrieve-then-write, say), that's one service spec whose service calls the
+others inside its own transaction, not a union.

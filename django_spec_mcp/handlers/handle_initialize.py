@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from rest_framework_mcp.constants import TASKS_EXTENSION_ID, JsonRpcErrorCode
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.protocol.build_server_info import build_server_info
-from rest_framework_mcp.protocol.types.implementation import Implementation
-from rest_framework_mcp.protocol.types.initialize_params import InitializeParams
-from rest_framework_mcp.protocol.types.initialize_result import InitializeResult
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.protocol.types.server_capabilities import ServerCapabilities
+from django_spec_mcp.constants import TASKS_EXTENSION_ID, JsonRpcErrorCode
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.protocol.build_server_info import build_server_info
+from django_spec_mcp.protocol.types.implementation import Implementation
+from django_spec_mcp.protocol.types.initialize_params import InitializeParams
+from django_spec_mcp.protocol.types.initialize_result import InitializeResult
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.protocol.types.server_capabilities import ServerCapabilities
 
 
 def handle_initialize(

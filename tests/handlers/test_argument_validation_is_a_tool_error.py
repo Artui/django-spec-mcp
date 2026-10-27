@@ -33,15 +33,15 @@ from rest_framework import serializers as drf_serializers
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import ChainStep, MCPServer
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.constants import JsonRpcErrorCode, UnknownArguments
-from rest_framework_mcp.handlers.handle_tools_call import handle_tools_call
-from rest_framework_mcp.handlers.handle_tools_call_async import handle_tools_call_async
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.constants import JsonRpcErrorCode, UnknownArguments
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.conftest import post_jsonrpc
 from tests.testapp.models import Invoice
 from tests.testapp.serializers import InvoiceInputSerializer, InvoiceOutputSerializer
@@ -100,11 +100,6 @@ def _server() -> MCPServer:
         ),
         paginate=True,
     )
-    server.register_chain_tool(
-        name="chain",
-        input_serializer=InvoiceInputSerializer,
-        steps=[ChainStep("made", ServiceSpec(service=_echo, atomic=False))],
-    )
     return server
 
 
@@ -141,16 +136,15 @@ def _assert_invalid_arguments(out: Any) -> dict[str, Any]:
 
 
 # One case per site that answered ``-32602``: the service tool's dispatch
-# (drf-services' ``REJECT``), the selector tool's own ``input_serializer`` pass,
-# and the chain's. ``is_async`` covers the async handler's own service arm, which
-# is a separate ``except``; the selector and chain siblings share theirs.
+# (drf-services' ``REJECT``) and the selector tool's own ``input_serializer``
+# pass. ``is_async`` covers the async handler's own service arm, which is a
+# separate ``except``; the selector siblings share theirs.
 @pytest.mark.parametrize("is_async", [False, True])
 @pytest.mark.parametrize(
     ("name", "arguments"),
     [
         ("service", {"number": "A", "amount_cents": 1, "rogue": 1}),
         ("selector", {"known": 1, "rogue": 1}),
-        ("chain", {"number": "A", "amount_cents": 1, "rogue": 1}),
     ],
 )
 async def test_an_unexpected_argument_is_a_validation_error_result(
@@ -169,7 +163,6 @@ async def test_an_unexpected_argument_is_a_validation_error_result(
     [
         ("service", {"amount_cents": 1}, "number"),
         ("selector", {"known": "not a number"}, "known"),
-        ("chain", {"number": "A", "amount_cents": -1}, "amount_cents"),
     ],
 )
 async def test_an_input_serializer_rejection_is_a_validation_error_result(
@@ -226,8 +219,8 @@ def test_call_tool_echoes_the_arguments_only_when_configured(settings) -> None:
     arguments = {"amount_cents": 1}
     error = tool_error(_server().call_tool("service", arguments, user=None).to_dict())
     assert "value" not in error
-    settings.REST_FRAMEWORK_MCP = {
-        **getattr(settings, "REST_FRAMEWORK_MCP", {}),
+    settings.SPEC_MCP = {
+        **getattr(settings, "SPEC_MCP", {}),
         "INCLUDE_VALIDATION_VALUE": True,
     }
     error = tool_error(_server().call_tool("service", arguments, user=None).to_dict())

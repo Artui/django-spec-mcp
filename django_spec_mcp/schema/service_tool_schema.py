@@ -7,10 +7,10 @@ from rest_framework_services import server_owned_keys, spec_to_json_schema
 from rest_framework_services.dispatch.utils import DROPPED_EDGE_SEEDS
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp.registry.types.tool_binding import ToolBinding
-from rest_framework_mcp.registry.types.url_kwarg import UrlKwarg
-from rest_framework_mcp.schema.input_schema import build_input_schema
-from rest_framework_mcp.schema.utils import (
+from django_spec_mcp.registry.types.tool_binding import ToolBinding
+from django_spec_mcp.registry.types.url_kwarg import UrlKwarg
+from django_spec_mcp.schema.input_schema import build_input_schema
+from django_spec_mcp.schema.utils import (
     caller_fields,
     selector_inputs,
     target_lookup,
@@ -45,7 +45,7 @@ def build_service_tool_input_schema(
       ``many=True`` shape below does; the serializer's shape above does not
       read it.
 
-    Registered [`UrlKwarg`][rest_framework_mcp.registry.types.url_kwarg.UrlKwarg]
+    Registered [`UrlKwarg`][django_spec_mcp.registry.types.url_kwarg.UrlKwarg]
     and ``QueryParam`` properties are merged over either. A
     ``UrlKwarg(required=True)`` joins ``required`` and ``spec.partial`` does
     **not** relax it: partial validation is about the *payload* the serializer

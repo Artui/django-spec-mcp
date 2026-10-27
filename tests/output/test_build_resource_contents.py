@@ -9,10 +9,10 @@ from typing import Any
 from django_service_specs import SelectorKind
 from rest_framework import serializers
 
-from rest_framework_mcp.constants import JsonRpcErrorCode, ResourceEncoding
-from rest_framework_mcp.output.build_resource_contents import build_resource_contents
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.registry.types.resource_binding import ResourceBinding
+from django_spec_mcp.constants import JsonRpcErrorCode, ResourceEncoding
+from django_spec_mcp.output.build_resource_contents import build_resource_contents
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.registry.types.resource_binding import ResourceBinding
 
 
 class _Out(serializers.Serializer):

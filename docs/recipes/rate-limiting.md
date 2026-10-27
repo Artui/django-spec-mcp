@@ -10,8 +10,8 @@ the right choice for most Django deployments — the cache is already shared
 across worker processes when you're running anything serious.
 
 ```python
-from rest_framework_mcp import MCPServer
-from rest_framework_mcp.auth.rate_limits.fixed_window_rate_limit import (
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.rate_limits.fixed_window_rate_limit import (
     FixedWindowRateLimit,
 )
 from rest_framework_services.types.service_spec import ServiceSpec
@@ -73,7 +73,7 @@ server.register_service_tool(
 
 ## Choosing a scheme
 
-Three implementations ship in `rest_framework_mcp.auth.rate_limits`:
+Three implementations ship in `django_spec_mcp.auth.rate_limits`:
 
 - **`FixedWindowRateLimit`** — bucketed counters, atomic via
   `cache.add` + `cache.incr`. Cheaper, but a client can issue
@@ -87,7 +87,7 @@ Three implementations ship in `rest_framework_mcp.auth.rate_limits`:
   `refill_per_second`. Useful when consumers naturally batch.
 
 ```python
-from rest_framework_mcp.auth.rate_limits import (
+from django_spec_mcp.auth.rate_limits import (
     FixedWindowRateLimit,
     SlidingWindowRateLimit,
     TokenBucketRateLimit,
@@ -116,7 +116,7 @@ the Protocol against your storage of choice:
 ```python
 from django.http import HttpRequest
 
-from rest_framework_mcp import TokenInfo
+from django_spec_mcp import TokenInfo
 
 
 class LeakyBucketRateLimit:

@@ -8,10 +8,8 @@ from typing import Any
 class AuthorizationServerMetadata:
     """RFC 8414 OAuth 2.0 Authorization Server Metadata payload.
 
-    Returned by ``MCPAuthBackend.authorization_server_metadata`` and
-    serialised by the contrib AS metadata ViewSet. A backend that hosts no
-    authorization server raises ``NotImplementedError`` instead, which
-    that ViewSet maps to ``501 Not Implemented``.
+    Returned by ``MCPAuthBackend.authorization_server_metadata``. A backend
+    that hosts no authorization server raises ``NotImplementedError`` instead.
 
     Field shapes mirror RFC 8414. The ``str``-typed endpoints default to ``""``
     so the wire shape is valid JSON even when the configuration is incomplete;

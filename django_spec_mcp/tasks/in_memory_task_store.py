@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from rest_framework_mcp.tasks.types.task_record import TaskRecord
+from django_spec_mcp.tasks.types.task_record import TaskRecord
 
 
 class InMemoryTaskStore:
@@ -12,7 +12,7 @@ class InMemoryTaskStore:
     writes its result into a dict the web process cannot see, and every poll answers
     "unknown task" until the client gives up. It fails silently and looks like a hung
     job, which is why
-    [`DjangoCacheTaskStore`][rest_framework_mcp.tasks.django_cache_task_store.DjangoCacheTaskStore]
+    [`DjangoCacheTaskStore`][django_spec_mcp.tasks.django_cache_task_store.DjangoCacheTaskStore]
     is the default. This class exists so tests and a single-process ``runserver`` can
     exercise the machinery without a cache.
 

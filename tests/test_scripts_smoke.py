@@ -1,7 +1,7 @@
 """The repo's own ``scripts/`` stay importable against the package they drive.
 
 Nothing in the standard gates covers them: they are not referenced from the
-Makefile's test target, and ``ty`` is scoped to ``rest_framework_mcp/`` only. So
+Makefile's test target, and ``ty`` is scoped to ``django_spec_mcp/`` only. So
 a package-wide rename — the move of types into ``types/`` sub-packages, say —
 leaves a script pointing at a module path that no longer exists, and the first
 person to find out is whoever follows the script's own documented invocation.
@@ -22,12 +22,10 @@ _SCRIPTS = pathlib.Path(__file__).resolve().parent.parent / "scripts"
 
 
 def _package_imports(source: str) -> list[tuple[str, str]]:
-    """``(module, symbol)`` for every ``from rest_framework_mcp… import …``."""
+    """``(module, symbol)`` for every ``from django_spec_mcp… import …``."""
     found: list[tuple[str, str]] = []
     for node in ast.walk(ast.parse(source)):
-        if isinstance(node, ast.ImportFrom) and (node.module or "").startswith(
-            "rest_framework_mcp"
-        ):
+        if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("django_spec_mcp"):
             found.extend((node.module or "", alias.name) for alias in node.names)
     return found
 

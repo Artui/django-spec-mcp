@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 from rest_framework.permissions import BasePermission
 
-from rest_framework_mcp.conf import get_setting
+from django_spec_mcp.conf import get_setting
 
 
 def tool_error(out: Any) -> dict[str, Any]:

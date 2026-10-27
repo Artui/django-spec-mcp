@@ -6,8 +6,8 @@ import pytest
 from django_service_specs import SelectorKind
 from rest_framework import serializers
 
-from rest_framework_mcp.schema.input_schema import build_input_schema
-from rest_framework_mcp.schema.output_schema import build_output_schema
+from django_spec_mcp.schema.input_schema import build_input_schema
+from django_spec_mcp.schema.output_schema import build_output_schema
 from tests.testapp.serializers import InvoiceOutputSerializer
 
 

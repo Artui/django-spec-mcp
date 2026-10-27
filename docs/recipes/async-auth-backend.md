@@ -19,8 +19,8 @@ import httpx
 from django.contrib.auth import get_user_model
 from django.http import HttpRequest
 
-from rest_framework_mcp import MCPAuthBackend, TokenInfo
-from rest_framework_mcp.auth.types.protected_resource_metadata import (
+from django_spec_mcp import MCPAuthBackend, TokenInfo
+from django_spec_mcp.auth.types.protected_resource_metadata import (
     ProtectedResourceMetadata,
 )
 
@@ -75,8 +75,7 @@ class IntrospectingAuthBackend:
 
     def authorization_server_metadata(self):
         # This backend consumes a remote authorization server, it doesn't host
-        # one. `NotImplementedError` is the documented signal that lets
-        # `rest_framework_mcp.contrib.oauth` skip the AS-side endpoints.
+        # one. `NotImplementedError` is the documented signal for that.
         raise NotImplementedError("Authorization is hosted by the IDP, not by this resource.")
 
     def www_authenticate_challenge(self, *, scopes=None, error=None) -> str:
@@ -91,7 +90,7 @@ class IntrospectingAuthBackend:
 Wire it into the server:
 
 ```python
-from rest_framework_mcp import MCPServer
+from django_spec_mcp import MCPServer
 
 server = MCPServer(
     name="my-app",

@@ -6,11 +6,11 @@ from typing import Any
 
 import pytest
 
-from rest_framework_mcp.constants import ELICITATION_KEY, ElicitAction
-from rest_framework_mcp.elicitation.can_ask_client import can_ask_client
-from rest_framework_mcp.elicitation.read_elicit_answer import read_elicit_answer
-from rest_framework_mcp.elicitation.types.elicit_request import ElicitRequest
-from rest_framework_mcp.elicitation.types.input_required_result import InputRequiredResult
+from django_spec_mcp.constants import ELICITATION_KEY, ElicitAction
+from django_spec_mcp.elicitation.can_ask_client import can_ask_client
+from django_spec_mcp.elicitation.read_elicit_answer import read_elicit_answer
+from django_spec_mcp.elicitation.types.elicit_request import ElicitRequest
+from django_spec_mcp.elicitation.types.input_required_result import InputRequiredResult
 
 SCHEMA: dict[str, Any] = {"type": "object", "properties": {"ok": {"type": "boolean"}}}
 

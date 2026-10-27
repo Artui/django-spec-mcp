@@ -14,8 +14,8 @@ from typing import Any
 import pytest
 from django.test import Client, override_settings
 
-from rest_framework_mcp import MCPServer
-from rest_framework_mcp.config.build_mcp_config import build_mcp_config
+from django_spec_mcp import MCPServer
+from django_spec_mcp.config.build_mcp_config import build_mcp_config
 
 INTERNAL = "/internal/mcp/"
 PUBLIC = "/public/mcp/"
@@ -142,17 +142,17 @@ def test_two_servers_can_hold_different_scalars() -> None:
 def test_config_ignores_later_settings_mutation() -> None:
     """Scalars freeze at construction — a settings change afterwards is not a
     silent, retroactive reconfiguration of an already-mounted server."""
-    with override_settings(REST_FRAMEWORK_MCP={"PAGE_SIZE": 7}):
+    with override_settings(SPEC_MCP={"PAGE_SIZE": 7}):
         server = MCPServer(name="s")
     assert server.config.page_size == 7
 
-    with override_settings(REST_FRAMEWORK_MCP={"PAGE_SIZE": 999}):
+    with override_settings(SPEC_MCP={"PAGE_SIZE": 999}):
         assert server.config.page_size == 7
 
 
 def test_settings_still_supply_defaults() -> None:
     """The single-server on-ramp is unchanged: configure settings, pass nothing."""
-    with override_settings(REST_FRAMEWORK_MCP={"PAGE_SIZE": 42, "MAX_REQUEST_BYTES": 99}):
+    with override_settings(SPEC_MCP={"PAGE_SIZE": 42, "MAX_REQUEST_BYTES": 99}):
         server = MCPServer(name="s")
     assert server.config.page_size == 42
     assert server.config.max_request_bytes == 99

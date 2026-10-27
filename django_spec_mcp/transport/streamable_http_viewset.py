@@ -12,45 +12,45 @@ from rest_framework.renderers import JSONRenderer
 from rest_framework.request import Request
 from rest_framework.viewsets import ViewSet
 
-from rest_framework_mcp._compat.reject_awaitable import reject_awaitable
-from rest_framework_mcp.auth.principal_for_token import principal_for_token
-from rest_framework_mcp.auth.types.auth_backend import MCPAuthBackend
-from rest_framework_mcp.config.types.mcp_config import MCPConfig
-from rest_framework_mcp.constants import (
+from django_spec_mcp._compat.reject_awaitable import reject_awaitable
+from django_spec_mcp.auth.principal_for_token import principal_for_token
+from django_spec_mcp.auth.types.auth_backend import MCPAuthBackend
+from django_spec_mcp.config.types.mcp_config import MCPConfig
+from django_spec_mcp.constants import (
     INTERNAL_ERROR_MESSAGE,
     MCP_ERROR_HEADER,
     MODERN_PROTOCOL_VERSIONS,
     SESSIONLESS_METHODS,
     JsonRpcErrorCode,
 )
-from rest_framework_mcp.handlers.dispatch import dispatch
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.observability import get_logger, session_fingerprint
-from rest_framework_mcp.protocol.parse_message import parse_message
-from rest_framework_mcp.protocol.types.implementation import Implementation
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.protocol.types.json_rpc_notification import JsonRpcNotification
-from rest_framework_mcp.protocol.types.json_rpc_request import JsonRpcRequest
-from rest_framework_mcp.protocol.types.json_rpc_response import JsonRpcResponse
-from rest_framework_mcp.registry.prompt_registry import PromptRegistry
-from rest_framework_mcp.registry.resource_registry import ResourceRegistry
-from rest_framework_mcp.registry.tool_registry import ToolRegistry
-from rest_framework_mcp.schema.types.agent_conventions import AgentConventions
-from rest_framework_mcp.subscriptions.types.subscription_broker import SubscriptionBroker
-from rest_framework_mcp.tasks.types.task_executor import TaskExecutor
-from rest_framework_mcp.tasks.types.task_store import TaskStore
-from rest_framework_mcp.transport.negotiate_protocol_version import negotiate_protocol_version
-from rest_framework_mcp.transport.origin_validation import is_origin_allowed
-from rest_framework_mcp.transport.types.request_metadata import RequestMetadata
-from rest_framework_mcp.transport.types.session_store import SessionStore
-from rest_framework_mcp.transport.utils import (
+from django_spec_mcp.handlers.dispatch import dispatch
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.observability import get_logger, session_fingerprint
+from django_spec_mcp.protocol.parse_message import parse_message
+from django_spec_mcp.protocol.types.implementation import Implementation
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.protocol.types.json_rpc_notification import JsonRpcNotification
+from django_spec_mcp.protocol.types.json_rpc_request import JsonRpcRequest
+from django_spec_mcp.protocol.types.json_rpc_response import JsonRpcResponse
+from django_spec_mcp.registry.prompt_registry import PromptRegistry
+from django_spec_mcp.registry.resource_registry import ResourceRegistry
+from django_spec_mcp.registry.tool_registry import ToolRegistry
+from django_spec_mcp.schema.types.agent_conventions import AgentConventions
+from django_spec_mcp.subscriptions.types.subscription_broker import SubscriptionBroker
+from django_spec_mcp.tasks.types.task_executor import TaskExecutor
+from django_spec_mcp.tasks.types.task_store import TaskStore
+from django_spec_mcp.transport.negotiate_protocol_version import negotiate_protocol_version
+from django_spec_mcp.transport.origin_validation import is_origin_allowed
+from django_spec_mcp.transport.types.request_metadata import RequestMetadata
+from django_spec_mcp.transport.types.session_store import SessionStore
+from django_spec_mcp.transport.utils import (
     insufficient_scope_challenge,
     is_permission_denial,
     modern_error_status,
     raised_denial_error,
     session_gate_failure,
 )
-from rest_framework_mcp.transport.validate_modern_request import validate_modern_request
+from django_spec_mcp.transport.validate_modern_request import validate_modern_request
 
 _SESSION_HEADER: str = "Mcp-Session-Id"
 _VERSION_HEADER: str = "Mcp-Protocol-Version"
@@ -185,13 +185,13 @@ class StreamableHttpViewSet(ViewSet):
 
     The transport bypasses DRF's default request lifecycle on purpose:
     ``authentication_classes`` is empty because
-    [`MCPAuthBackend`][rest_framework_mcp.auth.types.auth_backend.MCPAuthBackend] is the
+    [`MCPAuthBackend`][django_spec_mcp.auth.types.auth_backend.MCPAuthBackend] is the
     auth layer (DRF's ``SessionAuthentication`` would fight with the bearer-token shape
     MCP advertises), and ``permission_classes`` is ``AllowAny`` because per-binding
     permissions live on the registered tool / resource / prompt.
 
     Collaborators (registries, auth backend, session store) are instance-scoped and
-    passed in by [`MCPServer`][rest_framework_mcp.server.mcp_server.MCPServer] through
+    passed in by [`MCPServer`][django_spec_mcp.server.mcp_server.MCPServer] through
     ``as_view``, never looked up at module level, so independent servers in one process
     cannot interfere."""
 

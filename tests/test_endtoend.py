@@ -5,7 +5,7 @@ import json
 import pytest
 from django.test import Client, override_settings
 
-from rest_framework_mcp.config.build_mcp_config import build_mcp_config
+from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from tests.conftest import post_jsonrpc
 from tests.testapp.mcp import build_server
 from tests.testapp.urlconf_for import urlconf_for
@@ -150,8 +150,8 @@ def test_call_with_unsupported_version_still_rejected_when_disabled(
     client: Client, initialized_session: str, settings
 ) -> None:
     """A present-but-unsupported version still 400s even with the relaxation on."""
-    settings.REST_FRAMEWORK_MCP = {
-        **settings.REST_FRAMEWORK_MCP,
+    settings.SPEC_MCP = {
+        **settings.SPEC_MCP,
         "REQUIRE_PROTOCOL_VERSION_HEADER": False,
     }
     response = client.post(

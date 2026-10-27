@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from rest_framework_mcp.constants import NotificationKind
+from django_spec_mcp.constants import NotificationKind
 
 
 @dataclass(frozen=True)

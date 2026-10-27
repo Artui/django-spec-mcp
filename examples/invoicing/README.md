@@ -2,7 +2,7 @@
 
 A representative Django project that exposes an `Invoice` model over
 MCP using every public registration surface of
-`djangorestframework-mcp-server`:
+`django-spec-mcp`:
 
 | Surface                        | Demonstrated by                                              |
 |--------------------------------|--------------------------------------------------------------|
@@ -55,8 +55,8 @@ invoicing/
 ```bash
 cd examples/invoicing
 
-# Install the package (with the [filter] extra needed for the selector tool)
-uv pip install -e "../.." "../..[filter]"
+# Install the package, and django-filter for the selector tool's FilterSet
+uv pip install -e "../.." django-filter
 
 # Database
 python manage.py migrate

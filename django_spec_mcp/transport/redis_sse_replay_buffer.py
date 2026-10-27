@@ -18,7 +18,7 @@ def _resolve_async_redis() -> Any:
 AsyncRedis: Any = _resolve_async_redis()
 
 
-_DEFAULT_KEY_PREFIX: str = "drf-mcp:sse-replay"
+_DEFAULT_KEY_PREFIX: str = "spec-mcp:sse-replay"
 _NAMESPACE_DIGEST_CHARS: int = 12
 # A stream is only worth keeping while its session could still reconnect to it,
 # and the session store's own idle window is that horizon.
@@ -29,7 +29,7 @@ class RedisSSEReplayBuffer:
     """Cross-process replay buffer backed by Redis Streams.
 
     Drop-in replacement for
-    [`InMemorySSEReplayBuffer`][rest_framework_mcp.transport.in_memory_sse_replay_buffer.InMemorySSEReplayBuffer]
+    [`InMemorySSEReplayBuffer`][django_spec_mcp.transport.in_memory_sse_replay_buffer.InMemorySSEReplayBuffer]
     when running multiple ASGI workers: a reconnect can land on any worker, and a shared
     Redis Stream replays the same events whichever worker recorded them.
 
@@ -46,11 +46,11 @@ class RedisSSEReplayBuffer:
     ``stream-node-max-entries``), so after ``max_events`` is lowered on a long stream the first
     few writes leave it above the bound before it catches up.
 
-    Wire it into [`MCPServer`][rest_framework_mcp.server.mcp_server.MCPServer]:
+    Wire it into [`MCPServer`][django_spec_mcp.server.mcp_server.MCPServer]:
 
         from redis.asyncio import Redis
-        from rest_framework_mcp import MCPServer
-        from rest_framework_mcp.transport.redis_sse_replay_buffer import (
+        from django_spec_mcp import MCPServer
+        from django_spec_mcp.transport.redis_sse_replay_buffer import (
             RedisSSEReplayBuffer,
         )
 
@@ -87,7 +87,7 @@ class RedisSSEReplayBuffer:
         if AsyncRedis is None:  # pragma: no cover - exercised by the no-extras smoke job
             raise ImportError(
                 "RedisSSEReplayBuffer requires the `redis` package. "
-                'Install with `pip install "djangorestframework-mcp-server[redis]"`.'
+                'Install with `pip install "django-spec-mcp[redis]"`.'
             )
         if max_events <= 0:
             raise ValueError("max_events must be positive")

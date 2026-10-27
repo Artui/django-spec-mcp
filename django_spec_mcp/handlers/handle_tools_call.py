@@ -11,23 +11,22 @@ from rest_framework_services import (
     render_for_audience,
 )
 
-from rest_framework_mcp._compat.tracing import span
-from rest_framework_mcp.constants import JsonRpcErrorCode, OutputFormat
-from rest_framework_mcp.elicitation.types.resolved_input import ResolvedInput
-from rest_framework_mcp.handlers.chain_tool_dispatch import dispatch_chain_tool
-from rest_framework_mcp.handlers.input_dispatch import (
+from django_spec_mcp._compat.tracing import span
+from django_spec_mcp.constants import JsonRpcErrorCode, OutputFormat
+from django_spec_mcp.elicitation.types.resolved_input import ResolvedInput
+from django_spec_mcp.handlers.input_dispatch import (
     ask_for_input,
     refusal_result,
     resolve_prior_input,
 )
-from rest_framework_mcp.handlers.invalidation_dispatch import announce_invalidations
-from rest_framework_mcp.handlers.selector_tool_dispatch import (
+from django_spec_mcp.handlers.invalidation_dispatch import announce_invalidations
+from django_spec_mcp.handlers.selector_tool_dispatch import (
     dispatch_selector_tool,
     enforce_object_permissions,
 )
-from rest_framework_mcp.handlers.task_dispatch import maybe_create_task
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.handlers.utils import (
+from django_spec_mcp.handlers.task_dispatch import maybe_create_task
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.handlers.utils import (
     apply_tool_server_arguments,
     consume_rate_limits,
     dispatch_shape,
@@ -44,12 +43,11 @@ from rest_framework_mcp.handlers.utils import (
     validate_output_format,
     validation_error_result,
 )
-from rest_framework_mcp.output.error_tool_result import build_error_tool_result
-from rest_framework_mcp.output.resolve_structured_output import resolve_structured_output
-from rest_framework_mcp.output.tool_result import build_tool_result
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.registry.types.chain_tool_binding import ChainToolBinding
-from rest_framework_mcp.registry.types.selector_tool_binding import SelectorToolBinding
+from django_spec_mcp.output.error_tool_result import build_error_tool_result
+from django_spec_mcp.output.resolve_structured_output import resolve_structured_output
+from django_spec_mcp.output.tool_result import build_tool_result
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
 
 
 def handle_tools_call(
@@ -142,13 +140,13 @@ def _dispatch_tool_call(
     """Route a resolved binding to its dispatch path; return the raw result and its arguments.
 
     Split out of ``handle_tools_call`` so the size ceiling wraps every
-    return — including the ones the chain and selector helpers make — at a
+    return — including the ones the selector helpers make — at a
     single point. The async sibling splits the same way, plus the deadline.
 
     The arguments returned are the ones the tool ran with, which on a service
     tool's retry carry the answers merged over the arguments as sent, for the
-    invalidation the caller announces. The chain and selector paths merge no
-    answers, so theirs are the arguments as sent.
+    invalidation the caller announces. The selector path merges no answers, so
+    its are the arguments as sent.
     """
     # Scoped to the dispatch portion, after binding resolution, so cheap
     # validation rejections don't generate noise. A no-op without
@@ -157,14 +155,9 @@ def _dispatch_tool_call(
         "mcp.tools.call",
         attributes=_span_attrs(binding.name, context),
     ) as otel_span:
-        # Chain and selector tools have their own dispatch helpers; service
-        # tools fall through to the mutation-shaped path below. Neither merges
-        # a retry's answers, so each ran with the arguments as sent.
-        if isinstance(binding, ChainToolBinding):
-            return (
-                dispatch_chain_tool(binding, params, arguments_raw, context, otel_span),
-                arguments_raw,
-            )
+        # Selector tools have their own dispatch helpers; service tools fall
+        # through to the mutation-shaped path below. A selector merges no
+        # retry's answers, so it ran with the arguments as sent.
         if isinstance(binding, SelectorToolBinding):
             return (
                 dispatch_selector_tool(binding, params, arguments_raw, context, otel_span),

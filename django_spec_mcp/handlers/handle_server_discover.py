@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from rest_framework_mcp.constants import MODERN_PROTOCOL_VERSIONS
-from rest_framework_mcp.handlers.handle_initialize import build_capabilities
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.handlers.utils import catalog_cache_hints
-from rest_framework_mcp.protocol.build_server_info import build_server_info
-from rest_framework_mcp.protocol.types.discover_result import DiscoverResult
-from rest_framework_mcp.protocol.types.implementation import Implementation
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.constants import MODERN_PROTOCOL_VERSIONS
+from django_spec_mcp.handlers.handle_initialize import build_capabilities
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.handlers.utils import catalog_cache_hints
+from django_spec_mcp.protocol.build_server_info import build_server_info
+from django_spec_mcp.protocol.types.discover_result import DiscoverResult
+from django_spec_mcp.protocol.types.implementation import Implementation
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 
 
 def handle_server_discover(

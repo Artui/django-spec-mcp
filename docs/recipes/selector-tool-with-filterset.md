@@ -23,15 +23,15 @@ arguments → validate(merged inputSchema)
 Each knob is opt-in. A bare `register_selector_tool` with no
 filter/order/paginate behaves like a plain RPC read.
 
-## Install the optional extra
+## Install django-filter
 
-`spec.filter_set` requires `django-filter`:
+`spec.filter_set` requires `django-filter`, which this package does not pull in:
 
 ```bash
-pip install "djangorestframework-mcp-server[filter]"
+pip install django-filter
 ```
 
-Without it, importing `rest_framework_mcp` still works — the
+Without it, importing `django_spec_mcp` still works — the
 `ImportError` only fires when a selector spec actually carries a
 `filter_set`.
 
@@ -113,7 +113,7 @@ class InvoiceFilterSet(django_filters.FilterSet):
 ```python
 from django_service_specs import SelectorKind
 from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_mcp import MCPServer
+from django_spec_mcp import MCPServer
 
 from invoices.filters import InvoiceFilterSet
 from invoices.selectors import list_invoices

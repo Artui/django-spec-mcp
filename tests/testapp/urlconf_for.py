@@ -2,7 +2,7 @@
 
 Scalar config is resolved once, in ``MCPServer.__init__``. That is what lets two
 servers in one project differ — and it means a test can no longer mutate
-``settings.REST_FRAMEWORK_MCP`` and expect an already-mounted server to notice.
+``settings.SPEC_MCP`` and expect an already-mounted server to notice.
 Tests that need custom scalars build their own server and mount it here::
 
     server = build_server(config=build_mcp_config(allowed_origins=["https://ok"]))
@@ -20,7 +20,7 @@ import types
 
 from django.urls import path
 
-from rest_framework_mcp import MCPServer
+from django_spec_mcp import MCPServer
 
 
 def urlconf_for(

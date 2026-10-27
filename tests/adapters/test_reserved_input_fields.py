@@ -29,12 +29,12 @@ from rest_framework import serializers
 from rest_framework.permissions import AllowAny
 from rest_framework_services import ArgumentBinding, SelectorSpec, ServiceSpec
 
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.constants import TOOL_EDGE_SEEDS
-from rest_framework_mcp.handlers.handle_tools_call import handle_tools_call
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.server.mcp_server import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.constants import TOOL_EDGE_SEEDS
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.server.mcp_server import MCPServer
 
 _RESERVED = sorted(RESERVED_POOL_SEEDS | TOOL_EDGE_SEEDS)
 _ROUTES = ["direct", "decorator", "register_specs"]

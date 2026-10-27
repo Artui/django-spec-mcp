@@ -4,7 +4,7 @@ from typing import Any
 
 from django.core.exceptions import ImproperlyConfigured
 
-from rest_framework_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.auth.types.token_info import TokenInfo
 
 
 def principal_for_token(token: TokenInfo) -> str:

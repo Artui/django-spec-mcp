@@ -5,9 +5,9 @@ from typing import Any
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import UNSET, UnsetType
 
-from rest_framework_mcp.conf import get_setting
-from rest_framework_mcp.config.types.mcp_config import MCPConfig
-from rest_framework_mcp.constants import OutputFormat
+from django_spec_mcp.conf import get_setting
+from django_spec_mcp.config.types.mcp_config import MCPConfig
+from django_spec_mcp.constants import OutputFormat
 
 
 def _nullable_int(value: Any) -> int | None:
@@ -64,10 +64,10 @@ def build_mcp_config(
     input_request_ttl_seconds: int | None = None,
     max_input_rounds: int | None = None,
 ) -> MCPConfig:
-    """Resolve a ``MCPConfig`` from ``REST_FRAMEWORK_MCP``, applying overrides.
+    """Resolve a ``MCPConfig`` from ``SPEC_MCP``, applying overrides.
 
     The single place the scalar settings are read.
-    [`MCPServer`][rest_framework_mcp.server.mcp_server.MCPServer] calls this once in
+    [`MCPServer`][django_spec_mcp.server.mcp_server.MCPServer] calls this once in
     ``__init__``; nothing reads these settings per request, which is what lets two
     servers in one project hold different values.
 
@@ -86,7 +86,7 @@ def build_mcp_config(
         # Caught at construction rather than as an ``IndexError`` out of a view
         # on the first request: every version lookup downstream indexes this.
         raise ImproperlyConfigured(
-            "REST_FRAMEWORK_MCP['PROTOCOL_VERSIONS'] is empty, so this server supports "
+            "SPEC_MCP['PROTOCOL_VERSIONS'] is empty, so this server supports "
             "no MCP revision and cannot answer any request. List at least one."
         )
 

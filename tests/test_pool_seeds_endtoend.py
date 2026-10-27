@@ -10,7 +10,6 @@ or its context somewhere else:
   viewset), the in-process ``call_tool`` / ``acall_tool`` context, and the task
   worker's;
 - a selector tool, whose dispatch kwargs are shared by both of its siblings;
-- a chain step, which assembles its own pool rather than calling ``dispatch_spec``;
 - the availability check ``tools/list`` and ``unavailable_tools`` run;
 - registration, which must neither refuse a callable for declaring a seed nor
   accept a ``UrlKwarg`` / ``QueryParam`` that dispatch would strip.
@@ -33,16 +32,16 @@ from rest_framework.permissions import AllowAny
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import ChainStep, MCPServer, PromptArgument, QueryParam, UrlKwarg
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.constants import TaskPolicy
-from rest_framework_mcp.handlers.handle_completion_complete import handle_completion_complete
-from rest_framework_mcp.handlers.handle_prompts_get import handle_prompts_get
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.tasks.create_task import create_task
-from rest_framework_mcp.tasks.in_memory_task_store import InMemoryTaskStore
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp import MCPServer, PromptArgument, QueryParam, UrlKwarg
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.constants import TaskPolicy
+from django_spec_mcp.handlers.handle_completion_complete import handle_completion_complete
+from django_spec_mcp.handlers.handle_prompts_get import handle_prompts_get
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.tasks.create_task import create_task
+from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.tasks.conftest import RecordingExecutor
 from tests.testapp.urlconf_for import urlconf_for
 
@@ -56,11 +55,6 @@ def _whoami(*, tenant: str) -> dict[str, str]:
     # ``tenant`` has no default on purpose: registration has to count a
     # registered seed as a source, or this callable is refused before it runs.
     return {"tenant": tenant}
-
-
-def _reports(*, progress: Any) -> dict[str, str]:
-    progress(1, total=1)
-    return {"reported": "yes"}
 
 
 def _card(*, slug: str, tenant: str, progress: Any) -> dict[str, str]:
@@ -109,25 +103,6 @@ def _server(**kwargs: Any) -> MCPServer:
             name=f"tenant.{code}",
             spec=_service(affordances=[_tenant_is(expected)]),
         )
-    server.register_chain_tool(
-        name="tenant.chain",
-        steps=[
-            # ``inputs`` forwards the client's arguments whole, the natural way
-            # to write one, so a client ``tenant`` is in what it provides.
-            ChainStep(
-                "who",
-                _service(affordances=[_tenant_is("acme")]),
-                inputs=lambda ctx: dict(ctx.args),
-            ),
-            # Declares ``progress``, which a chain step's pool carries because
-            # it is built through drf-services' ``base_pool``.
-            ChainStep(
-                "reported",
-                ServiceSpec(service=_reports, atomic=False, permission_classes=[AllowAny]),
-            ),
-        ],
-        output_alias="who",
-    )
     server.register_resource(
         name="tenant.card",
         uri_template="tenants://{slug}",
@@ -298,18 +273,6 @@ def test_a_client_argument_named_after_a_seed_does_not_reach_a_selector(in_proce
         if in_process
         else async_to_sync(server.acall_tool)("tenant.scope", arguments, user=None)
     )
-
-    assert _structured(result) == {"tenant": "acme"}
-
-
-# ----- chain steps -----
-
-
-@pytest.mark.django_db
-def test_a_chain_step_reads_a_seed_over_what_its_inputs_provide() -> None:
-    server = _server()
-
-    result = async_to_sync(server.acall_tool)("tenant.chain", {"tenant": "globex"}, user=None)
 
     assert _structured(result) == {"tenant": "acme"}
 

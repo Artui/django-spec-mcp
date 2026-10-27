@@ -129,18 +129,6 @@ same projection from the same declaration: `register_selector_tool(spec=...)`
 and `register_service_tool(spec=...)` read the spec's `field_audiences` as
 `register_specs` does.
 
-A chain has no spec of its own to declare them on, so `register_chain_tool`
-takes them as an
-[`OfflineContract`][rest_framework_services.types.offline_contract.OfflineContract]:
-
-```python
-server.register_chain_tool(
-    name="lookup_and_bill",
-    steps=[...],
-    agent_contract=OfflineContract(field_audiences={"etag": FieldMarking()}),
-)
-```
-
 On `register_selector_tool`, `register_service_tool` and as a `register_specs`
 override, `agent_contract=` is deprecated and warns: it declares at the mount
 what the spec declares itself, and replaces the spec's declaration outright
@@ -158,10 +146,7 @@ thing you find in a transcript weeks later.
     necessarily ready — but it means a mistyped override reaches a request. A
     smoke test that lists your tools once catches it at deploy time.
 
-## Chains and pagination
-
-A chain renders each step through its own spec, so each step is projected by
-**its own** serializer's markings rather than the output step's.
+## Pagination
 
 For a paginated list the projection lands on the items, never on the envelope —
 `page`, `totalPages` and `hasNext` are this server's keys and belong to no

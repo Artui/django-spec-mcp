@@ -7,17 +7,17 @@ from typing import Any
 import pytest
 from django.http import HttpRequest
 
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.constants import UI_META_KEY, UI_RESOURCE_MIME_TYPE, JsonRpcErrorCode
-from rest_framework_mcp.handlers.handle_resources_list import handle_resources_list
-from rest_framework_mcp.handlers.handle_resources_read import handle_resources_read
-from rest_framework_mcp.handlers.handle_resources_read_async import handle_resources_read_async
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.registry.types.ui_csp import UICsp
-from rest_framework_mcp.registry.types.ui_resource_meta import UIResourceMeta
-from rest_framework_mcp.server.mcp_server import MCPServer
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.constants import UI_META_KEY, UI_RESOURCE_MIME_TYPE, JsonRpcErrorCode
+from django_spec_mcp.handlers.handle_resources_list import handle_resources_list
+from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
+from django_spec_mcp.handlers.handle_resources_read_async import handle_resources_read_async
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.registry.types.ui_csp import UICsp
+from django_spec_mcp.registry.types.ui_resource_meta import UIResourceMeta
+from django_spec_mcp.server.mcp_server import MCPServer
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 
 VIEW = "<!doctype html><h1>Invoices</h1>"
 URI = "ui://invoices/table.html"
@@ -116,8 +116,8 @@ class TestListing:
         assert server.resources.templates() == []
 
     def test_guarding_a_view_hides_it_from_the_listing(self, settings: Any) -> None:
-        settings.REST_FRAMEWORK_MCP = {
-            **settings.REST_FRAMEWORK_MCP,
+        settings.SPEC_MCP = {
+            **settings.SPEC_MCP,
             "FILTER_LISTINGS_BY_PERMISSIONS": True,
         }
 
