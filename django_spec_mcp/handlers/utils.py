@@ -88,9 +88,11 @@ def apply_tool_server_arguments(binding: Any, arguments: dict[str, Any]) -> dict
     ``same_arguments`` compares, so a task worker replaying the arguments this
     already applied logs nothing a second time. One arc to coverage: without
     the withheld condition a withheld ``"null"`` goes unlogged
-    (``test_the_bound_project_wins_and_the_withheld_sibling_is_dropped``), and
-    without the comparison a caller restating the bound value is logged
-    (``test_a_caller_restating_the_bound_value_is_not_logged``).
+    (``test_the_bound_project_wins_and_the_withheld_sibling_is_dropped`` on a
+    drfs tool, ``test_the_bound_value_wins_and_the_withheld_one_is_dropped`` on a
+    kernel one), and without the comparison a caller restating the bound value is
+    logged (``test_a_caller_restating_the_bound_value_is_not_logged`` and
+    ``test_a_caller_restating_a_bound_value_with_another_is_logged_once``).
 
     A binding that binds nothing gets its arguments back untouched, the same
     object, without the kernel's rule being run

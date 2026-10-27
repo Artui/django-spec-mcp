@@ -1,122 +1,139 @@
-"""A spec drf-services refuses to compile is refused when its tool is registered.
+"""A kernel spec this server refuses on every listing or call is refused when registered.
 
-drf-services compiles a spec to the kernel's on first read, and refuses some
-declarations there (an output selector declaring ``preconditions``, a ``reads``
-entry named after a seed). Registration did not compile, so such a spec
-registered and the refusal arrived later, at the first read: on ``tools/list``,
-whose operation-condition pass compiles every service tool's spec
-(``operation_affordances``), it took the whole listing down for every tool on
-the server, and on ``tools/call`` it failed each call. The registrars compile
-the spec as their last step, after this package's own checks, so drf-services'
-refusal is the startup error and this package's own wording still wins where
-both would refuse.
+A presenter whose markings cannot be projected, two fields marked as the
+record's label say, is refused by the kernel as the projection is derived, and
+the listing derives it for every tool: such a tool registered, and then
+``tools/list`` raised for every tool on the server and each call failed.
+Registration derives the projection, so the refusal names the tool at startup.
+
+A kernel spec is checked as it is constructed, so most of what drf-services
+refused only when it compiled a spec on first read (an output selector
+declaring ``preconditions``, a ``reads`` entry the dispatcher seeds, such as
+``user``) never reaches a registrar. One refusal still arrives late: a read
+named after a seed this server's calls carry, the call's own ``request`` and
+``view`` or a seed registered on ``pool_seeds=``. The kernel refuses it at
+dispatch, so the tool registers and fails every call with
+``ImproperlyConfigured``; it is listed with the read as an argument for
+``request`` and ``view``, but a read named after a registered seed is absent
+from the ``inputSchema``, since a seed answers it. Registration should refuse
+it.
+
+The kernel decides which reads a seed may share a name with (a ``reflected``
+read, a top-level Validator field) in ``dispatch.utils.seed_named_parameters``,
+which it does not export, and every local copy of such a reader has drifted
+from dispatch, so the refusal waits on that export and the tests are strict
+xfails until then.
+
+The drf-services original is kept beside this file as
+``test_registration_compiles_the_spec_drfs.py``; its ``QueryParam`` and
+``field_audiences`` cases have no kernel counterpart, because a kernel spec
+declares reads with ``Parameter`` and carries its markings on its presenter.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from dataclasses import dataclass
+from typing import Annotated, Any
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
-from django_service_specs import FieldMarking, SelectorKind
-from rest_framework.permissions import AllowAny
-from rest_framework_services import QueryParam, SelectorSpec, ServiceSpec
+from django_service_specs import (
+    DEFAULT_POOL_SEEDS,
+    DataclassPresenter,
+    FieldMarking,
+    Parameter,
+    Parameters,
+    SelectorKind,
+    SelectorSpec,
+    Unrestricted,
+)
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 
-_NESTED_PRECONDITIONS = "output_selector_spec declares preconditions"
+_AWAITS_THE_KERNEL = (
+    "the kernel's seed_named_parameters is not exported; registration calls it "
+    "for every kernel tool once it is"
+)
+
+
+@dataclass
+class _Row:
+    pk: int
+
+
+def _rows() -> list[_Row]:
+    return [_Row(pk=1)]
 
 
 def _server() -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    return MCPServer(
+        name="t",
+        auth_backend=AllowAnyBackend(),
+        session_store=None,
+        pool_seeds=DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme"),
+    )
 
 
-def _noop() -> None:
-    return None
+def _spec(read: str) -> SelectorSpec:
+    return SelectorSpec(
+        kind=SelectorKind.LIST,
+        selector=_rows,
+        reads=Parameters([Parameter(read, "string", required=False)]),
+        permissions=[Unrestricted()],
+        presenter=DataclassPresenter(_Row),
+    )
 
 
-def _rows() -> list[Any]:
+@pytest.mark.xfail(strict=True, reason=_AWAITS_THE_KERNEL)
+@pytest.mark.parametrize("read", ["request", "view", "tenant"])
+def test_a_read_a_seed_occupies_is_refused_at_registration(read: str) -> None:
+    server = _server()
+    with pytest.raises(ImproperlyConfigured, match=rf"'sel'.*\['{read}'\]"):
+        server.register_tool(_spec(read), name="sel", description="d", paginate=True)
+    assert "sel" not in server.tools
+
+
+def test_a_read_named_otherwise_registers_and_is_called() -> None:
+    server = _server()
+    server.register_tool(_spec("serializer"), name="sel", description="d", paginate=True)
+    result = server.call_tool("sel", {"serializer": "x"}, user=None)
+    assert result.is_error is False
+
+
+@dataclass
+class _TwoLabels:
+    pk: Annotated[int, FieldMarking.label()]
+    number: Annotated[str, FieldMarking.label()]
+
+
+def _two_labels() -> list[_TwoLabels]:
     return []
 
 
-def _refused_service_spec() -> ServiceSpec:
-    # A nested selector's preconditions never run, and drf-services refuses
-    # them when it compiles the spec.
-    return ServiceSpec(
-        service=_noop,
-        atomic=False,
-        permission_classes=[AllowAny],
-        output_selector_spec=SelectorSpec(
-            kind=SelectorKind.LIST, selector=_rows, preconditions=[lambda **_: None]
-        ),
-    )
-
-
-def _good_service_spec() -> ServiceSpec:
-    return ServiceSpec(service=_noop, atomic=False, permission_classes=[AllowAny])
-
-
-def test_a_service_tool_drf_services_cannot_compile_is_refused_at_registration() -> None:
-    server = _server()
-
-    with pytest.raises(ImproperlyConfigured, match=_NESTED_PRECONDITIONS) as caught:
-        server.register_service_tool(name="svc", spec=_refused_service_spec())
-
-    # drf-services' message names the spec, never the tool, so the registrar
-    # names it: a server registering many tools needs to find the one at fault.
-    assert str(caught.value).startswith("Tool 'svc': ")
-    assert server.tools.get("svc") is None
-
-
-def test_the_listing_of_the_rest_of_the_server_survives_the_refusal() -> None:
-    # The hazard the refusal closes: registered, the spec took ``tools/list``
-    # down for every other tool too.
-    server = _server()
-    server.register_service_tool(name="good", spec=_good_service_spec())
-    with pytest.raises(ImproperlyConfigured):
-        server.register_service_tool(name="svc", spec=_refused_service_spec())
-
-    listed: Any = server.list_tools(user=None)
-
-    assert [tool["name"] for tool in listed["tools"]] == ["good"]
-
-
-def test_a_selector_tool_drf_services_cannot_compile_is_refused_at_registration() -> None:
-    # drf-services refuses ``field_audiences`` with no output serializer to
-    # mark when it compiles. A read named after a seed is no longer the case
-    # to hold this with: the registrar routes the spec's reads, so this
-    # package's own channel check refuses that name first, in its own words.
+def test_a_presenter_whose_markings_cannot_project_is_refused_at_registration() -> None:
     server = _server()
     spec = SelectorSpec(
         kind=SelectorKind.LIST,
-        selector=_rows,
-        permission_classes=[AllowAny],
-        field_audiences={"label": FieldMarking()},
+        selector=_two_labels,
+        presenter=DataclassPresenter(_TwoLabels),
+        permissions=[Unrestricted()],
     )
-
-    with pytest.raises(
-        ImproperlyConfigured, match=r"field_audiences and no output serializer"
-    ) as caught:
-        server.register_selector_tool(name="sel", spec=spec)
-
-    assert str(caught.value).startswith("Tool 'sel': ")
-    assert server.tools.get("sel") is None
+    with pytest.raises(ImproperlyConfigured, match=r"MCP tool 'two': .*A record has one name"):
+        server.register_tool(spec, name="two", description="d", paginate=True)
+    assert "two" not in server.tools
+    # The rest of the server still lists.
+    server.register_tool(_spec("status"), name="other", description="d", paginate=True)
+    assert [tool["name"] for tool in server.list_tools(user=None)["tools"]] == ["other"]
 
 
-def test_a_specs_read_named_after_a_seed_is_refused_in_this_packages_words() -> None:
-    # The spec's own reads are channels this server routes, so they are held to
-    # the reserved names a mount's ``query_params`` is, before drf-services
-    # compiles the spec.
+@pytest.mark.parametrize(("read", "listed"), [("request", True), ("view", True), ("tenant", False)])
+def test_a_read_a_seed_occupies_is_listed_only_for_request_and_view(
+    read: str, listed: bool
+) -> None:
+    """The module docstring's claim about the ``inputSchema`` of each late-refused read."""
     server = _server()
-    spec = SelectorSpec(
-        kind=SelectorKind.LIST,
-        selector=_rows,
-        permission_classes=[AllowAny],
-        reads=[QueryParam("user")],
-    )
-
-    with pytest.raises(ImproperlyConfigured, match=r"collide with reserved transport keys"):
-        server.register_selector_tool(name="sel", spec=spec)
-
-    assert server.tools.get("sel") is None
+    server.register_tool(_spec(read), name="sel", description="d", paginate=True)
+    tools: Any = server.list_tools(user=None)["tools"]
+    (schema,) = (tool["inputSchema"] for tool in tools)
+    assert (read in schema["properties"]) is listed

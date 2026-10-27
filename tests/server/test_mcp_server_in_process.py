@@ -1,68 +1,84 @@
-"""``MCPServer.list_tools`` / ``acall_tool`` — the public in-process transport.
+"""``MCPServer.list_tools`` / ``acall_tool``, the public in-process transport, over kernel specs.
 
-The full-transport in-process surface (distinct from the spec-core
-:meth:`MCPServer.call_tool`): tool listing with the merged ``inputSchema`` +
-per-caller listing filter + pagination, and tool execution with the
-transport-level MCP permissions / rate limits, the selector post-fetch pipeline
-(filter / order / paginate) — none of which the spec core applies. These tests prove the methods delegate to the wire handlers (the
-behaviour itself is covered exhaustively under ``tests/handlers/``) and build the
-call context correctly off-HTTP.
+The full-transport in-process surface (distinct from :meth:`MCPServer.call_tool`):
+tool listing with the merged ``inputSchema``, the per-caller listing filter and
+pagination, and tool execution with the transport's scope gate and the read
+pipeline's pagination. These tests prove the methods delegate to the wire
+handlers (the behaviour itself is covered under ``tests/handlers/``) and build
+the call context correctly off-HTTP.
+
+The drf-services original is kept beside this file as
+``test_mcp_server_in_process_drfs.py``. Three of its questions change shape on
+the kernel: ordering came from a ``filter_set``'s ``OrderingFilter``, which a
+kernel spec does not have, so the read extras asked here are pagination alone;
+the transport-level ``MCPPermission`` gate is the ``scopes=`` gate; and a DRF
+``permission_classes`` denial is the kernel spec's own ``PermissionCheck``. The
+DB-backed listing permission (``DjangoPermRequired``) has no kernel binding
+counterpart, because a kernel binding's only listing gate is its scopes, which
+read the token and never the database.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-import django_filters
 import pytest
+from asgiref.sync import sync_to_async
 from django.http import HttpRequest
-from django_service_specs import SelectorKind
-from rest_framework.permissions import BasePermission
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_service_specs import (
+    DataclassPresenter,
+    DataclassValidator,
+    Parameter,
+    Parameters,
+    PermissionCheck,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+)
 
 from django_spec_mcp import JsonRpcError, JsonRpcErrorCode, MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.auth.permissions.django_perm_required import DjangoPermRequired
-from django_spec_mcp.auth.permissions.scope_required import ScopeRequired
 from django_spec_mcp.conf import get_setting
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
+from tests.testapp.kernel_shapes import InvoiceInput, InvoiceOutput
 from tests.testapp.models import Invoice
-from tests.testapp.serializers import InvoiceInputSerializer, InvoiceOutputSerializer
+from tests.testapp.services import invoice_by_pk, record_invoice
 
-
-class OrderedInvoiceFilterSet(django_filters.FilterSet):
-    """Ordering's only declaration channel — an ``OrderingFilter`` on the spec's
-    ``filter_set``, publishing the consumer-facing name rather than the ORM path."""
-
-    ordering = django_filters.OrderingFilter(fields=(("amount_cents", "amount"),))
-
-    class Meta:
-        model = Invoice
-        fields: list[str] = []
+OPEN = [Unrestricted()]
 
 
 def _server() -> MCPServer:
     return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore())
 
 
-class _Deny:
-    def has_permission(self, request: Any, token: Any) -> bool:  # noqa: ARG002
-        return False
-
-    def required_scopes(self) -> list[str]:
-        return ["x"]
-
-
-class _DenyAllSpecPerm(BasePermission):
-    """A DRF spec-level ``permission_classes`` entry that denies at class level."""
-
-    def has_permission(self, request: Any, view: Any) -> bool:  # noqa: ARG002
+class _Deny(PermissionCheck):
+    def has_permission(self, *args: Any, **kwargs: Any) -> bool:
         return False
 
 
-def _list_invoices() -> Any:
-    return Invoice.objects.all()
+def _create(**kwargs: Any) -> ServiceSpec:
+    return ServiceSpec(
+        service=record_invoice,
+        validator=DataclassValidator(InvoiceInput),
+        presenter=DataclassPresenter(InvoiceOutput),
+        permissions=OPEN,
+        **kwargs,
+    )
+
+
+def _invoices_cheapest_first(*, number_prefix: str = "") -> Any:
+    return Invoice.objects.filter(number__startswith=number_prefix).order_by("amount_cents")
+
+
+def _list() -> SelectorSpec:
+    return SelectorSpec(
+        kind=SelectorKind.LIST,
+        selector=_invoices_cheapest_first,
+        reads=Parameters([Parameter("number_prefix", "string", required=False)]),
+        presenter=DataclassPresenter(InvoiceOutput),
+        permissions=OPEN,
+    )
 
 
 # ----- list_tools -----
@@ -70,32 +86,21 @@ def _list_invoices() -> Any:
 
 def test_list_tools_returns_the_merged_input_schema() -> None:
     server = _server()
-    server.register_selector_tool(
-        name="invoices.list",
-        spec=SelectorSpec(
-            kind=SelectorKind.LIST,
-            selector=_list_invoices,
-            output_serializer=InvoiceOutputSerializer,
-            filter_set=OrderedInvoiceFilterSet,
-        ),
-        paginate=True,
-    )
+    server.register_tool(_list(), name="invoices.list", description="d", paginate=True)
     payload = server.list_tools(user=None)
     assert isinstance(payload, dict)
     (tool,) = payload["tools"]
     assert tool["name"] == "invoices.list"
-    # The wire's merged schema, not the bare serializer: a paginated selector
-    # over an ordering FilterSet advertises ``ordering`` (from the reflected
-    # filter) plus ``page`` / ``limit`` (from the binding's own knob).
-    props = tool["inputSchema"]["properties"]
-    assert {"ordering", "page", "limit"} <= set(props)
+    # The wire's merged schema: the spec's own read plus ``page`` / ``limit``
+    # from the binding's pagination knob.
+    assert set(tool["inputSchema"]["properties"]) == {"number_prefix", "page", "limit"}
 
 
-def test_list_tools_paginates_with_an_opaque_cursor(settings) -> None:
-    settings.SPEC_MCP = {"REQUIRE_TOOL_PERMISSIONS": False, "PAGE_SIZE": 1}
+def test_list_tools_paginates_with_an_opaque_cursor(settings: Any) -> None:
+    settings.SPEC_MCP = {"PAGE_SIZE": 1}
     server = _server()
     for name in ("a", "b"):
-        server.register_service_tool(name=name, spec=ServiceSpec(service=lambda: None))
+        server.register_tool(_create(), name=name, description="d")
 
     first = server.list_tools(user=None)
     assert isinstance(first, dict)
@@ -110,21 +115,15 @@ def test_list_tools_paginates_with_an_opaque_cursor(settings) -> None:
 
 
 def test_list_tools_bad_cursor_is_a_jsonrpc_error() -> None:
-    server = _server()
-    result = server.list_tools("not-a-real-cursor", user=None)
+    result = _server().list_tools("not-a-real-cursor", user=None)
     assert isinstance(result, JsonRpcError)
     assert result.code == JsonRpcErrorCode.INVALID_PARAMS
 
 
-def test_list_tools_filters_by_listing_permissions(settings) -> None:
-    settings.SPEC_MCP = {
-        "REQUIRE_TOOL_PERMISSIONS": False,
-        "FILTER_LISTINGS_BY_PERMISSIONS": True,
-    }
+def test_list_tools_filters_by_the_scope_gate(settings: Any) -> None:
+    settings.SPEC_MCP = {"FILTER_LISTINGS_BY_PERMISSIONS": True}
     server = _server()
-    server.register_service_tool(
-        name="hidden", spec=ServiceSpec(service=lambda: None), permissions=[_Deny()]
-    )
+    server.register_tool(_create(), name="hidden", description="d", scopes=("x",))
     payload = server.list_tools(user=None)
     assert isinstance(payload, dict)
     assert payload["tools"] == []
@@ -136,16 +135,7 @@ def test_list_tools_filters_by_listing_permissions(settings) -> None:
 @pytest.mark.django_db(transaction=True)
 async def test_acall_tool_runs_a_service_tool() -> None:
     server = _server()
-    server.register_service_tool(
-        name="invoices.create",
-        spec=ServiceSpec(
-            service=lambda *, data: Invoice.objects.create(**data),
-            input_serializer=InvoiceInputSerializer,
-            output_selector_spec=SelectorSpec(
-                kind=SelectorKind.RETRIEVE, output_serializer=InvoiceOutputSerializer
-            ),
-        ),
-    )
+    server.register_tool(_create(), name="invoices.create", description="d")
     out = await server.acall_tool(
         "invoices.create", {"number": "A-1", "amount_cents": 100}, user=None
     )
@@ -154,62 +144,48 @@ async def test_acall_tool_runs_a_service_tool() -> None:
 
 
 @pytest.mark.django_db(transaction=True)
-async def test_acall_tool_applies_read_extras_the_spec_core_omits() -> None:
-    """Ordering + pagination — the read-shaped transport extras ``call_tool``
-    (spec core) does not layer on — apply through ``acall_tool``."""
-    from asgiref.sync import sync_to_async
+async def test_acall_tool_applies_the_read_pipelines_pagination() -> None:
+    """Pagination, the read-shaped extra ``call_tool`` layers on too, applies
+    through ``acall_tool`` beside the spec's own read."""
 
     @sync_to_async
     def _setup() -> None:
-        for number, cents in (("A", 300), ("B", 100), ("C", 200)):
+        for number, cents in (("A", 300), ("B", 100), ("C", 200), ("X", 50)):
             Invoice.objects.create(number=number, amount_cents=cents)
 
     await _setup()
     server = _server()
-    server.register_selector_tool(
-        name="invoices.list",
-        spec=SelectorSpec(
-            kind=SelectorKind.LIST,
-            selector=_list_invoices,
-            output_serializer=InvoiceOutputSerializer,
-            filter_set=OrderedInvoiceFilterSet,
-        ),
-        paginate=True,
-    )
-    out = await server.acall_tool(
-        "invoices.list", {"ordering": "amount", "page": 1, "limit": 2}, user=None
-    )
+    server.register_tool(_list(), name="invoices.list", description="d", paginate=True)
+    out = await server.acall_tool("invoices.list", {"page": 1, "limit": 2}, user=None)
     assert isinstance(out, dict)
     payload = out["structuredContent"]
     assert payload["totalPages"] == 2
-    assert [item["number"] for item in payload["items"]] == ["B", "C"]
+    assert [item["number"] for item in payload["items"]] == ["X", "B"]
 
 
-async def test_acall_tool_enforces_mcp_permissions() -> None:
-    """Transport-level MCP permissions — which the spec core does not consult —
-    gate ``acall_tool``."""
+async def test_acall_tool_enforces_the_scope_gate() -> None:
+    """The transport's scope gate, which the spec's permissions know nothing of,
+    gates ``acall_tool``."""
     server = _server()
-    server.register_service_tool(
-        name="locked", spec=ServiceSpec(service=lambda: None), permissions=[_Deny()]
-    )
-    result = await server.acall_tool("locked", {}, user=None)
+    server.register_tool(_create(), name="locked", description="d", scopes=("x",))
+    result = await server.acall_tool("locked", {"number": "A"}, user=None)
     assert isinstance(result, JsonRpcError)
     assert result.code == JsonRpcErrorCode.FORBIDDEN
 
 
 @pytest.mark.django_db(transaction=True)
-async def test_acall_tool_enforces_selector_spec_permissions() -> None:
-    """Regression guard: a selector spec's ``permission_classes`` are
-    wrapped into ``binding.permissions`` at registration, so the wire path
-    (unlike the pre-fix spec-core ``call_tool``) has always denied them."""
+async def test_acall_tool_enforces_the_selector_specs_permissions() -> None:
     server = _server()
-    server.register_selector_tool(
-        name="secret",
-        spec=SelectorSpec(
+    server.register_tool(
+        SelectorSpec(
             kind=SelectorKind.RETRIEVE,
-            selector=lambda **_: {"leaked": True},
-            permission_classes=[_DenyAllSpecPerm],
+            selector=invoice_by_pk,
+            reads=Parameters([Parameter("pk", "integer", required=True)]),
+            presenter=DataclassPresenter(InvoiceOutput),
+            permissions=[_Deny()],
         ),
+        name="secret",
+        description="d",
     )
     result = await server.acall_tool("secret", {"pk": 1}, user=None)
     assert isinstance(result, JsonRpcError)
@@ -217,10 +193,9 @@ async def test_acall_tool_enforces_selector_spec_permissions() -> None:
 
 
 async def test_acall_tool_unknown_tool_is_a_jsonrpc_error() -> None:
-    # ``arguments`` omitted (defaults to ``None`` → ``{}``) and ``request`` omitted
-    # (a context is synthesised) — the bare-minimum call shape.
-    server = _server()
-    result = await server.acall_tool("nope", user=None)
+    # ``arguments`` omitted (defaults to ``None`` then ``{}``) and ``request``
+    # omitted (a context is synthesised): the bare-minimum call shape.
+    result = await _server().acall_tool("nope", user=None)
     assert isinstance(result, JsonRpcError)
     assert result.code == JsonRpcErrorCode.INVALID_PARAMS
 
@@ -263,17 +238,10 @@ def test_call_context_carries_scopes() -> None:
     assert server._call_context(user=None, scopes=["a", "b"]).token.scopes == ("a", "b")
 
 
-def test_list_tools_scopes_reveal_a_scope_gated_tool(settings) -> None:
-    settings.SPEC_MCP = {
-        "REQUIRE_TOOL_PERMISSIONS": False,
-        "FILTER_LISTINGS_BY_PERMISSIONS": True,
-    }
+def test_list_tools_scopes_reveal_a_scope_gated_tool(settings: Any) -> None:
+    settings.SPEC_MCP = {"FILTER_LISTINGS_BY_PERMISSIONS": True}
     server = _server()
-    server.register_service_tool(
-        name="gated",
-        spec=ServiceSpec(service=lambda: None),
-        permissions=[ScopeRequired(["invoices:read"])],
-    )
+    server.register_tool(_create(), name="gated", description="d", scopes=("invoices:read",))
     # Without the scope the gated tool is invisible; supplying it reveals the tool.
     assert server.list_tools(user=None)["tools"] == []  # type: ignore[index]
     revealed = server.list_tools(user=None, scopes=["invoices:read"])
@@ -284,15 +252,13 @@ def test_list_tools_scopes_reveal_a_scope_gated_tool(settings) -> None:
 @pytest.mark.django_db(transaction=True)
 async def test_acall_tool_scopes_allow_a_scope_gated_call() -> None:
     server = _server()
-    server.register_service_tool(
-        name="gated",
-        spec=ServiceSpec(service=lambda: {"ok": True}),
-        permissions=[ScopeRequired(["invoices:write"])],
-    )
-    denied = await server.acall_tool("gated", {}, user=None)
+    server.register_tool(_create(), name="gated", description="d", scopes=("invoices:write",))
+    denied = await server.acall_tool("gated", {"number": "A"}, user=None)
     assert isinstance(denied, JsonRpcError)
     assert denied.code == JsonRpcErrorCode.FORBIDDEN
-    allowed = await server.acall_tool("gated", {}, user=None, scopes=["invoices:write"])
+    allowed = await server.acall_tool(
+        "gated", {"number": "A"}, user=None, scopes=["invoices:write"]
+    )
     assert isinstance(allowed, dict)
     assert allowed.get("isError") is not True
 
@@ -302,50 +268,14 @@ async def test_acall_tool_scopes_allow_a_scope_gated_call() -> None:
 
 async def test_alist_tools_mirrors_list_tools() -> None:
     server = _server()
-    server.register_service_tool(name="a", spec=ServiceSpec(service=lambda: None))
+    server.register_tool(_create(), name="a", description="d")
     assert await server.alist_tools(user=None) == server.list_tools(user=None)
 
 
-async def test_alist_tools_honors_scopes(settings) -> None:
-    settings.SPEC_MCP = {
-        "REQUIRE_TOOL_PERMISSIONS": False,
-        "FILTER_LISTINGS_BY_PERMISSIONS": True,
-    }
+async def test_alist_tools_honors_scopes(settings: Any) -> None:
+    settings.SPEC_MCP = {"FILTER_LISTINGS_BY_PERMISSIONS": True}
     server = _server()
-    server.register_service_tool(
-        name="gated",
-        spec=ServiceSpec(service=lambda: None),
-        permissions=[ScopeRequired(["s"])],
-    )
+    server.register_tool(_create(), name="gated", description="d", scopes=("s",))
     payload = await server.alist_tools(user=None, scopes=["s"])
     assert isinstance(payload, dict)
     assert [t["name"] for t in payload["tools"]] == ["gated"]
-
-
-@pytest.mark.django_db(transaction=True)
-async def test_alist_tools_runs_db_backed_listing_filter_off_the_loop(settings) -> None:
-    """The reason ``alist_tools`` exists: a DB-backed listing permission
-    (``DjangoPermRequired`` → ``user.has_perm``) raises ``SynchronousOnlyOperation``
-    when the sync ``list_tools`` reaches it from inside the event loop; the async
-    variant runs the whole filter in a thread."""
-    from asgiref.sync import sync_to_async
-    from django.contrib.auth import get_user_model
-    from django.core.exceptions import SynchronousOnlyOperation
-
-    settings.SPEC_MCP = {
-        "REQUIRE_TOOL_PERMISSIONS": False,
-        "FILTER_LISTINGS_BY_PERMISSIONS": True,
-    }
-    user = await sync_to_async(get_user_model().objects.create_user)(username="u")
-    server = _server()
-    server.register_service_tool(
-        name="admin",
-        spec=ServiceSpec(service=lambda: None),
-        permissions=[DjangoPermRequired("testapp.add_invoice")],
-    )
-    with pytest.raises(SynchronousOnlyOperation):
-        server.list_tools(user=user)
-    payload = await server.alist_tools(user=user)
-    assert isinstance(payload, dict)
-    # The user lacks the perm, so the tool is filtered out — but no exception.
-    assert payload["tools"] == []

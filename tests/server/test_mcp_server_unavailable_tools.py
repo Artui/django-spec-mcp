@@ -1,4 +1,4 @@
-"""``MCPServer.unavailable_tools`` and ``list_tools(include_unavailable=True)``.
+"""``MCPServer.unavailable_tools`` over kernel specs, and ``list_tools(include_unavailable=True)``.
 
 The two halves of what an in-process consumer needs to keep a model's tools in
 step with ``tools/list`` without re-listing every step: every definition once,
@@ -8,21 +8,34 @@ What these hold is agreement. A name is reported exactly when ``list_tools``
 omits it, with the condition that omitted it; a tool this caller may not see is
 never named; ``always_listed`` is never reported; and the async twin answers as
 the sync one does, taking no executor hop when no tool declares anything to ask.
+
+Asked of kernel specs, whose ``affordances`` are the kernel's own. The
+drf-services original is kept beside this file as
+``test_mcp_server_unavailable_tools_drfs.py``; its transport-level
+``MCPPermission`` that hides a tool from the caller is the ``scopes=`` gate
+here, the one listing gate a kernel binding carries.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
 from django.db.models import Q
-from django_service_specs import Affordance, SelectorKind, base_pool
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_service_specs import (
+    Affordance,
+    DataclassPresenter,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+    base_pool,
+)
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
-from tests.testapp.affordances import order_selector_spec
 from tests.testapp.models import Invoice
 
 _POOL = "django_spec_mcp.handlers.offered_tools.base_pool"
@@ -36,20 +49,43 @@ _OPEN = Affordance(code="books_open", reason="The books are open.", when=lambda:
 _ROW_ONLY = Affordance(code="never", reason="Matches no row.", when=Q(pk__in=[]))
 
 
-class _Deny:
-    def has_permission(self, request: Any, token: Any) -> bool:  # noqa: ARG002
-        return False
-
-    def required_scopes(self) -> list[str]:
-        return []
+_DENIED = object()
+"""Stands where the original's denying ``MCPPermission`` stood: a scope no caller holds."""
 
 
-def _service(*affordances: Affordance) -> ServiceSpec[Any, Any, Any]:
+@dataclass
+class _Order:
+    number: str
+
+
+def _ran() -> dict[str, str]:
+    return {"status": "ran"}
+
+
+def _service(*affordances: Affordance) -> ServiceSpec:
     return ServiceSpec(
-        service=lambda **_: {"status": "ran"},
-        atomic=False,
-        affordances=list(affordances) or None,
+        service=_ran, permissions=[Unrestricted()], affordances=list(affordances) or None
     )
+
+
+def order_selector_spec(kind: SelectorKind) -> SelectorSpec:
+    """A selector rendering one order and projecting ``cancel``, another operation."""
+    return SelectorSpec(
+        kind=kind,
+        selector=lambda: _Order(number="A-1"),
+        presenter=DataclassPresenter(_Order),
+        permissions=[Unrestricted()],
+        affordances={"cancel": _service(_CLOSED)},
+    )
+
+
+def _register(
+    server: MCPServer, *, name: str, spec: Any, permissions: list[Any], **knobs: Any
+) -> None:
+    """The original's ``register_*_tool(name=, spec=, permissions=)`` call, on ``register_tool``."""
+    if permissions:
+        knobs["scopes"] = ("denied",)
+    server.register_tool(spec, name=name, description="d", **knobs)
 
 
 def _server(**config: Any) -> MCPServer:
@@ -95,15 +131,15 @@ def _hop_spy(monkeypatch: pytest.MonkeyPatch) -> list[Any]:
 
 def _every_kind(server: MCPServer) -> None:
     """One of each thing a pass can meet, in an order that interleaves the answers."""
-    server.register_service_tool(name="post_entry", spec=_service(), permissions=[])
-    server.register_service_tool(name="close_books", spec=_service(_CLOSED), permissions=[])
-    server.register_service_tool(name="open_books", spec=_service(_OPEN), permissions=[])
-    server.register_service_tool(
-        name="reopen_books", spec=_service(_CLOSED), permissions=[], always_listed=True
+    _register(server, name="post_entry", spec=_service(), permissions=[])
+    _register(server, name="close_books", spec=_service(_CLOSED), permissions=[])
+    _register(server, name="open_books", spec=_service(_OPEN), permissions=[])
+    _register(
+        server, name="reopen_books", spec=_service(_CLOSED), permissions=[], always_listed=True
     )
-    server.register_service_tool(name="void_invoice", spec=_service(_ROW_ONLY), permissions=[])
-    server.register_selector_tool(
-        name="get_order", spec=order_selector_spec(SelectorKind.RETRIEVE), permissions=[]
+    _register(server, name="void_invoice", spec=_service(_ROW_ONLY), permissions=[])
+    _register(
+        server, name="get_order", spec=order_selector_spec(SelectorKind.RETRIEVE), permissions=[]
     )
 
 
@@ -142,8 +178,8 @@ def test_always_listed_is_never_reported() -> None:
     """It is never left out, so there is nothing to explain; its condition is
     still enforced at the call."""
     server = _server()
-    server.register_service_tool(
-        name="reopen_books", spec=_service(_CLOSED), permissions=[], always_listed=True
+    _register(
+        server, name="reopen_books", spec=_service(_CLOSED), permissions=[], always_listed=True
     )
 
     assert _listed(server) == ["reopen_books"]
@@ -153,7 +189,8 @@ def test_always_listed_is_never_reported() -> None:
 def test_the_answer_is_asked_again_on_every_call() -> None:
     books: dict[str, bool] = {"open": False}
     server = _server()
-    server.register_service_tool(
+    _register(
+        server,
         name="close_books",
         spec=_service(
             Affordance(code="books_closed", reason="Closed.", when=lambda: books["open"])
@@ -177,7 +214,7 @@ def test_a_tool_hidden_from_the_caller_is_never_named(monkeypatch: pytest.Monkey
     it, and naming it would tell another principal it exists."""
     built = _pool_spy(monkeypatch)
     server = _server(filter_listings_by_permissions=True)
-    server.register_service_tool(name="close_books", spec=_service(_CLOSED), permissions=[_Deny()])
+    _register(server, name="close_books", spec=_service(_CLOSED), permissions=[_DENIED])
 
     assert server.unavailable_tools(user=None) == {}
     assert built == []
@@ -187,7 +224,7 @@ def test_with_the_permission_filter_off_every_tool_is_answered() -> None:
     """The flag is off by default, and then the listing shows the tool to anyone;
     what it omits for an unmet condition is reported whatever its permissions."""
     server = _server()
-    server.register_service_tool(name="close_books", spec=_service(_CLOSED), permissions=[_Deny()])
+    _register(server, name="close_books", spec=_service(_CLOSED), permissions=[_DENIED])
 
     assert server.unavailable_tools(user=None) == {"close_books": _CLOSED}
 
@@ -202,8 +239,8 @@ def test_include_unavailable_lists_every_tool_and_asks_nothing(
     over tools declaring nothing."""
     built = _pool_spy(monkeypatch)
     server = _server()
-    server.register_service_tool(name="close_books", spec=_service(_CLOSED), permissions=[])
-    server.register_service_tool(name="open_books", spec=_service(_OPEN), permissions=[])
+    _register(server, name="close_books", spec=_service(_CLOSED), permissions=[])
+    _register(server, name="open_books", spec=_service(_OPEN), permissions=[])
 
     listing: Any = server.list_tools(user=None, include_unavailable=True)
 
@@ -214,22 +251,22 @@ def test_include_unavailable_lists_every_tool_and_asks_nothing(
 
 def test_include_unavailable_still_applies_the_permission_filter() -> None:
     server = _server(filter_listings_by_permissions=True)
-    server.register_service_tool(name="close_books", spec=_service(_CLOSED), permissions=[_Deny()])
-    server.register_service_tool(name="open_books", spec=_service(_OPEN), permissions=[])
+    _register(server, name="close_books", spec=_service(_CLOSED), permissions=[_DENIED])
+    _register(server, name="open_books", spec=_service(_OPEN), permissions=[])
 
     assert _listed(server, include_unavailable=True) == ["open_books"]
 
 
 def test_the_default_listing_still_leaves_unavailable_tools_out() -> None:
     server = _server()
-    server.register_service_tool(name="close_books", spec=_service(_CLOSED), permissions=[])
+    _register(server, name="close_books", spec=_service(_CLOSED), permissions=[])
 
     assert _listed(server) == []
 
 
 async def test_alist_tools_passes_include_unavailable_through() -> None:
     server = _server()
-    server.register_service_tool(name="close_books", spec=_service(_CLOSED), permissions=[])
+    _register(server, name="close_books", spec=_service(_CLOSED), permissions=[])
 
     everything: Any = await server.alist_tools(user=None, include_unavailable=True)
     offered: Any = await server.alist_tools(user=None)
@@ -257,13 +294,13 @@ async def test_a_server_declaring_nothing_to_ask_answers_without_a_hop(
     ``always_listed`` tool whose condition is never asked."""
     hops = _hop_spy(monkeypatch)
     server = _server()
-    server.register_service_tool(name="post_entry", spec=_service(), permissions=[])
-    server.register_service_tool(name="void_invoice", spec=_service(_ROW_ONLY), permissions=[])
-    server.register_selector_tool(
-        name="get_order", spec=order_selector_spec(SelectorKind.RETRIEVE), permissions=[]
+    _register(server, name="post_entry", spec=_service(), permissions=[])
+    _register(server, name="void_invoice", spec=_service(_ROW_ONLY), permissions=[])
+    _register(
+        server, name="get_order", spec=order_selector_spec(SelectorKind.RETRIEVE), permissions=[]
     )
-    server.register_service_tool(
-        name="reopen_books", spec=_service(_CLOSED), permissions=[], always_listed=True
+    _register(
+        server, name="reopen_books", spec=_service(_CLOSED), permissions=[], always_listed=True
     )
 
     assert await server.aunavailable_tools(user=None) == {}
@@ -273,8 +310,8 @@ async def test_a_server_declaring_nothing_to_ask_answers_without_a_hop(
 async def test_one_condition_to_ask_takes_the_hop(monkeypatch: pytest.MonkeyPatch) -> None:
     hops = _hop_spy(monkeypatch)
     server = _server()
-    server.register_service_tool(name="post_entry", spec=_service(), permissions=[])
-    server.register_service_tool(name="open_books", spec=_service(_OPEN), permissions=[])
+    _register(server, name="post_entry", spec=_service(), permissions=[])
+    _register(server, name="open_books", spec=_service(_OPEN), permissions=[])
 
     assert await server.aunavailable_tools(user=None) == {}
     assert len(hops) == 1
@@ -284,7 +321,8 @@ async def test_one_condition_to_ask_takes_the_hop(monkeypatch: pytest.MonkeyPatc
 async def test_a_condition_that_queries_is_asked_off_the_event_loop() -> None:
     """Asked on the loop, the query would raise ``SynchronousOnlyOperation``."""
     server = _server()
-    server.register_service_tool(
+    _register(
+        server,
         name="close_books",
         spec=_service(
             Affordance(

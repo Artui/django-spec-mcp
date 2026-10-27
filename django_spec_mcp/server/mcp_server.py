@@ -114,6 +114,7 @@ from django_spec_mcp.transport.types.sse_replay_buffer import SSEReplayBuffer
 from django_spec_mcp.types.jsonrpc_version import JSONRPC_VERSION
 from django_spec_mcp.types.notification_kind import NotificationKind
 from django_spec_mcp.types.output_format import OutputFormat
+from django_spec_mcp.types.reserved_post_fetch_keys import RESERVED_POST_FETCH_KEYS
 from django_spec_mcp.types.resource_edge_seeds import RESOURCE_EDGE_SEEDS
 from django_spec_mcp.types.resource_encoding import ResourceEncoding
 from django_spec_mcp.types.resource_updated_method import RESOURCE_UPDATED_METHOD
@@ -656,6 +657,8 @@ class MCPServer:
         name: str,
         description: str | None = None,
         title: str | None = None,
+        display_name: str | None = None,
+        display_description: str | None = None,
         icons: tuple[Icon, ...] = (),
         annotations: dict[str, Any] | None = None,
         meta: dict[str, Any] | None = None,
@@ -693,6 +696,17 @@ class MCPServer:
         refused: ``paginate`` / ``max_page_size`` on a service tool,
         ``invalidates`` on a selector tool.
 
+        A ``LIST`` selector tool registered without ``paginate=True`` warns
+        ``UnboundedListWarning``, and ``REQUIRE_LIST_PAGINATION`` refuses it. A
+        paginated one whose spec declares a read named ``page`` or ``limit`` is
+        refused, since the pagination takes both names from the arguments
+        before the selector runs. A presenter whose audience markings cannot be
+        projected (two labels, say) is refused naming the tool, rather than
+        failing every ``tools/list`` of the server.
+
+        ``display_name`` and ``display_description`` are labels for in-process
+        consumers, read off the binding and never sent on the wire.
+
         ``scopes`` are the OAuth scopes the caller's token must carry, every one
         of them; a token missing one is answered ``-32006`` with every declared
         scope in ``requiredScopes``, as a ``ScopeRequired`` permission answers.
@@ -718,6 +732,8 @@ class MCPServer:
             name=name,
             description=description,
             title=title,
+            display_name=display_name,
+            display_description=display_description,
             icons=icons,
             annotations=annotations,
             meta=meta,
@@ -749,6 +765,8 @@ class MCPServer:
         name: str,
         description: str | None = None,
         title: str | None = None,
+        display_name: str | None = None,
+        display_description: str | None = None,
         icons: tuple[Icon, ...] = (),
         annotations: dict[str, Any] | None = None,
         meta: dict[str, Any] | None = None,
@@ -788,6 +806,8 @@ class MCPServer:
             name=name,
             description=description,
             title=title,
+            display_name=display_name,
+            display_description=display_description,
             icons=icons,
             annotations=annotations,
             meta=merge_meta(ui_meta, meta),
@@ -808,6 +828,16 @@ class MCPServer:
             unknown_arguments=unknown_arguments,
             server_arguments=server_arguments,
         )
+        # Derived now rather than on first read: the listing derives it for
+        # every tool, so markings the kernel cannot project (two labels, say)
+        # would otherwise register and then take ``tools/list`` down for every
+        # tool on the server. The kernel's refusal does not name the tool, so
+        # this does
+        # (``test_a_presenter_whose_markings_cannot_project_is_refused_at_registration``).
+        try:
+            _ = binding.audience_projection
+        except ImproperlyConfigured as exc:
+            raise ImproperlyConfigured(f"MCP tool {binding.name!r}: {exc}") from exc
         # The spec's own permissions are the tool's guard; the scope gate on
         # ``binding.permissions`` is not one, so it is not what is counted.
         if check_kernel_spec_guarded(
@@ -816,8 +846,15 @@ class MCPServer:
             # Only this warning earns the spec its per-call grant; a binding
             # passed straight to ``tools.register`` is never marked.
             object.__setattr__(binding, "unguarded", True)
+        # ``register_tools`` reaches here through a generator and ``register_tool``
+        # directly, so the depth to the caller is counted rather than fixed; the
+        # extra level is the check's own frame.
+        caller_level = _caller_stacklevel() + 1
         check_tool_description_present(
-            binding.name, binding.description, require=self._config.require_tool_descriptions
+            binding.name,
+            binding.description,
+            require=self._config.require_tool_descriptions,
+            stacklevel=caller_level,
         )
         resolve_structured_output(
             include_output_schema_override=binding.include_output_schema,
@@ -826,6 +863,18 @@ class MCPServer:
             default_output_schema=self._config.include_output_schema,
             default_structured_content=self._config.include_structured_content,
         )
+        # LIST only, as on the drf-services path: a RETRIEVE selector returns
+        # one instance and a service has no kind, so neither has a page to
+        # bound (``test_retrieve_selector_is_exempt``,
+        # ``test_a_service_tool_is_exempt``).
+        if binding.kind is SelectorKind.LIST:
+            _refuse_pagination_named_reads(binding)
+            check_list_pagination_declared(
+                binding.name,
+                paginate=binding.paginate,
+                require=self._config.require_list_pagination,
+                stacklevel=caller_level,
+            )
         return binding
 
     def register_tools(
@@ -2383,7 +2432,10 @@ def _caller_stacklevel() -> int:
     level would blame this package for some of them. Counted from the frame
     that calls ``warnings.warn``, which is level 1
     (``test_each_mount_level_knob_warns_naming_its_replacement`` asserts the
-    caller's file).
+    caller's file). The kernel registrars' description and pagination warnings
+    count the same way, one level further for the check's own frame
+    (``test_the_warning_points_at_the_registering_line_not_this_package`` in the
+    undescribed and unbounded-list suites).
     """
     package = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + os.sep
     frame = sys._getframe(1)
@@ -2392,6 +2444,29 @@ def _caller_stacklevel() -> int:
         frame = frame.f_back
         level += 1
     return level
+
+
+def _refuse_pagination_named_reads(binding: KernelToolBinding) -> None:
+    """Refuse a paginated kernel LIST tool whose spec declares ``page`` or ``limit``.
+
+    The read pipeline owns both names on a tool that paginates: the listing
+    advertises them as the page and its size, and the call takes them from the
+    arguments before the selector runs, so a read of either name registered,
+    was advertised as the pipeline's integer and never received the caller's
+    value. Only under ``paginate=True``: an unpaginated LIST tool hands either
+    name to its selector as any read
+    (``test_an_unpaginated_list_tools_pagination_named_read_reaches_the_selector``).
+    """
+    if not binding.paginate:
+        return
+    taken = sorted(binding.spec.parameters().names() & RESERVED_POST_FETCH_KEYS)
+    if taken:
+        raise ImproperlyConfigured(
+            f"MCP tool {binding.name!r}: the spec declares the read(s) {taken!r}, but `page` "
+            "and `limit` belong to the pagination of a tool registered with paginate=True, "
+            "which takes them from the arguments before the selector is called, so the "
+            "read would never receive the caller's value. Rename the read."
+        )
 
 
 def _refuse_retired_argument_binding(name: str, argument_binding: ArgumentBinding) -> None:

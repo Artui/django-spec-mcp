@@ -1,4 +1,12 @@
-"""``register_tool``, ``register_tools`` and the kernel form of ``register_resource``."""
+"""``register_tool``, ``register_tools`` and the kernel form of ``register_resource``.
+
+The spine's file, asked of kernel specs throughout. Its one drf-services question,
+whether ``register_tool`` refuses a drf-services spec, becomes whether it refuses
+anything that is not a kernel spec, which is what holds once drf-services is gone.
+Its check that ``scopes=`` is refused on the drf-services ``selector=`` form of
+``register_resource`` is not carried, because that form goes with drf-services.
+The original is kept beside this file as ``test_register_kernel_specs_drfs.py``.
+"""
 
 from __future__ import annotations
 
@@ -19,8 +27,6 @@ from django_service_specs import (
     UnknownArguments,
     Unrestricted,
 )
-from rest_framework_services.types.selector_spec import SelectorSpec as DrfSelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec as DrfServiceSpec
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.permissions.scope_required import ScopeRequired
@@ -59,11 +65,11 @@ def _selector(kind: SelectorKind = SelectorKind.LIST) -> SelectorSpec:
 @pytest.mark.parametrize(
     "spec",
     [
-        DrfServiceSpec(service=record_invoice),
-        DrfSelectorSpec(kind=SelectorKind.LIST, selector=list_invoices),
         record_invoice,
+        object(),
+        RegisteredSpec(name="t", spec=ServiceSpec(service=record_invoice, permissions=OPEN)),
     ],
-    ids=["drfs-service", "drfs-selector", "callable"],
+    ids=["callable", "object", "registry-entry"],
 )
 def test_register_tool_refuses_anything_but_a_kernel_spec(spec: Any) -> None:
     with pytest.raises(TypeError, match="takes a django_service_specs ServiceSpec or SelectorSpec"):
@@ -184,6 +190,32 @@ def test_register_tools_registers_every_entry_with_its_overrides() -> None:
     assert all(isinstance(b, KernelToolBinding) for b in bindings)
 
 
+def test_a_registry_entry_and_a_direct_registration_are_the_same_tool() -> None:
+    """What ``tests/registry/test_register_tools_drfs.py`` asked of ``ToolDefinition``:
+    bulk registration is less boilerplate, never a different binding."""
+    knobs: dict[str, Any] = {"paginate": True, "title": "Invoices", "description": "All."}
+    registry = SpecRegistry([RegisteredSpec(name="invoices.list", spec=_selector())])
+    (bulk,) = _server().register_tools(registry, overrides={"invoices.list": knobs})
+    direct = _server().register_tool(
+        registry.get("invoices.list").spec, name="invoices.list", **knobs
+    )
+    assert bulk == direct
+
+
+def test_an_empty_registry_registers_nothing() -> None:
+    server = _server()
+    assert server.register_tools(SpecRegistry([])) == ()
+    assert len(server.tools) == 0
+
+
+def test_register_tools_refuses_a_name_the_server_already_holds() -> None:
+    server = _server()
+    server.register_tool(_service(), name="invoices.create", description="d")
+    registry = SpecRegistry([RegisteredSpec(name="invoices.create", spec=_service())])
+    with pytest.raises(ValueError, match=r"Duplicate MCP tool name\(s\): \['invoices.create'\]"):
+        server.register_tools(registry)
+
+
 def test_register_tools_refuses_an_override_for_a_name_it_does_not_hold() -> None:
     registry = SpecRegistry([RegisteredSpec(name="invoices.create", spec=_service())])
     with pytest.raises(ValueError, match="overrides name specs not in this SpecRegistry"):
@@ -226,7 +258,7 @@ def test_register_resource_refuses_an_empty_scope_tuple() -> None:
 @pytest.mark.parametrize(
     ("knob", "value"),
     [
-        ("selector", DrfSelectorSpec(kind=SelectorKind.LIST, selector=list_invoices)),
+        ("selector", object()),
         ("output_serializer", object),
         ("permissions", []),
         ("mime_type", "text/csv"),
@@ -243,16 +275,6 @@ def test_the_kernel_form_refuses_each_knob_of_the_selector_form(knob: str, value
 def test_register_resource_needs_a_spec_or_a_selector() -> None:
     with pytest.raises(TypeError, match="it was given neither"):
         _server().register_resource(name="r", uri_template="r://{pk}")
-
-
-def test_scopes_belong_to_the_kernel_form() -> None:
-    with pytest.raises(TypeError, match="scopes= belongs to the kernel form"):
-        _server().register_resource(
-            name="r",
-            uri_template="r://{pk}",
-            selector=DrfSelectorSpec(kind=SelectorKind.LIST, selector=list_invoices),
-            scopes=("a",),
-        )
 
 
 def test_a_kernel_resource_carries_its_scope_gate() -> None:

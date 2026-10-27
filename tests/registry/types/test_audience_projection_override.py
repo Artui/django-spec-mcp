@@ -1,62 +1,91 @@
-"""Per-tool ``field_audiences`` overrides on top of the serializer's markings."""
+"""A kernel tool's audience projection is its presenter's markings, derived once.
+
+The markings live in the presenter's dataclass, as ``Annotated`` extras on its
+fields (``AgentInvoiceOutput``, the kernel twin of ``AgentInvoiceSerializer``),
+and ``KernelToolBinding.audience_projection`` reads them with the kernel's own
+``audience_projection_for_spec``, so the projected payload and the advertised
+``outputSchema`` read the same markings.
+
+The drf-services original asked about per-tool ``field_audiences=`` overrides
+on top of a serializer's markings, and is kept beside this file as
+``test_audience_projection_override_drfs.py``. The override has no kernel
+counterpart: ``field_audiences`` is not one of the registration knobs a kernel
+tool keeps, because the markings are a fact of the output rather than of the
+MCP binding. A tool that needs what its neighbour hides presents through a
+dataclass of its own, which is asked below in the override's place, and so is
+the refusal of two labels, which the kernel makes as the projection is derived.
+"""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Annotated, Any
+
 import pytest
 from django.core.exceptions import ImproperlyConfigured
-from django_service_specs import FieldAudience, FieldMarking, SelectorKind
-from rest_framework_services import SelectorSpec
+from django_service_specs import (
+    DataclassPresenter,
+    FieldAudience,
+    FieldMarking,
+    SelectorKind,
+    SelectorSpec,
+    Unrestricted,
+)
 
-from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
-from tests.testapp.serializers import AgentInvoiceSerializer
+from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
+from tests.testapp.kernel_shapes import AgentInvoiceOutput
 
 
-def _binding(**kwargs: object) -> SelectorToolBinding:
-    return SelectorToolBinding(
+@dataclass
+class _LookupInvoiceOutput:
+    """What a lookup tool presents: ``sent`` shown, and the handle as its label."""
+
+    id: Annotated[int, FieldMarking.label()]
+    number: str
+    sent: bool
+
+
+@dataclass
+class _TwoLabels:
+    id: Annotated[int, FieldMarking.label()]
+    number: Annotated[str, FieldMarking.label()]
+
+
+def _binding(output: Any = AgentInvoiceOutput) -> KernelToolBinding:
+    return KernelToolBinding(
         name="invoices",
         description=None,
         spec=SelectorSpec(
             kind=SelectorKind.LIST,
-            selector=lambda **_: [],
-            output_serializer=AgentInvoiceSerializer,
+            selector=lambda: [],
+            presenter=DataclassPresenter(output),
+            permissions=[Unrestricted()],
         ),
-        **kwargs,  # type: ignore[arg-type]
     )
 
 
-def test_the_serializer_alone_decides_by_default() -> None:
+def test_the_presenters_markings_decide() -> None:
     projection = _binding().audience_projection
-
     assert projection.audience("sent") is FieldAudience.HIDDEN
+    assert projection.audience("id") is FieldAudience.HANDLE
+    assert projection.audience("amount_cents") is FieldAudience.CONTENT
     assert projection.label == "number"
 
 
-def test_an_override_can_un_hide_what_a_sibling_tool_drops() -> None:
-    """The case the override exists for: a lookup tool needs what its neighbour hides."""
-    projection = _binding(field_audiences={"sent": FieldMarking()}).audience_projection
-
+def test_a_tool_that_needs_what_its_neighbour_hides_presents_its_own_dataclass() -> None:
+    projection = _binding(_LookupInvoiceOutput).audience_projection
     assert projection.audience("sent") is FieldAudience.CONTENT
-    # Everything not overridden still comes from the serializer.
-    assert projection.audience("id") is FieldAudience.HANDLE
-    assert projection.choice_labels["status"]["PAID"] == "Paid"
-
-
-def test_an_override_can_move_the_label() -> None:
-    projection = _binding(
-        field_audiences={"number": FieldMarking(), "id": FieldMarking.label()}
-    ).audience_projection
-
     assert projection.label == "id"
 
 
-def test_an_override_that_leaves_two_labels_raises() -> None:
-    binding = _binding(field_audiences={"id": FieldMarking.label()})
-
+def test_two_labels_are_refused() -> None:
+    """Registration reads the projection, so a server refuses this at startup
+    (``tests/server/test_registration_compiles_the_spec.py``)."""
+    binding = _binding(_TwoLabels)
     with pytest.raises(ImproperlyConfigured, match="A record has one name"):
         _ = binding.audience_projection
 
 
 def test_the_projection_is_derived_once_per_binding() -> None:
     binding = _binding()
-
     assert binding.audience_projection is binding.audience_projection
