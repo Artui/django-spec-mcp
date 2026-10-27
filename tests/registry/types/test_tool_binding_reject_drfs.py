@@ -121,7 +121,7 @@ def test_a_typed_dict_declared_below_the_decorated_service_is_named_as_a_cause()
     # message names only ``TYPE_CHECKING``, which this module does not use; the
     # refusal names both causes and the remedy for each.
     with pytest.raises(ImproperlyConfigured) as caught:
-        importlib.import_module("tests.registry.types.forward_reference_tools")
+        importlib.import_module("tests.registry.types.forward_reference_tools_drfs")
     message = str(caught.value)
     assert "Tool 'touch': UnknownArguments.REJECT cannot be enforced" in message
     assert "imported under 'if TYPE_CHECKING:'" in message
