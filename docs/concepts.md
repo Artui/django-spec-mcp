@@ -309,10 +309,7 @@ transports and eras, `call_tool` and `acall_tool`):
 The message is the server's
 [`conventions.missing_arguments`](#agent-conventions), and the same one the
 Pydantic-AI toolset gives the same call. An input serializer's own refusal,
-a missing field of its own included, keeps `"Invalid arguments"`. A kernel tool
-never reads `missing_arguments`: a call missing an argument answers
-`"Invalid arguments"` with the kernel's per-field detail, the same `detail` shape
-as above.
+a missing field of its own included, keeps `"Invalid arguments"`.
 
 It used to reach the selector as a `TypeError`, which answered HTTP 500 with
 JSON-RPC `-32603` "Internal error" on the wire and raised from `call_tool`. The
@@ -320,6 +317,10 @@ names checked are the ones the `inputSchema` requires of the selectors, read
 from the same reflection, so what a call is refused for is what the client was
 told. A service tool's own input serializer still answers for its fields, and a
 `many=True` service declares no target lookup to ask for anything.
+
+A kernel tool never reads `missing_arguments`: an admitted call missing an
+argument answers `"Invalid arguments"` with the kernel's per-field detail, the
+same `detail` shape as above.
 
 The check runs **after the permission and rate-limit answers** (and, on a
 selector tool, after its `input_serializer`), as every other argument check
@@ -954,10 +955,13 @@ What changes against the drf-services tools:
   call whose arguments fail that check is never shown them: it is judged as a
   filtered listing judges the spec, its checks asked on no arguments, and is
   refused `-32006` before the charge when they refuse; otherwise a tool call is
-  told which argument is wrong after the charge. A kernel resource's completion
-  has no arguments and is judged the same way. A hand-built binding that
-  declares a task policy has the checks asked before its task is created, and
-  again by the task's worker; `register_tool` refuses a task policy.
+  told which argument is wrong after the charge. A `many` call whose top level
+  passes and whose rows do not is the exception: its checks answer on the
+  checked top level, a refusal as `-32006` before the charge, and an admitted
+  caller is told the rows after it. A kernel resource's completion has no
+  arguments and is judged the same way. A hand-built binding that declares a
+  task policy has the checks asked before its task is created, and again by the
+  task's worker; `register_tool` refuses any task policy but the default.
 - **The schemas are the kernel's** `spec_input_schema` / `spec_output_schema`.
   A service tool's arguments are its spec's parameters, spread at the top level
   of `arguments`, with no `data` key around them. `unknown_arguments=` reaches
@@ -1593,9 +1597,9 @@ The server still decides **whether** a sentence appears: a tool with no handle
 gets no handle line, and an unpaginated tool gets no scope sentence, whatever the
 conventions say. A field changes **what it says**. The wording reaches every
 route a server answers on: both transports in both eras, `call_tool`,
-`acall_tool`, `list_tools`, and a task's worker. `missing_arguments` is the
-exception to "every tool": only drf-services tools read it, and a kernel tool
-answers `Invalid arguments` with the kernel's per-field detail.
+`acall_tool`, `list_tools`, and a task's worker. `missing_arguments` reaches
+only drf-services tools: a kernel tool answers `Invalid arguments` with the
+kernel's per-field detail.
 
 Every field is a `str.format` template, rendered wherever it lands whether or
 not it has a placeholder, so a literal brace is written twice, `{{` or `}}`, in

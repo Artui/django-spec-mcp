@@ -68,18 +68,19 @@ carries; releases up to 0.54.0 are in
   the charge; admitted, a tool call is told which argument is wrong after the
   charge. A `many` call whose rows alone are refused keeps the answer its
   checks gave the rest of its arguments; admitted, its checks are asked twice,
-  or three times when it streams. A `many` call refused by its rows and, beside
-  them, as a whole is answered the `validation_error` result, its rows listed
-  by index.
-- **A streamed denial keeps its status.** A streamed `tools/call` whose spec's
-  checks deny the caller keeps the `403` and challenge it gets without a
-  progress token, and a `ServiceError` a check raises on a streamed tool call is
+  or three times when it streams. A `many` call whose Validator refuses some rows
+  and also the list itself, a length cap say, is answered the `validation_error`
+  result: the rows keyed by index, the list's own message under
+  `non_field_errors`.
+- **A streamed denial is a `403`.** A streamed `tools/call` whose spec's
+  checks deny the caller is answered `403` with a challenge, as the same call
+  without a progress token is, and a `ServiceError` a check raises on a streamed tool call is
   an `isError` result inside the stream, as on a plain call.
 - **Completion is judged as the listing judges.** `completion/complete` of a
   kernel resource asks the spec's checks on no arguments before its rate limit.
   A check that refuses or raises on no arguments, a `ServiceError` included,
   refuses it with `-32006`; a configuration error a check raises
-  (`ImproperlyConfigured`) still fails the completion, as it fails the listing.
+  (`ImproperlyConfigured`) fails the completion, as it fails the listing.
 - **Resource reads answer an invalid URI variable.** An admitted reader of a
   URI whose variable fails the argument check is answered `-32602` with message
   `Invalid arguments` and the kernel's detail in `data`; `INCLUDE_VALIDATION_VALUE`

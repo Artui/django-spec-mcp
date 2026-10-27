@@ -108,8 +108,9 @@ The `SERVER_INFO` keys flow into both:
     kernel `Grant` built for that spec and that caller, so it is called
     with no permission check. A kernel spec that does declare checks has them
     asked before any rate limit is charged. A call whose arguments fail the
-    kernel's argument check, and a completion, are judged as a filtered listing
-    judges the spec: its checks asked on no arguments. See
+    kernel's argument check, other than a `many` call refused only by its rows,
+    and a completion, are judged as a filtered listing judges the spec: its
+    checks asked on no arguments. See
     [Kernel specs](concepts.md#kernel-specs).
 
     The same check runs on `register_resource` and `register_prompt`: the
@@ -248,8 +249,8 @@ The paths that name no tool call judge these as `request.data`:
 `completion/complete` on a resource template names the template rather than a
 URI, so a template whose permission scopes by a URI variable completes for
 nobody. A kernel resource's spec checks are asked on no arguments in the same
-way, and refuse the completion whether a check guards against the missing
-arguments or raises on them. The listings filter is described
+way, so a check scoping by a URI variable refuses the completion, whether it
+answers no on the missing arguments or raises on them. The listings filter is described
 [below](#filtering-listings-by-permissions).
 
 ### Object-level permissions
