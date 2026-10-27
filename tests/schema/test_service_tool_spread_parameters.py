@@ -40,6 +40,8 @@ from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
+from django_spec_mcp.schema.kernel_tool_input_schema import kernel_tool_input_schema
 
 
 @dataclass
@@ -96,14 +98,28 @@ def test_a_field_named_like_a_registered_seed_is_still_the_callers() -> None:
     # Changed by design: the drf-services path subtracted a registered seed's
     # name from a spread service's parameters. On the kernel a Validator field
     # of that name is the caller's to send: dispatch validates it, and the
-    # seed fills only the service's keyword (``server_owned_keys``).
-    server = _server(pool_seeds=DEFAULT_POOL_SEEDS.extend(tenant=lambda: 1))
-    _register(server)
+    # seed fills only the service's keyword (``server_owned_keys``). Asked of
+    # the builder with the seeds handed in, since the listing does not pass the
+    # server's yet (``test_kernel_tool_input_schema.py``); the reflected read
+    # of the same name is the control that shows they reached it.
+    seeds = DEFAULT_POOL_SEEDS.extend(tenant=lambda: 1)
+    server = _server()
+    _register(
+        server,
+        reads=Parameters([Parameter("region", "string", required=True, reflected=True)]),
+    )
+    binding = server.tools.get("close")
+    assert isinstance(binding, KernelToolBinding)
 
-    schema = _schema(server)
+    schema = kernel_tool_input_schema(
+        binding,
+        max_page_size=None,
+        pool_seeds=seeds.extend(region=lambda: "eu"),
+    )
 
     assert "tenant" in schema["properties"]
     assert "tenant" in schema["required"]
+    assert "region" not in schema["properties"]
 
 
 class _TenantScope(TypedDict):

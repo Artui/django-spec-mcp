@@ -151,10 +151,10 @@ def _arguments(name: str) -> dict[str, Any]:
 @pytest.mark.parametrize("name", _LISTS)
 def test_a_list_that_may_present_nothing_is_advertised_as_a_list(name: str) -> None:
     # The kernel writes ``["array", "null"]``, since its dispatch presents the
-    # ``None`` the service returned. No MCP result can carry a ``null``: a
-    # value that presents nothing is served as structured content of its own,
-    # and for a list that is the empty list, which an array schema admits.
-    # So the root is ``"array"``, and each row stays as strict as declared.
+    # ``None`` the service returned, and no MCP result can carry a ``null``.
+    # The schema states the list a client should be served in its place, the
+    # empty one, which an array admits; each row stays as strict as declared.
+    # The call still serves ``{}`` for it, which the strict xfail below holds.
     schema = _schemas(_list_server())[name]
 
     assert schema["type"] == "array"
