@@ -22,6 +22,7 @@ import jsonschema
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import (
+    DEFAULT_POOL_SEEDS,
     DataclassPresenter,
     DataclassValidator,
     Parameter,
@@ -30,6 +31,7 @@ from django_service_specs import (
     SelectorSpec,
     ServiceSpec,
     Unrestricted,
+    UnsetType,
 )
 from typing_extensions import TypedDict
 
@@ -187,6 +189,50 @@ def test_a_lookup_read_beside_an_untyped_provider_is_offered_and_not_required() 
 
     assert set(schema["properties"]) == {"number", "pk"}
     assert schema["required"] == ["number"]
+
+
+def test_a_lookup_read_a_registered_seed_fills_is_not_advertised() -> None:
+    # A reflected read of the target's lookup is the server's once a seed of
+    # its name is registered on the mount, as a reflected read of the spec's own is.
+    lookup = _by_pk(_PK, Parameter("tenant", "string", required=True, reflected=True))
+    server = MCPServer(
+        name="t",
+        auth_backend=AllowAnyBackend(),
+        session_store=None,
+        pool_seeds=DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme"),
+    )
+    server.register_tool(
+        _rename_spec(instance_selector_spec=lookup), name="rename_invoice", description="Rename."
+    )
+    listed: Any = server.list_tools(user=None)
+
+    (tool,) = listed["tools"]
+
+    assert set(tool["inputSchema"]["properties"]) == {"number", "pk"}
+
+
+class _MaybeTenant(TypedDict):
+    tenant: str | UnsetType
+
+
+def _maybe_tenant() -> _MaybeTenant:
+    return {"tenant": "acme"}
+
+
+def test_a_key_one_seat_may_decline_is_still_required_by_another() -> None:
+    # The lookup's provider may answer ``tenant``, but the lookup does not read
+    # it: the service's own read does, and no provider reaches that seat. So
+    # dispatch demands ``tenant`` of the caller, and the schema requires it.
+    spec = _rename_spec(
+        service=lambda *, instance, number, tenant: instance,
+        reads=Parameters([Parameter("tenant", "string", required=True)]),
+        instance_selector_spec=_by_pk(kwargs=_maybe_tenant),
+    )
+
+    schema = _schema(spec)
+
+    assert set(schema["properties"]) == {"number", "pk", "tenant"}
+    assert set(schema["required"]) == {"number", "pk", "tenant"}
 
 
 def test_a_spec_without_a_target_selector_advertises_only_its_input() -> None:

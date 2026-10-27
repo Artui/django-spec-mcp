@@ -175,3 +175,36 @@ def test_a_list_that_presents_nothing_conforms_to_its_schema(name: str) -> None:
 
     jsonschema.validate(served, schema)
     assert served == []
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("many", [False, True], ids=["returns_many", "many"])
+def test_a_list_that_presents_rows_is_served_them(many: bool) -> None:
+    # The empty list stands in only for nothing: a list declared ``allow_none``
+    # that does present rows serves every one of them.
+    rows = [_Row(1, "a"), _Row(2, "b")]
+    spec = (
+        ServiceSpec(
+            service=lambda **_: rows,
+            many=True,
+            allow_none=True,
+            validator=DataclassValidator(_Row),
+            presenter=DataclassPresenter(_Row),
+            permissions=OPEN,
+        )
+        if many
+        else ServiceSpec(
+            service=lambda: rows,
+            returns_many=True,
+            allow_none=True,
+            presenter=DataclassPresenter(_Row),
+            permissions=OPEN,
+        )
+    )
+    server = MCPServer(name="lists", auth_backend=AllowAnyBackend())
+    server.register_tool(spec, name="rows", description="Return rows.")
+    arguments = {"items": [_ROW, {"pk": 2, "name": "b"}]} if many else {}
+
+    served = server.call_tool("rows", arguments, user=None).to_dict()["structuredContent"]
+
+    assert served == [{"pk": 1, "name": "a"}, {"pk": 2, "name": "b"}]

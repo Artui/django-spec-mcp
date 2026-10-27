@@ -96,13 +96,13 @@ def _may_fill(spec: ServiceSpec | SelectorSpec) -> frozenset[str]:
 
     The Validator's seat is read only on a service that has a Validator and is
     not ``many``, whose fields are each row's rather than top-level arguments.
-    One arc to coverage, each conjunct held by its own test: a selector has no
-    Validator (every case of
-    ``test_an_untyped_provider_leaves_every_read_offered_and_none_required``),
-    a service may have none
+    Each condition is held by its own test: a selector has no Validator (every
+    case of ``test_an_untyped_provider_leaves_every_read_offered_and_none_required``),
+    and of the two conjuncts coverage sees as one arc, a service may have none
     (``test_a_service_without_a_validator_relaxes_its_reads_alone``) and a
     ``many`` spec's rows are no seat
-    (``test_an_untyped_input_data_leaves_a_many_specs_list_required``).
+    (``test_an_untyped_input_data_leaves_a_many_specs_list_required``). Each
+    seat's keys are its own (``test_a_key_one_seat_may_decline_is_still_required_by_another``).
     """
     seats: list[tuple[Callable[..., Any] | None, Parameters]] = [(spec.kwargs, spec.reads)]
     if isinstance(spec, ServiceSpec):

@@ -109,3 +109,30 @@ def test_the_listing_reads_the_servers_paging_sentence() -> None:
     server = _server(conventions=AgentConventions(query_param_on_pages="Per row."))
 
     assert _listed(server)["properties"]["fields"]["description"] == "Per row."
+
+
+def test_a_paged_tools_shape_a_registered_seed_fills_is_withheld_not_described() -> None:
+    # Only a shape still listed is told it applies to each item: one the
+    # server's seed fills is withheld before the sentence is laid on.
+    server = MCPServer(
+        name="t", auth_backend=AllowAnyBackend(), session_store=None, pool_seeds=SEEDS
+    )
+    server.register_tool(
+        SelectorSpec(
+            kind=SelectorKind.LIST,
+            selector=lambda **_: [],
+            shapes=Parameters(
+                [Parameter("fields", "string"), Parameter("tenant", "string", reflected=True)]
+            ),
+            presenter=DataclassPresenter(_Row),
+            permissions=[Unrestricted()],
+        ),
+        name="rows",
+        description="Read rows.",
+        paginate=True,
+    )
+
+    properties = _listed(server)["properties"]
+
+    assert "tenant" not in properties
+    assert "description" in properties["fields"]

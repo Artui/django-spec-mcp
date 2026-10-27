@@ -3,8 +3,7 @@
 The kernel spreads a service's input: a Validator's fields are the tool's
 arguments, and the service receives each validated value as its own keyword.
 There is no ``argument_binding`` to choose, so a service never bundles its
-input under ``data`` (decision 3 of the rewire: one spec, one schema on every
-transport). The schema lists every parameter, less what the server fills
+input under ``data``: one spec has one schema on every transport. The schema lists every parameter, less what the server fills
 whatever the caller sends, and does not require one a provider may fill.
 
 The drf-services original, which asked this of each ``ArgumentBinding`` and of

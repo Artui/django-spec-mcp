@@ -17,7 +17,9 @@ things answer for a read instead of the caller:
 The drf-services original asked the same of a reflected signature, a
 ``UrlKwarg``, ``spec_kwargs_provides=`` and an ``input_serializer``'s
 defaults, none of which a kernel spec has; it is kept beside this file as
-``test_selector_tool_requiredness_drfs.py``. Built through
+``test_selector_tool_requiredness_drfs.py``. Its run of the concepts page's
+example is not carried, because that example declares a drf-services spec;
+the kernel example the page owes gets the same test when it is written. Built through
 ``MCPServer.list_tools``, so each test reads what a client is served.
 """
 
@@ -67,6 +69,7 @@ def _rows(*, pk: int, tenant: str = "unscoped") -> list[_Row]:
 
 _PK = Parameter("pk", "integer", required=True)
 _TENANT = Parameter("tenant", "string", required=True)
+_REGION = Parameter("region", "string", required=True)
 
 
 def _register(server: MCPServer, *reads: Parameter, kwargs: Any = None) -> None:
@@ -185,6 +188,39 @@ def _noneable_provider() -> _NoneableScope:
     return {"tenant": "acme"}
 
 
+class _ContainerScope(TypedDict):
+    # ``UnsetType`` inside a container: the key is always a list or a dict, and
+    # only an item or a value of it may be ``UNSET``.
+    regions: list[str | UnsetType]
+    labels: dict[str, str | UnsetType]
+
+
+def _container_provider() -> _ContainerScope:
+    return {"regions": ["eu"], "labels": {}}
+
+
+class _UnresolvableFieldScope(TypedDict):
+    # The return annotation resolves; one of the class's own fields does not,
+    # and the other does.
+    tenant: NoSuchType  # noqa: F821
+    region: str
+
+
+def _unresolvable_field_provider() -> _UnresolvableFieldScope:
+    return {"tenant": "acme", "region": "eu"}
+
+
+class _MaybeTenantScope(TypedDict):
+    tenant: str | UnsetType
+    region: str
+
+
+def _unresolvable_parameter_provider(*, request: NoSuchRequest) -> _MaybeTenantScope:  # noqa: F821
+    # The return annotation resolves at runtime; the parameter's does not, as
+    # one imported only for type checking would not.
+    return {"tenant": "acme", "region": "eu"}
+
+
 @pytest.mark.django_db
 @pytest.mark.parametrize("provider", [_typed_provider, _generic_provider])
 def test_a_name_a_typed_provider_returns_is_not_asked_for(provider: Any) -> None:
@@ -219,6 +255,11 @@ def test_the_call_serves_the_providers_value_whatever_the_caller_sends() -> None
     "provider", [_maybe_provider, _maybe_union_provider, _generic_declining_provider]
 )
 def test_a_key_the_provider_may_decline_is_offered_but_not_required(provider: Any) -> None:
+    # Changed by design: drf-services kept a key its selector marked
+    # ``InputRequired`` required beside a provider that may decline it. A
+    # kernel read declared ``required=True`` is relaxed at dispatch when a
+    # provider may fill it, so a call without it is not refused for it, and
+    # the schema says what dispatch demands, as django-spec-agents' does.
     server = _server()
     _register(server, _PK, _TENANT, kwargs=provider)
 
@@ -265,6 +306,49 @@ def test_a_read_left_out_that_the_untyped_provider_does_not_fill_is_handed_back(
 
     assert out["isError"] is True
     assert "pk" in out["content"][0]["text"]
+
+
+def test_a_key_holding_unset_inside_a_container_is_filled() -> None:
+    # The provider cannot decline ``regions`` or ``labels``: each comes back as
+    # a list or a dict, and only a value that is ``UNSET`` itself is dropped
+    # from the pool. So both are filled and not advertised, and walking every
+    # argument of every generic would find ``UnsetType`` inside them and offer both.
+    server = _server()
+    _register(
+        server,
+        _PK,
+        Parameter("regions", "array", required=True, items="string"),
+        Parameter("labels", "object", required=True),
+        kwargs=_container_provider,
+    )
+
+    schema = _schema(server)
+
+    assert set(schema["properties"]) == {"pk"}
+    assert schema["required"] == ["pk"]
+
+
+@pytest.mark.parametrize(
+    "provider",
+    [_unresolvable_field_provider, _unresolvable_parameter_provider],
+    ids=["value-type", "parameter-type"],
+)
+def test_an_unresolvable_annotation_beside_the_return_costs_only_what_it_names(
+    provider: Any,
+) -> None:
+    # A ``TypedDict`` value type that cannot be read leaves only its own key
+    # undecided, offered and not required as a declinable key is; a parameter
+    # typed with a name absent at runtime costs nothing, since only the return
+    # annotation says which keys are filled. Either way ``region`` is filled,
+    # ``tenant`` is offered, and ``pk`` stays required, where reading the whole
+    # provider as untyped would offer ``region`` and require nothing.
+    server = _server()
+    _register(server, _PK, _TENANT, _REGION, kwargs=provider)
+
+    schema = _schema(server)
+
+    assert set(schema["properties"]) == {"pk", "tenant"}
+    assert schema["required"] == ["pk"]
 
 
 def test_a_spec_without_a_provider_keeps_every_declared_requirement() -> None:
