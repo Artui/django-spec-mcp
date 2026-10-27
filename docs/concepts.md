@@ -951,7 +951,9 @@ What changes against the drf-services tools:
   one that is missing any is answered `-32006` with every declared scope in
   `requiredScopes`, not only the missing ones. A bare string is one scope, as
   `ScopeRequired` reads it. `scopes=()` is refused, since it reads as a gate
-  and admits everyone.
+  and admits everyone. A `KernelToolBinding` or `KernelResourceBinding` built
+  by hand and passed to `server.tools.register` or `server.resources.register`
+  derives the same gate from its own `scopes` and refuses `()` the same way.
 - **A spec declaring `permissions=None` is unguarded.** With
   `REQUIRE_TOOL_PERMISSIONS` on, the default, registering one is refused. With
   it off, the tool or resource registers with one `UnguardedToolWarning` and

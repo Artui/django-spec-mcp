@@ -16,10 +16,10 @@ from django_service_specs import (
     spec_output_schema,
 )
 
-from django_spec_mcp.adapters.kernel_scopes import kernel_scopes
 from django_spec_mcp.adapters.utils import merge_tool_annotations
 from django_spec_mcp.protocol.types.icon import Icon
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
+from django_spec_mcp.registry.types.utils import kernel_scope_gate
 from django_spec_mcp.types.output_format import OutputFormat
 from django_spec_mcp.types.task_policy import TaskPolicy
 from django_spec_mcp.types.tool_content_kind import ToolContentKind
@@ -89,7 +89,6 @@ def kernel_spec_to_tool(
             f"Tool {name!r}: task_policy={task_policy.name} is not yet supported for a "
             "kernel spec; such a tool runs inline. Leave task_policy at its default."
         )
-    gate: tuple[str, ...] | None = kernel_scopes(f"Tool {name!r}", scopes)
     if unknown_arguments is UnknownArguments.PASSTHROUGH:
         raise ImproperlyConfigured(
             f"Tool {name!r}: UnknownArguments.PASSTHROUGH is not honoured by the kernel, "
@@ -124,7 +123,9 @@ def kernel_spec_to_tool(
         dispatch_timeout=dispatch_timeout,
         always_listed=always_listed,
         rate_limits=rate_limits,
-        scopes=gate,
+        # Read as the field holds them; the binding builds its gate from them, and
+        # refuses ``()``, whoever constructs it.
+        scopes=kernel_scope_gate(f"Tool {name!r}", scopes)[0],
         unknown_arguments=unknown_arguments,
         server_arguments=server_arguments or ServerArguments(),
     )

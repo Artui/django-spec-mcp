@@ -24,7 +24,9 @@ carries; releases up to 0.54.0 are in
   schemas are the kernel's, so a service tool's arguments sit at the top level
   with no `data` key. Each kernel refusal is answered as the drf-services path
   answers its counterpart. `scopes=` gates a tool or resource on every scope it
-  names, answering `-32006` with `requiredScopes`. Registration refuses a spec
+  names, answering `-32006` with `requiredScopes`; a `KernelToolBinding` or
+  `KernelResourceBinding` built by hand derives the same gate from its own
+  `scopes`, and refuses `scopes=()`. Registration refuses a spec
   that is not a kernel spec, a knob of the other kind of tool, `scopes=()`,
   `UnknownArguments.PASSTHROUGH` and, for now, any `task_policy` but the default.
   A spec declaring `permissions=None` is refused under

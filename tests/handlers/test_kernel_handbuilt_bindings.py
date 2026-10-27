@@ -147,3 +147,42 @@ def test_a_handbuilt_guarded_kernel_resource_is_read(
     server.resources.register(_resource([Unrestricted()]))
     body = _read_resource(client, server, is_async=is_async)
     assert RAN == ["read"], body
+
+
+@pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
+def test_a_handbuilt_kernel_resource_gates_on_its_scopes(client: Client, is_async: bool) -> None:
+    server = _server(require=True)
+    server.resources.register(_resource([Unrestricted()], scopes=("billing",)))
+    body = _read_resource(client, server, is_async=is_async)
+    assert body["error"]["code"] == -32006, body
+    assert RAN == []
+    # A token carrying the scope is let through, so the refusal was the gate's.
+    body = _read_resource(client, server, is_async=is_async, scopes="billing")
+    assert RAN == ["read"], body
+
+
+def test_a_handbuilt_kernel_resource_reads_a_bare_string_scope_as_one() -> None:
+    binding = _resource([Unrestricted()], scopes="billing")
+    assert binding.scopes == ("billing",)
+    (gate,) = binding.permissions
+    assert gate.required_scopes() == ["billing"]
+
+
+def test_a_handbuilt_kernel_resource_without_scopes_has_no_gate() -> None:
+    assert _resource([Unrestricted()]).permissions == ()
+
+
+@pytest.mark.parametrize("build", [_tool, _resource], ids=["tool", "resource"])
+def test_a_handbuilt_kernel_binding_refuses_an_empty_scope_tuple(build: Any) -> None:
+    def build_with_no_scopes() -> Any:
+        if build is _tool:
+            return KernelToolBinding(
+                name="hand.write",
+                description="Write.",
+                spec=ServiceSpec(service=_write, permissions=[Unrestricted()]),
+                scopes=(),
+            )
+        return _resource([Unrestricted()], scopes=())
+
+    with pytest.raises(ImproperlyConfigured, match=r"scopes=\(\) permits every caller"):
+        build_with_no_scopes()

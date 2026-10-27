@@ -6,10 +6,9 @@ from typing import Any
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import SelectorKind, SelectorSpec, UnsetType
 
-from django_spec_mcp.adapters.kernel_scopes import kernel_scopes
-from django_spec_mcp.auth.permissions.scope_required import ScopeRequired
 from django_spec_mcp.protocol.types.icon import Icon
 from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
+from django_spec_mcp.registry.types.utils import kernel_scope_gate
 
 
 def kernel_selector_to_resource(
@@ -47,7 +46,6 @@ def kernel_selector_to_resource(
             f"Resource {name!r}: a kernel resource reads one row, so its SelectorSpec "
             f"is a RETRIEVE, not a {spec.kind.name}. Register a LIST as a selector tool."
         )
-    gate: tuple[str, ...] | None = kernel_scopes(f"Resource {name!r}", scopes)
     return KernelResourceBinding(
         name=name,
         uri_template=uri_template,
@@ -55,8 +53,9 @@ def kernel_selector_to_resource(
         selector=spec.selector,
         kind=spec.kind,
         spec=spec,
-        scopes=gate,
-        permissions=(ScopeRequired(list(gate)),) if gate else (),
+        # Read as the field holds them; the binding builds its gate from them, and
+        # refuses ``()``, whoever constructs it.
+        scopes=kernel_scope_gate(f"Resource {name!r}", scopes)[0],
         rate_limits=rate_limits,
         annotations=dict(annotations or {}),
         meta=dict(meta or {}),

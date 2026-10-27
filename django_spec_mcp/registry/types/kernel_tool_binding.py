@@ -17,9 +17,8 @@ from django_service_specs import (
     audience_projection_for_spec,
 )
 
-from django_spec_mcp.auth.permissions.scope_required import ScopeRequired
 from django_spec_mcp.protocol.types.icon import Icon
-from django_spec_mcp.registry.types.utils import validate_content_kind
+from django_spec_mcp.registry.types.utils import kernel_scope_gate, validate_content_kind
 from django_spec_mcp.types.output_format import OutputFormat
 from django_spec_mcp.types.task_policy import TaskPolicy
 from django_spec_mcp.types.tool_content_kind import ToolContentKind
@@ -76,8 +75,8 @@ class KernelToolBinding:
     ``permissions``, so a token missing one is answered ``-32006`` with every
     declared scope in ``requiredScopes``, not only the missing ones, as a
     ``ScopeRequired`` permission is answered on every other binding. An empty
-    tuple is refused at registration: it would read as a gate and admit every
-    caller."""
+    tuple is refused when the binding is built, by hand or by the registrar: it
+    would read as a gate and admit every caller."""
     unknown_arguments: UnknownArguments = UnknownArguments.REJECT
     """Handed to the kernel's ``dispatch`` as ``unknown_arguments=``, and read by
     ``spec_input_schema`` so the advertised schema is closed exactly when the
@@ -120,12 +119,11 @@ class KernelToolBinding:
             include_structured_content=self.include_structured_content,
             include_output_schema=self.include_output_schema,
         )
-        # A bare string is one scope, as ``ScopeRequired`` and the registrars read
-        # it, so a binding built by hand does not split it per character
+        # Here rather than in the registrar, so a binding built by hand reads a
+        # bare string as one scope and refuses ``scopes=()`` as well
         # (``test_a_binding_built_by_hand_reads_a_bare_string_scope_as_one``).
-        if isinstance(self.scopes, str):
-            object.__setattr__(self, "scopes", (self.scopes,))
-        checks: tuple[Any, ...] = (ScopeRequired(list(self.scopes)),) if self.scopes else ()
+        scopes, checks = kernel_scope_gate(f"Tool {self.name!r}", self.scopes)
+        object.__setattr__(self, "scopes", scopes)
         object.__setattr__(self, "permissions", checks)
 
     @property

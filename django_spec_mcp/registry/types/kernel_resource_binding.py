@@ -6,6 +6,7 @@ from typing import Any
 from django_service_specs import SelectorSpec
 
 from django_spec_mcp.registry.types.resource_binding import ResourceBinding
+from django_spec_mcp.registry.types.utils import kernel_scope_gate
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -19,14 +20,20 @@ class KernelResourceBinding(ResourceBinding[Any]):
     spec's own permissions, reads, shaping and presenter answer the read.
 
     ``selector`` and ``kind`` are the spec's, set at registration, and nothing on
-    this path calls ``selector`` itself. ``permissions`` holds only the scope
-    gate built from ``scopes``; the spec's ``permissions`` are the kernel's and
-    ``dispatch`` asks them.
+    this path calls ``selector`` itself. ``permissions`` is not a constructor
+    argument here: it holds only the scope gate built from ``scopes``, derived
+    when the binding is built, so one built by hand and passed to
+    ``server.resources.register`` gates its reads as a registered one does
+    (``test_a_handbuilt_kernel_resource_gates_on_its_scopes``). The spec's
+    ``permissions`` are the kernel's and ``dispatch`` asks them.
     """
 
     spec: SelectorSpec
     scopes: tuple[str, ...] | None = None
-    """See ``KernelToolBinding.scopes``."""
+    """See ``KernelToolBinding.scopes``. A bare string is one scope, and ``()`` is
+    refused, since it reads as a gate and admits every caller."""
+    permissions: tuple[Any, ...] = field(init=False)
+    """The scope gate the shared shell judges, derived from ``scopes``."""
     unguarded: bool = field(default=False, init=False)
     """Whether a call runs the spec without a permission check.
 
@@ -35,6 +42,11 @@ class KernelResourceBinding(ResourceBinding[Any]):
     it at construction: a binding built by hand stays unmarked, and the kernel's
     dispatch refuses its unguarded spec
     (``test_a_handbuilt_unguarded_kernel_resource_is_never_read``)."""
+
+    def __post_init__(self) -> None:
+        scopes, checks = kernel_scope_gate(f"Resource {self.name!r}", self.scopes)
+        object.__setattr__(self, "scopes", scopes)
+        object.__setattr__(self, "permissions", checks)
 
 
 __all__ = ["KernelResourceBinding"]
