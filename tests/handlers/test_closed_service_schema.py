@@ -14,7 +14,7 @@ one binding, and its arguments are what it declares, so neither has a kernel
 counterpart. Two answers changed by design: the refusal names the key in the
 detail (``{"rogue": ["Unknown argument."]}``) where drf-services filed it under
 ``non_field_errors``; and a service's bare ``**kwargs`` no longer opens the set,
-since a kernel service receives only what the spec declares. It is kept beside
+since an argument the spec does not declare never reaches a kernel callable. It is kept beside
 this file as ``test_closed_service_schema_drfs.py``.
 """
 
@@ -168,12 +168,12 @@ def test_ignore_keeps_serving_an_undeclared_argument() -> None:
     assert out["structuredContent"] == {"title": "kept", "note": ""}
 
 
-def test_a_bare_var_keyword_service_stays_closed_and_receives_only_the_declared() -> None:
+def test_a_bare_var_keyword_service_stays_closed_and_receives_no_undeclared_argument() -> None:
     # Changed by design: drf-services read a spread service's ``**kwargs`` as
-    # an open set. A kernel service receives what the spec declares, so its
-    # ``**kwargs`` opens nothing: the undeclared key is refused, and a call
-    # without it reaches the service with the Validator's fields beside the
-    # pool's seeds, as any catch-all receives them.
+    # an open set. An argument the spec does not declare never reaches a
+    # kernel callable, so its ``**kwargs`` opens nothing: the undeclared key
+    # is refused, and a call without it reaches the service with the
+    # Validator's fields beside the pool's seeds, as any catch-all receives them.
     server = _server(_SPECS["var-keyword"](), policy=UnknownArguments.REJECT)
 
     schema = _input_schema(server)

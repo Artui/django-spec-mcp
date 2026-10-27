@@ -22,6 +22,7 @@ is kept beside this file as ``test_required_param_sources_drfs.py``.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import pytest
@@ -93,6 +94,8 @@ def test_a_defaulted_parameter_nothing_fills_runs_on_its_default() -> None:
 
 @pytest.mark.xfail(
     strict=True,
+    # "DID NOT RAISE" only, so no other error can keep the test quietly xfailed.
+    raises=pytest.fail.Exception,
     reason=(
         "register_tool accepts a callable whose required parameter nothing in the pool "
         "fills, and every call raises TypeError out of dispatch. Fix: the kernel refuses "
@@ -101,14 +104,20 @@ def test_a_defaulted_parameter_nothing_fills_runs_on_its_default() -> None:
     ),
 )
 @pytest.mark.parametrize(
-    "spec",
+    "build",
     [
-        pytest.param(_service(lambda *, other: other), id="service"),
-        pytest.param(_retrieve(lambda *, pk: pk), id="selector"),
-        pytest.param(_service(lambda *, instance: instance), id="instance-without-a-lookup"),
-        pytest.param(_retrieve(lambda pk, /: pk, reads=_PK), id="positional-only"),
+        # Factories, built inside the block: a spec refused when it is built
+        # must neither fail collection nor stay xfailed for the wrong reason.
+        pytest.param(lambda: _service(lambda *, other: other), id="service"),
+        pytest.param(lambda: _retrieve(lambda *, pk: pk), id="selector"),
+        pytest.param(
+            lambda: _service(lambda *, instance: instance), id="instance-without-a-lookup"
+        ),
+        pytest.param(lambda: _retrieve(lambda pk, /: pk, reads=_PK), id="positional-only"),
     ],
 )
-def test_a_required_parameter_nothing_fills_is_refused_at_registration(spec: Any) -> None:
+def test_a_required_parameter_nothing_fills_is_refused_at_registration(
+    build: Callable[[], Any],
+) -> None:
     with pytest.raises(ImproperlyConfigured):
-        _server(spec)
+        _server(build())

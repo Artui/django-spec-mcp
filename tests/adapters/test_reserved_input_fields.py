@@ -116,6 +116,8 @@ def test_a_validator_field_named_like_a_registered_seed_is_the_callers_and_reach
 
 @pytest.mark.xfail(
     strict=True,
+    # "DID NOT RAISE" only, so no other error can keep the test quietly xfailed.
+    raises=pytest.fail.Exception,
     reason=(
         "register_tool accepts a read a registered seed occupies, which dispatch refuses "
         "on every call. Fix: the kernel exports the reader dispatch refuses with "
@@ -124,19 +126,22 @@ def test_a_validator_field_named_like_a_registered_seed_is_the_callers_and_reach
     ),
 )
 def test_a_read_named_like_a_registered_seed_is_refused_at_registration() -> None:
-    spec = ServiceSpec(
-        service=lambda *, tenant: tenant,
-        atomic=False,
-        permissions=[Unrestricted()],
-        reads=Parameters([Parameter("tenant", "string", required=True)]),
-    )
-
+    # The spec is built inside the block, so a refusal from either layer, the
+    # spec's construction or the registration, turns the xfail into an XPASS.
     with pytest.raises(ImproperlyConfigured, match="tenant"):
+        spec = ServiceSpec(
+            service=lambda *, tenant: tenant,
+            atomic=False,
+            permissions=[Unrestricted()],
+            reads=Parameters([Parameter("tenant", "string", required=True)]),
+        )
         _server(pool_seeds=_SEEDED).register_tool(spec, name="t")
 
 
 @pytest.mark.xfail(
     strict=True,
+    # "DID NOT RAISE" only, so no other error can keep the test quietly xfailed.
+    raises=pytest.fail.Exception,
     reason=(
         "register_tool accepts a read named request or view, which dispatch refuses on "
         "every mount and every call. Fix: the kernel refuses a read of either name nobody "
@@ -146,12 +151,11 @@ def test_a_read_named_like_a_registered_seed_is_refused_at_registration() -> Non
 )
 @pytest.mark.parametrize("name", ["request", "view"])
 def test_a_read_named_after_the_calls_own_seat_is_refused_at_registration(name: str) -> None:
-    spec = SelectorSpec(
-        kind=SelectorKind.RETRIEVE,
-        selector=lambda **_: None,
-        permissions=[Unrestricted()],
-        reads=Parameters([Parameter(name, "string", required=True)]),
-    )
-
     with pytest.raises(ImproperlyConfigured, match=name):
+        spec = SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=lambda **_: None,
+            permissions=[Unrestricted()],
+            reads=Parameters([Parameter(name, "string", required=True)]),
+        )
         _server().register_tool(spec, name="t")
