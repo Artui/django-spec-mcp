@@ -4,10 +4,23 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from django.http import StreamingHttpResponse
-from django_service_specs import ProgressReporter
+from django_service_specs import (
+    DispatchError,
+    NotPermitted,
+    PrincipalUnavailable,
+    ProgressReporter,
+    check_call,
+)
 
+from django_spec_mcp.handlers.kernel_utils import (
+    call_context,
+    carry_token,
+    principal_of,
+    unguarded_grant,
+)
+from django_spec_mcp.handlers.runs_on_kernel import runs_on_kernel
 from django_spec_mcp.handlers.types.context import MCPCallContext
-from django_spec_mcp.handlers.utils import judge_tool_permissions
+from django_spec_mcp.handlers.utils import apply_tool_server_arguments, judge_tool_permissions
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.transport.response_stream import build_response_stream
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
@@ -98,16 +111,73 @@ def preflight_permissions(method: str, params: Any, context: MCPCallContext) -> 
     # ``url_kwargs`` is read bare because only a service or a selector binding
     # gets here.
     arguments: Any = params.get("arguments")
-    allowed, required_scopes = judge_tool_permissions(
-        binding, arguments if isinstance(arguments, dict) else {}, context
-    )
-    if allowed:
-        return None
-    return JsonRpcError(
-        JsonRpcErrorCode.FORBIDDEN,
-        "Insufficient permission",
-        data={"requiredScopes": required_scopes} if required_scopes else None,
-    )
+    sent: dict[str, Any] = arguments if isinstance(arguments, dict) else {}
+    allowed, required_scopes = judge_tool_permissions(binding, sent, context)
+    if not allowed:
+        return JsonRpcError(
+            JsonRpcErrorCode.FORBIDDEN,
+            "Insufficient permission",
+            data={"requiredScopes": required_scopes} if required_scopes else None,
+        )
+    # One arc to coverage: without the first condition a drf-services binding
+    # reaches the kernel's prelude, which cannot read its spec
+    # (``test_the_preflight_sees_the_url_kwargs_the_call_delivers``), and without the
+    # second no kernel check is pre-flighted
+    # (``test_a_spec_check_denying_a_streamed_call_keeps_its_403_and_challenge``).
+    if runs_on_kernel(binding) and _kernel_refuses(binding, sent, context):
+        return JsonRpcError(JsonRpcErrorCode.FORBIDDEN, "Insufficient permission")
+    return None
+
+
+def _kernel_refuses(binding: Any, arguments: dict[str, Any], context: MCPCallContext) -> bool:
+    """Whether the kernel's prelude refuses this call as a permission denial.
+
+    A kernel binding's ``permissions`` hold only its ``scopes=`` gate, which
+    ``judge_tool_permissions`` has judged. The spec's own permission checks run
+    inside ``adispatch``, after a stream has committed its ``200``, so a
+    call they deny streamed ``-32006`` where the same call without a progress
+    token was a ``403`` with a challenge
+    (``test_a_spec_check_denying_a_streamed_call_keeps_its_403_and_challenge``).
+
+    ``check_call`` is dispatch's own prelude, in dispatch's order, rather than
+    ``authorize`` alone: dispatch refuses a deactivated principal first
+    (``test_a_deactivated_principal_is_refused_before_the_stream``) and checks
+    the arguments before the permissions, so a denied caller sending an
+    unknown argument is told about the argument on both paths
+    (``test_a_refusal_that_is_not_a_denial_is_left_to_the_handler``, which
+    ``authorize`` fails). It is handed what ``run_kernel_tool_async`` hands ``adispatch``: the server's
+    arguments laid over the caller's, since the handler lays them only after
+    this runs (``test_a_check_reading_arguments_is_judged_on_the_servers_value``);
+    the call context carrying the token
+    (``test_a_check_reading_the_token_sees_the_calls_request``); and the grant
+    of an unguarded spec
+    (``test_an_unguarded_spec_streams_under_the_grant_its_call_carries``).
+
+    Only the two refusals ``KERNEL_REFUSALS`` answers ``-32006`` deny here. Any
+    other is left to the handler, which answers it in the stream as it would
+    without one (``test_a_refusal_that_is_not_a_denial_is_left_to_the_handler``).
+    Arguments a retry's answers would merge in are not seen here, as the
+    drf-services pre-flight does not see them either: the handler judges
+    those again.
+    """
+    principal: Any = principal_of(context.token.user)
+    try:
+        check_call(
+            binding.spec,
+            principal=principal,
+            arguments=apply_tool_server_arguments(binding, arguments),
+            grant=unguarded_grant(binding, principal, context.config),
+            pool_seeds=context.pool_seeds,
+            unknown_arguments=binding.unknown_arguments,
+            call_context=call_context(
+                carry_token(context.http_request, context.token), binding.name
+            ),
+        )
+    except (NotPermitted, PrincipalUnavailable):
+        return True
+    except DispatchError:
+        return False
+    return False
 
 
 def _tool_binding(params: dict[str, Any], context: MCPCallContext) -> Any:
