@@ -9,18 +9,20 @@ from django_service_specs import (
     NotPermitted,
     PrincipalUnavailable,
     ProgressReporter,
+    apply_server_arguments,
     check_call,
 )
 
 from django_spec_mcp.handlers.kernel_utils import (
     call_context,
     carry_token,
+    page_request,
     principal_of,
     unguarded_grant,
 )
 from django_spec_mcp.handlers.runs_on_kernel import runs_on_kernel
 from django_spec_mcp.handlers.types.context import MCPCallContext
-from django_spec_mcp.handlers.utils import apply_tool_server_arguments, judge_tool_permissions
+from django_spec_mcp.handlers.utils import judge_tool_permissions
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.transport.response_stream import build_response_stream
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
@@ -120,9 +122,10 @@ def preflight_permissions(method: str, params: Any, context: MCPCallContext) -> 
             data={"requiredScopes": required_scopes} if required_scopes else None,
         )
     # One arc to coverage: without the first condition a drf-services binding
-    # reaches the kernel's prelude, which cannot read its spec
-    # (``test_the_preflight_sees_the_url_kwargs_the_call_delivers``), and without the
-    # second no kernel check is pre-flighted
+    # reaches the kernel's prelude and raises on what only a kernel binding
+    # carries (``paginate``, the ``unguarded`` mark)
+    # (``test_the_preflight_sees_the_url_kwargs_the_call_delivers``), and
+    # without the second no kernel check is pre-flighted
     # (``test_a_spec_check_denying_a_streamed_call_keeps_its_403_and_challenge``).
     if runs_on_kernel(binding) and _kernel_refuses(binding, sent, context):
         return JsonRpcError(JsonRpcErrorCode.FORBIDDEN, "Insufficient permission")
@@ -145,13 +148,23 @@ def _kernel_refuses(binding: Any, arguments: dict[str, Any], context: MCPCallCon
     the arguments before the permissions, so a denied caller sending an
     unknown argument is told about the argument on both paths
     (``test_a_refusal_that_is_not_a_denial_is_left_to_the_handler``, which
-    ``authorize`` fails). It is handed what ``run_kernel_tool_async`` hands ``adispatch``: the server's
-    arguments laid over the caller's, since the handler lays them only after
-    this runs (``test_a_check_reading_arguments_is_judged_on_the_servers_value``);
-    the call context carrying the token
-    (``test_a_check_reading_the_token_sees_the_calls_request``); and the grant
-    of an unguarded spec
-    (``test_an_unguarded_spec_streams_under_the_grant_its_call_carries``).
+    ``authorize`` fails).
+
+    It is handed what ``run_kernel_tool_async`` hands ``adispatch``:
+
+    - the server's arguments laid over the caller's, since the handler lays
+      them only after this runs
+      (``test_a_check_reading_arguments_is_judged_on_the_servers_value``),
+      through the kernel's rule rather than ``apply_tool_server_arguments``,
+      which would log the dropped value a second time
+      (``test_the_server_arguments_are_laid_without_a_second_warning``);
+    - a paged tool's arguments with ``page`` and ``limit`` split off, or the
+      kernel refuses them as unknown ahead of the permission check
+      (``test_a_paged_call_its_spec_denies_keeps_its_403``);
+    - the call context carrying the token
+      (``test_a_check_reading_the_token_sees_the_calls_request``);
+    - and the grant of an unguarded spec
+      (``test_an_unguarded_spec_streams_under_the_grant_its_call_carries``).
 
     Only the two refusals ``KERNEL_REFUSALS`` answers ``-32006`` deny here. Any
     other is left to the handler, which answers it in the stream as it would
@@ -161,11 +174,13 @@ def _kernel_refuses(binding: Any, arguments: dict[str, Any], context: MCPCallCon
     those again.
     """
     principal: Any = principal_of(context.token.user)
+    laid: dict[str, Any] = apply_server_arguments(binding.spec, arguments, binding.server_arguments)
+    dispatched, _ = page_request(binding, laid, context.config)
     try:
         check_call(
             binding.spec,
             principal=principal,
-            arguments=apply_tool_server_arguments(binding, arguments),
+            arguments=dispatched,
             grant=unguarded_grant(binding, principal, context.config),
             pool_seeds=context.pool_seeds,
             unknown_arguments=binding.unknown_arguments,

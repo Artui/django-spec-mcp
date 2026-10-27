@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from dataclasses import dataclass
 from typing import Any
 
@@ -136,6 +137,11 @@ def _server(*, auth_backend: MCPAuthBackend | None = None) -> MCPServer:
     server.register_tool(
         ServiceSpec(service=lambda: {"wrote": True}, permissions=[_NeedsWriteScope()]),
         name="p.write",
+    )
+    server.register_tool(
+        SelectorSpec(kind=SelectorKind.LIST, selector=lambda: [], permissions=[_Deny()]),
+        name="p.pages",
+        paginate=True,
     )
     return server
 
@@ -344,6 +350,30 @@ async def test_a_check_reading_arguments_is_judged_on_the_servers_value() -> Non
     assert response.status_code == 200
     assert response["Content-Type"] == "text/event-stream"
     assert (await _frames(response))[-1]["result"]["structuredContent"] == {"tenant": "acme"}
+
+
+@pytest.mark.django_db(transaction=True)
+async def test_the_server_arguments_are_laid_without_a_second_warning(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The handler warns once that it dropped the caller's ``tenant``; the
+    pre-flight lays the same values without saying so again."""
+    caplog.set_level(logging.WARNING, logger="django_spec_mcp")
+    await _frames(await _post(_server(), name="p.tenanted", arguments={"tenant": "evil"}))
+    dropped = [r for r in caplog.records if "dropped the caller's value" in r.getMessage()]
+    assert len(dropped) == 1
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("paging", [{"page": 2}, {"limit": 5}])
+async def test_a_paged_call_its_spec_denies_keeps_its_403(paging: dict[str, int]) -> None:
+    """``page`` and ``limit`` are the transport's, split off before dispatch, so
+    the pre-flight splits them too: left in, the kernel refused them as unknown
+    arguments ahead of the permission check, the pre-flight stood aside, and
+    the denial streamed inside a ``200``."""
+    streamed, plain = await _both(_server(), name="p.pages", arguments=paging)
+    assert streamed.status_code == 403
+    assert _wire(streamed, streamed.json()) == _wire(plain, plain.json())
 
 
 @pytest.mark.django_db(transaction=True)
