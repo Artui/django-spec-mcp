@@ -8,32 +8,77 @@ learn the key or the codes it switches on.
 
 Each test reads the listing through ``MCPServer.list_tools``, the public surface,
 so it runs unchanged against a tree without the fix.
+
+The kernel version of the drf-services original, kept beside it as
+``test_tools_list_affordances_drfs.py``. The same questions, of kernel specs
+registered with ``register_tool``: a ``DataclassPresenter`` stands where the
+original's ``OrderSerializer`` stood, and the order spec and its ``cancel``
+affordance are kernel twins declared here, since ``tests/testapp/affordances.py``
+declares drf-services ones.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
-from django_service_specs import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_service_specs import (
+    Affordance,
+    DataclassPresenter,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+)
 
 from django_spec_mcp import MCPServer
-from tests.testapp.affordances import (
-    CANCEL_ORDER,
-    DECLARED_CODES,
-    OrderSerializer,
-    fresh_server,
-    order_selector_spec,
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+
+
+@dataclass
+class Order:
+    number: str
+
+
+CANCEL_ORDER: ServiceSpec = ServiceSpec(
+    service=lambda: None,
+    permissions=[Unrestricted()],
+    affordances=[
+        Affordance(code="already_shipped", reason="The order has shipped.", when=lambda: True),
+        Affordance(code="books_closed", reason="The books are closed.", when=lambda: False),
+    ],
 )
+"""Met on its first condition and refused on its second, so every call answers
+``books_closed``."""
+
+DECLARED_CODES: list[str] = ["already_shipped", "books_closed"]
+
+
+def order_selector_spec(kind: SelectorKind, **overrides: Any) -> SelectorSpec:
+    """A selector spec presenting one order, declaring ``cancel`` as an affordance."""
+    rows: Any = {"number": "A-1"} if kind is SelectorKind.RETRIEVE else [{"number": "A-1"}]
+    fields: dict[str, Any] = {
+        "kind": kind,
+        "selector": lambda: rows,
+        "presenter": DataclassPresenter(Order),
+        "affordances": {"cancel": CANCEL_ORDER},
+        "permissions": [Unrestricted()],
+        **overrides,
+    }
+    return SelectorSpec(**fields)
+
+
+def fresh_server() -> MCPServer:
+    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+
 
 _ORDER_ITEM: dict[str, Any] = {
     "type": "object",
     "properties": {"number": {"type": "string"}},
     "required": ["number"],
 }
-"""The item schema ``OrderSerializer`` advertised before affordances existed."""
+"""The item schema ``Order`` advertises without affordances."""
 
 _ORDER_SERVICE_RESULT: dict[str, Any] = {
     "type": "object",
@@ -66,12 +111,12 @@ def _assert_advertises_cancel(item: Any) -> None:
     assert cancel["properties"]["code"]["enum"] == DECLARED_CODES
 
 
-def _order_service(**overrides: Any) -> ServiceSpec[Any, Any, Any]:
+def _order_service(**overrides: Any) -> ServiceSpec:
     fields: dict[str, Any] = {
-        "service": lambda **_: {"number": "A-1"},
-        "atomic": False,
+        "service": lambda: {"number": "A-1"},
+        "permissions": [Unrestricted()],
         "output_selector_spec": order_selector_spec(
-            SelectorKind.RETRIEVE, selector=lambda result, **_: result
+            SelectorKind.RETRIEVE, selector=lambda result: result
         ),
         **overrides,
     }
@@ -80,8 +125,9 @@ def _order_service(**overrides: Any) -> ServiceSpec[Any, Any, Any]:
 
 def test_a_retrieve_selector_tool_advertises_its_affordances() -> None:
     server = fresh_server()
-    server.register_selector_tool(
-        name="get_order", spec=order_selector_spec(SelectorKind.RETRIEVE), permissions=[]
+    server.register_tool(
+        name="get_order",
+        spec=order_selector_spec(SelectorKind.RETRIEVE),
     )
 
     _assert_advertises_cancel(_output_schema(server, "get_order"))
@@ -89,8 +135,9 @@ def test_a_retrieve_selector_tool_advertises_its_affordances() -> None:
 
 def test_an_unpaginated_list_tool_advertises_them_on_each_array_item() -> None:
     server = fresh_server()
-    server.register_selector_tool(
-        name="list_orders", spec=order_selector_spec(SelectorKind.LIST), permissions=[]
+    server.register_tool(
+        name="list_orders",
+        spec=order_selector_spec(SelectorKind.LIST),
     )
     schema = _output_schema(server, "list_orders")
 
@@ -101,11 +148,10 @@ def test_an_unpaginated_list_tool_advertises_them_on_each_array_item() -> None:
 def test_a_paginated_list_tool_advertises_them_on_each_envelope_item() -> None:
     """On the items, and not on the envelope, which is this transport's own shape."""
     server = fresh_server()
-    server.register_selector_tool(
+    server.register_tool(
         name="page_orders",
         spec=order_selector_spec(SelectorKind.LIST),
         paginate=True,
-        permissions=[],
     )
     schema = _output_schema(server, "page_orders")
 
@@ -116,7 +162,7 @@ def test_a_paginated_list_tool_advertises_them_on_each_envelope_item() -> None:
 
 def test_a_service_tool_advertises_its_output_selector_spec_s_affordances() -> None:
     server = fresh_server()
-    server.register_service_tool(name="place_order", spec=_order_service(), permissions=[])
+    server.register_tool(name="place_order", spec=_order_service())
 
     _assert_advertises_cancel(_output_schema(server, "place_order"))
 
@@ -125,17 +171,17 @@ def test_a_service_s_own_affordances_are_not_advertised() -> None:
     """A service's own ``affordances`` are what a call is refused against, and are
     never rendered, so they must not reach the schema of what it returns."""
     server = fresh_server()
-    server.register_service_tool(
+    server.register_tool(
         name="cancel_order",
         spec=_order_service(
             affordances=CANCEL_ORDER.affordances,
             output_selector_spec=SelectorSpec(
                 kind=SelectorKind.RETRIEVE,
-                selector=lambda result, **_: result,
-                output_serializer=OrderSerializer,
+                selector=lambda result: result,
+                presenter=DataclassPresenter(Order),
+                permissions=[Unrestricted()],
             ),
         ),
-        permissions=[],
         # Its ``books_closed`` condition is unmet, which on its own would leave
         # it out of the listing this test reads.
         always_listed=True,
@@ -170,20 +216,18 @@ def test_a_spec_without_affordances_advertises_exactly_what_it_did_before(
     kind: SelectorKind, paginate: bool, expected: dict[str, Any]
 ) -> None:
     server = fresh_server()
-    server.register_selector_tool(
+    server.register_tool(
         name="orders",
         spec=order_selector_spec(kind, affordances=None),
         paginate=paginate,
-        permissions=[],
     )
-    server.register_service_tool(
+    server.register_tool(
         name="place_order",
         spec=_order_service(
             output_selector_spec=order_selector_spec(
-                SelectorKind.RETRIEVE, selector=lambda result, **_: result, affordances=None
+                SelectorKind.RETRIEVE, selector=lambda result: result, affordances=None
             )
         ),
-        permissions=[],
     )
 
     assert _output_schema(server, "orders") == expected

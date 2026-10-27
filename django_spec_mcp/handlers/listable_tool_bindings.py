@@ -22,7 +22,15 @@ def listable_tool_bindings(context: MCPCallContext) -> list[ToolBindingLike]:
     bindings: list[ToolBindingLike] = list(context.tools.all())
     if context.config.filter_listings_by_permissions:
         bindings = [
-            b for b in bindings if is_binding_listable(b, context.http_request, context.token)
+            b
+            for b in bindings
+            if is_binding_listable(
+                b,
+                context.http_request,
+                context.token,
+                config=context.config,
+                pool_seeds=context.pool_seeds,
+            )
         ]
     return bindings
 

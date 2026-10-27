@@ -1,15 +1,22 @@
-"""``server/discover`` plus the cacheability fields every result now carries."""
+"""``server/discover`` plus the cacheability fields every result now carries, on kernel specs.
+
+The kernel version of the drf-services original, kept beside it as
+``test_server_discover_drfs.py``. It asks the same questions of a server whose
+tool is registered with ``register_tool`` and whose data resource is
+registered with ``register_resource``, both on kernel specs: discovery reports
+capabilities rather than bindings, a filtered catalog is private, and a read is
+private and uncached unless a static view opts into a TTL. The UI-view case was
+never a drfs one and is kept as it is.
+"""
 
 from __future__ import annotations
 
 from typing import Any
 
 from django.http import HttpRequest
-from django_service_specs import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_service_specs import SelectorKind, SelectorSpec, ServiceSpec, Unrestricted
 
-from django_spec_mcp import MCPServer, ResourceEncoding
+from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
@@ -46,10 +53,10 @@ def _ctx(server: MCPServer) -> MCPCallContext:
 
 
 def _with_a_tool(server: MCPServer) -> MCPServer:
-    server.register_service_tool(
+    server.register_tool(
+        ServiceSpec(service=lambda: {}, permissions=[Unrestricted()]),
         name="t.svc",
         description="does a thing",
-        spec=ServiceSpec(service=lambda **_: {}, atomic=False),
     )
     return server
 
@@ -152,13 +159,16 @@ def test_the_catalog_ttl_is_configurable() -> None:
 def test_a_resource_read_is_always_private_and_uncached_by_default() -> None:
     server = _server()
     server.register_resource(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=lambda: {"body": "hi"},
+            permissions=[Unrestricted()],
+        ),
         name="doc",
         uri_template="docs://readme",
-        selector=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda: "hi"),
-        mime_type="text/markdown",
-        encoding=ResourceEncoding.TEXT,
     )
     result = dispatch("resources/read", {"uri": "docs://readme"}, _ctx(server))
+    assert result["contents"][0]["uri"] == "docs://readme"
     assert result["cacheScope"] == "private"
     assert result["ttlMs"] == 0
 
