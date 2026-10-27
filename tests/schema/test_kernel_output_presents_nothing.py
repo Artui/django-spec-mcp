@@ -154,7 +154,7 @@ def test_a_list_that_may_present_nothing_is_advertised_as_a_list(name: str) -> N
     # ``None`` the service returned, and no MCP result can carry a ``null``.
     # The schema states the list a client should be served in its place, the
     # empty one, which an array admits; each row stays as strict as declared.
-    # The call still serves ``{}`` for it, which the strict xfail below holds.
+    # The call serves that empty list (the test below).
     schema = _schemas(_list_server())[name]
 
     assert schema["type"] == "array"
@@ -166,13 +166,6 @@ def test_a_list_that_may_present_nothing_is_advertised_as_a_list(name: str) -> N
 
 
 @pytest.mark.django_db
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "A list-shaped result presenting nothing is still served as {}; serving [] "
-        "is the result builder's, outside the schema."
-    ),
-)
 @pytest.mark.parametrize("name", _LISTS)
 def test_a_list_that_presents_nothing_conforms_to_its_schema(name: str) -> None:
     server = _list_server()

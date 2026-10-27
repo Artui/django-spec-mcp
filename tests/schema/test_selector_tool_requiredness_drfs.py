@@ -25,7 +25,7 @@ import dataclasses
 import inspect
 import pathlib
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Annotated, Any, Generic, TypeVar, Union  # noqa: TID251
+from typing import TYPE_CHECKING, Annotated, Any, Generic, TypeVar, Union
 
 import pytest
 from django_service_specs import DEFAULT_POOL_SEEDS, SelectorKind, UnsetType

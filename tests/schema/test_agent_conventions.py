@@ -23,17 +23,7 @@ from django_service_specs import (
 from django_spec_mcp import AgentConventions, MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.schema.agent_conventions import append_agent_conventions
-from tests.testapp.kernel_shapes import InvoiceOutput
-
-
-@dataclass
-class _AgentInvoice:
-    """The kernel twin of ``AgentInvoiceSerializer``'s markings."""
-
-    id: Annotated[int, FieldMarking.handle("Invoice handle.")]
-    number: Annotated[str, FieldMarking.label()]
-    amount_cents: int
-    sent: Annotated[bool, FieldMarking.hidden()]
+from tests.testapp.kernel_shapes import AgentInvoiceOutput, InvoiceOutput
 
 
 @dataclass
@@ -51,7 +41,7 @@ def _spec(presented: type) -> SelectorSpec:
     )
 
 
-AGENT = audience_projection_for_spec(_spec(_AgentInvoice))
+AGENT = audience_projection_for_spec(_spec(AgentInvoiceOutput))
 
 
 def test_a_tool_with_handles_gains_the_line() -> None:
@@ -99,7 +89,7 @@ def _listed_description(conventions: AgentConventions | None) -> Any:
     server = MCPServer(
         name="t", auth_backend=AllowAnyBackend(), session_store=None, conventions=conventions
     )
-    server.register_tool(_spec(_AgentInvoice), name="get", description="Fetch an invoice.")
+    server.register_tool(_spec(AgentInvoiceOutput), name="get", description="Fetch an invoice.")
     listed: Any = server.list_tools(user=None)
     return listed["tools"][0]["description"]
 

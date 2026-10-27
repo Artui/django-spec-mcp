@@ -48,6 +48,8 @@ def kernel_tool_entry(binding: KernelToolBinding, context: MCPCallContext) -> di
         input_schema=kernel_tool_input_schema(
             binding,
             max_page_size=resolve_bound(binding.max_page_size, context.config.max_page_size),
+            pool_seeds=context.pool_seeds,
+            query_param_on_pages=render_convention(context.conventions.query_param_on_pages),
         ),
         output_schema=output_schema,
         annotations=dict(binding.annotations) or None,

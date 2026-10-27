@@ -1,10 +1,8 @@
 """``kernel_tool_input_schema``'s two server-wide inputs: the pool seeds and the paging sentence.
 
 Each is the owning server's: its ``pool_seeds=`` and its
-``AgentConventions.query_param_on_pages``. The builder takes both, and these
-tests hand them in directly. The listing does not pass them yet, so a server's
-own value is held by a strict ``xfail`` each, which starts failing the day the
-listing passes it.
+``AgentConventions.query_param_on_pages``. The builder takes both: these tests
+hand them in directly, and ask the listing that the server's own values reach it.
 """
 
 from __future__ import annotations
@@ -12,7 +10,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-import pytest
 from django_service_specs import (
     DEFAULT_POOL_SEEDS,
     DataclassPresenter,
@@ -29,7 +26,6 @@ from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from django_spec_mcp.schema.kernel_tool_input_schema import kernel_tool_input_schema
 
 SEEDS = DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme")
-NOT_PASSED = "the listing does not pass the server's value to kernel_tool_input_schema yet"
 
 
 @dataclass
@@ -89,7 +85,6 @@ def test_without_the_seed_the_read_is_the_callers() -> None:
     assert "tenant" in schema["required"]
 
 
-@pytest.mark.xfail(strict=True, reason=NOT_PASSED)
 def test_the_listing_reads_the_servers_pool_seeds() -> None:
     assert "tenant" not in _listed(_server(pool_seeds=SEEDS))["properties"]
 
@@ -110,7 +105,6 @@ def test_none_advertises_a_paged_tools_shape_as_declared() -> None:
     assert schema["properties"]["fields"] == {"type": "string"}
 
 
-@pytest.mark.xfail(strict=True, reason=NOT_PASSED)
 def test_the_listing_reads_the_servers_paging_sentence() -> None:
     server = _server(conventions=AgentConventions(query_param_on_pages="Per row."))
 

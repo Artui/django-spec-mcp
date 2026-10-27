@@ -53,10 +53,9 @@ def _a_list(schema: dict[str, Any]) -> dict[str, Any]:
     ``"null"`` the kernel adds describes nothing a client is served. A list
     that presents nothing is the empty list, which ``"array"`` already admits,
     and each row stays as strict as declared
-    (``test_a_list_that_may_present_nothing_is_advertised_as_a_list``). The
-    result builder serving that empty list rather than ``{}`` is outside this
-    schema, and ``test_a_list_that_presents_nothing_conforms_to_its_schema``
-    fails as expected until it does.
+    (``test_a_list_that_may_present_nothing_is_advertised_as_a_list``), and
+    ``present_tool_result`` serves that empty list rather than ``{}``
+    (``test_a_list_that_presents_nothing_conforms_to_its_schema``).
     """
     return {**schema, "type": "array"}
 

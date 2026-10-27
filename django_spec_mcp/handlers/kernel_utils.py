@@ -20,6 +20,7 @@ from django_service_specs import (
     ServiceError,
     paginate_output,
     present_for_audience,
+    spec_output_schema,
 )
 
 from django_spec_mcp.config.types.mcp_config import MCPConfig
@@ -154,9 +155,20 @@ def present_tool_result(
     Synchronous, because a presenter may read related rows; the async caller
     runs it off the event loop. The audience projection lands on the rows, and
     the page envelope is laid around what they present as.
+
+    A list-shaped spec that presents nothing is served the empty list, which
+    its ``outputSchema`` advertises as ``"array"`` (``kernel_tool_output_schema``),
+    rather than the ``{}`` a ``None`` becomes: the result drf-services' ``many``
+    serves for the same declaration
+    (``test_a_list_that_presents_nothing_conforms_to_its_schema``).
     """
     if page is None:
-        return present_for_audience(binding.spec, result, projection=binding.audience_projection)
+        presented = present_for_audience(
+            binding.spec, result, projection=binding.audience_projection
+        )
+        if presented is None and _presents_a_list(binding):
+            return []
+        return presented
     output: OutputPage = paginate_output(
         result.value, page=page.page, limit=page.limit, max_page_size=page.max_page_size
     )
@@ -164,6 +176,19 @@ def present_tool_result(
         binding.spec, replace(result, value=output.items), projection=binding.audience_projection
     )
     return output.envelope(rows)
+
+
+def _presents_a_list(binding: KernelToolBinding) -> bool:
+    """Whether the kernel describes what ``binding`` presents as a list or nothing.
+
+    The root ``kernel_tool_output_schema`` restates as ``"array"``: a ``many`` or
+    ``returns_many`` service's rows, or ``None``.
+    """
+    # A spec with no presenter has no output schema, and presents nothing at all
+    # (``test_kernel_shell_knobs``). The type keeps a single row that presents
+    # nothing serving ``{}`` (``test_a_result_that_presents_nothing_conforms_to_its_schema``).
+    schema = spec_output_schema(binding.spec)
+    return schema is not None and schema.get("type") == ["array", "null"]
 
 
 def not_found_result(binding: KernelToolBinding) -> ToolResult:
