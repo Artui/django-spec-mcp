@@ -5,7 +5,8 @@ from dataclasses import dataclass
 from itertools import islice
 from typing import Any
 
-from django_service_specs import RESERVED_POOL_SEEDS, DispatchError, authorize
+from django.core.exceptions import ImproperlyConfigured
+from django_service_specs import RESERVED_POOL_SEEDS, DispatchError, ServiceError, authorize
 from rest_framework_services import build_offline_context, resolve_callable_kwargs
 from rest_framework_services.dispatch.utils import DROPPED_EDGE_SEEDS
 
@@ -246,8 +247,11 @@ def _refused_by_the_spec(target: _CompletionTarget, context: MCPCallContext) -> 
     kernel's ``authorize`` with the same principal, grant, context and seeds.
     Stands in for the class-level half of ``dispatch``; there is no row to
     judge. ``arguments`` is ``None``: a completion names a template rather
-    than a URI, so a check scoping by a variable decides on nothing and should
-    refuse (``test_a_kernel_resources_completion_is_judged_on_no_arguments``).
+    than a URI, so a check scoping by a variable decides on nothing and
+    refuses, whether it guards against ``None`` and answers no
+    (``test_a_kernel_resources_completion_is_judged_on_no_arguments``) or
+    indexes it and raises
+    (``test_a_check_raising_on_no_arguments_refuses_the_completion_as_the_read_refuses``).
     """
     binding = target.kernel
     if binding is None:
@@ -264,9 +268,6 @@ def _refused_by_the_spec(target: _CompletionTarget, context: MCPCallContext) -> 
             ),
             pool_seeds=context.pool_seeds,
         )
-    # ``DispatchError`` alone: a ``ServiceError`` a check raises leaves
-    # ``authorize`` and propagates, as ``resource_refusal`` re-raises it on the
-    # read (test_a_check_raising_a_service_error_fails_the_completion_as_the_read).
     except DispatchError as exc:
         return resource_refusal(
             exc,
@@ -274,6 +275,20 @@ def _refused_by_the_spec(target: _CompletionTarget, context: MCPCallContext) -> 
                 arguments={}, config=context.config, conventions=context.conventions
             ),
         )
+    # Raised as the read raises them: a ``ServiceError`` a check raises leaves
+    # ``authorize`` and ``resource_refusal`` re-raises it on the read
+    # (test_a_check_raising_a_service_error_fails_the_completion_as_the_read),
+    # and a configuration error is the mount's, not a refusal
+    # (test_a_misconfigured_check_fails_the_completion_as_the_read). Without
+    # this clause the arm below would swallow both.
+    except (ImproperlyConfigured, ServiceError):
+        raise
+    except Exception:
+        # A check that cannot decide without the arguments a completion does
+        # not have raises on their absence (a ``TypeError`` or ``KeyError`` on
+        # ``None``), and that is a refusal, as ``is_binding_listable`` reads it
+        # at list time, rather than an internal error where the read refuses.
+        return JsonRpcError(JsonRpcErrorCode.FORBIDDEN, "Insufficient permission")
     return None
 
 

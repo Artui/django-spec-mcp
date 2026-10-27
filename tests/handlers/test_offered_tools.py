@@ -3,9 +3,8 @@
 The original's questions, asked of kernel ``ServiceSpec`` tools registered with
 ``register_tool``: a callable ``when`` unmet against the pool's seeds alone
 leaves the tool out, with or without ``FILTER_LISTINGS_BY_PERMISSIONS``; a
-condition on the row is never asked; ``always_listed`` keeps the tool; one pool
-serves a listing and none is built when nothing is declared; and ``tools/call``
-is unchanged. The permission filter is exercised through ``scopes=``, the
+condition on the row is never asked; ``always_listed`` keeps the tool; no pool
+is built when nothing is declared; and ``tools/call`` is unchanged. The permission filter is exercised through ``scopes=``, the
 kernel binding's own gate, because whether the listing reads a kernel spec's
 ``permissions`` is ``is_binding_listable``'s question and not this file's.
 
@@ -13,19 +12,25 @@ One question is asked differently. The original held that a condition sees the
 DRF ``Request`` the call wraps. A kernel condition has no ``request`` seed: it
 reads the call's ``call_context``, whose ``request`` is the transport's own
 ``HttpRequest`` carrying the token as ``mcp_token`` and whose ``action`` is the
-tool's name, so that is what the listing must hand it too. The original is kept
-beside this file as ``test_offered_tools_drfs.py``.
+tool's name, so that is what the listing must hand it too. For the same reason
+the original's one pool per listing is one pool per conditioned tool here: a
+call resolves the seeds against its own ``call_context``, and a resolver may
+read that context's ``request`` and ``action``. The original is kept beside this
+file as ``test_offered_tools_drfs.py``.
 """
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 import pytest
 from django.db.models import Q
 from django.http import HttpRequest
 from django_service_specs import (
+    DEFAULT_POOL_SEEDS,
     Affordance,
+    PoolSeeds,
     SelectorKind,
     SelectorSpec,
     ServiceSpec,
@@ -254,7 +259,12 @@ def test_a_listing_of_tools_declaring_nothing_builds_no_pool(
     assert built == []
 
 
-def test_one_pool_serves_the_whole_listing(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_pool_is_built_per_conditioned_tool(monkeypatch: pytest.MonkeyPatch) -> None:
+    """One per kernel tool asking a condition, and none for the tool declaring
+    nothing, since each call builds its own pool with its own ``action``
+    (``test_each_tool_s_seeds_are_resolved_with_its_own_action``). None of them
+    keeps the ``call_context`` it was built from: the condition is handed it
+    beside the pool, as dispatch hands it."""
     built = _pool_spy(monkeypatch)
     server = _server()
     server.register_tool(_service(), name="post_entry")
@@ -262,7 +272,8 @@ def test_one_pool_serves_the_whole_listing(monkeypatch: pytest.MonkeyPatch) -> N
     server.register_tool(_service(_OPEN), name="open_books")
 
     assert _listed(server) == ["post_entry", "open_books"]
-    assert len(built) == 1
+    assert len(built) == 2
+    assert all("call_context" not in pool for pool in built)
 
 
 def test_the_condition_sees_the_context_and_user_a_call_would() -> None:
@@ -295,6 +306,94 @@ def test_the_condition_sees_the_context_and_user_a_call_would() -> None:
     at_list, at_call = seen
     assert at_list == at_call
     assert at_list == (http_request, ctx.token, "close_books", user)
+
+
+def _seeded_ctx(seeds: PoolSeeds, **kwargs: Any) -> tuple[MCPServer, MCPCallContext]:
+    """A server registering ``seeds``, and a context carrying them as the transport's does."""
+    server = MCPServer(
+        name="t", auth_backend=AllowAnyBackend(), session_store=None, pool_seeds=seeds
+    )
+    return server, replace(_ctx(server, **kwargs), pool_seeds=seeds)
+
+
+def _tenant_request(tenant: str) -> HttpRequest:
+    http_request = HttpRequest()
+    http_request.method = "POST"
+    http_request.tenant = tenant
+    return http_request
+
+
+def _acme_only() -> Affordance:
+    return Affordance(code="not_acme", reason="Acme only.", when=lambda tenant: tenant == "acme")
+
+
+@pytest.mark.django_db
+def test_a_seed_reading_the_request_is_resolved_for_the_listing_as_for_the_call() -> None:
+    """A seed whose resolver declares ``request`` reads it off the call's
+    ``call_context``. The listing built its kernel pool with no context, so the
+    resolver was handed nothing to bind ``request`` to and the whole listing
+    raised ``TypeError``, the plain tool with it, while the call ran."""
+    server, ctx = _seeded_ctx(
+        DEFAULT_POOL_SEEDS.extend(tenant=lambda *, request: request.tenant),
+        http_request=_tenant_request("acme"),
+    )
+    server.register_tool(_service(), name="post_entry")
+    server.register_tool(_service(_acme_only()), name="close_books")
+
+    listing: Any = handle_tools_list(None, ctx)
+    called: Any = handle_tools_call({"name": "close_books", "arguments": {}}, ctx)
+
+    assert [tool["name"] for tool in listing["tools"]] == ["post_entry", "close_books"]
+    assert called["structuredContent"] == {"status": "ran"}
+
+
+@pytest.mark.django_db
+def test_a_seed_defaulting_the_request_does_not_hide_a_tool_the_call_admits() -> None:
+    """The quieter form of the same gap: a resolver defaulting ``request`` to
+    ``None`` was handed the default at list time, so the condition read no
+    tenant and the tool was hidden from a caller whose call it admits."""
+    server, ctx = _seeded_ctx(
+        DEFAULT_POOL_SEEDS.extend(tenant=lambda *, request=None: getattr(request, "tenant", None)),
+        http_request=_tenant_request("acme"),
+    )
+    server.register_tool(_service(_acme_only()), name="close_books")
+
+    listing: Any = handle_tools_list(None, ctx)
+    called: Any = handle_tools_call({"name": "close_books", "arguments": {}}, ctx)
+
+    assert [tool["name"] for tool in listing["tools"]] == ["close_books"]
+    assert called["structuredContent"] == {"status": "ran"}
+
+
+@pytest.mark.django_db
+def test_each_tool_s_seeds_are_resolved_with_its_own_action() -> None:
+    """A resolver may declare ``call_context`` and read its ``action``, the tool's
+    name, which differs from tool to tool. Each call resolves the seeds for its
+    own tool, so the listing does too: one pool shared across the listing would
+    hand the second tool the first one's ``action``."""
+    actions: list[str] = []
+
+    def acting_for(*, call_context: Any) -> str:
+        actions.append(call_context["action"])
+        return call_context["action"]
+
+    def own_tool(acting_for: str) -> bool:
+        return acting_for in {"close_books", "open_books"}
+
+    server, ctx = _seeded_ctx(DEFAULT_POOL_SEEDS.extend(acting_for=acting_for))
+    for name in ("close_books", "open_books"):
+        server.register_tool(
+            _service(Affordance(code="other", reason="Not this tool.", when=own_tool)), name=name
+        )
+
+    listing: Any = handle_tools_list(None, ctx)
+    at_list = list(actions)
+    actions.clear()
+    for name in ("close_books", "open_books"):
+        handle_tools_call({"name": name, "arguments": {}}, ctx)
+
+    assert [tool["name"] for tool in listing["tools"]] == ["close_books", "open_books"]
+    assert at_list == actions == ["close_books", "open_books"]
 
 
 # ---------- the call is unchanged ----------

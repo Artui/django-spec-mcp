@@ -6,9 +6,12 @@ The resource half registers kernel ``RETRIEVE`` specs through
 template's variables. A completion is a read of what it completes, so a kernel
 resource's spec permissions answer it as they answer ``resources/read``: the
 class-level checks, asked through the kernel's ``authorize`` with no arguments,
-since a completion names a template rather than a URI. A check reading
-``arguments`` is handed ``None`` there and refuses, which is the kernel form of
-the original's route-scoped template completing for nobody.
+since a completion names a template rather than a URI, and after the rate
+limit, as the read asks them. A check reading ``arguments`` is handed ``None``
+there and refuses, whether it guards against ``None`` or raises on it, which is
+the kernel form of the original's route-scoped template completing for nobody;
+a ``ServiceError`` or a configuration error it raises fails the completion as
+it fails the read.
 
 Not carried: that a ``DRFPermissionAdapter`` on a prompt sees ``{}`` as
 ``request.data`` and ``None`` as ``view.action`` at completion. A DRF class has
@@ -18,11 +21,13 @@ alone. The original is kept beside this file as ``test_completion_complete_drfs.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest
+from django.test import Client, override_settings
 from django_service_specs import (
     Parameter,
     Parameters,
@@ -43,6 +48,9 @@ from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
+from tests.kernel_client import KernelClient
+from tests.testapp.auth_backend import HeaderAuthBackend
+from tests.testapp.urlconf_for import urlconf_for
 
 LANGUAGES = ["python", "pytorch", "pyside", "ruby"]
 
@@ -407,6 +415,72 @@ def test_a_check_raising_a_service_error_fails_the_completion_as_the_read() -> N
         handle_resources_read({"uri": "invoices://1"}, _ctx(server))
 
 
+class _KeyedOnPk(PermissionCheck):
+    """Scopes by the ``pk`` a read names, with no guard for a call naming none."""
+
+    def has_permission(self, principal: Any, spec: Any, *, arguments: Any) -> bool:
+        return arguments["pk"] == 1
+
+
+@pytest.fixture(params=[False, True], ids=["sync", "async"])
+def keyed_caller(request: pytest.FixtureRequest, client: Client) -> Iterator[KernelClient]:
+    """A caller of a mount whose resource is guarded by ``_KeyedOnPk``, over the wire."""
+    server = MCPServer(name="t", auth_backend=HeaderAuthBackend())
+    server.register_resource(
+        _invoice(_KeyedOnPk()),
+        name="invoice",
+        uri_template="invoices://{pk}",
+        completions={"pk": lambda: pytest.fail("the completer ran for a refused caller")},
+    )
+    with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=request.param)):
+        caller = KernelClient(client)
+        caller.initialize()
+        yield caller
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_check_raising_on_no_arguments_refuses_the_completion_as_the_read_refuses(
+    keyed_caller: KernelClient,
+) -> None:
+    # A check that indexes ``arguments`` raises ``TypeError`` on the ``None`` a
+    # completion hands it. That was an internal error (HTTP 500, -32603) where a
+    # read the check refuses answers -32006; it is the same refusal now, on the
+    # same HTTP status.
+    completed = keyed_caller.post("completion/complete", _INVOICE_PK)
+    read = keyed_caller.post("resources/read", {"uri": "invoices://2"})
+
+    assert completed.status_code == read.status_code
+    assert completed.json()["error"]["code"] == read.json()["error"]["code"] == -32006
+    assert completed.json()["error"]["message"] == "Insufficient permission"
+
+
+class _AnswersWithACoroutine(PermissionCheck):
+    """A sync check handing back a coroutine, which ``authorize`` refuses as misconfigured."""
+
+    def has_permission(self, principal: Any, spec: Any) -> Any:
+        async def granted() -> bool:
+            return True
+
+        return granted()
+
+
+def test_a_misconfigured_check_fails_the_completion_as_the_read() -> None:
+    # A configuration error is raised, as the read raises it, rather than read
+    # as a refusal that would hide the mistake behind a -32006.
+    server = _server()
+    server.register_resource(
+        _invoice(_AnswersWithACoroutine()),
+        name="invoice",
+        uri_template="invoices://{pk}",
+        completions={"pk": lambda: ["1"]},
+    )
+
+    with pytest.raises(ImproperlyConfigured, match="awaitable"):
+        _complete(server, _INVOICE_PK)
+    with pytest.raises(ImproperlyConfigured, match="awaitable"):
+        handle_resources_read({"uri": "invoices://1"}, _ctx(server))
+
+
 def test_a_kernel_resource_admitting_the_caller_completes() -> None:
     server = _server()
     server.register_resource(
@@ -439,6 +513,27 @@ def test_completion_runs_the_bindings_rate_limits() -> None:
     assert isinstance(result, JsonRpcError)
     assert result.code == -32005
     assert result.data == {"retryAfter": 30}
+
+
+def test_a_kernel_resources_spec_is_asked_after_its_rate_limit() -> None:
+    # The read's dispatch asks the spec's checks after the transport's rate
+    # limit, so a caller over the limit learns only that, and the check, which
+    # may query, is not asked for a request that is turned away anyway.
+    check = _Refuses()
+    server = _server()
+    server.register_resource(
+        _invoice(check),
+        name="invoice",
+        uri_template="invoices://{pk}",
+        rate_limits=[_AlwaysLimited()],
+        completions={"pk": lambda: ["1"]},
+    )
+
+    result = _complete(server, _INVOICE_PK)
+
+    assert isinstance(result, JsonRpcError)
+    assert result.code == -32005
+    assert check.asked == 0
 
 
 def test_unknown_prompt_is_invalid_params() -> None:

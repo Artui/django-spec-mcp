@@ -6,7 +6,7 @@ and ``handle_tools_call_async`` alike: a ``filter_set`` advertises its filters
 and narrows the rows, ``paginate=True`` lays one page out through the kernel's
 ``paginate_output`` with the untyped ``page`` / ``limit`` read as ints, a
 declared read is shape-checked, a list return pages in memory, ``None`` under
-``allow_none`` is the empty list, and the spec's permissions, the rate limits,
+``allow_none`` is the empty list and without it an internal error, and the spec's permissions, the rate limits,
 a ``ServiceValidationError`` and a ``ServiceError`` are each answered on the
 tool result or the JSON-RPC error the drf-services path answers with. The
 async-only questions are in ``test_selector_tool_dispatch_async.py``.
@@ -33,7 +33,7 @@ import django_filters
 import pytest
 from asgiref.sync import sync_to_async
 from django.http import HttpRequest
-from django.test import override_settings
+from django.test import Client, override_settings
 from django_service_specs import (
     DataclassPresenter,
     Parameter,
@@ -55,8 +55,11 @@ from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
+from tests.kernel_client import KernelClient
+from tests.testapp.auth_backend import HeaderAuthBackend
 from tests.testapp.kernel_shapes import InvoiceOutput
 from tests.testapp.models import Invoice
+from tests.testapp.urlconf_for import urlconf_for
 from tests.utils import tool_error
 
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -311,9 +314,35 @@ async def test_a_declared_read_is_shape_checked(is_async: bool) -> None:
 
 @routes
 async def test_none_under_allow_none_is_the_empty_list(is_async: bool) -> None:
+    # Changed by design: a drf-services ``LIST`` returning ``None`` was served
+    # as ``{}`` with nothing declared. A kernel spec says ``None`` is an answer
+    # by declaring ``allow_none=True``; without it the kernel's ``present``
+    # raises ``TypeError`` and the call is an internal error
+    # (test_none_without_allow_none_is_an_internal_error).
     out = await _call(_server(_invoices(lambda: None, allow_none=True)), {}, is_async=is_async)
 
     assert out["structuredContent"] == []
+
+
+@routes
+async def test_none_without_allow_none_raises_in_process(is_async: bool) -> None:
+    with pytest.raises(TypeError):
+        await _call(_server(_invoices(lambda: None)), {}, is_async=is_async)
+
+
+@routes
+def test_none_without_allow_none_is_an_internal_error(is_async: bool, client: Client) -> None:
+    """What a ``LIST`` returning ``None`` with nothing declared answers on the wire,
+    on both mounts: the transport's internal error, never an empty result."""
+    server = MCPServer(name="t", auth_backend=HeaderAuthBackend())
+    server.register_tool(_invoices(lambda: None), name="invoices.list")
+    with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=is_async)):
+        caller = KernelClient(client)
+        caller.initialize()
+        response = caller.post("tools/call", {"name": "invoices.list", "arguments": {}})
+
+    assert response.status_code == 500
+    assert response.json()["error"] == {"code": -32603, "message": "Internal error"}
 
 
 @routes

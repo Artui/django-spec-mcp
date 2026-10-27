@@ -22,6 +22,7 @@ The original is kept beside this file as ``test_every_route_strips_pagination_ke
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -189,5 +190,7 @@ async def test_a_service_tools_page_and_limit_are_its_own_on_every_route(route: 
 )
 @pytest.mark.parametrize("name", ["page", "limit"])
 def test_a_paginated_list_declaring_a_read_named_page_or_limit_is_refused(name: str) -> None:
-    with pytest.raises(ImproperlyConfigured, match=name):
+    # The name as the registration message lists it, so a message that only
+    # mentions ``page`` and ``limit`` in passing cannot satisfy the match.
+    with pytest.raises(ImproperlyConfigured, match=re.escape(f"['{name}']")):
         _server(_selector(SelectorKind.LIST, Parameter(name, "integer")), paginate=True)
