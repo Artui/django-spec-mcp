@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 
 from django.core.exceptions import ImproperlyConfigured
 
-from django_spec_mcp.constants import IconTheme
+from django_spec_mcp.types.icon_theme import IconTheme
 
 _ALLOWED_SCHEMES: frozenset[str] = frozenset({"https", "data"})
 

@@ -8,18 +8,18 @@ JSON-RPC envelope, MCP message types, and error codes.
 ::: django_spec_mcp.protocol.types.json_rpc_notification.JsonRpcNotification
 ::: django_spec_mcp.protocol.types.json_rpc_response.JsonRpcResponse
 ::: django_spec_mcp.protocol.types.json_rpc_error.JsonRpcError
-::: django_spec_mcp.constants.JsonRpcErrorCode
+::: django_spec_mcp.types.JsonRpcErrorCode
 ::: django_spec_mcp.protocol.parse_message.parse_message
 
 ## Display metadata
 
 ::: django_spec_mcp.protocol.types.icon.Icon
-::: django_spec_mcp.constants.IconTheme
+::: django_spec_mcp.types.IconTheme
 
 ## Result envelope
 
-::: django_spec_mcp.constants.ResultType
-::: django_spec_mcp.constants.CacheScope
+::: django_spec_mcp.types.ResultType
+::: django_spec_mcp.types.CacheScope
 
 ## Discovery and the initialize handshake
 
@@ -34,7 +34,7 @@ JSON-RPC envelope, MCP message types, and error codes.
 
 ::: django_spec_mcp.protocol.types.tool.Tool
 ::: django_spec_mcp.protocol.types.tool_content_block.ToolContentBlock
-::: django_spec_mcp.constants.ToolContentKind
+::: django_spec_mcp.types.ToolContentKind
 ::: django_spec_mcp.protocol.types.tool_result.ToolResult
 
 ## Resources
@@ -60,7 +60,7 @@ See [Server-pushed notifications](../concepts.md#server-pushed-notifications-sub
 for how to wire one up.
 
 ::: django_spec_mcp.subscriptions.types.subscription_filter.SubscriptionFilter
-::: django_spec_mcp.constants.NotificationKind
+::: django_spec_mcp.types.NotificationKind
 ::: django_spec_mcp.subscriptions.types.subscription_broker.SubscriptionBroker
 ::: django_spec_mcp.subscriptions.in_memory_subscription_broker.InMemorySubscriptionBroker
 ::: django_spec_mcp.subscriptions.redis_subscription_broker.RedisSubscriptionBroker
@@ -73,8 +73,8 @@ The `io.modelcontextprotocol/tasks` extension. See
 up; these are the types.
 
 ::: django_spec_mcp.protocol.types.task.Task
-::: django_spec_mcp.constants.TaskStatus
-::: django_spec_mcp.constants.TaskPolicy
+::: django_spec_mcp.types.TaskStatus
+::: django_spec_mcp.types.TaskPolicy
 ::: django_spec_mcp.tasks.types.task_store.TaskStore
 ::: django_spec_mcp.tasks.types.task_executor.TaskExecutor
 ::: django_spec_mcp.tasks.types.task_record.TaskRecord

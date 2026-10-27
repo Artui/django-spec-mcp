@@ -14,7 +14,6 @@ import pytest
 from django.core.cache import cache
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.constants import TaskStatus
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.protocol.types.task import Task
 from django_spec_mcp.tasks.django_cache_task_store import DjangoCacheTaskStore
@@ -25,6 +24,7 @@ from django_spec_mcp.tasks.report_task_progress import (
 )
 from django_spec_mcp.tasks.transition_task import transition_task
 from django_spec_mcp.tasks.types.task_record import TaskRecord
+from django_spec_mcp.types.task_status import TaskStatus
 from tests.tasks.conftest import RecordingExecutor, context
 from tests.tasks.test_task_lifecycle import _create, _register
 

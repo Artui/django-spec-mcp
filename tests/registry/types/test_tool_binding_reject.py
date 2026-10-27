@@ -15,15 +15,15 @@ from typing import Any
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
-from django_service_specs import SelectorKind
+from django_service_specs import SelectorKind, UnknownArguments
 from rest_framework import serializers
 from rest_framework.permissions import AllowAny
+from rest_framework_services import ArgumentBinding
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.constants import ArgumentBinding, UnknownArguments
 
 
 def _touch(*, title: str = "", **changes: Any) -> dict[str, Any]:

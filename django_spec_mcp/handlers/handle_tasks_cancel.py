@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from django_spec_mcp.constants import TaskStatus
 from django_spec_mcp.handlers.tasks_utils import (
     declares_tasks_extension,
     missing_capability_error,
@@ -14,6 +13,7 @@ from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.tasks.transition_task import transition_task
 from django_spec_mcp.tasks.types.task_record import TaskRecord
+from django_spec_mcp.types.task_status import TaskStatus
 
 
 def handle_tasks_cancel(

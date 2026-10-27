@@ -17,13 +17,13 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import SelectorKind
 from rest_framework import serializers as drf_serializers
+from rest_framework_services import ArgumentBinding
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
 from django_spec_mcp.adapters.selector_to_tool import selector_spec_to_tool
 from django_spec_mcp.adapters.service_to_tool import service_spec_to_tool
 from django_spec_mcp.adapters.utils import validate_input_serializer_against_callable
-from django_spec_mcp.constants import ArgumentBinding
 
 
 class _TwoField(drf_serializers.Serializer):

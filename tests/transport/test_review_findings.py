@@ -248,8 +248,8 @@ def test_the_reporter_guards_its_counters_with_a_lock() -> None:
 def test_a_tuple_of_resource_links_is_accepted() -> None:
     """A selector returning a tuple is producing the right shape; rejecting it
     with a message about the wrong shape read as nonsense."""
-    from django_spec_mcp.constants import ToolContentKind
     from django_spec_mcp.output.build_content_blocks import build_content_blocks
+    from django_spec_mcp.types.tool_content_kind import ToolContentKind
 
     blocks = build_content_blocks(
         ({"uri": "a://1", "name": "one"}, {"uri": "a://2", "name": "two"}),

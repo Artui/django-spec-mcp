@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from django_spec_mcp.constants import ELICITATION_KEY, ElicitAction
 from django_spec_mcp.elicitation.types.elicit_answer import ElicitAnswer
+from django_spec_mcp.types.elicit_action import ElicitAction
+from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
 
 
 def read_elicit_answer(params: dict[str, Any]) -> ElicitAnswer | None:

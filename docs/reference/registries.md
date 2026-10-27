@@ -32,7 +32,7 @@ to each item in `items`, never to the envelope — and its description in the
 A `UrlKwarg` or `QueryParam` may not take a name the DRF edge fills on every
 call; registration refuses one that does.
 
-::: django_spec_mcp.constants.TOOL_EDGE_SEEDS
+::: django_spec_mcp.types.TOOL_EDGE_SEEDS
 ::: django_spec_mcp.registry.tool_registry.ToolRegistry
 ::: django_spec_mcp.registry.types.resource_binding.ResourceBinding
 ::: django_spec_mcp.registry.resource_registry.ResourceRegistry
@@ -40,8 +40,8 @@ call; registration refuses one that does.
 A URI-template variable may not take a name `resources/read` seeds itself;
 registration refuses one that does.
 
-::: django_spec_mcp.constants.RESOURCE_EDGE_SEEDS
-::: django_spec_mcp.constants.ResourceEncoding
+::: django_spec_mcp.types.RESOURCE_EDGE_SEEDS
+::: django_spec_mcp.types.ResourceEncoding
 ::: django_spec_mcp.registry.types.prompt_binding.PromptBinding
 ::: django_spec_mcp.registry.prompt_registry.PromptRegistry
 
@@ -58,9 +58,9 @@ rule.
 
 ::: django_spec_mcp.registry.types.ui_resource_meta.UIResourceMeta
 ::: django_spec_mcp.registry.types.ui_csp.UICsp
-::: django_spec_mcp.constants.UIPermission
+::: django_spec_mcp.types.UIPermission
 ::: django_spec_mcp.registry.types.ui_tool_meta.UIToolMeta
-::: django_spec_mcp.constants.UIVisibility
+::: django_spec_mcp.types.UIVisibility
 
 ### The view document
 
@@ -86,12 +86,12 @@ bindings in input order.
 ::: django_spec_mcp.registry.types.tool_definition.ToolDefinition
 ::: django_spec_mcp.registry.types.service_defaults.ServiceDefaults
 ::: django_spec_mcp.registry.types.selector_defaults.SelectorDefaults
-::: django_spec_mcp.constants.ToolKind
+::: django_spec_mcp.types.ToolKind
 
 `ArgumentBinding` is re-exported from `djangorestframework-services`, whose
 `dispatch_spec` owns it, and `UnknownArguments` from `django-service-specs`,
 the kernel that drf-services dispatches through and that owns it; import both
-from `django_spec_mcp.constants`. `ArgumentBinding.SPREAD_CALLER_WINS` and
+from `django_spec_mcp`. `ArgumentBinding.SPREAD_CALLER_WINS` and
 `UnknownArguments.PASSTHROUGH` are retired: registering a tool with either,
 directly, through a `ToolDefinition` or through `ServiceDefaults` /
 `SelectorDefaults`, raises `ImproperlyConfigured` naming the tool.

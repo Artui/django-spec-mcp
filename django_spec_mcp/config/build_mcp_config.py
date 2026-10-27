@@ -7,7 +7,7 @@ from django_service_specs import UNSET, UnsetType
 
 from django_spec_mcp.conf import get_setting
 from django_spec_mcp.config.types.mcp_config import MCPConfig
-from django_spec_mcp.constants import OutputFormat
+from django_spec_mcp.types.output_format import OutputFormat
 
 
 def _nullable_int(value: Any) -> int | None:

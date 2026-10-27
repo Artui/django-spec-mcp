@@ -15,13 +15,13 @@ from django.contrib.auth.models import AnonymousUser
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.types.token_info import TokenInfo
-from django_spec_mcp.constants import TaskStatus
 from django_spec_mcp.protocol.types.task import Task
 from django_spec_mcp.tasks.build_worker_token import build_worker_token
 from django_spec_mcp.tasks.create_task import create_task
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from django_spec_mcp.tasks.transition_task import transition_task
 from django_spec_mcp.tasks.types.task_record import TaskRecord
+from django_spec_mcp.types.task_status import TaskStatus
 from tests.tasks.conftest import BrokenExecutor, RecordingExecutor, slow_service
 
 

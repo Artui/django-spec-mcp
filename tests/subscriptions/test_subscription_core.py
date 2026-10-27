@@ -13,7 +13,6 @@ from rest_framework_services.types.service_spec import ServiceSpec
 from django_spec_mcp import MCPServer, NotificationKind, SubscriptionFilter
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
-from django_spec_mcp.constants import TASKS_EXTENSION_ID
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.subscriptions.grant_subscription import grant_subscription
 from django_spec_mcp.subscriptions.in_memory_subscription_broker import (
@@ -26,6 +25,7 @@ from django_spec_mcp.subscriptions.utils import (
 )
 from django_spec_mcp.tasks.create_task import create_task
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
+from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
 from tests.tasks.conftest import RecordingExecutor, slow_service
 
 # ----- SubscriptionFilter -----

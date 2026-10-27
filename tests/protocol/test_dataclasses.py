@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from django_spec_mcp.constants import UI_EXTENSION_ID, JsonRpcErrorCode
 from django_spec_mcp.protocol.parse_message import parse_message
 from django_spec_mcp.protocol.types.client_capabilities import ClientCapabilities
 from django_spec_mcp.protocol.types.implementation import Implementation
@@ -17,6 +16,8 @@ from django_spec_mcp.protocol.types.server_capabilities import ServerCapabilitie
 from django_spec_mcp.protocol.types.tool import Tool
 from django_spec_mcp.protocol.types.tool_content_block import ToolContentBlock
 from django_spec_mcp.protocol.types.tool_result import ToolResult
+from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
+from django_spec_mcp.types.ui_extension_id import UI_EXTENSION_ID
 
 
 def test_implementation_to_dict() -> None:

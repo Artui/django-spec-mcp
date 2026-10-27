@@ -15,7 +15,6 @@ from typing import Any
 import pytest
 
 from django_spec_mcp import NotificationKind, SubscriptionFilter
-from django_spec_mcp.constants import SUBSCRIPTION_ID_META_KEY
 from django_spec_mcp.subscriptions.in_memory_subscription_broker import (
     InMemorySubscriptionBroker,
 )
@@ -24,6 +23,7 @@ from django_spec_mcp.transport.subscription_stream import (
     build_subscription_stream,
     subscription_closed_response,
 )
+from django_spec_mcp.types.subscription_id_meta_key import SUBSCRIPTION_ID_META_KEY
 
 pytestmark = pytest.mark.asyncio
 

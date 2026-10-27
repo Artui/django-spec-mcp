@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from django_spec_mcp.constants import MODERN_PROTOCOL_VERSIONS, OutputFormat
+from django_spec_mcp.types.modern_protocol_versions import MODERN_PROTOCOL_VERSIONS
+from django_spec_mcp.types.output_format import OutputFormat
 
 
 @dataclass(frozen=True)

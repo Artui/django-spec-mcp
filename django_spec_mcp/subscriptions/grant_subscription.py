@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from django_spec_mcp.constants import NotificationKind
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import check_permissions, resource_shape
 from django_spec_mcp.subscriptions.types.subscription_filter import SubscriptionFilter
@@ -11,6 +10,7 @@ from django_spec_mcp.subscriptions.utils import (
     topic_for_resource,
     topic_for_task,
 )
+from django_spec_mcp.types.notification_kind import NotificationKind
 
 
 def grant_subscription(

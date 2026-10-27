@@ -8,14 +8,12 @@ from django.template.loader import render_to_string
 from django_service_specs import UNSET, SelectorKind, UnsetType
 
 from django_spec_mcp.adapters.utils import merge_meta
-from django_spec_mcp.constants import (
-    UI_META_KEY,
-    UI_RESOURCE_MIME_TYPE,
-    ResourceEncoding,
-)
 from django_spec_mcp.protocol.types.icon import Icon
 from django_spec_mcp.registry.types.resource_binding import ResourceBinding
 from django_spec_mcp.registry.types.ui_resource_meta import UIResourceMeta
+from django_spec_mcp.types.resource_encoding import ResourceEncoding
+from django_spec_mcp.types.ui_meta_key import UI_META_KEY
+from django_spec_mcp.types.ui_resource_mime_type import UI_RESOURCE_MIME_TYPE
 from django_spec_mcp.ui.build_app_document import build_app_document
 
 

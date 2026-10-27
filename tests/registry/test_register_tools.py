@@ -9,18 +9,13 @@ tests pin the equivalence.
 from __future__ import annotations
 
 import pytest
-from django_service_specs import SelectorKind
+from django_service_specs import SelectorKind, UnknownArguments
+from rest_framework_services import ArgumentBinding
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.constants import (
-    ArgumentBinding,
-    OutputFormat,
-    ToolKind,
-    UnknownArguments,
-)
 from django_spec_mcp.registry.register_tools import register_tools
 from django_spec_mcp.registry.types.selector_defaults import SelectorDefaults
 from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
@@ -28,6 +23,8 @@ from django_spec_mcp.registry.types.service_defaults import ServiceDefaults
 from django_spec_mcp.registry.types.tool_binding import ToolBinding
 from django_spec_mcp.registry.types.tool_definition import ToolDefinition
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp.types.output_format import OutputFormat
+from django_spec_mcp.types.tool_kind import ToolKind
 
 
 def _server() -> MCPServer:

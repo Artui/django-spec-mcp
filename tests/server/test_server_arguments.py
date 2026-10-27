@@ -34,10 +34,10 @@ from rest_framework_services import QueryParam, SelectorSpec, ServiceSpec, UrlKw
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.constants import ELICITATION_KEY
 from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
 from django_spec_mcp.registry.types.tool_binding import ToolBinding
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
 from tests.testapp.urlconf_for import urlconf_for
 from tests.utils import granting_route, tool_error
 

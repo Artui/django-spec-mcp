@@ -11,7 +11,6 @@ from rest_framework_services import adispatch_spec, enforce_permissions
 
 from django_spec_mcp._compat.acall import acall
 from django_spec_mcp._compat.tracing import span
-from django_spec_mcp.constants import JsonRpcErrorCode, OutputFormat
 from django_spec_mcp.elicitation.types.resolved_input import ResolvedInput
 from django_spec_mcp.handlers.handle_tools_call import _forbidden, _render, _span_attrs
 from django_spec_mcp.handlers.input_dispatch import (
@@ -49,6 +48,8 @@ from django_spec_mcp.output.resolve_structured_output import resolve_structured_
 from django_spec_mcp.output.tool_result import build_tool_result
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
+from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
+from django_spec_mcp.types.output_format import OutputFormat
 
 
 async def handle_tools_call_async(

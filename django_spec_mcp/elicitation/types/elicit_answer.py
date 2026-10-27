@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from django_spec_mcp.constants import ElicitAction
+from django_spec_mcp.types.elicit_action import ElicitAction
 
 
 @dataclass(frozen=True)

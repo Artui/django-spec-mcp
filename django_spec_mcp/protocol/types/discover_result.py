@@ -3,9 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from django_spec_mcp.constants import SERVER_INFO_META_KEY
 from django_spec_mcp.protocol.types.implementation import Implementation
 from django_spec_mcp.protocol.types.server_capabilities import ServerCapabilities
+from django_spec_mcp.types.server_info_meta_key import SERVER_INFO_META_KEY
 
 
 @dataclass(frozen=True)

@@ -16,7 +16,7 @@ from typing import Any
 
 import pytest
 from django.http import HttpRequest
-from django_service_specs import SelectorKind
+from django_service_specs import SelectorKind, UnknownArguments
 from rest_framework import serializers as drf_serializers
 from rest_framework_services import ArgumentBinding
 from rest_framework_services.dispatch.utils import refuse_retired_modes
@@ -26,7 +26,6 @@ from rest_framework_services.types.service_spec import ServiceSpec
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
-from django_spec_mcp.constants import UnknownArguments
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
 from django_spec_mcp.handlers.types.context import MCPCallContext

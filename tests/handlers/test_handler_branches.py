@@ -12,7 +12,6 @@ from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
 from django_spec_mcp.auth.types.token_info import TokenInfo
-from django_spec_mcp.constants import JsonRpcErrorCode
 from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
@@ -25,6 +24,7 @@ from django_spec_mcp.registry.resource_registry import ResourceRegistry
 from django_spec_mcp.registry.tool_registry import ToolRegistry
 from django_spec_mcp.registry.types.resource_binding import ResourceBinding
 from django_spec_mcp.registry.types.tool_binding import ToolBinding
+from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from tests.utils import tool_error
 
 
@@ -447,7 +447,7 @@ def test_tools_list_emits_output_schema_when_structured_content_enabled() -> Non
 
 def test_service_tool_with_merge_binding_spreads_args_to_callable_params() -> None:
     """``ArgumentBinding.SPREAD_AUTHOR_WINS`` lets a service declare individual params."""
-    from django_spec_mcp.constants import ArgumentBinding
+    from rest_framework_services import ArgumentBinding
 
     def svc(*, project_id: str, expand: bool = False) -> dict[str, Any]:
         return {"pid": project_id, "expand": expand}
@@ -470,7 +470,7 @@ def test_service_tool_with_merge_binding_spreads_args_to_callable_params() -> No
 
 def test_service_tool_merge_pool_seeds_cannot_be_overridden_by_client() -> None:
     """Reserved pool-seed keys (``user`` / ``request`` / ``data``) are stripped from spread."""
-    from django_spec_mcp.constants import ArgumentBinding
+    from rest_framework_services import ArgumentBinding
 
     received: dict[str, Any] = {}
 

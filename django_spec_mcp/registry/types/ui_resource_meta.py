@@ -4,8 +4,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from django_spec_mcp.constants import UIPermission
 from django_spec_mcp.registry.types.ui_csp import UICsp
+from django_spec_mcp.types.ui_permission import UIPermission
 
 
 @dataclass(frozen=True)

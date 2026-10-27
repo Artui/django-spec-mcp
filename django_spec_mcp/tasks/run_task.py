@@ -4,7 +4,6 @@ from collections.abc import Callable
 from dataclasses import replace
 from typing import Any
 
-from django_spec_mcp.constants import TaskStatus
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
@@ -12,6 +11,7 @@ from django_spec_mcp.tasks.report_task_progress import report_task_progress
 from django_spec_mcp.tasks.transition_task import transition_task
 from django_spec_mcp.tasks.types.task_record import TaskRecord
 from django_spec_mcp.tasks.types.task_store import TaskStore
+from django_spec_mcp.types.task_status import TaskStatus
 
 
 def run_task(

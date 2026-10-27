@@ -4,7 +4,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from django_spec_mcp.constants import ArgumentBinding, OutputFormat, UnknownArguments
+from django_service_specs import UnknownArguments
+from rest_framework_services import ArgumentBinding
+
+from django_spec_mcp.types.output_format import OutputFormat
 
 
 @dataclass(frozen=True)

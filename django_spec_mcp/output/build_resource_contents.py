@@ -6,11 +6,12 @@ from typing import Any
 from django_service_specs import SelectorKind
 from rest_framework_services import base_serializer_context, renderable_serializer_class
 
-from django_spec_mcp.constants import JsonRpcErrorCode, ResourceEncoding
 from django_spec_mcp.output.encode_json import encode_json
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.protocol.types.resource_contents import ResourceContents
 from django_spec_mcp.registry.types.resource_binding import ResourceBinding
+from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
+from django_spec_mcp.types.resource_encoding import ResourceEncoding
 
 
 def build_resource_contents(
@@ -45,7 +46,7 @@ def build_resource_contents(
        ``DataclassSerializer``; instantiated as declared, its own ``__init__``
        received ``many=`` and every read raised.
     2. **Encode** per the binding's
-       [`ResourceEncoding`][django_spec_mcp.constants.ResourceEncoding].
+       [`ResourceEncoding`][django_spec_mcp.types.ResourceEncoding].
        ``JSON`` pretty-prints; ``TEXT`` passes the value through verbatim, which is what
        an HTML / Markdown / CSV resource needs; ``BLOB`` base64-encodes it into
        the spec's ``blob`` field. ``text`` and ``blob`` are mutually exclusive

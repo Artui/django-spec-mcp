@@ -3,12 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from django_spec_mcp.constants import (
-    CLIENT_CAPABILITIES_META_KEY,
-    CLIENT_INFO_META_KEY,
-    PROTOCOL_VERSION_META_KEY,
-)
 from django_spec_mcp.protocol.types.implementation import Implementation
+from django_spec_mcp.types.client_capabilities_meta_key import CLIENT_CAPABILITIES_META_KEY
+from django_spec_mcp.types.client_info_meta_key import CLIENT_INFO_META_KEY
+from django_spec_mcp.types.protocol_version_meta_key import PROTOCOL_VERSION_META_KEY
 
 
 @dataclass(frozen=True)

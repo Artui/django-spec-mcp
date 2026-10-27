@@ -11,12 +11,12 @@ from django.db.models import IntegerField, QuerySet, Value
 from django.http import HttpRequest
 from django_service_specs import SelectorKind
 from rest_framework import serializers as drf_serializers
+from rest_framework_services import ArgumentBinding
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
-from django_spec_mcp.constants import ArgumentBinding
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.types.context import MCPCallContext

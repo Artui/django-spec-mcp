@@ -40,7 +40,6 @@ from rest_framework_services import (
 
 from django_spec_mcp.adapters.utils import _overlaid_field_names
 from django_spec_mcp.config.types.mcp_config import MCPConfig
-from django_spec_mcp.constants import RESERVED_POST_FETCH_KEYS
 from django_spec_mcp.handlers.selector_tool_dispatch import enforce_object_permissions
 from django_spec_mcp.handlers.utils import (
     apply_tool_server_arguments,
@@ -59,6 +58,7 @@ from django_spec_mcp.protocol.types.tool_result import ToolResult
 from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
 from django_spec_mcp.registry.types.tool_binding import ToolBinding
 from django_spec_mcp.schema.types.agent_conventions import AgentConventions
+from django_spec_mcp.types.reserved_post_fetch_keys import RESERVED_POST_FETCH_KEYS
 
 
 def call_spec_tool(

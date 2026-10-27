@@ -9,7 +9,6 @@ from django.http import HttpRequest
 
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
-from django_spec_mcp.constants import UI_META_KEY, UI_RESOURCE_MIME_TYPE, JsonRpcErrorCode
 from django_spec_mcp.handlers.handle_resources_list import handle_resources_list
 from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
 from django_spec_mcp.handlers.handle_resources_read_async import handle_resources_read_async
@@ -18,6 +17,9 @@ from django_spec_mcp.registry.types.ui_csp import UICsp
 from django_spec_mcp.registry.types.ui_resource_meta import UIResourceMeta
 from django_spec_mcp.server.mcp_server import MCPServer
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
+from django_spec_mcp.types.ui_meta_key import UI_META_KEY
+from django_spec_mcp.types.ui_resource_mime_type import UI_RESOURCE_MIME_TYPE
 
 VIEW = "<!doctype html><h1>Invoices</h1>"
 URI = "ui://invoices/table.html"

@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from django_spec_mcp.constants import UIVisibility
+from django_spec_mcp.types.ui_visibility import UIVisibility
 
 
 @dataclass(frozen=True)

@@ -5,10 +5,10 @@ from typing import Any
 
 from asgiref.sync import sync_to_async
 
-from django_spec_mcp.constants import ResultType
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.subscriptions.publish_invalidations import publish_invalidations
 from django_spec_mcp.subscriptions.render_invalidations import render_invalidations
+from django_spec_mcp.types.result_type import ResultType
 
 
 def announce_invalidations(

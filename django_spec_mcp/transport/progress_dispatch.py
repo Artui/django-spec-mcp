@@ -6,11 +6,12 @@ from typing import Any
 from django.http import StreamingHttpResponse
 from django_service_specs import ProgressReporter
 
-from django_spec_mcp.constants import PROGRESS_TOKEN_META_KEY, JsonRpcErrorCode
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import judge_tool_permissions
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.transport.response_stream import build_response_stream
+from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
+from django_spec_mcp.types.progress_token_meta_key import PROGRESS_TOKEN_META_KEY
 
 
 def progress_token(params: Any) -> str | int | None:

@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from django_spec_mcp.constants import TaskStatus
 from django_spec_mcp.subscriptions.publish_after_task import publish_task_status
 from django_spec_mcp.subscriptions.types.subscription_broker import SubscriptionBroker
 from django_spec_mcp.tasks.types.task_record import TaskRecord
 from django_spec_mcp.tasks.types.task_store import TaskStore
 from django_spec_mcp.tasks.utils import now_iso
+from django_spec_mcp.types.task_status import TaskStatus
 
 
 def transition_task(

@@ -1,4 +1,3 @@
-from django_spec_mcp.constants import JsonRpcErrorCode
 from django_spec_mcp.protocol.parse_message import parse_message
 from django_spec_mcp.protocol.types.client_capabilities import ClientCapabilities
 from django_spec_mcp.protocol.types.get_prompt_result import GetPromptResult
@@ -20,6 +19,7 @@ from django_spec_mcp.protocol.types.server_capabilities import ServerCapabilitie
 from django_spec_mcp.protocol.types.tool import Tool
 from django_spec_mcp.protocol.types.tool_content_block import ToolContentBlock
 from django_spec_mcp.protocol.types.tool_result import ToolResult
+from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 
 __all__ = [
     "ClientCapabilities",

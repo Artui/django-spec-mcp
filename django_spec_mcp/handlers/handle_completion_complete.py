@@ -5,20 +5,18 @@ from dataclasses import dataclass
 from itertools import islice
 from typing import Any
 
+from django_service_specs import RESERVED_POOL_SEEDS
 from rest_framework_services import build_offline_context, resolve_callable_kwargs
 from rest_framework_services.dispatch.utils import DROPPED_EDGE_SEEDS
 
 from django_spec_mcp._compat.tracing import span
-from django_spec_mcp.constants import (
-    MAX_COMPLETION_VALUES,
-    RESERVED_POOL_SEEDS,
-    JsonRpcErrorCode,
-)
 from django_spec_mcp.handlers.handle_tools_call import _span_attrs
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import check_permissions, consume_rate_limits
 from django_spec_mcp.protocol.types.completion import Completion
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
+from django_spec_mcp.types.max_completion_values import MAX_COMPLETION_VALUES
 
 
 def handle_completion_complete(

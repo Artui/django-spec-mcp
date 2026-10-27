@@ -6,8 +6,8 @@ import sys
 import pytest
 from django_service_specs import UNSET
 
-from django_spec_mcp.constants import OutputFormat
 from django_spec_mcp.output.tool_result import build_tool_result
+from django_spec_mcp.types.output_format import OutputFormat
 
 
 def test_build_tool_result_json_default() -> None:
@@ -150,7 +150,7 @@ def test_opting_out_still_omits_the_key_entirely() -> None:
 
 
 def test_a_resource_link_result_makes_the_same_distinction(monkeypatch) -> None:
-    from django_spec_mcp.constants import ToolContentKind
+    from django_spec_mcp.types.tool_content_kind import ToolContentKind
 
     res = build_tool_result(
         {"uri": "https://example.test/doc", "name": "doc"},

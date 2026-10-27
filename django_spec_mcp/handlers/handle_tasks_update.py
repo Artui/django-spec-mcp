@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
-from django_spec_mcp.constants import JsonRpcErrorCode, TaskStatus
 from django_spec_mcp.handlers.tasks_utils import (
     declares_tasks_extension,
     missing_capability_error,
@@ -16,6 +15,8 @@ from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.subscriptions.publish_after_task import publish_task_status
 from django_spec_mcp.tasks.types.task_record import TaskRecord
 from django_spec_mcp.tasks.utils import now_iso
+from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
+from django_spec_mcp.types.task_status import TaskStatus
 
 
 def handle_tasks_update(

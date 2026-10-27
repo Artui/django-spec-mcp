@@ -4,7 +4,6 @@ from typing import Any
 
 from django_service_specs import UNSET
 
-from django_spec_mcp.constants import OutputFormat, ToolContentKind
 from django_spec_mcp.output.build_content_blocks import build_content_blocks
 from django_spec_mcp.output.encode_json import encode_json
 from django_spec_mcp.output.encode_toon import encode_toon
@@ -12,6 +11,8 @@ from django_spec_mcp.output.error_tool_result import build_error_tool_result
 from django_spec_mcp.output.utils import toon_encoder
 from django_spec_mcp.protocol.types.tool_content_block import ToolContentBlock
 from django_spec_mcp.protocol.types.tool_result import ToolResult
+from django_spec_mcp.types.output_format import OutputFormat
+from django_spec_mcp.types.tool_content_kind import ToolContentKind
 
 
 def _is_uniform_list_of_objects(payload: Any) -> bool:
