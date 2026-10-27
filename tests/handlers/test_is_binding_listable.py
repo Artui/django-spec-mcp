@@ -33,6 +33,8 @@ from django.contrib.auth import get_user_model
 from django.http import HttpRequest
 from django_service_specs import (
     DEFAULT_POOL_SEEDS,
+    Parameter,
+    Parameters,
     PermissionCheck,
     SelectorKind,
     SelectorSpec,
@@ -238,7 +240,12 @@ def test_a_selector_tool_is_judged_by_its_spec_s_checks() -> None:
 def test_a_resource_is_judged_by_its_spec_s_checks() -> None:
     server = _server()
     server.register_resource(
-        SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_one, permissions=[_IsStaff()]),
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=_one,
+            reads=Parameters([Parameter("pk", "integer", required=True)]),
+            permissions=[_IsStaff()],
+        ),
         uri_template="rows://{pk}",
         name="row",
     )
@@ -312,9 +319,12 @@ def test_each_spec_listing_hands_the_server_s_seeds_and_setting(
             server.tools.register(lenient.register_tool(ServiceSpec(service=_write), name="open"))
         else:
             selector = _one if "{pk}" in uri else _all
-            spec = SelectorSpec(kind=SelectorKind.RETRIEVE, selector=selector, permissions=[check])
+            reads = Parameters([Parameter("pk", "integer", required=True)] if "{pk}" in uri else [])
+            spec = SelectorSpec(
+                kind=SelectorKind.RETRIEVE, selector=selector, reads=reads, permissions=[check]
+            )
             server.register_resource(spec, uri_template=uri, name="guarded")
-            open_spec = SelectorSpec(kind=SelectorKind.RETRIEVE, selector=selector)
+            open_spec = SelectorSpec(kind=SelectorKind.RETRIEVE, selector=selector, reads=reads)
             server.resources.register(
                 lenient.register_resource(open_spec, uri_template=f"{uri}/open", name="open")
             )

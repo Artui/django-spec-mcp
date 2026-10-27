@@ -36,6 +36,8 @@ from django.http import HttpRequest
 from django.test import Client, override_settings
 from django_service_specs import (
     DataclassValidator,
+    Parameter,
+    Parameters,
     PermissionCheck,
     SelectorKind,
     SelectorSpec,
@@ -191,7 +193,10 @@ def _tool(server: MCPServer, name: str, *checks: PermissionCheck, **kwargs: Any)
 def _resource(server: MCPServer, name: str, uri: str, *checks: PermissionCheck) -> None:
     server.register_resource(
         SelectorSpec(
-            kind=SelectorKind.RETRIEVE, selector=_one, permissions=list(checks or [Unrestricted()])
+            kind=SelectorKind.RETRIEVE,
+            selector=_one,
+            reads=Parameters([Parameter("pk", "integer")]),
+            permissions=list(checks or [Unrestricted()]),
         ),
         uri_template=uri,
         name=name,

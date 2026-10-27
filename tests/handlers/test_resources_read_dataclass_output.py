@@ -15,8 +15,7 @@ The original's other questions, in their kernel form:
   refused when the spec is built, and ``output_serializer=`` beside a kernel
   spec is refused at registration, since the spec declares its own presenter;
 - a declaration every read would fail on, refused at registration rather than
-  at the first read: a template variable no read declares. That one is not
-  refused yet, so its test is a strict xfail naming the fix.
+  at the first read: a template variable no read declares.
 
 The original is kept beside this file as ``test_resources_read_dataclass_output_drfs.py``.
 """
@@ -140,14 +139,6 @@ def test_an_output_serializer_beside_a_kernel_spec_is_refused() -> None:
         )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "register_resource does not compare a kernel spec's reads with the template's "
-        "variables, so every read of this resource is refused as invalid params; the "
-        "fix is a check in MCPServer._register_kernel_resource."
-    ),
-)
 def test_a_template_variable_no_read_declares_is_refused_at_registration() -> None:
     server = MCPServer(name="t", auth_backend=AllowAnyBackend())
     with pytest.raises(ImproperlyConfigured, match="pk"):
@@ -156,3 +147,43 @@ def test_a_template_variable_no_read_declares_is_refused_at_registration() -> No
             name="bad",
             uri_template="bad://{pk}",
         )
+
+
+def test_the_refusal_names_the_resource_and_each_variable_no_read_declares() -> None:
+    """``pk`` is declared and so is left out; the other two are listed, in order, which a
+    check naming only the first it found, or all of them, would not do."""
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend())
+    with pytest.raises(ImproperlyConfigured) as raised:
+        server.register_resource(
+            SelectorSpec(
+                kind=SelectorKind.RETRIEVE, selector=_invoice, reads=_PK, permissions=OPEN
+            ),
+            name="bad",
+            uri_template="bad://{tenant}/{pk}/{area}",
+        )
+    message = str(raised.value)
+    assert "Resource 'bad'" in message
+    assert "['area', 'tenant']" in message
+    assert "'pk'" not in message
+
+
+@pytest.mark.django_db
+def test_a_template_variable_naming_a_shape_registers_and_is_read() -> None:
+    """A shape is a parameter of the spec too (``parameters()`` is its reads then its
+    shapes), which dispatch takes as an argument, so a variable naming one is not
+    refused: the check reads ``parameters()`` and not ``reads`` alone."""
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend())
+    server.register_resource(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=_invoice,
+            reads=_PK,
+            shapes=Parameters([Parameter("fields", "string")]),
+            presenter=DataclassPresenter(Invoice),
+            permissions=OPEN,
+        ),
+        name="invoice",
+        uri_template="invoices://{pk}/{fields}",
+    )
+    out = handle_resources_read({"uri": "invoices://7/number"}, _ctx(server))
+    assert _body(out)["number"] == "INV-7"

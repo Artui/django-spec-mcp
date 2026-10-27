@@ -1605,6 +1605,18 @@ class MCPServer:
             reserved=self._pool_seeds.names | RESOURCE_EDGE_SEEDS,
         )
         check_completions_declared(f"Resource {name!r}", binding.completions, template_variables)
+        # A variable no read declares reaches ``dispatch`` as an argument the spec
+        # does not take and is refused at every read, so the resource could never
+        # be served (``test_a_template_variable_no_read_declares_is_refused_at_registration``).
+        # A name a pool seed fills was refused above, so what is left is a name
+        # the spec itself must declare, a ``shapes`` entry included.
+        undeclared = sorted(set(template_variables) - spec.parameters().names())
+        if undeclared:
+            raise ImproperlyConfigured(
+                f"Resource {name!r}: uri_template variables {undeclared} are not among the "
+                "spec's reads, so every read would be refused as an argument the spec does "
+                "not take. Declare each as a read of the spec."
+            )
         # The spec's own permissions are the guard, as for ``register_tool``.
         if check_kernel_spec_guarded(
             binding.name, spec, require=self._config.require_tool_permissions, kind="resource"
