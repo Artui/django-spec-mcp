@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/djangorestframework-mcp-server
+      url: https://pypi.org/p/django-spec-mcp
     permissions:
       id-token: write   # PyPI OIDC trusted publishing
       contents: write   # tag push + gh release create

@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "djangorestframework-mcp-server"
+name = "django-spec-mcp"
 dynamic = ["version"]
 description = "Expose djangorestframework-services services and selectors as an MCP (Model Context Protocol) server."
 readme = "README.md"
@@ -186,16 +186,16 @@ jwt = ["djangorestframework-simplejwt>=5.3.1"]
 test = ["jsonschema[format-nongpl]>=4.0.1"]
 
 [project.urls]
-Homepage = "https://github.com/Artui/djangorestframework-mcp-server"
-Repository = "https://github.com/Artui/djangorestframework-mcp-server"
-Issues = "https://github.com/Artui/djangorestframework-mcp-server/issues"
+Homepage = "https://github.com/Artui/django-spec-mcp"
+Repository = "https://github.com/Artui/django-spec-mcp"
+Issues = "https://github.com/Artui/django-spec-mcp/issues"
 
 [tool.hatch.version]
-path = "rest_framework_mcp/version.py"
+path = "django_spec_mcp/version.py"
 pattern = "^__version__(?:\\s*:\\s*[A-Za-z][A-Za-z0-9_]*)?\\s*=\\s*[\"'](?P<version>[^\"']+)[\"']"
 
 [tool.hatch.build.targets.wheel]
-packages = ["rest_framework_mcp"]
+packages = ["django_spec_mcp"]
 
 [dependency-groups]
 dev = [
@@ -343,17 +343,17 @@ line-ending = "auto"
 root = ["./rest_framework_mcp"]
 
 # bump-my-version drives `make release-bump` — it rewrites the version in
-# rest_framework_mcp/version.py and promotes the CHANGELOG [Unreleased]
+# django_spec_mcp/version.py and promotes the CHANGELOG [Unreleased]
 # block under a new dated heading. Run via `uvx bump-my-version` (no
 # permanent dependency added to the project).
 [tool.bumpversion]
-current_version = "0.54.0"
+current_version = "0.0.0"
 allow_dirty = false
 commit = false
 tag = false
 
 [[tool.bumpversion.files]]
-filename = "rest_framework_mcp/version.py"
+filename = "django_spec_mcp/version.py"
 search = '__version__: str = "{current_version}"'
 replace = '__version__: str = "{new_version}"'
 
@@ -366,6 +366,6 @@ replace = """## [Unreleased]
 
 [[tool.bumpversion.files]]
 filename = "CHANGELOG.md"
-search = "[Unreleased]: https://github.com/Artui/djangorestframework-mcp-server/compare/v{current_version}...HEAD"
-replace = """[Unreleased]: https://github.com/Artui/djangorestframework-mcp-server/compare/v{new_version}...HEAD
-[{new_version}]: https://github.com/Artui/djangorestframework-mcp-server/compare/v{current_version}...v{new_version}"""
+search = "[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v{current_version}...HEAD"
+replace = """[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v{new_version}...HEAD
+[{new_version}]: https://github.com/Artui/django-spec-mcp/compare/v{current_version}...v{new_version}"""

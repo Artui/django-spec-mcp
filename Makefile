@@ -62,7 +62,7 @@ release-bump:
 	@echo "Bumped to $(VERSION). Edit CHANGELOG.md to fill the new section,"
 	@echo "review with 'git diff', then run 'make release-publish'."
 
-# Release pipeline. The version lives in rest_framework_mcp/version.py
+# Release pipeline. The version lives in django_spec_mcp/version.py
 # (pyproject pulls it in via [tool.hatch.version] dynamic). The three targets
 # below wrap scripts/release-publish.sh, which is the single source of truth
 # for the flow and stays byte-identical across the services + mcp-server repos.
@@ -75,8 +75,8 @@ release-bump:
 #                               Called after PyPI publish succeeds in CI.
 #   release-publish           — prepare → uv publish → finalize. For end-to-end
 #                               workstation releases. Set DRY_RUN=1 to rehearse.
-RELEASE_PACKAGE_NAME := djangorestframework-mcp-server
-RELEASE_VERSION_FILES := rest_framework_mcp/version.py|^__version__[^=]*= *
+RELEASE_PACKAGE_NAME := django-spec-mcp
+RELEASE_VERSION_FILES := django_spec_mcp/version.py|^__version__[^=]*= *
 
 release-publish:
 	@PACKAGE_NAME='$(RELEASE_PACKAGE_NAME)' \
