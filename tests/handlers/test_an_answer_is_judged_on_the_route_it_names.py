@@ -21,19 +21,22 @@ the notice names the row the service ran on. It is kept beside this file as
 ``test_an_answer_is_judged_on_the_route_it_names_drfs.py``.
 
 Its charge questions hold one way only on the kernel path: a caller admitted
-is charged once, while a caller refused on the row an answer names is charged
-too, because the spec's checks run inside ``dispatch`` after the shell has
-charged the call. The second is held as a strict ``xfail``.
+is charged once, while a caller the spec refuses is charged too, because the
+spec's checks run inside ``dispatch`` after the shell has charged the call. The
+second is held as a strict ``xfail``, fixed by the shell judging a kernel
+spec's checks before the charge, as drfs did.
 """
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Any
 
 import pytest
 from asgiref.sync import sync_to_async
 from django.http import HttpRequest
+from django.test import AsyncClient, Client, override_settings
 from django_service_specs import (
     DataclassValidator,
     Parameter,
@@ -58,6 +61,7 @@ from django_spec_mcp.subscriptions.utils import topic_for_resource
 from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from tests.testapp.models import Invoice
+from tests.testapp.urlconf_for import urlconf_for
 from tests.utils import RefusingRateLimit, tool_error
 
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -197,6 +201,41 @@ async def test_an_answer_naming_a_row_the_caller_may_not_touch_is_refused(
 
 
 @_ASYNC
+async def test_an_answer_naming_a_row_the_caller_may_not_touch_is_refused_over_http(
+    rows: tuple[Invoice, Invoice], is_async: bool
+) -> None:
+    # The same call through the transport: it answers 403 and runs nothing.
+    acme, beta = rows
+    ran: list[int] = []
+    modern = "2026-07-28"
+    params = {
+        "name": "annotate",
+        "arguments": {"pk": acme.pk, "note": "x"},
+        "inputResponses": {ELICITATION_KEY: {"action": "accept", "content": {"pk": beta.pk}}},
+        "_meta": {
+            "io.modelcontextprotocol/protocolVersion": modern,
+            "io.modelcontextprotocol/clientCapabilities": {},
+        },
+    }
+    body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": params})
+    headers = {"Mcp-Protocol-Version": modern, "Mcp-Method": "tools/call", "Mcp-Name": "annotate"}
+
+    with override_settings(ROOT_URLCONF=urlconf_for(_server(_NotBeta(), ran), is_async=is_async)):
+        if is_async:
+            response = await AsyncClient().post(
+                "/mcp/", data=body, content_type="application/json", headers=headers
+            )
+        else:
+            response = await sync_to_async(Client().post)(
+                "/mcp/", data=body, content_type="application/json", headers=headers
+            )
+
+    assert response.status_code == 403
+    assert json.loads(response.content)["error"]["code"] == JsonRpcErrorCode.FORBIDDEN
+    assert ran == []
+
+
+@_ASYNC
 async def test_an_answer_naming_a_row_the_caller_may_touch_runs_on_it(
     rows: tuple[Invoice, Invoice], is_async: bool
 ) -> None:
@@ -317,13 +356,14 @@ async def test_a_caller_admitted_on_the_answered_row_is_charged_once(
     strict=True,
     reason=(
         "A kernel spec's checks run inside dispatch, after handle_tools_call*.py has charged "
-        "the rate limit, so a caller they refuse is charged and, against a spent quota, told "
-        "RATE_LIMITED. Fixed by authorizing a kernel spec in the shell, on the merged "
-        "arguments and before consume_rate_limits, and handing dispatch the grant."
+        "the rate limit, so every caller they refuse is charged and, against a spent quota, "
+        "told RATE_LIMITED. Fixed by the shell judging a kernel spec's checks before the "
+        "charge, as drfs did: on the merged arguments, before consume_rate_limits, handing "
+        "dispatch the grant."
     ),
 )
 @_ASYNC
-async def test_a_caller_refused_on_the_row_an_answer_names_is_not_charged(
+async def test_a_caller_the_spec_refuses_is_not_charged(
     rows: tuple[Invoice, Invoice], is_async: bool
 ) -> None:
     acme, beta = rows

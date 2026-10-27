@@ -13,7 +13,11 @@ The drf-services original asked this of an ``input_serializer`` and a binding
 built by hand, beside ``UrlKwarg`` and ``QueryParam`` values riding next to the
 list and a ``metadata["json_schema"]`` fragment replacing the properties; none
 of the three exists on a kernel spec, whose arguments are its parameters. It
-is kept beside this file as ``test_many_argument_tools_drfs.py``.
+is kept beside this file as ``test_many_argument_tools_drfs.py``. Changed on
+the kernel path: drfs closed the arguments whatever the policy, while the
+kernel's ``unknown_arguments`` decides, so an argument beside the list is
+refused under ``REJECT`` and dropped under ``IGNORE``, and the top level of the
+schema is closed exactly when it is refused.
 """
 
 from __future__ import annotations
@@ -168,13 +172,39 @@ def test_a_declared_argument_name_carries_the_list() -> None:
 # ---------- what dispatch refuses ----------
 
 
-def test_an_argument_beside_the_list_is_refused_under_reject() -> None:
-    error = tool_error(
-        _server().call_tool("bulk", {"items": [_ROW], "note": "x"}, user=None).to_dict()
-    )
+@pytest.mark.parametrize(
+    ("policy", "refused"),
+    [(UnknownArguments.REJECT, True), (UnknownArguments.IGNORE, False)],
+    ids=["reject", "ignore"],
+)
+def test_an_argument_beside_the_list_follows_the_unknown_arguments_policy(
+    policy: UnknownArguments, refused: bool
+) -> None:
+    """Refused under ``REJECT`` and dropped under ``IGNORE``, where the service is
+    handed the list alone; the schema's top level is closed exactly when it is
+    refused."""
+    ran: list[Any] = []
 
-    assert error["type"] == "validation_error"
-    assert error["detail"] == {"note": ["Unknown argument."]}
+    def _record(*, data: list[_Line]) -> list[_Line]:
+        ran.append(data)
+        return list(data)
+
+    server = _server(_spec(service=_record), unknown_arguments=policy)
+
+    out = server.call_tool("bulk", {"items": [_ROW], "note": "x"}, user=None)
+
+    schema = _schema(server)
+    if refused:
+        error = tool_error(out.to_dict())
+        assert error["type"] == "validation_error"
+        assert error["detail"] == {"note": ["Unknown argument."]}
+        assert ran == []
+        assert schema["additionalProperties"] is False
+    else:
+        assert not out.is_error, out
+        assert out.structured_content == [_ROW]
+        assert ran == [[_Line(**_ROW)]]
+        assert "additionalProperties" not in schema
 
 
 def test_a_missing_list_is_refused_under_the_argument() -> None:

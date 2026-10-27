@@ -13,8 +13,8 @@ defaults. A read's declared ``default`` is reported in the schema, not applied,
 so the default a selector reads is its own signature's, declared beside it.
 A read declared optional over a selector with no default of its own is where
 the two come apart: the schema offers it as optional and the call leaving it
-out is refused. Held as a strict ``xfail``. The original is kept beside this
-file as
+out is refused. Held as a strict ``xfail``, as a question for the kernel
+rather than a settled defect. The original is kept beside this file as
 ``test_a_dataclass_input_is_laid_back_drfs.py``.
 """
 
@@ -49,7 +49,9 @@ class _Charge:
     amount_cents: int = 250
 
 
-def _read(*, number: str, limit: int = 10) -> dict[str, Any]:
+def _read(*, number: str, limit: int = 5) -> dict[str, Any]:
+    # Its own default differs from the 10 the read declares, so a test sees which
+    # of the two a call applies.
     return {"number": number, "limit": limit}
 
 
@@ -84,12 +86,12 @@ def _server() -> MCPServer:
 @pytest.mark.parametrize(
     ("name", "arguments", "read"),
     [
-        ("read", {"number": "A"}, {"number": "A", "limit": 10}),
+        ("read", {"number": "A"}, {"number": "A", "limit": 5}),
         ("read", {"number": "A", "limit": "3"}, {"number": "A", "limit": 3}),
         ("charge", {"number": "A"}, {"number": "A", "amount_cents": 250}),
         ("charge", {"number": "A", "amount_cents": "3"}, {"number": "A", "amount_cents": 3}),
     ],
-    ids=["read-default", "read-coerced", "validator-default", "validator-coerced"],
+    ids=["read-selector-default", "read-coerced", "validator-default", "validator-coerced"],
 )
 async def test_the_callable_reads_the_declared_value(
     name: str, arguments: dict[str, Any], read: dict[str, Any]
@@ -97,6 +99,19 @@ async def test_the_callable_reads_the_declared_value(
     out = await _server().acall_tool(name, arguments, user=None)
 
     assert out["structuredContent"] == read
+
+
+async def test_a_reads_default_is_reported_and_not_applied() -> None:
+    # The read declares 10 over a selector defaulting to 5: the schema tells a
+    # client 10, and a call leaving the argument out reads the selector's 5.
+    server = _server()
+    listed: Any = server.list_tools(user=None)
+    schemas = {tool["name"]: tool["inputSchema"] for tool in listed["tools"]}
+
+    out = await server.acall_tool("read", {"number": "A"}, user=None)
+
+    assert schemas["read"]["properties"]["limit"]["default"] == 10
+    assert out["structuredContent"]["limit"] == 5
 
 
 def test_the_schema_requires_exactly_the_names_nothing_defaults() -> None:
@@ -117,15 +132,16 @@ def _read_without_a_default(*, number: str, limit: int) -> dict[str, Any]:
 @pytest.mark.xfail(
     strict=True,
     reason=(
-        "A read declared optional whose selector has no default is offered as optional "
-        "and refused as required when left out. Fixed either by registration refusing the "
-        "declaration (register_tool, or the kernel's spec checks), or by dispatch letting "
-        "the omitted read through to a selector that defaults it."
+        "A read declared optional over a selector keyword with no default is offered as "
+        "optional and refused when left out. Fixed only if registration refuses that "
+        "declaration, which is a question for the kernel, not a settled defect: its "
+        "selectors/utils.py refuses such a keyword at the call because a registered seed "
+        "may fill it, held by test_an_optional_read_a_selector_requires_is_refused_when_not_sent."
     ),
 )
 async def test_a_read_the_schema_offers_as_optional_is_not_refused_when_left_out() -> None:
-    # Fix-agnostic: a registration refusing the declaration is the two
-    # agreeing too, since no client is ever shown the schema.
+    # A registration refusing the declaration is the two agreeing too, since no
+    # client is ever shown the schema.
     server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
     try:
         server.register_tool(

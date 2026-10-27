@@ -17,9 +17,11 @@ arguments rather than a request, and ``QueryParam`` has no kernel counterpart.
 The original is kept beside this file as
 ``test_an_answer_is_judged_on_the_arguments_it_changes_drfs.py``.
 
-Its last question, that a caller refused on an answered value is not charged
-the rate limit, does not hold on the kernel path: the spec's checks run inside
-``dispatch``, after the shell has charged the call. Held as a strict ``xfail``.
+Its last question, that a caller the spec refuses is not charged the rate
+limit, does not hold on the kernel path, answered or not: the spec's checks run
+inside ``dispatch``, after the shell has charged the call, so every refused
+caller is charged. Held as a strict ``xfail``, fixed by the shell judging a
+kernel spec's checks before the charge, as drfs did.
 """
 
 from __future__ import annotations
@@ -195,19 +197,25 @@ async def test_a_streamed_answer_changing_a_value_the_permission_reads_is_refuse
     strict=True,
     reason=(
         "A kernel spec's checks run inside dispatch, after handle_tools_call*.py has charged "
-        "the rate limit, so a caller they refuse is charged and, against a spent quota, told "
-        "RATE_LIMITED. Fixed by authorizing a kernel spec in the shell, on the merged "
-        "arguments and before consume_rate_limits, and handing dispatch the grant."
+        "the rate limit, so every caller they refuse, answering or not, is charged and, "
+        "against a spent quota, told RATE_LIMITED. Fixed by the shell judging a kernel "
+        "spec's checks before the charge, as drfs did: on the merged arguments, before "
+        "consume_rate_limits, handing dispatch the grant."
     ),
 )
+@pytest.mark.parametrize(
+    ("sent", "answer"),
+    [({"project": "7"}, {"project": "8"}), ({"project": "8"}, None)],
+    ids=["answered", "plain"],
+)
 @pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
-async def test_a_caller_refused_on_an_answered_value_is_not_charged(is_async: bool) -> None:
+async def test_a_caller_the_spec_refuses_is_not_charged(
+    sent: dict[str, Any], answer: dict[str, Any] | None, is_async: bool
+) -> None:
     limit = RefusingRateLimit()
     ran: list[Any] = []
 
-    out = await _handle(
-        _server(ran, limiter=limit), _params({"project": "7"}, {"project": "8"}), is_async=is_async
-    )
+    out = await _handle(_server(ran, limiter=limit), _params(sent, answer), is_async=is_async)
 
     assert isinstance(out, JsonRpcError) and out.code == JsonRpcErrorCode.FORBIDDEN, out
     assert limit.consumed == 0
