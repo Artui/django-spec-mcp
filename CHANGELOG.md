@@ -32,8 +32,10 @@ carries; releases up to 0.54.0 are in
   A spec declaring `permissions=None` is refused under
   `REQUIRE_TOOL_PERMISSIONS`; with the setting off it registers with an
   `UnguardedToolWarning` and is called without a permission check, under a
-  kernel `Grant` minted per call for that spec and principal. Only those
-  registration methods grant: a kernel binding built by hand and passed to
+  kernel `Grant` minted per call for that spec and principal. Only
+  `register_tool` and `register_resource` grant, since a kernel `SpecRegistry`
+  refuses such a spec before `register_tools` sees it; a kernel binding built
+  by hand and passed to
   `server.tools.register` or `server.resources.register` is never granted, so
   the kernel refuses its unguarded spec at the call.
   The drf-services registration methods are unchanged.

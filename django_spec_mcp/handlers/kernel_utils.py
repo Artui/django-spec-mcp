@@ -86,11 +86,13 @@ def principal_of(user: Any) -> Any:
 def unguarded_grant(binding: Any, principal: Any) -> Grant | None:
     """The ``Grant`` an unguarded kernel binding is dispatched under, or ``None``.
 
-    Only a binding the registrar marked ``unguarded`` gets one: ``register_tool``,
-    ``register_tools`` and ``register_resource`` mark a spec declaring
-    ``permissions=None`` when they register it with ``REQUIRE_TOOL_PERMISSIONS``
-    off (``check_kernel_spec_guarded``), and it is then called without a
-    permission check. The kernel's dispatch refuses such a spec on its own, so
+    Only a binding the registrar marked ``unguarded`` gets one: ``register_tool``
+    and ``register_resource`` mark a spec declaring ``permissions=None`` when
+    they register it with ``REQUIRE_TOOL_PERMISSIONS`` off
+    (``check_kernel_spec_guarded``), and it is then called without a permission
+    check. ``register_tools`` never marks one, since the kernel's
+    ``SpecRegistry`` it reads refuses such a spec when it is built
+    (``test_a_spec_registry_cannot_carry_an_unguarded_spec_to_register_tools``). The kernel's dispatch refuses such a spec on its own, so
     the call carries a grant bound to this spec and ``principal``, which must be
     the very principal the call dispatches with.
 

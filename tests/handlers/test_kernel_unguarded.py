@@ -18,9 +18,11 @@ from django.core.exceptions import ImproperlyConfigured
 from django.test import Client, override_settings
 from django_service_specs import (
     PermissionCheck,
+    RegisteredSpec,
     SelectorKind,
     SelectorSpec,
     ServiceSpec,
+    SpecRegistry,
 )
 
 from django_spec_mcp import MCPServer
@@ -105,6 +107,14 @@ def test_an_unguarded_kernel_tool_runs_in_process_with_the_setting_off() -> None
         _register(server)
     result = server.call_tool("open.write", {}, user=None)
     assert result.is_error is False
+
+
+def test_a_spec_registry_cannot_carry_an_unguarded_spec_to_register_tools() -> None:
+    # So the batch route never reaches the warning, and never earns the grant.
+    with pytest.raises(ImproperlyConfigured, match="'open.batch' declares no permissions"):
+        SpecRegistry(
+            [RegisteredSpec(name="open.batch", spec=ServiceSpec(service=lambda: {"ran": True}))]
+        )
 
 
 def test_the_warning_fires_once_per_registration_in_kernel_terms() -> None:

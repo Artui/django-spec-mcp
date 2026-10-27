@@ -959,8 +959,10 @@ What changes against the drf-services tools:
   it off, the tool or resource registers with one `UnguardedToolWarning` and
   every call runs without a permission check, under a kernel `Grant` minted for
   that spec and the calling principal. A spec with permissions of its own is
-  never granted: its checks run whatever the setting says. Only the
-  registration methods grant: a `KernelToolBinding` or `KernelResourceBinding`
+  never granted: its checks run whatever the setting says. Only
+  `register_tool` and `register_resource` grant; a kernel `SpecRegistry`
+  refuses such a spec when it is built, so `register_tools` never receives
+  one. A `KernelToolBinding` or `KernelResourceBinding`
   built by hand and passed to `server.tools.register` or
   `server.resources.register` is never granted, whatever the setting, so the
   kernel refuses its unguarded spec at the call and the operation does not run.
