@@ -1,49 +1,14 @@
-"""A mounted server that can actually run tasks, for the end-to-end suite.
+"""The task-running mount the end-to-end suite names by this module path.
 
-Module-level so the store outlives a single request the way it does in a real
-deployment — the whole point of a task is that the process handling the poll is
-not the one that created it.
+Its drf-services server is kept in ``urls_drfs.py`` until the drfs path is
+deleted, and re-exported here so ``test_tasks_endtoend_drfs.py`` still mounts it
+under the name it was written against. Every tool on it carries a
+``task_policy``, which a kernel spec does not take yet, so there is no kernel
+twin of this mount. The deletion drops these lines with that file.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from tests.tasks.urls_drfs import EXECUTOR, SERVER, STORE, urlpatterns
 
-from django.urls import path
-from rest_framework_services.types.service_spec import ServiceSpec
-
-from django_spec_mcp import MCPServer, TaskPolicy
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
-from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
-from tests.tasks.conftest import RecordingExecutor, slow_service
-
-STORE = InMemoryTaskStore()
-EXECUTOR = RecordingExecutor(STORE)
-
-
-def _build() -> MCPServer:
-    server = MCPServer(
-        name="tasks-e2e",
-        auth_backend=AllowAnyBackend(),
-        session_store=InMemorySessionStore(),
-        task_store=STORE,
-        task_executor=EXECUTOR,
-    )
-    for name, policy in (
-        ("t.optional", TaskPolicy.OPTIONAL),
-        ("t.required", TaskPolicy.REQUIRED),
-        ("t.inline", TaskPolicy.FORBIDDEN),
-    ):
-        server.register_service_tool(
-            name=name,
-            description="x",
-            spec=ServiceSpec(service=slow_service, atomic=False),
-            task_policy=policy,
-        )
-    return server
-
-
-SERVER = _build()
-
-urlpatterns: list[Any] = [path("mcp/", SERVER.urls)]
+__all__ = ["EXECUTOR", "SERVER", "STORE", "urlpatterns"]

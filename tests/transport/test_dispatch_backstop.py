@@ -431,15 +431,6 @@ async def test_a_permission_preflight_that_raises_before_a_stream_is_a_json_rpc_
     _assert_logged(caplog, _VIEWSET_LOGGERS[True], RuntimeError)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "grant_subscription judges only a kernel resource's scopes= gate, never its spec's "
-        "own checks, so the raising check is not run and the stream opens. The fix is in "
-        "subscriptions/grant_subscription.py: run the kernel's check_call for a kernel "
-        "binding in _may_watch_resource, as resources/read's dispatch does."
-    ),
-)
 async def test_a_subscription_grant_that_raises_is_a_json_rpc_internal_error(
     caplog: pytest.LogCaptureFixture,
 ) -> None:

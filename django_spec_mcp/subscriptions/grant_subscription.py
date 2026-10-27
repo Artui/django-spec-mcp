@@ -2,8 +2,18 @@ from __future__ import annotations
 
 from typing import Any
 
+from django_service_specs import DispatchError, check_call, coerce_flat
+
+from django_spec_mcp.handlers.kernel_utils import (
+    call_context,
+    carry_token,
+    principal_of,
+    unguarded_grant,
+)
+from django_spec_mcp.handlers.runs_on_kernel import runs_on_kernel
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import check_permissions, resource_shape
+from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
 from django_spec_mcp.subscriptions.types.subscription_filter import SubscriptionFilter
 from django_spec_mcp.subscriptions.utils import (
     topic_for_kind,
@@ -29,7 +39,8 @@ def grant_subscription(
     may hear what is here:
 
     - **A resource URI is granted only if it resolves to a registered resource
-      and this caller may read it.** Otherwise a subscription is a side channel
+      and this caller may read it**, which for a kernel resource includes the
+      spec's own permissions as well as the binding's scope gate. Otherwise a subscription is a side channel
       around ``resources/read``: a caller denied the body could still learn
       every time it changed, and activity is often the more sensitive signal.
     - **A task id is granted only to the principal that created it**, and only
@@ -109,7 +120,61 @@ def _may_watch_resource(uri: str, context: MCPCallContext) -> bool:
         context.token,
         shape=resource_shape(binding, vars_),
     )
-    return bool(allowed)
+    if not allowed:
+        return False
+    # A kernel binding's ``permissions`` are only its scope gate: the spec's own
+    # permissions answer the read inside ``dispatch``, so they answer the watch
+    # here too, or a caller the read refuses would still hear every change
+    # (``test_a_resource_the_caller_cannot_read_is_not_watchable``).
+    if runs_on_kernel(binding):
+        return _kernel_read_admits(binding, vars_, context)
+    return True
+
+
+def _kernel_read_admits(
+    binding: KernelResourceBinding, variables: dict[str, str], context: MCPCallContext
+) -> bool:
+    """Whether the kernel would let this caller start the read of ``binding``.
+
+    ``check_call`` is ``dispatch``'s prelude run alone, built from what
+    ``read_kernel_resource`` hands ``dispatch``: the same principal, the grant
+    only a registered unguarded binding carries, the URI variables read as the
+    spec's parameters, and the same call context. Each is held by a test that
+    fails without it: the server's seeds by
+    ``test_a_subscription_resolves_the_servers_pool_seeds``, the call context by
+    ``test_a_subscription_hands_the_check_the_call_context_the_read_does`` and
+    the URI variables read as the spec's types by
+    ``test_a_uri_variable_is_coerced_to_the_type_the_spec_declares``.
+
+    So a deactivated principal
+    (``test_a_deactivated_principal_cannot_watch_what_it_cannot_read``) and a
+    spec permission refusing the caller are refused here as the read refuses
+    them. Nothing is looked up, so a check on the row itself is not asked, as
+    the drf-services arm asks none either: the watch is judged on the request,
+    not on a row it would have to fetch.
+
+    Only ``DispatchError`` is a refusal. ``ImproperlyConfigured`` is how the
+    kernel answers a hand-built binding over an unguarded spec, whose read
+    answers -32603 and never runs: a misconfiguration, not a caller turned
+    away, so it propagates and fails the watch the same way
+    (``test_a_handbuilt_unguarded_kernel_resource_fails_the_watch_as_the_read_fails``)
+    rather than being dropped.
+    """
+    principal: Any = principal_of(context.token.user)
+    try:
+        check_call(
+            binding.spec,
+            principal=principal,
+            arguments=coerce_flat(binding.spec.parameters(), variables),
+            grant=unguarded_grant(binding, principal, context.config),
+            pool_seeds=context.pool_seeds,
+            call_context=call_context(
+                carry_token(context.http_request, context.token), binding.name
+            ),
+        )
+    except DispatchError:
+        return False
+    return True
 
 
 def _may_watch_task(task_id: str, context: MCPCallContext) -> bool:

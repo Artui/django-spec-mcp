@@ -1,4 +1,10 @@
-"""``subscriptions/listen`` over the real transport."""
+"""``subscriptions/listen`` over the real transport.
+
+Asked here of kernel resources, mounted by ``kernel_urls.py``: ``gated``'s own
+spec permission refuses the caller, so dropping it from the first frame is the
+kernel read's gate answering the watch. The original, asking it of drf-services
+resources, is kept beside this file as ``test_subscriptions_endtoend_drfs.py``.
+"""
 
 from __future__ import annotations
 
@@ -9,19 +15,20 @@ from typing import Any
 import pytest
 from django.test import AsyncClient, override_settings
 from django.urls import path
-from django_service_specs import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
 
 from django_spec_mcp import MCPServer, SubscriptionFilter
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from django_spec_mcp.types.subscription_id_meta_key import SUBSCRIPTION_ID_META_KEY
-from tests.subscriptions.urls import SERVER
+from tests.subscriptions.kernel_urls import SERVER, thing_spec
 
 MODERN = "2026-07-28"
 LEGACY = "2025-11-25"
 
-pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.urls("tests.subscriptions.urls")]
+pytestmark = [
+    pytest.mark.django_db(transaction=True),
+    pytest.mark.urls("tests.subscriptions.kernel_urls"),
+]
 
 
 def _body(params: dict[str, Any], *, request_id: Any = 1) -> str:
@@ -58,7 +65,7 @@ async def _first_frame(response: Any) -> Any:
 
 async def test_listening_opens_an_event_stream() -> None:
     response = await _listen(
-        AsyncClient(), {"notifications": {"resourceSubscriptions": ["open://thing"]}}
+        AsyncClient(), {"notifications": {"resourceSubscriptions": ["open://1"]}}
     )
     assert response.status_code == 200
     assert response["Content-Type"] == "text/event-stream"
@@ -68,27 +75,27 @@ async def test_listening_opens_an_event_stream() -> None:
 async def test_the_first_frame_acknowledges_what_was_granted() -> None:
     response = await _listen(
         AsyncClient(),
-        {"notifications": {"resourceSubscriptions": ["open://thing", "gated://thing"]}},
+        {"notifications": {"resourceSubscriptions": ["open://1", "gated://1"]}},
         request_id="s1",
     )
     frame = await _first_frame(response)
     assert frame["method"] == "notifications/subscriptions/acknowledged"
     # The gated URI is dropped, and the client is told so on the first frame.
-    assert frame["params"]["notifications"]["resourceSubscriptions"] == ["open://thing"]
+    assert frame["params"]["notifications"]["resourceSubscriptions"] == ["open://1"]
     assert frame["params"]["_meta"][SUBSCRIPTION_ID_META_KEY] == "s1"
     await response.streaming_content.aclose()
 
 
 async def test_a_notification_published_elsewhere_arrives_on_the_stream() -> None:
     response = await _listen(
-        AsyncClient(), {"notifications": {"resourceSubscriptions": ["open://thing"]}}
+        AsyncClient(), {"notifications": {"resourceSubscriptions": ["open://1"]}}
     )
     stream = response.streaming_content
     await anext(stream)  # acknowledgement
-    await SERVER.notify_resource_updated("open://thing")
+    await SERVER.notify_resource_updated("open://1")
     frame = json.loads((await anext(stream))[len(b"data: ") :].strip())
     assert frame["method"] == "notifications/resources/updated"
-    assert frame["params"]["uri"] == "open://thing"
+    assert frame["params"]["uri"] == "open://1"
     await stream.aclose()
 
 
@@ -150,16 +157,12 @@ async def test_a_server_with_no_broker_says_so_on_the_first_frame() -> None:
     server = MCPServer(
         name="brokerless", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore()
     )
-    server.register_resource(
-        name="open",
-        uri_template="open://thing",
-        selector=SelectorSpec(kind=SelectorKind.LIST, selector=lambda: [{"a": 1}]),
-    )
+    server.register_resource(thing_spec(), name="open", uri_template="open://{pk}")
     module = types.ModuleType("tests.subscriptions._brokerless_urls")
     module.urlpatterns = [path("mcp/", server.async_urls)]  # type: ignore[attr-defined]
     with override_settings(ROOT_URLCONF=module):
         response = await _listen(
-            AsyncClient(), {"notifications": {"resourceSubscriptions": ["open://thing"]}}
+            AsyncClient(), {"notifications": {"resourceSubscriptions": ["open://1"]}}
         )
         assert (await _first_frame(response))["params"]["notifications"] == {}
         await response.streaming_content.aclose()
@@ -194,7 +197,7 @@ async def test_a_grant_of_nothing_closes_instead_of_holding_a_worker() -> None:
     """The fix for a stream that used to keep an ASGI worker parked forever
     emitting keepalives it could never follow with anything."""
     response = await _listen(
-        AsyncClient(), {"notifications": {"resourceSubscriptions": ["gated://thing"]}}
+        AsyncClient(), {"notifications": {"resourceSubscriptions": ["gated://1"]}}
     )
     frames = [json.loads(c[len(b"data: ") :].strip()) async for c in response.streaming_content]
     assert len(frames) == 2
@@ -237,16 +240,12 @@ async def test_a_capped_server_refuses_a_further_subscription() -> None:
             session_store=InMemorySessionStore(),
             subscription_broker=InMemorySubscriptionBroker(),
         )
-        server.register_resource(
-            name="open",
-            uri_template="open://thing",
-            selector=SelectorSpec(kind=SelectorKind.LIST, selector=lambda: [{"a": 1}]),
-        )
+        server.register_resource(thing_spec(), name="open", uri_template="open://{pk}")
         module = _t.ModuleType("tests.subscriptions._capped_urls")
         module.urlpatterns = [path("mcp/", server.async_urls)]  # type: ignore[attr-defined]
         with override_settings(ROOT_URLCONF=module):
             response = await _listen(
-                AsyncClient(), {"notifications": {"resourceSubscriptions": ["open://thing"]}}
+                AsyncClient(), {"notifications": {"resourceSubscriptions": ["open://1"]}}
             )
     assert response.status_code == 503
     assert json.loads(response.content)["error"]["code"] == -32603

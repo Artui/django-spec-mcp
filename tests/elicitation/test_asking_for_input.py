@@ -6,6 +6,15 @@ server-initiated requests: a call that needs something answers with an
 request carrying the answer. Nothing is held between the two — which is what
 these tests are really pinning, since every one of them builds a new context
 rather than reusing one.
+
+Asked here of kernel service tools: ``rows.delete`` and its two neighbours are
+kernel ``ServiceSpec`` objects registered with ``register_tool``, validating
+through a dataclass, so the answer reaches the service as a spread keyword
+argument and the call runs through the kernel's ``dispatch``. The module's own
+``server`` fixture builds that server, standing in for the conftest's drf-services
+one under the same name, so every question below is the original's word for
+word. The original, asking it of drf-services specs, is kept beside this file
+as ``test_asking_for_input_drfs.py``.
 """
 
 from __future__ import annotations
@@ -14,15 +23,28 @@ from typing import Any
 
 import pytest
 from django.core import signing
+from django_service_specs import (
+    AdditionalInputRequired,
+    DataclassValidator,
+    ServiceSpec,
+    Unrestricted,
+)
 
 from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
 from django_spec_mcp.types.request_state_salt import REQUEST_STATE_SALT
-from tests.elicitation.conftest import TOOL, context
+from tests.elicitation.conftest import TOOL, DeleteRows, build_kernel_server, context
 from tests.utils import tool_error
+
+
+@pytest.fixture
+def server() -> MCPServer:
+    """The kernel server, under the name every test here asks for."""
+    return build_kernel_server()
 
 
 def _call(server: MCPServer, arguments: dict[str, Any], **extra: Any) -> Any:
@@ -319,6 +341,39 @@ def test_the_budget_counts_rounds_not_calls(server: MCPServer) -> None:
 
 
 # ---------- other registration shapes ----------
+
+
+def _asks_for_an_undeclared_name(*, count: int, confirmed: bool = False, reason: str = "") -> Any:  # noqa: ARG001
+    raise AdditionalInputRequired("Confirm?", schema={"confirm": {"type": "boolean"}})
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "The kernel tool path does not hand build_requested_schema the names its spec "
+        "admits: kernel_refusals._input_required and input_dispatch.ask_for_input pass "
+        "admitted=, so the question is refused before the user answers it."
+    ),
+)
+def test_a_question_whose_answer_the_spec_refuses_is_an_internal_error() -> None:
+    """The kernel's own question, with no drf-services counterpart: the answer
+    to ``confirm`` comes back as an argument the spec does not declare, which
+    the closed argument set refuses as unknown on the second round. So the
+    first round refuses the question, as an unrenderable one is refused."""
+    server = MCPServer(name="undeclared", auth_backend=AllowAnyBackend())
+    server.register_tool(
+        ServiceSpec(
+            service=_asks_for_an_undeclared_name,
+            validator=DataclassValidator(DeleteRows),
+            permissions=[Unrestricted()],
+            atomic=False,
+        ),
+        name=TOOL,
+    )
+    out = _call(server, {"count": 1})
+    assert isinstance(out, JsonRpcError)
+    assert out.code == -32603
+    assert "'confirm'" in out.message
 
 
 # ---------- async parity ----------

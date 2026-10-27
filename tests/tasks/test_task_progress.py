@@ -26,7 +26,7 @@ from django_spec_mcp.tasks.transition_task import transition_task
 from django_spec_mcp.tasks.types.task_record import TaskRecord
 from django_spec_mcp.types.task_status import TaskStatus
 from tests.tasks.conftest import RecordingExecutor, context
-from tests.tasks.test_task_lifecycle import _create, _register
+from tests.tasks.test_task_lifecycle_drfs import _create, _register
 
 # ----- rendering -----
 

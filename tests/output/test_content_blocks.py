@@ -1,4 +1,16 @@
-"""Non-text content blocks: the vocabulary, and the two paths that produce it."""
+"""Non-text content blocks: the vocabulary, and the paths that produce it.
+
+Asked here of kernel specs: the tools are kernel ``ServiceSpec`` and
+``SelectorSpec`` objects registered with ``register_tool``, and their call runs
+through the kernel's ``dispatch``. The vocabulary questions name no spec and are
+asked as the original asks them.
+
+The original's binary-resource questions have no kernel counterpart: a kernel
+resource presents a row, so the registrar refuses ``encoding=BLOB`` and a
+``mime_type`` beside it, and a base64 body and a non-bytes return under it are
+asked only of the drf-services read. The original is kept beside this file as
+``test_content_blocks_drfs.py``.
+"""
 
 from __future__ import annotations
 
@@ -8,21 +20,17 @@ from typing import Any
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest
-from django_service_specs import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_service_specs import SelectorKind, SelectorSpec, ServiceSpec, Unrestricted
 
 from django_spec_mcp import (
     MCPServer,
     PromptMessage,
     ResourceContents,
-    ResourceEncoding,
     ToolContentBlock,
     ToolContentKind,
 )
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
-from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
 from django_spec_mcp.handlers.types.context import MCPCallContext
@@ -34,6 +42,10 @@ PNG_B64 = base64.b64encode(PNG).decode("ascii")
 
 def _server() -> MCPServer:
     return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore())
+
+
+def _spec(service: Any) -> ServiceSpec:
+    return ServiceSpec(service=service, permissions=[Unrestricted()], atomic=False)
 
 
 def _ctx(server: MCPServer) -> MCPCallContext:
@@ -111,46 +123,14 @@ def test_prompt_message_accepts_any_block() -> None:
     }
 
 
-# ----- binary resources -----
-
-
-def test_blob_resource_base64_encodes_the_body() -> None:
-    server = _server()
-    server.register_resource(
-        name="logo",
-        uri_template="assets://logo",
-        selector=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda: PNG),
-        mime_type="image/png",
-        encoding=ResourceEncoding.BLOB,
-    )
-    result = handle_resources_read({"uri": "assets://logo"}, _ctx(server))
-    contents = result["contents"][0]
-    assert contents == {"uri": "assets://logo", "mimeType": "image/png", "blob": PNG_B64}
-    # ``text`` and ``blob`` are mutually exclusive on a contents entry.
-    assert "text" not in contents
-
-
-def test_blob_resource_rejects_a_non_bytes_selector_return() -> None:
-    server = _server()
-    server.register_resource(
-        name="logo",
-        uri_template="assets://logo",
-        selector=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda: "not bytes"),
-        encoding=ResourceEncoding.BLOB,
-    )
-    result = handle_resources_read({"uri": "assets://logo"}, _ctx(server))
-    assert result.code == -32603
-    assert "encoding=BLOB but produced str" in result.message
-
-
 # ----- tool results -----
 
 
 def test_image_tool_emits_one_image_block_and_no_structured_content() -> None:
     server = _server()
-    server.register_service_tool(
+    server.register_tool(
+        _spec(lambda: PNG),
         name="chart.render",
-        spec=ServiceSpec(service=lambda **_: PNG, atomic=False),
         content_kind=ToolContentKind.IMAGE,
         content_mime_type="image/png",
     )
@@ -161,9 +141,9 @@ def test_image_tool_emits_one_image_block_and_no_structured_content() -> None:
 
 def test_image_tool_does_not_advertise_an_output_schema() -> None:
     server = _server()
-    server.register_service_tool(
+    server.register_tool(
+        _spec(lambda: PNG),
         name="chart.render",
-        spec=ServiceSpec(service=lambda **_: PNG, atomic=False),
         content_kind=ToolContentKind.IMAGE,
         content_mime_type="image/png",
     )
@@ -173,9 +153,9 @@ def test_image_tool_does_not_advertise_an_output_schema() -> None:
 def test_a_bytearray_payload_is_accepted() -> None:
     """Django's file/image handling hands back buffers, not always ``bytes``."""
     server = _server()
-    server.register_service_tool(
+    server.register_tool(
+        _spec(lambda: bytearray(PNG)),
         name="chart.render",
-        spec=ServiceSpec(service=lambda **_: bytearray(PNG), atomic=False),
         content_kind=ToolContentKind.IMAGE,
         content_mime_type="image/png",
     )
@@ -185,9 +165,9 @@ def test_a_bytearray_payload_is_accepted() -> None:
 
 def test_audio_tool() -> None:
     server = _server()
-    server.register_service_tool(
+    server.register_tool(
+        _spec(lambda: b"RIFF"),
         name="tts.say",
-        spec=ServiceSpec(service=lambda **_: b"RIFF", atomic=False),
         content_kind=ToolContentKind.AUDIO,
         content_mime_type="audio/wav",
     )
@@ -202,9 +182,9 @@ def test_media_tool_returning_json_is_a_tool_level_error() -> None:
     gets a well-formed response, and the message names the declaration.
     """
     server = _server()
-    server.register_service_tool(
+    server.register_tool(
+        _spec(lambda: {"not": "bytes"}),
         name="chart.render",
-        spec=ServiceSpec(service=lambda **_: {"not": "bytes"}, atomic=False),
         content_kind=ToolContentKind.IMAGE,
         content_mime_type="image/png",
     )
@@ -220,9 +200,9 @@ def test_resource_link_tool_emits_links_and_keeps_structured_content() -> None:
         {"uri": "invoices://2", "name": "Invoice 2", "mimeType": "application/pdf"},
     ]
     server = _server()
-    server.register_service_tool(
+    server.register_tool(
+        _spec(lambda: links),
         name="invoices.find",
-        spec=ServiceSpec(service=lambda **_: links, atomic=False),
         content_kind=ToolContentKind.RESOURCE_LINK,
     )
     result = handle_tools_call({"name": "invoices.find", "arguments": {}}, _ctx(server))
@@ -233,11 +213,9 @@ def test_resource_link_tool_emits_links_and_keeps_structured_content() -> None:
 
 def test_a_single_mapping_is_accepted_as_one_link() -> None:
     server = _server()
-    server.register_service_tool(
+    server.register_tool(
+        _spec(lambda: {"uri": "invoices://1", "name": "Invoice 1"}),
         name="invoices.one",
-        spec=ServiceSpec(
-            service=lambda **_: {"uri": "invoices://1", "name": "Invoice 1"}, atomic=False
-        ),
         content_kind=ToolContentKind.RESOURCE_LINK,
     )
     result = handle_tools_call({"name": "invoices.one", "arguments": {}}, _ctx(server))
@@ -246,9 +224,9 @@ def test_a_single_mapping_is_accepted_as_one_link() -> None:
 
 def test_resource_link_tool_returning_the_wrong_shape_errors() -> None:
     server = _server()
-    server.register_service_tool(
+    server.register_tool(
+        _spec(lambda: "just a string"),
         name="invoices.find",
-        spec=ServiceSpec(service=lambda **_: "just a string", atomic=False),
         content_kind=ToolContentKind.RESOURCE_LINK,
     )
     result = handle_tools_call({"name": "invoices.find", "arguments": {}}, _ctx(server))
@@ -258,9 +236,9 @@ def test_resource_link_tool_returning_the_wrong_shape_errors() -> None:
 
 def test_resource_link_entry_missing_uri_errors() -> None:
     server = _server()
-    server.register_service_tool(
+    server.register_tool(
+        _spec(lambda: [{"name": "Invoice 1"}]),
         name="invoices.find",
-        spec=ServiceSpec(service=lambda **_: [{"name": "Invoice 1"}], atomic=False),
         content_kind=ToolContentKind.RESOURCE_LINK,
     )
     result = handle_tools_call({"name": "invoices.find", "arguments": {}}, _ctx(server))
@@ -270,9 +248,11 @@ def test_resource_link_entry_missing_uri_errors() -> None:
 
 def test_selector_tool_honours_the_content_kind() -> None:
     server = _server()
-    server.register_selector_tool(
+    server.register_tool(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE, selector=lambda: PNG, permissions=[Unrestricted()]
+        ),
         name="thumb.get",
-        spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda: PNG),
         content_kind=ToolContentKind.IMAGE,
         content_mime_type="image/png",
     )
@@ -286,9 +266,9 @@ def test_selector_tool_honours_the_content_kind() -> None:
 def test_media_without_a_mime_type_is_refused() -> None:
     server = _server()
     with pytest.raises(ImproperlyConfigured, match="requires content_mime_type"):
-        server.register_service_tool(
+        server.register_tool(
+            _spec(lambda: PNG),
             name="chart.render",
-            spec=ServiceSpec(service=lambda **_: PNG, atomic=False),
             content_kind=ToolContentKind.IMAGE,
         )
 
@@ -296,9 +276,9 @@ def test_media_without_a_mime_type_is_refused() -> None:
 def test_media_with_structured_content_requested_is_refused() -> None:
     server = _server()
     with pytest.raises(ImproperlyConfigured, match="cannot be combined"):
-        server.register_service_tool(
+        server.register_tool(
+            _spec(lambda: PNG),
             name="chart.render",
-            spec=ServiceSpec(service=lambda **_: PNG, atomic=False),
             content_kind=ToolContentKind.IMAGE,
             content_mime_type="image/png",
             include_structured_content=True,
@@ -308,9 +288,9 @@ def test_media_with_structured_content_requested_is_refused() -> None:
 def test_resource_link_needs_no_mime_type() -> None:
     """Links carry their own per-entry ``mimeType``, so the binding needs none."""
     server = _server()
-    binding = server.register_service_tool(
+    binding = server.register_tool(
+        _spec(lambda: []),
         name="invoices.find",
-        spec=ServiceSpec(service=lambda **_: [], atomic=False),
         content_kind=ToolContentKind.RESOURCE_LINK,
     )
     assert binding.content_mime_type is None
@@ -321,9 +301,9 @@ def test_resource_link_needs_no_mime_type() -> None:
 
 def _link_result(uri: Any) -> dict[str, Any]:
     server = _server()
-    server.register_service_tool(
+    server.register_tool(
+        _spec(lambda: [{"uri": uri, "name": "Saved link"}]),
         name="bookmarks.find",
-        spec=ServiceSpec(service=lambda **_: [{"uri": uri, "name": "Saved link"}], atomic=False),
         content_kind=ToolContentKind.RESOURCE_LINK,
     )
     return handle_tools_call({"name": "bookmarks.find", "arguments": {}}, _ctx(server))

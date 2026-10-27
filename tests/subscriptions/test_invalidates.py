@@ -1,18 +1,33 @@
-"""``invalidates=`` — the write path announcing its own changes."""
+"""``invalidates=`` — the write path announcing its own changes.
+
+Asked here of kernel service tools registered with ``register_tool``: their
+arguments validate through a dataclass and reach the service spread, a refusal
+is a kernel ``PermissionCheck``, and a selector tool is a kernel
+``SelectorSpec``. The rendering questions name no spec and are asked as the
+original asks them. The original, asking all of it of drf-services specs, is
+kept beside this file as ``test_invalidates_drfs.py``.
+"""
 
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
 from asgiref.sync import sync_to_async
+from django.core.exceptions import ImproperlyConfigured
 from django.db import transaction
-from django_service_specs import AdditionalInputRequired, SelectorKind, ServiceError
-from rest_framework import serializers as drf_serializers
-from rest_framework.permissions import BasePermission
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_service_specs import (
+    AdditionalInputRequired,
+    DataclassValidator,
+    PermissionCheck,
+    SelectorKind,
+    SelectorSpec,
+    ServiceError,
+    ServiceSpec,
+    Unrestricted,
+)
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
@@ -108,33 +123,38 @@ def test_a_non_dict_result_contributes_no_keys() -> None:
 # ----- dispatch -----
 
 
-def _service(**kwargs: Any) -> dict[str, Any]:
-    return {"pk": kwargs.get("data", {}).get("pk", 1)}
+@dataclass
+class _PkInput:
+    pk: int = 1
 
 
-def _failing(**_: Any) -> Any:
+def _service(*, pk: int = 1) -> dict[str, Any]:
+    return {"pk": pk}
+
+
+def _failing(*, pk: int = 1) -> Any:  # noqa: ARG001
     raise ServiceError("nope")
+
+
+def _spec(service: Any, validator: type = _PkInput, **kwargs: Any) -> ServiceSpec:
+    kwargs.setdefault("permissions", [Unrestricted()])
+    return ServiceSpec(
+        service=service, validator=DataclassValidator(validator), atomic=False, **kwargs
+    )
 
 
 def _server(broker: Any) -> MCPServer:
     server = MCPServer(name="inval", auth_backend=AllowAnyBackend(), subscription_broker=broker)
-    server.register_service_tool(
+    server.register_tool(
+        _spec(_service),
         name="invoices.create",
         description="x",
-        spec=ServiceSpec(service=_service, atomic=False),
         invalidates=("invoices://{pk}", "invoices://"),
     )
-    server.register_service_tool(
-        name="invoices.broken",
-        description="x",
-        spec=ServiceSpec(service=_failing, atomic=False),
-        invalidates=("invoices://{pk}",),
+    server.register_tool(
+        _spec(_failing), name="invoices.broken", description="x", invalidates=("invoices://{pk}",)
     )
-    server.register_service_tool(
-        name="invoices.quiet",
-        description="x",
-        spec=ServiceSpec(service=_service, atomic=False),
-    )
+    server.register_tool(_spec(_service), name="invoices.quiet", description="x")
     return server
 
 
@@ -165,17 +185,18 @@ async def test_a_failed_tool_announces_nothing() -> None:
     assert queue.qsize() == 0
 
 
-def _confirming(**kwargs: Any) -> dict[str, Any]:
+def _confirming(*, confirmed: bool = False) -> dict[str, Any]:
     """Runs only once the caller has confirmed; asks for the confirmation otherwise."""
-    if not kwargs.get("data", {}).get("confirmed"):
+    if not confirmed:
         raise AdditionalInputRequired(
             "Confirm to proceed.", schema={"confirmed": {"type": "boolean"}}
         )
     return {"pk": 1}
 
 
-class _ConfirmInput(drf_serializers.Serializer):
-    confirmed = drf_serializers.BooleanField(required=False, default=False)
+@dataclass
+class _ConfirmInput:
+    confirmed: bool = False
 
 
 @pytest.mark.django_db(transaction=True)
@@ -192,10 +213,10 @@ async def test_only_a_completed_result_announces(
     ``isError`` to fail on, which is why the check is on the result completing."""
     broker = InMemorySubscriptionBroker()
     server = MCPServer(name="inval", auth_backend=AllowAnyBackend(), subscription_broker=broker)
-    server.register_service_tool(
+    server.register_tool(
+        _spec(_confirming, _ConfirmInput),
         name="invoices.confirm",
         description="x",
-        spec=ServiceSpec(service=_confirming, input_serializer=_ConfirmInput, atomic=False),
         # Static, so the template is fillable from any result, a request for
         # input included: what stops the announcement is the check under test.
         invalidates=("invoices://",),
@@ -213,8 +234,8 @@ async def test_only_a_completed_result_announces(
     assert queue.qsize() == announced
 
 
-class _Refuses(BasePermission):
-    def has_permission(self, request: Any, view: Any) -> bool:
+class _Refuses(PermissionCheck):
+    def has_permission(self, principal: Any, spec: Any) -> bool:
         return False
 
 
@@ -223,10 +244,10 @@ async def test_a_non_dict_result_announces_nothing() -> None:
     """A denied call is answered with a protocol error rather than a result."""
     broker = InMemorySubscriptionBroker()
     server = MCPServer(name="inval", auth_backend=AllowAnyBackend(), subscription_broker=broker)
-    server.register_service_tool(
+    server.register_tool(
+        _spec(_service, permissions=[_Refuses()]),
         name="invoices.denied",
         description="x",
-        spec=ServiceSpec(service=_service, atomic=False, permission_classes=[_Refuses]),
         invalidates=("invoices://",),
     )
     queue = await broker.subscribe(frozenset({topic_for_resource("invoices://")}))
@@ -342,11 +363,8 @@ async def test_a_server_with_no_broker_is_unaffected() -> None:
     error — otherwise the declaration could not be written once and deployed
     both ways."""
     server = MCPServer(name="nobroker", auth_backend=AllowAnyBackend())
-    server.register_service_tool(
-        name="invoices.create",
-        description="x",
-        spec=ServiceSpec(service=_service, atomic=False),
-        invalidates=("invoices://{pk}",),
+    server.register_tool(
+        _spec(_service), name="invoices.create", description="x", invalidates=("invoices://{pk}",)
     )
     result = await handle_tools_call_async(
         {"name": "invoices.create", "arguments": {}}, _context(server)
@@ -357,16 +375,19 @@ async def test_a_server_with_no_broker_is_unaffected() -> None:
 # ----- registration surface -----
 
 
-def test_a_selector_tool_has_no_invalidates_kwarg() -> None:
-    """A read changes nothing, and accepting the kwarg would invite using it."""
+def test_a_selector_tool_refuses_invalidates() -> None:
+    """A read changes nothing, and accepting the knob would invite using it.
+    ``register_tool`` takes both kinds of spec, so the knob is a keyword of it
+    and a selector spec is refused at registration, where the drf-services
+    ``register_selector_tool`` had no such keyword at all."""
     server = MCPServer(name="sel", auth_backend=AllowAnyBackend())
-    with pytest.raises(TypeError, match="invalidates"):
-        server.register_selector_tool(
+    with pytest.raises(ImproperlyConfigured, match="invalidates belongs to a service tool"):
+        server.register_tool(
+            SelectorSpec(kind=SelectorKind.LIST, selector=lambda: [], permissions=[Unrestricted()]),
             name="s",
             description="x",
-            spec=SelectorSpec(kind=SelectorKind.LIST, selector=lambda: []),
             paginate=True,
-            invalidates=("a://",),  # type: ignore[call-arg]
+            invalidates=("a://",),
         )
 
 
