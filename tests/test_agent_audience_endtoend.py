@@ -1,0 +1,110 @@
+"""Agent audience on a kernel tool, on the wire.
+
+Unit coverage proves each piece; this proves the wiring. A kernel tool presenting
+through a marked-up dataclass must actually *return* a projected payload and
+advertise a schema that matches it: a round trip through the handlers, not
+through the projection helpers directly.
+
+The markings are ``FieldMarking`` extras on ``AgentInvoiceOutput``, the kernel
+twin of the ``AgentInvoiceSerializer`` the drf-services original read. Two
+answers differ by design: a hidden field is left out of the schema and the row
+alike, and a ``Literal`` presents its value (``PENDING_REVIEW``) where the
+serializer's choice field presented its label. The original is kept beside this
+file as ``test_agent_audience_endtoend_drfs.py``.
+"""
+
+from __future__ import annotations
+
+import json
+from typing import Any
+
+import pytest
+from django.db.models import Value
+from django.http import HttpRequest
+from django_service_specs import DataclassPresenter, SelectorKind, SelectorSpec, Unrestricted
+
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from tests.testapp.kernel_shapes import AgentInvoiceOutput
+from tests.testapp.models import Invoice
+
+
+def _invoices() -> Any:
+    # ``Invoice`` has no status column; the presenter reads one by attribute.
+    return Invoice.objects.annotate(status=Value("PENDING_REVIEW")).order_by("id")
+
+
+def _server() -> MCPServer:
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server.register_tool(
+        SelectorSpec(
+            kind=SelectorKind.LIST,
+            selector=_invoices,
+            presenter=DataclassPresenter(AgentInvoiceOutput),
+            permissions=[Unrestricted()],
+        ),
+        name="list_invoices",
+        description="List invoices.",
+    )
+    return server
+
+
+def _ctx(server: MCPServer) -> MCPCallContext:
+    return MCPCallContext(
+        http_request=HttpRequest(),
+        token=TokenInfo(user=None),
+        tools=server.tools,
+        resources=server.resources,
+        prompts=server.prompts,
+        protocol_version="2025-11-25",
+    )
+
+
+@pytest.mark.django_db
+def test_the_returned_payload_is_projected() -> None:
+    invoice = Invoice.objects.create(number="FV/2026/0043", amount_cents=124000, sent=True)
+    server = _server()
+
+    result: Any = handle_tools_call({"name": "list_invoices", "arguments": {}}, _ctx(server))
+    rows = result["structuredContent"]
+
+    assert rows == [
+        {
+            "id": invoice.pk,
+            "number": "FV/2026/0043",
+            "amount_cents": 124000,
+            "status": "PENDING_REVIEW",
+        }
+    ]
+    # The text block a client reads carries the same projection, not the raw row.
+    assert "sent" not in result["content"][0]["text"]
+    assert json.loads(result["content"][0]["text"]) == rows
+
+
+@pytest.mark.django_db
+def test_the_advertised_schema_matches_what_the_call_returns() -> None:
+    Invoice.objects.create(number="FV/2026/0043", amount_cents=124000, sent=True)
+    server = _server()
+    ctx = _ctx(server)
+
+    tool: Any = handle_tools_list(None, ctx)["tools"][0]
+    returned: Any = handle_tools_call({"name": "list_invoices", "arguments": {}}, ctx)
+
+    advertised = set(tool["outputSchema"]["items"]["properties"])
+    assert advertised == set(returned["structuredContent"][0])
+    # The handle is described rather than silently omitted, and the hidden
+    # field is described nowhere.
+    assert "id" in advertised
+    assert "sent" not in advertised
+
+
+def test_the_description_teaches_the_handle_convention() -> None:
+    tool: Any = handle_tools_list(None, _ctx(_server()))["tools"][0]
+
+    assert tool["description"].startswith("List invoices.")
+    assert "Identify records by `number`." in tool["description"]
+    assert tool["outputSchema"]["items"]["properties"]["id"]["description"] == "Invoice handle."
