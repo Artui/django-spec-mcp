@@ -296,8 +296,8 @@ nothing. A value of the returned `TypedDict` that does not resolve makes only
 its own key one the provider may decline, offered and not required, while the
 other keys stay filled and hidden.
 
-**A call that leaves out a required parameter is refused before the selector
-runs**, with a `validation_error` result naming what is missing, keyed in
+**A call to a drf-services tool that leaves out a required parameter is refused
+before the selector runs**, with a `validation_error` result naming what is missing, keyed in
 `detail` the way a serializer keys a missing field, on every route (both
 transports and eras, `call_tool` and `acall_tool`):
 
@@ -309,7 +309,10 @@ transports and eras, `call_tool` and `acall_tool`):
 The message is the server's
 [`conventions.missing_arguments`](#agent-conventions), and the same one the
 Pydantic-AI toolset gives the same call. An input serializer's own refusal,
-a missing field of its own included, keeps `"Invalid arguments"`.
+a missing field of its own included, keeps `"Invalid arguments"`. A kernel tool
+never reads `missing_arguments`: a call missing an argument answers
+`"Invalid arguments"` with the kernel's per-field detail, the same `detail` shape
+as above.
 
 It used to reach the selector as a `TypeError`, which answered HTTP 500 with
 JSON-RPC `-32603` "Internal error" on the wire and raised from `call_tool`. The
@@ -1178,9 +1181,12 @@ forms) accept three behavior knobs:
 A service's `affordances` say when the operation is possible. A condition written
 as a callable is answered against the pool's seeds — `user`, `request`, `progress`,
 and any the server registers with [`pool_seeds=`](#pool-seeds) — and never
-against the call's arguments, so when it is unmet **every** call of
+against the call's arguments. (A kernel tool's condition has no `request` seed: it
+reads the transport's request from `call_context`, beside a pool of `user`,
+`progress` and the registered seeds.) So when a condition is unmet **every** call of
 the tool is refused, whatever the client sends. `tools/list` therefore asks each
-such condition, through drf-services' `unmet_operation_affordance`, and leaves the
+such condition, through drf-services' `unmet_operation_affordance` (the kernel's, for a kernel
+tool), and leaves the
 tool out while any is unmet:
 
 ```python
@@ -1203,9 +1209,12 @@ server.register_service_tool(
 ```
 
 - **Asked on every `tools/list`, with the request and user a call would use.** The
-  condition sees the same kind of `request` a call's condition sees — the DRF
-  `Request` built around the transport's own, method `POST`, with no arguments and
-  no query string — and the token's user. It is not gated by
+  condition sees the same kind of `request` a call's condition sees. For a
+  drf-services tool that is the DRF `Request` built around the transport's own,
+  method `POST`, with no arguments and no query string. A kernel condition has no
+  `request` seed: it reads the call's `call_context`, whose `request` is the
+  transport's own `HttpRequest` carrying the token as `mcp_token` and whose
+  `action` is the tool's name. Either sees the token's user. It is not gated by
   `FILTER_LISTINGS_BY_PERMISSIONS`: that setting is off by default because a
   permission may read arguments that do not exist at list time, and a condition
   answered against the seeds cannot read arguments at all.
@@ -1584,7 +1593,9 @@ The server still decides **whether** a sentence appears: a tool with no handle
 gets no handle line, and an unpaginated tool gets no scope sentence, whatever the
 conventions say. A field changes **what it says**. The wording reaches every
 route a server answers on: both transports in both eras, `call_tool`,
-`acall_tool`, `list_tools`, and a task's worker.
+`acall_tool`, `list_tools`, and a task's worker. `missing_arguments` is the
+exception to "every tool": only drf-services tools read it, and a kernel tool
+answers `Invalid arguments` with the kernel's per-field detail.
 
 Every field is a `str.format` template, rendered wherever it lands whether or
 not it has a placeholder, so a literal brace is written twice, `{{` or `}}`, in
