@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import DispatchError, check_call, coerce_flat
 
 from django_spec_mcp.handlers.kernel_utils import (
@@ -140,17 +139,26 @@ def _kernel_read_admits(
     ``check_call`` is ``dispatch``'s prelude run alone, built from what
     ``read_kernel_resource`` hands ``dispatch``: the same principal, the grant
     only a registered unguarded binding carries, the URI variables read as the
-    spec's parameters, and the same call context. So a deactivated principal
+    spec's parameters, and the same call context. Each is held by a test that
+    fails without it: the server's seeds by
+    ``test_a_subscription_resolves_the_servers_pool_seeds``, the call context by
+    ``test_a_subscription_hands_the_check_the_call_context_the_read_does`` and
+    the URI variables read as the spec's types by
+    ``test_a_uri_variable_is_coerced_to_the_type_the_spec_declares``.
+
+    So a deactivated principal
     (``test_a_deactivated_principal_cannot_watch_what_it_cannot_read``) and a
     spec permission refusing the caller are refused here as the read refuses
     them. Nothing is looked up, so a check on the row itself is not asked, as
     the drf-services arm asks none either: the watch is judged on the request,
     not on a row it would have to fetch.
 
-    ``ImproperlyConfigured`` is a refusal too: it is how the kernel answers a
-    hand-built binding over an unguarded spec, whose read never runs
-    (``test_a_handbuilt_unguarded_kernel_resource_is_not_watchable``), and a
-    subscription drops an entry rather than failing the stream on one.
+    Only ``DispatchError`` is a refusal. ``ImproperlyConfigured`` is how the
+    kernel answers a hand-built binding over an unguarded spec, whose read
+    answers -32603 and never runs: a misconfiguration, not a caller turned
+    away, so it propagates and fails the watch the same way
+    (``test_a_handbuilt_unguarded_kernel_resource_fails_the_watch_as_the_read_fails``)
+    rather than being dropped.
     """
     principal: Any = principal_of(context.token.user)
     try:
@@ -164,7 +172,7 @@ def _kernel_read_admits(
                 carry_token(context.http_request, context.token), binding.name
             ),
         )
-    except (DispatchError, ImproperlyConfigured):
+    except DispatchError:
         return False
     return True
 

@@ -21,12 +21,15 @@ beside this file as ``test_subscription_core_drfs.py``.
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import Any
 
 import pytest
 from django.contrib.auth.models import AnonymousUser
 from django.http import HttpRequest
+from django.test import AsyncClient, override_settings
 from django_service_specs import (
+    DEFAULT_POOL_SEEDS,
     Parameter,
     Parameters,
     PermissionCheck,
@@ -55,6 +58,7 @@ from django_spec_mcp.tasks.create_task import create_task
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
 from tests.tasks.conftest import RecordingExecutor
+from tests.testapp.urlconf_for import urlconf_for
 
 # ----- SubscriptionFilter -----
 
@@ -242,6 +246,30 @@ def _server(**kwargs: Any) -> MCPServer:
     return server
 
 
+async def _listen(uris: list[str]) -> Any:
+    """``subscriptions/listen`` over the async mount, as a modern client posts it."""
+    modern = "2026-07-28"
+    return await AsyncClient().post(
+        "/mcp/",
+        data=json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "subscriptions/listen",
+                "params": {
+                    "notifications": {"resourceSubscriptions": uris},
+                    "_meta": {
+                        "io.modelcontextprotocol/protocolVersion": modern,
+                        "io.modelcontextprotocol/clientCapabilities": {},
+                    },
+                },
+            }
+        ),
+        content_type="application/json",
+        headers={"Mcp-Method": "subscriptions/listen", "Mcp-Protocol-Version": modern},
+    )
+
+
 def _context(server: MCPServer, **overrides: Any) -> MCPCallContext:
     request = HttpRequest()
     request.method = "POST"
@@ -332,12 +360,16 @@ def test_a_deactivated_principal_cannot_watch_what_it_cannot_read() -> None:
     assert granted.resource_uris == ()
 
 
-def test_a_handbuilt_unguarded_kernel_resource_is_not_watchable() -> None:
-    """A binding nobody marked unguarded is read under no grant, and the
-    kernel refuses its unguarded spec, so its read never runs
+@pytest.mark.django_db(transaction=True)
+async def test_a_handbuilt_unguarded_kernel_resource_fails_the_watch_as_the_read_fails() -> None:
+    """A binding nobody marked unguarded is read under no grant, and the kernel
+    refuses its unguarded spec, so its read answers -32603 and never runs
     (``test_a_handbuilt_unguarded_kernel_resource_is_never_read``). The watch is
-    refused the same way, as a dropped entry rather than a stream that raises."""
-    server = _server()
+    a misconfiguration too, not a caller the spec turned away: it answers -32603
+    rather than dropping the entry, which would leave a client believing it
+    watches a resource it is not told about. The control on the same mount is
+    the guarded neighbour, granted."""
+    server = _server(subscription_broker=InMemorySubscriptionBroker())
     server.resources.register(
         KernelResourceBinding(
             name="bare",
@@ -348,10 +380,13 @@ def test_a_handbuilt_unguarded_kernel_resource_is_not_watchable() -> None:
             spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_thing, reads=_PK),
         )
     )
-    granted, _ = grant_subscription(
-        SubscriptionFilter(resource_uris=("bare://1", "open://1")), _context(server)
-    )
-    assert granted.resource_uris == ("open://1",)
+    with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=True)):
+        control = await _listen(["open://1"])
+        assert control.status_code == 200
+        await control.streaming_content.aclose()
+        response = await _listen(["bare://1", "open://1"])
+    assert response.status_code == 500
+    assert json.loads(response.content)["error"]["code"] == -32603
 
 
 def test_a_registered_unguarded_kernel_resource_is_watchable_with_the_setting_off() -> None:
@@ -378,6 +413,94 @@ def test_a_uri_whose_variable_the_spec_cannot_read_is_dropped() -> None:
         SubscriptionFilter(resource_uris=("open://abc", "open://1")), _context(_server())
     )
     assert granted.resource_uris == ("open://1",)
+
+
+class _OnlyTenant(PermissionCheck):
+    """Admits the ``acme`` tenant, resolved from the server's own ``pool_seeds``."""
+
+    def has_permission(self, principal: Any, spec: Any, *, tenant: Any) -> bool:
+        return tenant == "acme"
+
+
+class _OnlyMarkedRequests(PermissionCheck):
+    """Admits a call whose ``call_context`` carries the marked request."""
+
+    def has_permission(self, principal: Any, spec: Any, *, call_context: dict[str, Any]) -> bool:
+        return getattr(call_context["request"], "marked", False) is True
+
+
+def _flag(*, v: bool) -> dict[str, bool]:
+    return {"v": v}
+
+
+def test_a_subscription_resolves_the_servers_pool_seeds() -> None:
+    """``pool_seeds=`` of ``_kernel_read_admits``: a check naming ``tenant`` is
+    handed what the server's own seeds resolve, as the read hands it, so a
+    caller the read admits as ``acme`` may watch, and one resolving to another
+    tenant may not."""
+    server = _server(
+        pool_seeds=DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme"),
+    )
+    server.register_resource(
+        _resource([_OnlyTenant()]), name="tenanted", uri_template="tenanted://{pk}"
+    )
+    granted, _ = grant_subscription(
+        SubscriptionFilter(resource_uris=("tenanted://1",)),
+        _context(server, pool_seeds=server.pool_seeds),
+    )
+    assert granted.resource_uris == ("tenanted://1",)
+    other = _server(pool_seeds=DEFAULT_POOL_SEEDS.extend(tenant=lambda: "globex"))
+    other.register_resource(
+        _resource([_OnlyTenant()]), name="tenanted", uri_template="tenanted://{pk}"
+    )
+    refused, _ = grant_subscription(
+        SubscriptionFilter(resource_uris=("tenanted://1",)),
+        _context(other, pool_seeds=other.pool_seeds),
+    )
+    assert refused.resource_uris == ()
+
+
+def test_a_subscription_hands_the_check_the_call_context_the_read_does() -> None:
+    """``call_context=`` of ``_kernel_read_admits``: a check reading
+    ``call_context["request"]`` sees the request being judged, so one admitting
+    on it grants the watch, and the same check refuses a request without it."""
+    server = _server()
+    server.register_resource(
+        _resource([_OnlyMarkedRequests()]), name="marked", uri_template="marked://{pk}"
+    )
+    request = HttpRequest()
+    request.method = "POST"
+    request.user = None
+    request.marked = True  # ty: ignore[unresolved-attribute]
+    granted, _ = grant_subscription(
+        SubscriptionFilter(resource_uris=("marked://1",)), _context(server, http_request=request)
+    )
+    assert granted.resource_uris == ("marked://1",)
+    unmarked, _ = grant_subscription(
+        SubscriptionFilter(resource_uris=("marked://1",)), _context(server)
+    )
+    assert unmarked.resource_uris == ()
+
+
+def test_a_uri_variable_is_coerced_to_the_type_the_spec_declares() -> None:
+    """``coerce_flat(...)`` of ``_kernel_read_admits``: ``true`` in a URI is the
+    text of a boolean, and the read admits it as ``True``; handed through
+    as text the argument check would refuse it and the watch would be dropped."""
+    server = _server()
+    server.register_resource(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=_flag,
+            reads=Parameters([Parameter("v", "boolean", required=True)]),
+            permissions=[Unrestricted()],
+        ),
+        name="flag",
+        uri_template="flag://{v}",
+    )
+    granted, _ = grant_subscription(
+        SubscriptionFilter(resource_uris=("flag://true",)), _context(server)
+    )
+    assert granted.resource_uris == ("flag://true",)
 
 
 def test_a_list_changed_kind_needs_a_registry_behind_it() -> None:

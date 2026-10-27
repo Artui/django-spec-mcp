@@ -141,7 +141,7 @@ def _listen(client: Any, task_ids: list[str], *, declares: bool) -> Any:
     )
 
 
-@pytest.mark.urls("tests.subscriptions.urls")
+@pytest.mark.urls("tests.subscriptions.kernel_urls")
 async def test_asking_for_task_notifications_without_the_capability_is_an_error() -> None:
     """The spec's one exception to "refused entries are dropped": this MUST
     be an error rather than a quiet omission from the acknowledgement."""
@@ -157,7 +157,7 @@ async def test_asking_for_task_notifications_without_the_capability_is_an_error(
     )
 
 
-@pytest.mark.urls("tests.subscriptions.urls")
+@pytest.mark.urls("tests.subscriptions.kernel_urls")
 async def test_declaring_the_capability_gets_a_stream_even_with_no_such_task() -> None:
     """The error turns on what the *client declared*, not on anything about the
     tasks it named — so it is not an oracle for which ids exist."""
