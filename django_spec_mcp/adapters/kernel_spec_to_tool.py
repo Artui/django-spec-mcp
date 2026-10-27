@@ -31,6 +31,8 @@ def kernel_spec_to_tool(
     name: str,
     description: str | None,
     title: str | None,
+    display_name: str | None,
+    display_description: str | None,
     icons: tuple[Icon, ...],
     annotations: dict[str, Any] | None,
     meta: dict[str, Any],
@@ -104,6 +106,8 @@ def kernel_spec_to_tool(
         description=description,
         spec=spec,
         title=title,
+        display_name=display_name,
+        display_description=display_description,
         icons=icons,
         annotations=merge_tool_annotations(
             annotations,

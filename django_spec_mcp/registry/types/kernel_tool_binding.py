@@ -50,6 +50,14 @@ class KernelToolBinding:
     description: str | None
     spec: ServiceSpec | SelectorSpec
     title: str | None = None
+    display_name: str | None = None
+    """Consumer-only label, **never emitted on the MCP wire**, so a downstream
+    library can render a richer label than the protocol ``title``."""
+
+    display_description: str | None = None
+    """Consumer-only blurb, the sibling of ``display_name`` and likewise
+    never emitted on the MCP wire."""
+
     icons: tuple[Icon, ...] = ()
     annotations: dict[str, Any] = field(default_factory=dict)
     meta: dict[str, Any] = field(default_factory=dict)

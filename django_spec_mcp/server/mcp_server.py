@@ -657,6 +657,8 @@ class MCPServer:
         name: str,
         description: str | None = None,
         title: str | None = None,
+        display_name: str | None = None,
+        display_description: str | None = None,
         icons: tuple[Icon, ...] = (),
         annotations: dict[str, Any] | None = None,
         meta: dict[str, Any] | None = None,
@@ -694,6 +696,17 @@ class MCPServer:
         refused: ``paginate`` / ``max_page_size`` on a service tool,
         ``invalidates`` on a selector tool.
 
+        A ``LIST`` selector tool registered without ``paginate=True`` warns
+        ``UnboundedListWarning``, and ``REQUIRE_LIST_PAGINATION`` refuses it. A
+        paginated one whose spec declares a read named ``page`` or ``limit`` is
+        refused, since the pagination takes both names from the arguments
+        before the selector runs. A presenter whose audience markings cannot be
+        projected (two labels, say) is refused naming the tool, rather than
+        failing every ``tools/list`` of the server.
+
+        ``display_name`` and ``display_description`` are labels for in-process
+        consumers, read off the binding and never sent on the wire.
+
         ``scopes`` are the OAuth scopes the caller's token must carry, every one
         of them; a token missing one is answered ``-32006`` with every declared
         scope in ``requiredScopes``, as a ``ScopeRequired`` permission answers.
@@ -719,6 +732,8 @@ class MCPServer:
             name=name,
             description=description,
             title=title,
+            display_name=display_name,
+            display_description=display_description,
             icons=icons,
             annotations=annotations,
             meta=meta,
@@ -750,6 +765,8 @@ class MCPServer:
         name: str,
         description: str | None = None,
         title: str | None = None,
+        display_name: str | None = None,
+        display_description: str | None = None,
         icons: tuple[Icon, ...] = (),
         annotations: dict[str, Any] | None = None,
         meta: dict[str, Any] | None = None,
@@ -789,6 +806,8 @@ class MCPServer:
             name=name,
             description=description,
             title=title,
+            display_name=display_name,
+            display_description=display_description,
             icons=icons,
             annotations=annotations,
             meta=merge_meta(ui_meta, meta),
