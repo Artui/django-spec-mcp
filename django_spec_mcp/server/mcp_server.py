@@ -809,6 +809,16 @@ class MCPServer:
             unknown_arguments=unknown_arguments,
             server_arguments=server_arguments,
         )
+        # Derived now rather than on first read: the listing derives it for
+        # every tool, so markings the kernel cannot project (two labels, say)
+        # would otherwise register and then take ``tools/list`` down for every
+        # tool on the server. The kernel's refusal does not name the tool, so
+        # this does
+        # (``test_a_presenter_whose_markings_cannot_project_is_refused_at_registration``).
+        try:
+            _ = binding.audience_projection
+        except ImproperlyConfigured as exc:
+            raise ImproperlyConfigured(f"MCP tool {binding.name!r}: {exc}") from exc
         # The spec's own permissions are the tool's guard; the scope gate on
         # ``binding.permissions`` is not one, so it is not what is counted.
         if check_kernel_spec_guarded(
