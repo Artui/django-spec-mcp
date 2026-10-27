@@ -1,0 +1,615 @@
+"""An exception escaping dispatch is still answered with a JSON-RPC reply.
+
+Every case goes through the real URL conf, on both viewsets and in both eras,
+because the defect lived at the HTTP edge: the handlers were never asked to
+catch everything, and before the backstop an escaping DRF ``APIException`` was
+rendered by DRF's ``handle_exception`` as a bare DRF body (a ``400`` reading
+``["`items` field is not found"]``, with no ``jsonrpc`` and no ``id``), while
+anything else became Django's ``500`` page.
+
+The second half pins the responses the backstop must **not** absorb. None of
+them is an exception escaping dispatch - each is either a value a handler
+returns or a rejection made before dispatch runs - but a backstop placed one
+level too wide would turn every one into a ``-32603``, so each is held here on
+every path the backstop sits on.
+
+The clients are built with ``raise_request_exception=False`` so that the
+pre-backstop behaviour fails these tests on their assertions (a status, a
+content type) rather than by re-raising the handler's exception into the test.
+
+The tools and the resource are kernel specs registered with ``register_tool``
+and ``register_resource``, and a consumer permission is a kernel
+``PermissionCheck`` on the spec rather than an entry in ``permissions=``. The
+drf-services original is kept beside this file as
+``test_dispatch_backstop_drfs.py``. Two of its questions have no kernel
+counterpart:
+
+- an escaping DRF ``APIException``, the reported case, since nothing on the
+  kernel path raises one. A presenter raising while it renders is asked
+  instead (``test_a_presenter_that_raises_is_a_json_rpc_internal_error``);
+- a DRF throttle reaching these viewsets through ``DEFAULT_THROTTLE_CLASSES``,
+  which is a property of the viewsets being DRF's rather than of anything a
+  kernel tool declares. A kernel tool's limit is ``rate_limits=``
+  (``test_a_rate_limit_keeps_its_error_and_retry_hint``).
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+from dataclasses import dataclass
+from typing import Any
+
+import pytest
+from asgiref.sync import sync_to_async
+from django.core.exceptions import PermissionDenied as DjangoPermissionDenied
+from django.http import Http404, HttpRequest
+from django.test import AsyncClient, Client, override_settings
+from django_service_specs import (
+    DataclassPresenter,
+    NotPermitted,
+    PermissionCheck,
+    SelectorKind,
+    SelectorSpec,
+    Unrestricted,
+)
+
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.subscriptions.in_memory_subscription_broker import (
+    InMemorySubscriptionBroker,
+)
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
+from tests.testapp.models import Invoice
+from tests.testapp.urlconf_for import urlconf_for
+from tests.utils import tool_error
+
+LEGACY = "2025-11-25"
+MODERN = "2026-07-28"
+# A string id, so a reply echoing a default ``1`` or ``null`` cannot pass.
+REQUEST_ID = "backstop-7"
+# What django-restql 0.18.0 raises from ``to_representation`` for a selection
+# naming a field the serializer lacks: the drf-services original's reported
+# case, kept as the text a raising presenter carries.
+RESTQL_TEXT = "`items` field is not found"
+# Stands in for whatever a real exception carries that a client must not read.
+SECRET = "could not connect to db-primary.internal:5432"
+
+_VIEWSET_LOGGERS: dict[bool, str] = {
+    False: "django_spec_mcp.transport.streamable_http_viewset",
+    True: "django_spec_mcp.transport.async_streamable_http_viewset",
+}
+_STREAM_LOGGER = "django_spec_mcp.transport.response_stream"
+
+
+# ----- a server whose tools fail in the ways a dispatch can -----
+
+
+@dataclass
+class _Row:
+    id: int
+
+
+class _RejectingPresenter(DataclassPresenter):
+    """Raises while rendering, as a strict field-selecting renderer does."""
+
+    def present(self, value: Any) -> Any:
+        raise ValueError(RESTQL_TEXT)
+
+
+def _rows() -> list[dict[str, Any]]:
+    return [{"id": 1}, {"id": 2}]
+
+
+def _missing_row() -> Any:
+    """``get_object_or_404``'s idiom, which a view reads as a 404 and a tool as a missing row."""
+    raise Http404(SECRET)
+
+
+def _list_does_not_exist() -> Any:
+    raise Invoice.DoesNotExist(SECRET)
+
+
+def _explode() -> list[dict[str, Any]]:
+    raise RuntimeError(SECRET)
+
+
+class _ExplodingCheck(PermissionCheck):
+    """A consumer permission check with a bug in it."""
+
+    def has_permission(self, *args: Any, **kwargs: Any) -> bool:
+        raise RuntimeError(SECRET)
+
+
+class _RaisingDenial(PermissionCheck):
+    """A check that refuses by raising, the idiom for a message of its own."""
+
+    def __init__(self, exc_type: type[Exception]) -> None:
+        self.exc_type = exc_type
+
+    def has_permission(self, *args: Any, **kwargs: Any) -> bool:
+        raise self.exc_type(SECRET)
+
+
+class _AlwaysDeny:
+    """A per-binding rate limit that is always exhausted."""
+
+    def consume(self, request: HttpRequest, token: TokenInfo) -> int | None:
+        return 42
+
+
+_OPEN = [Unrestricted()]
+
+
+def _selector(
+    selector: Any, *, kind: SelectorKind = SelectorKind.LIST, **spec: Any
+) -> SelectorSpec:
+    spec.setdefault("permissions", _OPEN)
+    return SelectorSpec(kind=kind, selector=selector, **spec)
+
+
+def _server() -> MCPServer:
+    server = MCPServer(
+        name="backstop",
+        auth_backend=AllowAnyBackend(),
+        session_store=InMemorySessionStore(),
+        subscription_broker=InMemorySubscriptionBroker(),
+    )
+    # Paged, so the presenter runs over rows the selector really returned:
+    # the rejection has no caller-supplied value to blame and is a server
+    # fault that always reaches the backstop.
+    server.register_tool(
+        _selector(_rows, presenter=_RejectingPresenter(_Row)), name="boom.render", paginate=True
+    )
+    server.register_tool(_selector(_explode), name="boom.runtime")
+    server.register_tool(
+        _selector(_missing_row, kind=SelectorKind.RETRIEVE), name="missing.retrieve"
+    )
+    server.register_tool(_selector(_missing_row), name="missing.list")
+    server.register_tool(_selector(_list_does_not_exist), name="boom.list_does_not_exist")
+    server.register_tool(_selector(_rows, permissions=[_ExplodingCheck()]), name="boom.permission")
+    server.register_tool(_selector(_rows), name="ok.gated", scopes="mcp:admin")
+    server.register_tool(
+        _selector(_rows, permissions=[_RaisingDenial(NotPermitted)]), name="deny.kernel"
+    )
+    server.register_tool(
+        _selector(_rows, permissions=[_RaisingDenial(DjangoPermissionDenied)]),
+        name="deny.django",
+    )
+    server.register_tool(_selector(_rows), name="ok.limited", rate_limits=[_AlwaysDeny()])
+    server.register_resource(
+        _selector(_rows, kind=SelectorKind.RETRIEVE, permissions=[_ExplodingCheck()]),
+        name="boom",
+        uri_template="boom://thing",
+    )
+    return server
+
+
+# ----- wire helpers -----
+
+
+def _initialize_body() -> str:
+    return json.dumps(
+        {
+            "jsonrpc": "2.0",
+            "id": 0,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": LEGACY,
+                "capabilities": {},
+                "clientInfo": {"name": "pytest", "version": "0.0"},
+            },
+        }
+    )
+
+
+def _request(
+    method: str,
+    params: dict[str, Any],
+    *,
+    modern: bool,
+    progress: bool = False,
+    notification: bool = False,
+) -> tuple[str, dict[str, str]]:
+    """The body and headers of one POST, shaped for its era."""
+    meta: dict[str, Any] = {}
+    if modern:
+        meta["io.modelcontextprotocol/protocolVersion"] = MODERN
+        meta["io.modelcontextprotocol/clientCapabilities"] = {}
+    if progress:
+        meta["progressToken"] = "p1"
+    sent: dict[str, Any] = {**params, "_meta": meta} if meta else dict(params)
+    body: dict[str, Any] = {"jsonrpc": "2.0", "method": method, "params": sent}
+    if not notification:
+        body["id"] = REQUEST_ID
+    headers: dict[str, str] = {"Mcp-Protocol-Version": MODERN if modern else LEGACY}
+    if modern and not notification:
+        headers["Mcp-Method"] = method
+        if method == "tools/call":
+            headers["Mcp-Name"] = params["name"]
+    return json.dumps(body), headers
+
+
+def _post_sync(
+    server: MCPServer, method: str, params: dict[str, Any], *, modern: bool, **kw: Any
+) -> Any:
+    client = Client(raise_request_exception=False)
+    body, headers = _request(method, params, modern=modern, **kw)
+    with override_settings(ROOT_URLCONF=urlconf_for(server)):
+        if not modern:
+            init = client.post("/mcp/", data=_initialize_body(), content_type="application/json")
+            headers["Mcp-Session-Id"] = init["Mcp-Session-Id"]
+        return client.post("/mcp/", data=body, content_type="application/json", headers=headers)
+
+
+async def _post_async(
+    server: MCPServer, method: str, params: dict[str, Any], *, modern: bool, **kw: Any
+) -> Any:
+    client = AsyncClient(raise_request_exception=False)
+    body, headers = _request(method, params, modern=modern, **kw)
+    with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=True)):
+        if not modern:
+            init = await client.post(
+                "/mcp/", data=_initialize_body(), content_type="application/json"
+            )
+            headers["Mcp-Session-Id"] = init["Mcp-Session-Id"]
+        return await client.post(
+            "/mcp/", data=body, content_type="application/json", headers=headers
+        )
+
+
+async def _post(
+    is_async: bool, server: MCPServer, method: str, params: dict[str, Any], **kw: Any
+) -> Any:
+    if is_async:
+        return await _post_async(server, method, params, **kw)
+    # Off the loop: the sync test client must not run inside an event loop.
+    return await sync_to_async(_post_sync)(server, method, params, **kw)
+
+
+async def _frames(response: Any) -> list[dict[str, Any]]:
+    """Parse the ``data:`` lines of an SSE body into JSON-RPC messages."""
+    raw = b"".join([chunk async for chunk in response.streaming_content]).decode()
+    return [
+        json.loads(line[len("data: ") :]) for line in raw.splitlines() if line.startswith("data: ")
+    ]
+
+
+def _assert_internal_error(response: Any) -> None:
+    """A JSON-RPC ``-32603`` for this request, under a ``500``, saying nothing more."""
+    assert response["Content-Type"].startswith("application/json"), response.content[:200]
+    assert response.status_code == 500, response.content
+    body = response.json()
+    assert body == {
+        "jsonrpc": "2.0",
+        "id": REQUEST_ID,
+        "error": {"code": -32603, "message": "Internal error"},
+    }
+    text = response.content.decode()
+    assert "field is not found" not in text
+    assert "db-primary" not in text
+    assert "Error" not in text.replace("Internal error", "")
+
+
+def _assert_logged(caplog: pytest.LogCaptureFixture, logger: str, exc_type: type) -> None:
+    """The operator gets what the client does not: the exception and its traceback."""
+    records = [r for r in caplog.records if r.name == logger and r.levelno == logging.ERROR]
+    assert len(records) == 1, [r.name for r in caplog.records]
+    record = records[0]
+    assert REQUEST_ID in record.getMessage()
+    assert record.exc_info is not None
+    assert isinstance(record.exc_info[1], exc_type)
+
+
+_PATHS = pytest.mark.parametrize(
+    ("is_async", "modern"),
+    [(False, False), (False, True), (True, False), (True, True)],
+    ids=["sync-legacy", "sync-modern", "async-legacy", "async-modern"],
+)
+
+
+# ----- the backstop -----
+
+
+@_PATHS
+@pytest.mark.parametrize("tool", ["missing.retrieve", "missing.list"])
+async def test_a_selectors_http404_is_a_not_found_result_not_a_server_fault(
+    is_async: bool, modern: bool, tool: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    """``get_object_or_404`` in a selector is a missing row, as ``DoesNotExist`` is.
+
+    ``Http404`` is not an ``ObjectDoesNotExist``, so before the kernel mapped it
+    it reached the backstop: a ``500`` with ``-32603`` and an ERROR line. It is
+    now a ``200`` whose tool result is the kernel's ``not_found``, and nothing is
+    logged, because nothing went wrong.
+    """
+    caplog.set_level(logging.ERROR, logger="django_spec_mcp")
+    response = await _post(
+        is_async, _server(), "tools/call", {"name": tool, "arguments": {}}, modern=modern
+    )
+    assert response.status_code == 200, response.content
+    body = response.json()
+    assert body["id"] == REQUEST_ID
+    assert "error" not in body
+    error = tool_error(body["result"])
+    assert error["type"] == "not_found"
+    # A LIST has no instance to miss, usually a parent, so it does not say one.
+    assert ("instance" in error["message"]) == (tool == "missing.retrieve")
+    # The exception text is the selector's own and is not the client's to read.
+    assert "db-primary" not in response.content.decode()
+    assert [r for r in caplog.records if r.levelno >= logging.ERROR] == []
+
+
+@_PATHS
+async def test_a_presenter_that_raises_is_a_json_rpc_internal_error(
+    is_async: bool, modern: bool, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The kernel form of the reported case: an exception raised while rendering.
+
+    The original raised DRF's ``ValidationError``, which DRF rendered as a
+    ``400`` with a bare list for a body before the backstop. A presenter's
+    exception is the server's fault whatever its type.
+    """
+    caplog.set_level(logging.ERROR, logger="django_spec_mcp")
+    response = await _post(
+        is_async, _server(), "tools/call", {"name": "boom.render", "arguments": {}}, modern=modern
+    )
+    _assert_internal_error(response)
+    _assert_logged(caplog, _VIEWSET_LOGGERS[is_async], ValueError)
+    assert RESTQL_TEXT in caplog.text
+
+
+@_PATHS
+async def test_a_list_selectors_does_not_exist_stays_a_server_fault(
+    is_async: bool, modern: bool, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Only ``Http404`` is a LIST's "not found"; ``DoesNotExist`` escaping a LIST
+    selector is a bug in the selector, so it is still a ``-32603`` and logged."""
+    caplog.set_level(logging.ERROR, logger="django_spec_mcp")
+    response = await _post(
+        is_async,
+        _server(),
+        "tools/call",
+        {"name": "boom.list_does_not_exist", "arguments": {}},
+        modern=modern,
+    )
+    _assert_internal_error(response)
+    _assert_logged(caplog, _VIEWSET_LOGGERS[is_async], Invoice.DoesNotExist)
+
+
+@_PATHS
+async def test_any_other_escaping_exception_is_a_json_rpc_internal_error(
+    is_async: bool, modern: bool, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Before the backstop this was Django's ``500`` page, HTML and all."""
+    caplog.set_level(logging.ERROR, logger="django_spec_mcp")
+    response = await _post(
+        is_async, _server(), "tools/call", {"name": "boom.runtime", "arguments": {}}, modern=modern
+    )
+    _assert_internal_error(response)
+    _assert_logged(caplog, _VIEWSET_LOGGERS[is_async], RuntimeError)
+    assert "db-primary" in caplog.text
+
+
+@_PATHS
+async def test_a_permission_class_that_raises_is_a_json_rpc_internal_error(
+    is_async: bool, modern: bool, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Consumer code raising inside the spec's own permission check."""
+    caplog.set_level(logging.ERROR, logger="django_spec_mcp")
+    response = await _post(
+        is_async,
+        _server(),
+        "tools/call",
+        {"name": "boom.permission", "arguments": {}},
+        modern=modern,
+    )
+    _assert_internal_error(response)
+    _assert_logged(caplog, _VIEWSET_LOGGERS[is_async], RuntimeError)
+
+
+@pytest.mark.parametrize("modern", [False, True], ids=["legacy", "modern"])
+async def test_a_permission_preflight_that_raises_before_a_stream_is_a_json_rpc_error(
+    modern: bool, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A ``progressToken`` moves the permission check ahead of the stream.
+
+    It runs before any status is committed, so the backstop can still answer
+    with a ``500`` and a JSON body rather than opening a stream.
+    """
+    caplog.set_level(logging.ERROR, logger="django_spec_mcp")
+    response = await _post_async(
+        _server(),
+        "tools/call",
+        {"name": "boom.permission", "arguments": {}},
+        modern=modern,
+        progress=True,
+    )
+    assert not response.streaming
+    _assert_internal_error(response)
+    _assert_logged(caplog, _VIEWSET_LOGGERS[True], RuntimeError)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "grant_subscription judges only a kernel resource's scopes= gate, never its spec's "
+        "own checks, so the raising check is not run and the stream opens. The fix is in "
+        "subscriptions/grant_subscription.py: run the kernel's check_call for a kernel "
+        "binding in _may_watch_resource, as resources/read's dispatch does."
+    ),
+)
+async def test_a_subscription_grant_that_raises_is_a_json_rpc_internal_error(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """``subscriptions/listen`` runs the resource's permission checks to build its grant."""
+    caplog.set_level(logging.ERROR, logger="django_spec_mcp")
+    response = await _post_async(
+        _server(),
+        "subscriptions/listen",
+        {"notifications": {"resourceSubscriptions": ["boom://thing"]}},
+        modern=True,
+    )
+    assert not response.streaming
+    _assert_internal_error(response)
+    _assert_logged(caplog, _VIEWSET_LOGGERS[True], RuntimeError)
+
+
+@pytest.mark.parametrize("modern", [False, True], ids=["legacy", "modern"])
+@pytest.mark.parametrize(
+    ("tool", "exc_type"),
+    [("boom.render", ValueError), ("boom.runtime", RuntimeError)],
+    ids=["presenter", "runtime-error"],
+)
+async def test_a_streamed_dispatch_that_raises_ends_with_a_generic_error_frame(
+    tool: str, exc_type: type, modern: bool, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Once the stream is open the status is spent, so the error rides as the last frame.
+
+    It used to read ``ValidationError: [ErrorDetail(...)]``: the exception's
+    own text, which is written for an operator rather than a client.
+    """
+    caplog.set_level(logging.ERROR, logger="django_spec_mcp")
+    response = await _post_async(
+        _server(), "tools/call", {"name": tool, "arguments": {}}, modern=modern, progress=True
+    )
+    assert response.streaming
+    frames = await _frames(response)
+    assert frames[-1] == {
+        "jsonrpc": "2.0",
+        "id": REQUEST_ID,
+        "error": {"code": -32603, "message": "Internal error"},
+    }
+    streamed = json.dumps(frames)
+    assert "field is not found" not in streamed
+    assert "db-primary" not in streamed
+    _assert_logged(caplog, _STREAM_LOGGER, exc_type)
+
+
+# ----- what the backstop must leave alone -----
+
+
+@_PATHS
+async def test_a_notification_is_never_dispatched_so_nothing_can_raise(
+    is_async: bool, modern: bool, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A notification is acknowledged before dispatch, so its handler never runs.
+
+    JSON-RPC forbids replying to one, and nothing here would: the ``202``
+    comes back with no body and nothing is logged, even when the method
+    named would raise if it were dispatched.
+    """
+    caplog.set_level(logging.ERROR, logger="django_spec_mcp")
+    response = await _post(
+        is_async,
+        _server(),
+        "tools/call",
+        {"name": "boom.runtime", "arguments": {}},
+        modern=modern,
+        notification=True,
+    )
+    assert response.status_code == 202
+    assert response.content == b""
+    assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
+
+
+@pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
+async def test_a_batch_is_refused_before_dispatch(is_async: bool) -> None:
+    """The transport takes one message per POST; an array is ``-32600`` under ``400``."""
+    body = json.dumps([{"jsonrpc": "2.0", "id": REQUEST_ID, "method": "ping"}])
+    with override_settings(ROOT_URLCONF=urlconf_for(_server(), is_async=is_async)):
+        if is_async:
+            response = await AsyncClient().post("/mcp/", data=body, content_type="application/json")
+        else:
+            response = await sync_to_async(Client().post)(
+                "/mcp/", data=body, content_type="application/json"
+            )
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == -32600
+
+
+@_PATHS
+async def test_a_permission_denial_keeps_its_403_and_challenge(
+    is_async: bool, modern: bool
+) -> None:
+    """A denial is a value dispatch *returns*, so it never reaches the backstop."""
+    response = await _post(
+        is_async, _server(), "tools/call", {"name": "ok.gated", "arguments": {}}, modern=modern
+    )
+    assert response.status_code == 403, response.content
+    assert response.json()["error"]["code"] == -32006
+    assert "mcp:admin" in response["WWW-Authenticate"]
+
+
+# Both flavours by name, since each is answered somewhere else: the kernel's
+# ``NotPermitted`` by the refusal map, as a returned denial is, and Django's
+# ``PermissionDenied``, which the kernel lets through, by the backstop.
+_RAISED_DENIALS = pytest.mark.parametrize("tool", ["deny.kernel", "deny.django"])
+
+
+def _assert_raised_denial(response: Any, caplog: pytest.LogCaptureFixture) -> None:
+    """The answer a *returned* denial gets, and nothing of the exception's text."""
+    assert response.status_code == 403, response.content
+    assert response["Content-Type"].startswith("application/json")
+    body = response.json()
+    assert body["id"] == REQUEST_ID
+    assert body["error"] == {"code": -32006, "message": "Insufficient permission"}
+    assert "WWW-Authenticate" in response
+    assert SECRET not in response.content.decode()
+    # A refusal, so nothing lands at ERROR: that level is for server faults.
+    assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
+
+
+@_PATHS
+@_RAISED_DENIALS
+async def test_a_raised_permission_denial_is_a_denial_not_a_fault(
+    is_async: bool, modern: bool, tool: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A permission check that raises instead of returning ``False``.
+
+    A catch-all ``-32603`` would report a refusal as a ``500``.
+    """
+    caplog.set_level(logging.ERROR, logger="django_spec_mcp")
+    response = await _post(
+        is_async, _server(), "tools/call", {"name": tool, "arguments": {}}, modern=modern
+    )
+    _assert_raised_denial(response, caplog)
+
+
+@pytest.mark.parametrize("modern", [False, True], ids=["legacy", "modern"])
+@_RAISED_DENIALS
+async def test_a_raised_denial_in_the_stream_preflight_is_a_403(
+    modern: bool, tool: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The pre-flight runs the permission class before any stream opens."""
+    caplog.set_level(logging.ERROR, logger="django_spec_mcp")
+    response = await _post_async(
+        _server(),
+        "tools/call",
+        {"name": tool, "arguments": {}},
+        modern=modern,
+        progress=True,
+    )
+    assert not response.streaming
+    _assert_raised_denial(response, caplog)
+
+
+@_PATHS
+async def test_a_rate_limit_keeps_its_error_and_retry_hint(is_async: bool, modern: bool) -> None:
+    """Also returned, not raised: a ``200`` whose error carries ``retryAfter``."""
+    response = await _post(
+        is_async, _server(), "tools/call", {"name": "ok.limited", "arguments": {}}, modern=modern
+    )
+    assert response.status_code == 200, response.content
+    error = response.json()["error"]
+    assert error["code"] == -32005
+    assert error["data"] == {"retryAfter": 42}
+
+
+@_PATHS
+async def test_an_unknown_method_keeps_its_own_answer(is_async: bool, modern: bool) -> None:
+    """``-32601``, under the ``404`` the modern era makes normative."""
+    response = await _post(is_async, _server(), "nope/nothing", {}, modern=modern)
+    assert response.status_code == (404 if modern else 200), response.content
+    assert response.json()["error"]["code"] == -32601
