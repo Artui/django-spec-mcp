@@ -7,6 +7,7 @@ from django_service_specs import DispatchError, ServiceError, coerce_flat, dispa
 from django_spec_mcp.handlers.kernel_utils import (
     call_context,
     carry_token,
+    principal_of,
     resource_read_result,
     resource_refusal,
 )
@@ -32,7 +33,7 @@ def read_kernel_resource(
     try:
         result = dispatch(
             binding.spec,
-            principal=context.token.user,
+            principal=principal_of(context.token.user),
             arguments=coerce_flat(binding.spec.parameters(), variables),
             pool_seeds=context.pool_seeds,
             call_context=call_context(

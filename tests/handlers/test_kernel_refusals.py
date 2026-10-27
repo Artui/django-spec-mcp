@@ -17,6 +17,12 @@ out fails a named test even where the map stays total:
   ``test_a_service_validation_error_is_a_validation_result``;
 - ``ServiceError`` (unanswered without it): ``test_a_service_error_is_a_service_result``
   and the totality test.
+
+Each row with a drf-services counterpart is also compared with what a drf-services
+tool serves for it: ``test_a_denial_is_answered_as_the_drf_services_path_answers_it``,
+``test_invalid_arguments_are_answered_as_the_drf_services_path_answers_them`` and
+``test_a_service_refusal_is_answered_as_the_drf_services_path_answers_it``. A bare
+``DispatchError`` and a deactivated principal have none: drf-services raises neither.
 """
 
 from __future__ import annotations
@@ -42,6 +48,8 @@ from django_service_specs import (
     Unrestricted,
     unanswered_refusals,
 )
+from rest_framework import serializers
+from rest_framework.permissions import BasePermission
 from rest_framework_services.types.service_spec import ServiceSpec as DrfServiceSpec
 
 from django_spec_mcp import MCPServer
@@ -205,6 +213,8 @@ def test_a_retrieve_not_found_is_worded_as_a_missing_instance(kernel: KernelClie
     [
         (ServiceError("The ledger is closed"), "closed"),
         (ActionUnavailable("Already sent", code="already_sent"), "sent"),
+        (ServiceValidationError("Too late to amend"), "late"),
+        (AdditionalInputRequired("Which account?", schema=_ACCOUNT), "asks"),
     ],
 )
 def test_a_service_refusal_is_answered_as_the_drf_services_path_answers_it(
@@ -212,12 +222,46 @@ def test_a_service_refusal_is_answered_as_the_drf_services_path_answers_it(
 ) -> None:
     drfs = MCPServer(name="drfs", auth_backend=build_kernel_server()._auth_backend)
     drfs.register_service_tool(name=name, spec=DrfServiceSpec(service=_raising(exc)))
-    with override_settings(ROOT_URLCONF=urlconf_for(drfs)):
+    assert _served(client, _build(), name) == _served(client, drfs, name)
+
+
+class _DrfDeny(BasePermission):
+    def has_permission(self, request: Any, view: Any) -> bool:
+        return False
+
+
+class _NumberSerializer(serializers.Serializer):
+    number = serializers.CharField()
+
+
+def test_a_denial_is_answered_as_the_drf_services_path_answers_it(client: Client) -> None:
+    drfs = MCPServer(name="drfs", auth_backend=build_kernel_server()._auth_backend)
+    drfs.register_service_tool(
+        name="denied", spec=DrfServiceSpec(service=lambda: None, permission_classes=[_DrfDeny])
+    )
+    assert _served(client, _build(), "denied") == _served(client, drfs, "denied")
+
+
+def test_invalid_arguments_are_answered_as_the_drf_services_path_answers_them(
+    client: Client,
+) -> None:
+    """The same missing field, refused by a serializer there and the kernel's
+    validator here, answers the same error, per-field detail and wording included."""
+    drfs = MCPServer(name="drfs", auth_backend=build_kernel_server()._auth_backend)
+    drfs.register_service_tool(
+        name="validated",
+        spec=DrfServiceSpec(service=lambda **_: None, input_serializer=_NumberSerializer),
+    )
+    by_drfs = _error(_served(client, drfs, "validated", {"data": {}}))
+    by_kernel = _error(_served(client, _build(), "validated", {}))
+    assert by_kernel == by_drfs
+    assert by_kernel["detail"] == {"number": ["This field is required."]}
+
+
+def _served(
+    client: Client, server: MCPServer, name: str, arguments: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    with override_settings(ROOT_URLCONF=urlconf_for(server)):
         caller = KernelClient(client)
         caller.initialize()
-        served_by_drfs = caller.call(name)
-    with override_settings(ROOT_URLCONF=urlconf_for(_build())):
-        caller = KernelClient(client)
-        caller.initialize()
-        served_by_kernel = caller.call(name)
-    assert served_by_kernel == served_by_drfs
+        return caller.call(name, arguments or {})

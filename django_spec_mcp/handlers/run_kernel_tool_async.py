@@ -14,6 +14,7 @@ from django_spec_mcp.handlers.kernel_utils import (
     on_the_wire,
     page_request,
     present_tool_result,
+    principal_of,
     tool_result,
 )
 from django_spec_mcp.handlers.types.context import MCPCallContext
@@ -52,7 +53,7 @@ async def run_kernel_tool_async(
     try:
         result = await adispatch(
             binding.spec,
-            principal=context.token.user,
+            principal=principal_of(context.token.user),
             arguments=dispatched,
             pool_seeds=context.pool_seeds,
             unknown_arguments=binding.unknown_arguments,

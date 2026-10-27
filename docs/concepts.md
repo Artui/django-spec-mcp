@@ -939,7 +939,7 @@ server.register_resource(
 What changes against the drf-services tools:
 
 - **The call is the kernel's `dispatch` / `adispatch`.** The principal is the
-  token's user, and `call_context["request"]` is the transport's request, with
+  token's user, an `AnonymousUser` for `call_tool(..., user=None)`, and `call_context["request"]` is the transport's request, with
   the resolved token as `request.mcp_token`. The spec's own `permissions`
   answer the call: a refused principal is `-32006` "Insufficient permission".
 - **The schemas are the kernel's** `spec_input_schema` / `spec_output_schema`.

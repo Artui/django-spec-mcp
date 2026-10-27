@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Any
 
+from django.contrib.auth.models import AnonymousUser
 from django_service_specs import (
     DEFAULT_PAGE_SIZE,
     DispatchError,
@@ -66,6 +67,19 @@ def call_context(request: Any, action: str) -> dict[str, Any]:
     tool or resource name, the role ``view.action`` plays for a view.
     """
     return {"request": request, "view": None, "format": None, "action": action}
+
+
+def principal_of(user: Any) -> Any:
+    """The principal a kernel dispatch runs for: ``user``, or an ``AnonymousUser``.
+
+    ``acall_tool`` / ``call_tool`` take ``user=None`` for an anonymous caller,
+    and the kernel's ``adispatch`` reads ``principal=None`` as no principal
+    given at all, refusing the call with a ``TypeError``. An ``AnonymousUser``
+    is what an anonymous request carries over HTTP, so both routes and both
+    dispatchers see the same principal
+    (``test_an_anonymous_in_process_caller_reaches_a_kernel_tool``).
+    """
+    return AnonymousUser() if user is None else user
 
 
 def carry_token(request: Any, token: Any) -> Any:
@@ -247,6 +261,7 @@ __all__ = [
     "not_found_result",
     "on_the_wire",
     "page_request",
+    "principal_of",
     "present_tool_result",
     "resource_read_result",
     "resource_refusal",

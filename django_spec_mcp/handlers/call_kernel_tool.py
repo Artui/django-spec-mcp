@@ -11,6 +11,7 @@ from django_spec_mcp.handlers.kernel_utils import (
     not_found_result,
     page_request,
     present_tool_result,
+    principal_of,
     tool_result,
 )
 from django_spec_mcp.handlers.types.kernel_refusal_scene import KernelRefusalScene
@@ -47,7 +48,7 @@ def call_kernel_tool(
     try:
         result = dispatch(
             binding.spec,
-            principal=user,
+            principal=principal_of(user),
             arguments=dispatched,
             pool_seeds=pool_seeds,
             unknown_arguments=binding.unknown_arguments,
