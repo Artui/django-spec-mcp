@@ -15,7 +15,10 @@ the runtime lock is reached only by a binding built by hand: there the kernel's
 argument check refuses ``user`` as an argument the spec does not declare, and
 the selector never runs under the name the URI carried: the refusal is raised
 on to the transport's internal error, as any resource refusal with no JSON-RPC
-answer is.
+answer is. That is the only outcome on this path: a resource read dispatches
+under the kernel's default ``REJECT``, and ``register_resource`` takes no
+``unknown_arguments`` knob, so the ``IGNORE`` case the tool path asks (in
+``test_handler_branches.py``) has no resource counterpart.
 """
 
 from __future__ import annotations
@@ -32,6 +35,7 @@ from django_service_specs import (
     Parameters,
     SelectorKind,
     SelectorSpec,
+    UnknownArguments,
     Unrestricted,
 )
 
@@ -178,6 +182,17 @@ def test_a_kernel_spec_declaring_a_read_named_user_is_refused() -> None:
             selector=_notes,
             reads=Parameters([Parameter("user", "string", required=True)]),
             permissions=[Unrestricted()],
+        )
+
+
+def test_a_resource_takes_no_unknown_argument_policy() -> None:
+    """Holds the module's claim that a resource read is always ``REJECT``."""
+    with pytest.raises(TypeError, match="unknown_arguments"):
+        _server().register_resource(
+            _notes_spec(),
+            name="notes",
+            uri_template="notes://{pk}",
+            unknown_arguments=UnknownArguments.IGNORE,
         )
 
 
