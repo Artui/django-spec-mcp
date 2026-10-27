@@ -151,7 +151,8 @@ def _kernel_unmet(binding: KernelToolBinding, context: MCPCallContext) -> Afford
     )
     # The key ``base_pool`` was handed it under; the condition is handed the
     # same dict as ``call_context=`` instead, and the kernel refuses a pool
-    # carrying a context beside a different one.
+    # carrying a context beside a different one
+    # (test_a_pool_is_built_per_conditioned_tool fails without this line).
     del pool["call_context"]
     return kernel_unmet_affordance(
         binding.spec, pool, reserved=context.pool_seeds.reserved, call_context=tool_context

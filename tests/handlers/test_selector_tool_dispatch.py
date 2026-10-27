@@ -326,7 +326,7 @@ async def test_none_under_allow_none_is_the_empty_list(is_async: bool) -> None:
 
 @routes
 async def test_none_without_allow_none_raises_in_process(is_async: bool) -> None:
-    with pytest.raises(TypeError):
+    with pytest.raises(TypeError, match="not iterable"):
         await _call(_server(_invoices(lambda: None)), {}, is_async=is_async)
 
 
