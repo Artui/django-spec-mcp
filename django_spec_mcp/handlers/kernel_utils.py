@@ -7,6 +7,7 @@ the two paths share only the helpers they call by name.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from itertools import islice
 from typing import Any
 
 from django.contrib.auth.models import AnonymousUser
@@ -18,6 +19,7 @@ from django_service_specs import (
     OutputPage,
     SelectorKind,
     ServiceError,
+    is_queryset,
     paginate_output,
     present_for_audience,
     spec_output_schema,
@@ -32,6 +34,7 @@ from django_spec_mcp.handlers.utils import (
     resource_cache_hints,
     resource_not_found_code,
 )
+from django_spec_mcp.observability import get_logger
 from django_spec_mcp.output.encode_json import encode_json
 from django_spec_mcp.output.enforce_result_bytes import enforce_result_bytes
 from django_spec_mcp.output.error_tool_result import build_error_tool_result
@@ -44,6 +47,8 @@ from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourc
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from django_spec_mcp.types.output_format import OutputFormat
+
+logger = get_logger(__name__)
 
 # The two arguments a paginated ``LIST`` tool takes for its page, which the
 # kernel's argument check would refuse as undeclared if they reached dispatch.
@@ -191,6 +196,71 @@ def _presents_a_list(binding: KernelToolBinding) -> bool:
     return schema is not None and schema.get("type") == ["array", "null"]
 
 
+def bound_unpaginated_rows(
+    binding: KernelToolBinding,
+    result: DispatchResult,
+    page: KernelPageRequest | None,
+    config: MCPConfig,
+) -> DispatchResult | ToolResult:
+    """``result`` with an unpaginated ``LIST`` tool's rows taken up to the row ceiling.
+
+    The ceiling is the most rows one ``LIST`` tool result carries, paged or not:
+    the binding's ``max_page_size``, deferring to the server's. A page clamps to
+    it inside ``paginate_output`` and says so in its envelope; an unpaginated
+    result carries nothing that could say rows were dropped, so one over the
+    ceiling is refused as ``result_too_large`` rather than truncated, as the
+    byte ceiling refuses
+    (``test_an_unpaginated_list_over_the_ceiling_is_refused``).
+
+    One row past the ceiling is read, so "exactly at the ceiling" is told from
+    "over it", and read as a **slice**, so a QuerySet bounds the fetch in SQL
+    and its result cache is what the presenter then iterates
+    (``test_the_ceiling_bounds_the_fetch_and_not_just_the_payload``). That is
+    the point of doing this before presenting rather than leaning on the byte
+    ceiling, which measures a payload already fetched and presented in full.
+    Synchronous, because the slice runs the query; the async caller runs it off
+    the event loop.
+
+    Every other result passes untouched. Each condition is held by a test: a
+    page by ``test_a_model_supplied_limit_is_clamped_to_the_server_ceiling``, a
+    tool that is no ``LIST`` by ``test_a_service_tool_returning_rows_is_not_row_bounded``
+    and a disabled ceiling by ``test_a_disabled_ceiling_serves_an_unpaginated_list_whole``.
+    """
+    max_rows = resolve_bound(binding.max_page_size, config.max_page_size)
+    if page is not None or binding.kind is not SelectorKind.LIST or max_rows is None:
+        return result
+    # The kernel hands a ``LIST`` selector's Manager over as its ``.all()``, and
+    # presents a ``LIST`` by iterating what it returned, so every value here is
+    # rows to iterate, a mapping's keys and a string's characters included
+    # (``test_any_list_result_is_bounded_by_the_same_ceiling``).
+    rows: Any = result.value
+    # ``rows[:n]`` on a QuerySet is a LIMIT, and ``len()`` evaluates it once;
+    # any other iterable, a list or a generator, is windowed with ``islice``.
+    window: Any = rows[: max_rows + 1] if is_queryset(rows) else list(islice(rows, max_rows + 1))
+    if len(window) > max_rows:
+        return _over_row_ceiling(binding, max_rows)
+    return replace(result, value=window)
+
+
+def _over_row_ceiling(binding: KernelToolBinding, max_rows: int) -> ToolResult:
+    """The refusal of an unpaginated result carrying more rows than the ceiling."""
+    # The caller is told by the result; the operator only by this. A bound that
+    # fires invisibly reads to everyone else as "the tool is broken".
+    logger.warning(
+        "Row bound exceeded: unpaginated tool %r resolved more than the %d row ceiling",
+        binding.name,
+        max_rows,
+    )
+    return build_error_tool_result(
+        f"Tool {binding.name!r} is unpaginated and resolved more than this server's "
+        f"{max_rows} row ceiling. Narrow the request (add or tighten a filter) and "
+        "call again. The result was not truncated: an unpaginated payload carries "
+        "nothing to say rows were dropped, so a partial one would look complete. "
+        "Registering the tool with paginate=True lets it be read a page at a time.",
+        error_type="result_too_large",
+    )
+
+
 def not_found_result(binding: KernelToolBinding) -> ToolResult:
     """A ``not_found`` dispatch result, worded as the drf-services path words it.
 
@@ -313,6 +383,7 @@ def _coerce_int(value: Any, *, default: int) -> int:
 
 __all__ = [
     "KernelPageRequest",
+    "bound_unpaginated_rows",
     "call_context",
     "carry_token",
     "not_found_result",
