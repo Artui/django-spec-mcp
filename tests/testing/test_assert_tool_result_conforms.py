@@ -4,6 +4,15 @@ The headline is `test_a_type_break_that_the_key_set_check_calls_conforming`: one
 one call, and two assertions over the same pair -- the key-set comparison a
 suite writes on its own passes it, and this helper fails it. Everything else
 here covers the edges of the message that failure carries.
+
+The two cases calling a tool register a kernel list selector presenting through
+``InvoiceOutput``, the kernel twin of the ``InvoiceOutputSerializer`` the
+drf-services original read. The type break is a presenter formatting the amount
+on the way out, as the original's ``LedgerSerializer`` does in
+``to_representation``: the advertised schema comes from the declared dataclass
+and goes on saying ``integer``. The other cases build no spec and are carried
+unchanged. The original is kept beside this file as
+``test_assert_tool_result_conforms_drfs.py``.
 """
 
 from __future__ import annotations
@@ -14,8 +23,7 @@ from typing import Any
 
 import pytest
 from django.http import HttpRequest
-from django_service_specs import SelectorKind
-from rest_framework_services import SelectorSpec
+from django_service_specs import DataclassPresenter, SelectorKind, SelectorSpec, Unrestricted
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
@@ -24,21 +32,36 @@ from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.testing import assert_tool_result_conforms
+from tests.testapp.kernel_shapes import InvoiceOutput
 from tests.testapp.models import Invoice
-from tests.testapp.serializers import InvoiceOutputSerializer, LedgerSerializer
 
 
-def _server(output_serializer: type) -> MCPServer:
+class _LedgerPresenter(DataclassPresenter):
+    """A presenter that formats one value for display on the way out.
+
+    A stand-in for a real consumer defect rather than a contrivance: someone
+    overrides ``present`` to render an amount the way a person reads it, and the
+    advertised schema, derived from the *declared* dataclass, goes on saying
+    ``integer``. No key changes name and none disappears.
+    """
+
+    def present(self, value: Any) -> Any:
+        row = super().present(value)
+        row["amount_cents"] = f"{row['amount_cents'] / 100:.2f}"
+        return row
+
+
+def _server(presenter: DataclassPresenter) -> MCPServer:
     server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
-    server.register_selector_tool(
+    server.register_tool(
+        SelectorSpec(
+            kind=SelectorKind.LIST,
+            selector=lambda: Invoice.objects.all().order_by("id"),
+            presenter=presenter,
+            permissions=[Unrestricted()],
+        ),
         name="list_invoices",
         description="List invoices.",
-        spec=SelectorSpec(
-            kind=SelectorKind.LIST,
-            selector=lambda **_: Invoice.objects.all().order_by("id"),
-            output_serializer=output_serializer,
-        ),
-        permissions=[],
     )
     return server
 
@@ -54,9 +77,9 @@ def _ctx(server: MCPServer) -> MCPCallContext:
     )
 
 
-def _call(output_serializer: type) -> tuple[Any, Any]:
+def _call(presenter: DataclassPresenter) -> tuple[Any, Any]:
     """The advertised entry and the returned result for one registered tool."""
-    server = _server(output_serializer)
+    server = _server(presenter)
     ctx = _ctx(server)
     tool: Any = handle_tools_list(None, ctx)["tools"][0]
     result: Any = handle_tools_call({"name": "list_invoices", "arguments": {}}, ctx)
@@ -68,7 +91,7 @@ def test_a_conforming_tool_passes() -> None:
     """The real pipeline, end to end, with no disagreement to find."""
     Invoice.objects.create(number="FV/2026/0043", amount_cents=124000, sent=True)
 
-    tool, result = _call(InvoiceOutputSerializer)
+    tool, result = _call(DataclassPresenter(InvoiceOutput))
 
     assert_tool_result_conforms(tool, result)
 
@@ -78,7 +101,7 @@ def test_a_type_break_that_the_key_set_check_calls_conforming() -> None:
     """Same tool, same call, two assertions: one passes it and one catches it."""
     Invoice.objects.create(number="FV/2026/0043", amount_cents=124000, sent=True)
 
-    tool, result = _call(LedgerSerializer)
+    tool, result = _call(_LedgerPresenter(InvoiceOutput))
     advertised = tool["outputSchema"]["items"]["properties"]
     row = result["structuredContent"][0]
 

@@ -35,7 +35,7 @@ from django_spec_mcp import MCPServer, QueryParam
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
-from tests.handlers.test_query_params import _ctx
+from tests.handlers.test_query_params_drfs import _ctx
 from tests.testapp.models import Invoice
 
 # The one spreading binding drf-services accepts: ``SPREAD_CALLER_WINS`` is retired

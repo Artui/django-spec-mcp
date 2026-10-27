@@ -1,18 +1,29 @@
-"""Consumer-reported ergonomics: places the package was correct but silent.
+"""Consumer-reported ergonomics, on a kernel tool: places the package was correct but silent.
 
 Every case here was reported by a first-party integration that lost debugging
-hours to it. None was a broken guarantee — each was a convention the package
+hours to it. None was a broken guarantee: each was a convention the package
 depended on and enforced nowhere, or a decision it made and never wrote down.
+
+The registration cases ask ``register_tool`` with kernel specs what the
+drf-services original asked ``register_service_tool``: the structured-output pair
+is refused at registration, and an unguarded spec is refused by default. On the
+kernel the guard is the spec's own ``permissions``, a ``PermissionCheck`` list,
+where the original read a DRF ``permission_classes``; and the scope gate, the
+kernel tool's ``scopes=``, does not count as one, where the original passed an
+``MCPPermission`` in ``permissions=``. The authorization-server and observability
+cases build no spec and are carried unchanged. The original is kept beside this
+file as ``test_consumer_ergonomics_drfs.py``.
 """
 
 from __future__ import annotations
 
 import logging
 import warnings
+from typing import Any
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
-from rest_framework_services import ServiceSpec
+from django_service_specs import PermissionCheck, ServiceSpec, Unrestricted
 
 from django_spec_mcp.auth.backends.django_oauth_toolkit_backend import (
     DjangoOAuthToolkitBackend,
@@ -24,15 +35,19 @@ from django_spec_mcp.server.mcp_server import MCPServer
 from django_spec_mcp.server.utils import UnguardedToolWarning
 
 
-class _AlwaysAllow:
-    """Minimal MCP permission — keeps ``UnguardedToolWarning`` out of the way."""
-
-    def has_permission(self, *_args: object, **_kwargs: object) -> bool:
-        return True
+def _spec(**declared: Any) -> ServiceSpec:
+    return ServiceSpec(service=lambda: {"ok": True}, **declared)
 
 
-def _spec() -> ServiceSpec:
-    return ServiceSpec(service=lambda: {"ok": True})
+def _guarded() -> ServiceSpec:
+    return _spec(permissions=[Unrestricted()])
+
+
+class _Staff(PermissionCheck):
+    """A check of the project's own, as a spec declares one."""
+
+    def has_permission(self, principal: Any, spec: Any) -> bool:
+        return bool(getattr(principal, "is_staff", False))
 
 
 class TestAuthorizationServerRoot:
@@ -97,31 +112,29 @@ class TestStructuredOutputCouplingAtRegistration:
     def test_schema_without_content_is_refused_when_registering(self) -> None:
         server = self._server(include_output_schema=True, include_structured_content=False)
         with pytest.raises(ImproperlyConfigured, match="structuredContent"):
-            server.register_service_tool(
-                name="t.x", spec=_spec(), description="d", permissions=[_AlwaysAllow()]
-            )
+            server.register_tool(_guarded(), name="t.x", description="d")
 
     def test_a_binding_override_can_make_the_global_pair_legal(self) -> None:
         """Why this check cannot live on the global config alone.
 
         Server-wide "schema on, content off" is legitimate precisely when every
-        binding overrides the content back on — so checking the two settings at
+        binding overrides the content back on, so checking the two settings at
         ``build_mcp_config`` time would reject a working configuration.
         """
         server = self._server(include_output_schema=True, include_structured_content=False)
-        server.register_service_tool(
-            name="t.ok",
-            spec=_spec(),
-            description="d",
-            permissions=[_AlwaysAllow()],
-            include_structured_content=True,
+
+        binding = server.register_tool(
+            _guarded(), name="t.ok", description="d", include_structured_content=True
         )
+
+        assert binding.include_structured_content is True
 
     def test_the_ordinary_pair_registers_cleanly(self) -> None:
         server = self._server(include_output_schema=True, include_structured_content=True)
-        server.register_service_tool(
-            name="t.y", spec=_spec(), description="d", permissions=[_AlwaysAllow()]
-        )
+
+        server.register_tool(_guarded(), name="t.y", description="d")
+
+        assert "t.y" in server.tools
 
 
 class TestUnguardedToolsAreRefusedByDefault:
@@ -130,7 +143,7 @@ class TestUnguardedToolsAreRefusedByDefault:
     def test_the_shipped_default_is_strict(self) -> None:
         """Pinned against the settings file, because the suite opts *out*.
 
-        ``tests/conftest_settings.py`` sets this False so ~260 fixtures whose
+        ``tests/conftest_settings.py`` sets this False so the fixtures whose
         subject is not permissions keep working. That override could otherwise
         mask a regression back to permissive, so assert the shipped value here.
         """
@@ -140,36 +153,43 @@ class TestUnguardedToolsAreRefusedByDefault:
 
     def test_an_unguarded_tool_is_refused(self) -> None:
         server = MCPServer(name="t", config=build_mcp_config(require_tool_permissions=True))
-        with pytest.raises(ImproperlyConfigured, match="no permissions"):
-            server.register_service_tool(name="t.open", spec=_spec(), description="d")
+        with pytest.raises(ImproperlyConfigured, match="declares no permissions"):
+            server.register_tool(_spec(), name="t.open", description="d")
 
     def test_the_error_names_the_way_out_not_the_way_in(self) -> None:
         """The raise and the warning need *opposite* remedies.
 
-        The warning says "set the flag to make this an error". Reusing that text
-        on the raise tells you to enable the setting that just fired, which
-        reads as a bug in the framework rather than a problem with your code.
+        The warning says why the call runs unchecked. Reusing that text on the
+        raise tells you to change the setting that just fired, which reads as a
+        bug in the framework rather than a problem with your code.
         """
         server = MCPServer(name="t", config=build_mcp_config(require_tool_permissions=True))
         with pytest.raises(ImproperlyConfigured) as excinfo:
-            server.register_service_tool(name="t.open", spec=_spec(), description="d")
+            server.register_tool(_spec(), name="t.open", description="d")
         assert "= False" in str(excinfo.value)
+        assert "Unrestricted()" in str(excinfo.value)
 
-    def test_spec_permission_classes_satisfy_it(self) -> None:
-        """The idiomatic fix: declare on the spec, so every transport sees it."""
-        from rest_framework.permissions import AllowAny
-
+    def test_a_scope_gate_is_not_a_guard(self) -> None:
+        """The scope gate is the transport's; the spec's ``permissions`` are what count."""
         server = MCPServer(name="t", config=build_mcp_config(require_tool_permissions=True))
-        server.register_service_tool(
-            name="t.guarded",
-            spec=ServiceSpec(service=lambda: {"ok": True}, permission_classes=[AllowAny]),
-            description="d",
-        )
+        with pytest.raises(ImproperlyConfigured, match="declares no permissions"):
+            server.register_tool(_spec(), name="t.open", description="d", scopes=("a",))
+
+    @pytest.mark.parametrize("check", [Unrestricted(), _Staff()], ids=["unrestricted", "own"])
+    def test_spec_permissions_satisfy_it(self, check: PermissionCheck) -> None:
+        """The idiomatic fix: declare on the spec, so every transport sees it."""
+        server = MCPServer(name="t", config=build_mcp_config(require_tool_permissions=True))
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", UnguardedToolWarning)
+            binding = server.register_tool(_spec(permissions=[check]), name="t.g", description="d")
+        assert binding.unguarded is False
 
     def test_the_opt_out_downgrades_it_to_a_warning(self) -> None:
         server = MCPServer(name="t", config=build_mcp_config(require_tool_permissions=False))
-        with pytest.warns(UnguardedToolWarning, match="by default it is an error"):
-            server.register_service_tool(name="t.open", spec=_spec(), description="d")
+        with pytest.warns(UnguardedToolWarning, match="REQUIRE_TOOL_PERMISSIONS'\\] is False"):
+            binding = server.register_tool(_spec(), name="t.open", description="d")
+        # Only the warning earns the spec the per-call grant it runs on.
+        assert binding.unguarded is True
 
 
 class TestObservability:

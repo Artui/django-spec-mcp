@@ -3,6 +3,13 @@
 The spec attaches ``icons`` to four listable types plus the server's own
 ``Implementation``. Each is wired separately, so each is asserted separately —
 a single spot-check would not have caught the one that was missed.
+
+The tools and resources are kernel specs registered with ``register_tool`` and
+``register_resource``, where the drf-services original registered drf-services
+specs. A kernel resource is a ``RETRIEVE`` selector, so the fixed-URI resource
+is one reading nothing, where the original's was a ``LIST``. The prompt and
+server cases build no spec and are carried unchanged. The original is kept
+beside this file as ``test_icons_endtoend_drfs.py``.
 """
 
 from __future__ import annotations
@@ -11,9 +18,14 @@ from typing import Any
 
 from django.http import HttpRequest
 from django.test import override_settings
-from django_service_specs import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_service_specs import (
+    Parameter,
+    Parameters,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+)
 
 from django_spec_mcp import Icon, IconTheme, MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
@@ -29,6 +41,7 @@ from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 
 ICON = Icon(src="https://example.test/i.png", mime_type="image/png", sizes=("48x48",))
+OPEN = [Unrestricted()]
 ICON_DICT: dict[str, Any] = {
     "src": "https://example.test/i.png",
     "mimeType": "image/png",
@@ -62,9 +75,10 @@ def _ctx(server: MCPServer) -> MCPCallContext:
 
 def test_service_tool_icons_reach_tools_list() -> None:
     server = _server()
-    server.register_service_tool(
+    server.register_tool(
+        ServiceSpec(service=lambda: {}, permissions=OPEN),
         name="t.svc",
-        spec=ServiceSpec(service=lambda **_: {}, atomic=False),
+        description="d",
         icons=(ICON,),
     )
     result = handle_tools_list(None, _ctx(server))
@@ -73,9 +87,10 @@ def test_service_tool_icons_reach_tools_list() -> None:
 
 def test_selector_tool_icons_reach_tools_list() -> None:
     server = _server()
-    server.register_selector_tool(
+    server.register_tool(
+        SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda: None, permissions=OPEN),
         name="t.sel",
-        spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda: None),
+        description="d",
         icons=(ICON,),
     )
     result = handle_tools_list(None, _ctx(server))
@@ -85,9 +100,9 @@ def test_selector_tool_icons_reach_tools_list() -> None:
 def test_resource_icons_reach_resources_list() -> None:
     server = _server()
     server.register_resource(
+        SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda: None, permissions=OPEN),
         name="r",
         uri_template="things://all",
-        selector=SelectorSpec(kind=SelectorKind.LIST, selector=lambda: []),
         icons=(ICON,),
     )
     result = handle_resources_list(None, _ctx(server))
@@ -97,9 +112,14 @@ def test_resource_icons_reach_resources_list() -> None:
 def test_template_icons_reach_templates_list() -> None:
     server = _server()
     server.register_resource(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=lambda *, pk: None,
+            reads=Parameters([Parameter("pk", "integer", required=True)]),
+            permissions=OPEN,
+        ),
         name="r",
         uri_template="things://{pk}",
-        selector=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda **_: None),
         icons=(ICON,),
     )
     result = handle_resources_templates_list(None, _ctx(server))

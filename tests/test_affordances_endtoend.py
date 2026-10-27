@@ -1,50 +1,93 @@
-"""Affordances, on the wire: the schema a tool advertises names the key it returns.
+"""Affordances on a kernel tool, on the wire: the advertised schema names the key it returns.
 
 ``assert_tool_result_conforms`` cannot see this gap, which is the reason for the
 test. It validates a result against the schema, and a schema that does not forbid
-extra keys validates a key it never mentions -- so a result carrying an
+extra keys validates a key it never mentions, so a result carrying an
 ``affordances`` object its tool never advertised conforms. Here the question is
 the stronger one a client or a model asks of a schema: is every key I receive one
 it describes?
+
+Asked of kernel specs: a retrieve, a list and a paged list selector tool, and a
+service tool presenting through its output selector, each declaring ``cancel``.
+A kernel selector carries affordance answers on model instances and mappings, and
+its ``DataclassPresenter`` reads by attribute, so the row is an ``Invoice`` where
+the drf-services original rendered a mapping. The declarations are local, where
+the original read ``tests/testapp/affordances.py``, which builds drf-services
+specs. The original is kept beside this file as
+``test_affordances_endtoend_drfs.py``.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
-from django_service_specs import SelectorKind
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_service_specs import (
+    Affordance,
+    DataclassPresenter,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+)
 
 from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.testing import assert_tool_result_conforms
-from tests.testapp.affordances import fresh_server, order_selector_spec
+from tests.testapp.models import Invoice
+
+OPEN = [Unrestricted()]
+
+
+@dataclass
+class _Order:
+    number: str
+
+
+CANCEL_ORDER = ServiceSpec(
+    service=lambda: None,
+    permissions=OPEN,
+    affordances=[
+        Affordance(code="already_shipped", reason="The order has shipped.", when=lambda: True),
+        Affordance(code="books_closed", reason="The books are closed.", when=lambda: False),
+    ],
+)
+"""Met on its first condition and refused on its second, so every call answers
+``books_closed``. Two conditions, so a schema enumerating only the one a row
+happened to fail is told apart from one enumerating the declaration."""
+
+
+def _order_selector_spec(kind: SelectorKind, **overrides: Any) -> SelectorSpec:
+    declared: dict[str, Any] = {
+        "kind": kind,
+        "selector": (
+            (lambda: Invoice.objects.get())
+            if kind is SelectorKind.RETRIEVE
+            else (lambda: Invoice.objects.all())
+        ),
+        "presenter": DataclassPresenter(_Order),
+        "permissions": OPEN,
+        "affordances": {"cancel": CANCEL_ORDER},
+        **overrides,
+    }
+    return SelectorSpec(**declared)
 
 
 def _server() -> MCPServer:
-    server = fresh_server()
-    server.register_selector_tool(
-        name="get_order", spec=order_selector_spec(SelectorKind.RETRIEVE), permissions=[]
-    )
-    server.register_selector_tool(
-        name="list_orders", spec=order_selector_spec(SelectorKind.LIST), permissions=[]
-    )
-    server.register_selector_tool(
-        name="page_orders",
-        spec=order_selector_spec(SelectorKind.LIST),
-        paginate=True,
-        permissions=[],
-    )
-    server.register_service_tool(
-        name="place_order",
-        spec=ServiceSpec(
-            service=lambda **_: {"number": "A-1"},
-            atomic=False,
-            output_selector_spec=order_selector_spec(
-                SelectorKind.RETRIEVE, selector=lambda result, **_: result
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server.register_tool(_order_selector_spec(SelectorKind.RETRIEVE), name="get_order")
+    server.register_tool(_order_selector_spec(SelectorKind.LIST), name="list_orders")
+    server.register_tool(_order_selector_spec(SelectorKind.LIST), name="page_orders", paginate=True)
+    server.register_tool(
+        ServiceSpec(
+            service=lambda: Invoice.objects.get(),
+            permissions=OPEN,
+            output_selector_spec=_order_selector_spec(
+                SelectorKind.RETRIEVE, selector=lambda *, result: result
             ),
         ),
-        permissions=[],
+        name="place_order",
     )
     return server
 
@@ -72,7 +115,7 @@ def _undescribed(schema: Any, value: Any, path: str = "$") -> list[str]:
 
 
 def _answers(structured: Any) -> list[Any]:
-    """The ``affordances`` object on each rendered item, wherever the item sits."""
+    """The ``affordances`` object on each presented item, wherever the item sits."""
     if isinstance(structured, list):
         items = structured
     elif "items" in structured:
@@ -83,7 +126,9 @@ def _answers(structured: Any) -> list[Any]:
 
 
 @pytest.mark.parametrize("name", ["get_order", "list_orders", "page_orders", "place_order"])
+@pytest.mark.django_db(transaction=True)
 async def test_the_advertised_schema_describes_the_affordances_a_call_returns(name: str) -> None:
+    await Invoice.objects.acreate(number="A-1")
     server = _server()
     listing: Any = await server.alist_tools(user=None)
     tool = next(entry for entry in listing["tools"] if entry["name"] == name)
@@ -95,7 +140,7 @@ async def test_the_advertised_schema_describes_the_affordances_a_call_returns(na
     assert _answers(structured) == [
         {"cancel": {"available": False, "code": "books_closed", "reason": "The books are closed."}}
     ]
-    # ...the conformance helper passes, as it did while the schema was silent...
+    # ...the conformance helper passes, as it would while the schema was silent...
     assert_tool_result_conforms(tool, result)
     # ...and only this tells a described key from a tolerated one.
     assert _undescribed(tool["outputSchema"], structured) == []

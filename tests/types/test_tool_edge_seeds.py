@@ -1,15 +1,157 @@
-"""``TOOL_EDGE_SEEDS``: what a tool call fills itself beyond the kernel's set."""
+"""What each name in ``TOOL_EDGE_SEEDS`` is to a kernel tool call.
+
+The constant is the DRF edge's: drf-services seeds ``request`` and ``view`` on
+every ``dispatch_spec`` and its validator binds ``serializer``, so the drfs
+registrars reserve the three beside the kernel's ``RESERVED_POOL_SEEDS``. On the
+kernel path the first two are the kernel's own ``CALL_SEEDS``, read off the
+call's context, and ``serializer`` is an ordinary argument, since a kernel
+Validator binds nothing of that name. So this asks what each of the three is to
+a kernel tool: ``serializer`` is advertised and received; a read named
+``request`` or ``view``, or after a seed the server registers, should be
+refused at registration, because no caller's value of that name reaches the
+service. It registers and is listed today, which is the defect the strict xfail
+below holds. A top-level Validator field of such a name is not a defect: the
+kernel documents it as the caller's, validated into ``data`` and never handed
+to the service under that name, so the last test here holds that answer.
+
+The drf-services original pinned the constant to drf-services' own
+``EDGE_SEEDS`` and ``DROPPED_EDGE_SEEDS``; it is kept beside this file as
+``test_tool_edge_seeds_drfs.py``. The constant goes with the drfs registrars.
+"""
 
 from __future__ import annotations
 
-from django_service_specs import RESERVED_POOL_SEEDS
-from rest_framework_services.dispatch.utils import DROPPED_EDGE_SEEDS, EDGE_SEEDS
+from dataclasses import make_dataclass
+from typing import Any
 
+import pytest
+from django.core.exceptions import ImproperlyConfigured
+from django_service_specs import (
+    CALL_SEEDS,
+    DEFAULT_POOL_SEEDS,
+    RESERVED_POOL_SEEDS,
+    DataclassValidator,
+    Parameter,
+    Parameters,
+    ServiceSpec,
+    Unrestricted,
+)
+
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.types.tool_edge_seeds import TOOL_EDGE_SEEDS
 
 
-def test_the_tool_edge_seeds_are_what_the_drf_edge_fills() -> None:
-    # Written out in ``types/tool_edge_seeds.py``; pinned to drf-services' own sets so an
-    # upstream change to what the edge seeds or drops fails here.
-    assert frozenset(EDGE_SEEDS) | DROPPED_EDGE_SEEDS == TOOL_EDGE_SEEDS
+def _echo(**pool: Any) -> dict[str, Any]:
+    # The whole pool arrives (``user``, ``progress`` beside the arguments), so
+    # each test reads back only the name it sent.
+    return pool
+
+
+def _echoed(out: Any, name: str) -> Any:
+    assert out.get("isError") is not True, out
+    return out["structuredContent"][name]
+
+
+SEEDS = DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme")
+
+EDGE_NAMES = sorted(CALL_SEEDS | {"serializer"})
+"""The constant's names, spelled out: the constant goes with the drfs registrars,
+and these questions outlive it."""
+
+
+def _server(spec: ServiceSpec) -> MCPServer:
+    # A registered seed beside the call's own, so ``tenant`` is asked as a seed's name.
+    server = MCPServer(
+        name="t", auth_backend=AllowAnyBackend(), session_store=None, pool_seeds=SEEDS
+    )
+    server.register_tool(spec, name="echo", description="Echo the arguments.")
+    return server
+
+
+def test_the_tool_edge_seeds_are_the_kernels_call_seeds_and_the_drf_validators_name() -> None:
+    assert CALL_SEEDS < TOOL_EDGE_SEEDS
+    assert {"serializer"} == TOOL_EDGE_SEEDS - CALL_SEEDS
     assert not (TOOL_EDGE_SEEDS & RESERVED_POOL_SEEDS)
+
+
+@pytest.mark.django_db
+def test_a_kernel_read_named_serializer_is_advertised_and_received() -> None:
+    name = "serializer"
+    spec = ServiceSpec(
+        service=_echo,
+        permissions=[Unrestricted()],
+        reads=Parameters([Parameter(name, "string", required=True)]),
+    )
+    server = _server(spec)
+    listed: Any = server.list_tools(user=None)
+
+    (tool,) = listed["tools"]
+    out = server.call_tool("echo", {name: "the caller's"}, user=None).to_dict()
+
+    assert tool["inputSchema"]["properties"] == {name: {"type": "string"}}
+    assert _echoed(out, name) == "the caller's"
+
+
+def _reading(name: str) -> ServiceSpec:
+    """A spec taking ``name`` as a read."""
+    # Named outright: a ``**`` catch-all is never handed a call seed's name.
+    namespace: dict[str, Any] = {}
+    exec(f"def service(*, {name}): return {{{name!r}: {name}}}", namespace)
+    return ServiceSpec(
+        service=namespace["service"],
+        permissions=[Unrestricted()],
+        reads=Parameters([Parameter(name, "string", required=True)]),
+    )
+
+
+@pytest.mark.xfail(
+    strict=True,
+    # Only "did not raise" counts, so a spec that failed to build is not taken
+    # for the defect.
+    raises=pytest.fail.Exception,
+    reason=(
+        "register_tool admits a read no caller's value can reach: a read named "
+        "after a CALL_SEEDS name or a registered seed raises ImproperlyConfigured out of "
+        "every dispatch. Fix: refuse it at registration, as the drfs registrars refuse a "
+        "TOOL_EDGE_SEEDS or pool_seeds name, or have the kernel refuse it."
+    ),
+)
+@pytest.mark.parametrize("name", [*sorted(CALL_SEEDS), "tenant"])
+def test_a_read_named_after_a_seed_is_refused_at_registration(name: str) -> None:
+    with pytest.raises(ImproperlyConfigured, match=rf"\['{name}'\]"):
+        _server(_reading(name))
+
+
+@pytest.mark.parametrize("name", ["call_context", "user"])
+def test_a_kernel_read_named_after_a_reserved_seed_is_refused_by_the_kernel(name: str) -> None:
+    # The kernel's own refusal, raised when the spec is built, before any
+    # registrar of this package sees it.
+    with pytest.raises(ImproperlyConfigured, match=rf"\['{name}'\], which dispatch seeds itself"):
+        ServiceSpec(
+            service=_echo,
+            permissions=[Unrestricted()],
+            reads=Parameters([Parameter(name, "string", required=True)]),
+        )
+
+
+@pytest.mark.django_db
+def test_a_validator_field_named_after_a_seed_is_the_callers_and_the_keyword_is_the_seeds() -> None:
+    # Changed by design: the drfs registrars refused a field named after a seed,
+    # and the kernel (0.18.0) instead seats it as the caller's. It validates into
+    # ``data`` and never reaches the service under that name, so the ``tenant``
+    # keyword reads the seed's value while the caller's own is in ``data``.
+    def service(*, data: Any, tenant: str) -> dict[str, Any]:
+        return {"data": dict(data) if isinstance(data, dict) else vars(data), "tenant": tenant}
+
+    spec = ServiceSpec(
+        service=service,
+        permissions=[Unrestricted()],
+        validator=DataclassValidator(make_dataclass("_Input", [("tenant", str)])),
+    )
+    server = _server(spec)
+
+    out = server.call_tool("echo", {"tenant": "globex"}, user=None).to_dict()
+
+    assert out.get("isError") is not True, out
+    assert out["structuredContent"] == {"data": {"tenant": "globex"}, "tenant": "acme"}

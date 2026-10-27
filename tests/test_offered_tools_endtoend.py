@@ -1,8 +1,14 @@
-"""An unavailable tool, on the wire: left out of ``tools/list``, refused by ``tools/call``.
+"""An unavailable kernel tool, on the wire: left out of ``tools/list``, refused by ``tools/call``.
 
 Through the real URL conf, in both eras and on both transports, because the two
 transports are parallel implementations and the async one reaches the list
 handler through an executor hop the sync one does not make.
+
+Asked of kernel service specs declaring an ``Affordance``, registered with
+``register_tool``, where the drf-services original registered drf-services specs
+with ``register_service_tool``. The refusal is the kernel's ``ServiceError``
+answered as the drfs path answers it. The original is kept beside this file as
+``test_offered_tools_endtoend_drfs.py``.
 """
 
 from __future__ import annotations
@@ -13,8 +19,7 @@ from typing import Any
 import pytest
 from asgiref.sync import async_to_sync
 from django.test import AsyncClient, Client, override_settings
-from django_service_specs import Affordance
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_service_specs import Affordance, ServiceSpec, Unrestricted
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
@@ -30,11 +35,10 @@ def _server() -> MCPServer:
         name="t", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore()
     )
     for name, met in (("open_books", True), ("close_books", False)):
-        server.register_service_tool(
-            name=name,
-            spec=ServiceSpec(
-                service=lambda **_: {"status": "ran"},
-                atomic=False,
+        server.register_tool(
+            ServiceSpec(
+                service=lambda: {"status": "ran"},
+                permissions=[Unrestricted()],
                 affordances=[
                     Affordance(
                         code="books_closed",
@@ -43,8 +47,8 @@ def _server() -> MCPServer:
                     )
                 ],
             ),
+            name=name,
             description=name,
-            permissions=[],
         )
     return server
 

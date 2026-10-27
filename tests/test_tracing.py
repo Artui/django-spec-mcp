@@ -2,6 +2,13 @@
 
 Tests use an in-memory ``InMemorySpanExporter`` so they verify the wire shape
 (span names, attributes) without needing a real OTel collector.
+
+The tool and the resource are kernel specs registered with ``register_tool`` and
+``register_resource``, where the drf-services original registered drf-services
+specs or built a ``ToolBinding`` by hand; the service raising ``ServiceError`` is
+registered the same way, since a kernel binding is built by the registrar. The
+prompt, rejection and no-OTel cases build no spec and are carried unchanged. The
+original is kept beside this file as ``test_tracing_drfs.py``.
 """
 
 from __future__ import annotations
@@ -9,13 +16,19 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from django_service_specs import SelectorKind
+from django_service_specs import (
+    Parameter,
+    Parameters,
+    SelectorKind,
+    SelectorSpec,
+    ServiceError,
+    ServiceSpec,
+    Unrestricted,
+)
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
 
 from django_spec_mcp import MCPServer, PromptArgument
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
@@ -65,11 +78,13 @@ def _ctx(server: MCPServer) -> Any:
     )
 
 
+OPEN = [Unrestricted()]
+
+
+@pytest.mark.django_db
 def test_tools_call_emits_span(exporter: InMemorySpanExporter) -> None:
     server = _server()
-    server.register_service_tool(
-        name="t.x", spec=ServiceSpec(service=lambda: {"ok": True}, atomic=False)
-    )
+    server.register_tool(ServiceSpec(service=lambda: {"ok": True}, permissions=OPEN), name="t.x")
     handle_tools_call({"name": "t.x", "arguments": {}}, _ctx(server))
     spans = list(exporter.get_finished_spans())
     matching = [s for s in spans if s.name == "mcp.tools.call"]
@@ -83,9 +98,14 @@ def test_tools_call_emits_span(exporter: InMemorySpanExporter) -> None:
 def test_resources_read_emits_span_with_uri(exporter: InMemorySpanExporter) -> None:
     server = _server()
     server.register_resource(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=lambda *, pk: {"pk": pk},
+            reads=Parameters([Parameter("pk", "integer", required=True)]),
+            permissions=OPEN,
+        ),
         name="r",
         uri_template="r://{pk}",
-        selector=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda *, pk: {"pk": pk}),
     )
     handle_resources_read({"uri": "r://7"}, _ctx(server))
     spans = list(exporter.get_finished_spans())
@@ -145,20 +165,14 @@ def test_span_helper_is_noop_without_otel(monkeypatch) -> None:
 
 
 def _tools_raising_service_error() -> Any:
-    """A registry holding a tool whose service raises ``ServiceError``."""
-    from django_service_specs import ServiceError
-
-    from django_spec_mcp.registry.tool_registry import ToolRegistry
-    from django_spec_mcp.registry.types.tool_binding import ToolBinding
+    """A registry holding a kernel tool whose service raises ``ServiceError``."""
 
     def boom() -> None:
         raise ServiceError("nope")
 
-    tools = ToolRegistry()
-    tools.register(
-        ToolBinding(name="t.boom", description=None, spec=ServiceSpec(service=boom, atomic=False))
-    )
-    return tools
+    server = _server()
+    server.register_tool(ServiceSpec(service=boom, permissions=OPEN), name="t.boom")
+    return server.tools
 
 
 def _ctx_with_tools(tools: Any) -> Any:
@@ -179,6 +193,7 @@ def _ctx_with_tools(tools: Any) -> Any:
     )
 
 
+@pytest.mark.django_db
 def test_service_error_recorded_when_setting_enabled(
     exporter: InMemorySpanExporter, settings
 ) -> None:
@@ -195,6 +210,7 @@ def test_service_error_recorded_when_setting_enabled(
     )
 
 
+@pytest.mark.django_db
 def test_service_error_not_recorded_by_default(exporter: InMemorySpanExporter, settings) -> None:
     """Default state: ``ServiceError`` is mapped to JSON-RPC but not recorded."""
     settings.SPEC_MCP = {}
@@ -206,6 +222,7 @@ def test_service_error_not_recorded_by_default(exporter: InMemorySpanExporter, s
     assert not any(e.name == "exception" for e in spans[-1].events)
 
 
+@pytest.mark.django_db(transaction=True)
 async def test_async_service_error_recorded_when_setting_enabled(
     exporter: InMemorySpanExporter, settings
 ) -> None:
@@ -220,6 +237,7 @@ async def test_async_service_error_recorded_when_setting_enabled(
     assert any(e.name == "exception" for e in spans[-1].events)
 
 
+@pytest.mark.django_db(transaction=True)
 async def test_async_service_error_not_recorded_by_default(
     exporter: InMemorySpanExporter, settings
 ) -> None:
