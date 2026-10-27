@@ -6,6 +6,7 @@ the two paths share only the helpers they call by name.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from itertools import islice
@@ -556,9 +557,12 @@ def _presents_a_list(binding: KernelToolBinding) -> bool:
     The root ``kernel_tool_output_schema`` restates as ``"array"``: a ``many`` or
     ``returns_many`` service's rows, or ``None``.
     """
-    # A spec with no presenter has no output schema
-    # (``test_no_presenter_yields_no_schema``), so it is no list. The type keeps
-    # a single row that presents nothing serving ``{}``
+    # A spec with no presenter has no output schema (``test_no_presenter_yields_no_schema``),
+    # and what it returns as nothing is served as the object ``{}``, not a list
+    # (``test_a_service_returning_none_still_serves_an_object``,
+    # ``test_an_allow_none_retrieve_returns_an_empty_result_not_an_error``: both
+    # reach this with no schema, which the ``is not None`` conjunct answers).
+    # The type keeps a single row that presents nothing serving ``{}``
     # (``test_a_result_that_presents_nothing_conforms_to_its_schema``).
     schema = spec_output_schema(binding.spec)
     return schema is not None and schema.get("type") == ["array", "null"]
@@ -738,11 +742,20 @@ def resource_refusal(exc: DispatchError | ServiceError, scene: KernelRefusalScen
     selector that raises.
     """
     if isinstance(exc, InvalidArguments):
+        # Written as JSON writes it, so the integer row indices of a many call's
+        # tree are strings, as in a tool result; the kernel's order is kept.
         return JsonRpcError(
             JsonRpcErrorCode.INVALID_PARAMS,
             "Invalid arguments",
-            data=validation_error_data(
-                exc.detail, scene.arguments, include_value=scene.config.include_validation_value
+            data=json.loads(
+                json.dumps(
+                    validation_error_data(
+                        exc.detail,
+                        scene.arguments,
+                        include_value=scene.config.include_validation_value,
+                    ),
+                    default=str,
+                )
             ),
         )
     answer = answer_kernel_refusal(exc, scene)

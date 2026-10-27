@@ -1084,6 +1084,8 @@ def test_a_reader_told_its_arguments_are_invalid_gets_the_detail_as_json_would_w
     assert out.data["detail"] == {
         "rows": {"1": {"pk": ["Bad."]}, "non_field_errors": ["Too many."]}
     }
+    # The kernel's reading order is kept: the rows by index, then the list's message.
+    assert list(out.data["detail"]["rows"]) == ["1", "non_field_errors"]
     assert out.data.get("value") == ({"pk": "abc"} if include_value else None)
     json.dumps(out.to_dict())
 

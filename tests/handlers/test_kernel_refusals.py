@@ -122,6 +122,15 @@ def _build() -> MCPServer:
         ),
         name="bulk",
     )
+    server.register_tool(
+        ServiceSpec(
+            service=lambda *, data: data,
+            many=True,
+            validator=DataclassValidator(_Line),
+            permissions=[Unrestricted()],
+        ),
+        name="many",
+    )
     server.register_tool(_service(DispatchError("the call cannot run")), name="bare")
     server.register_tool(
         _service(AdditionalInputRequired("Which account?", schema=_ACCOUNT)),
@@ -206,6 +215,20 @@ def test_a_many_call_refused_by_row_and_as_a_whole_is_a_validation_result(
             "non_field_errors": ["Too many lines."],
         }
     }
+    # The kernel's reading order: the rows by index, then the list's own message.
+    assert list(error["detail"]["items"]) == ["1", "non_field_errors"]
+
+
+def test_a_many_calls_refused_rows_are_listed_in_index_order(kernel: KernelClient) -> None:
+    # Rows 2 and 10 fail: the text a model reads lists them as the kernel does,
+    # by number, where a sort of the stringified keys would put "10" first.
+    lines = [{"number": str(n), "amount_cents": 1} for n in range(12)]
+    lines[2]["amount_cents"] = "x"
+    lines[10]["amount_cents"] = "x"
+
+    error = _error(kernel.call("many", {"items": lines}))
+
+    assert list(error["detail"]["items"]) == ["2", "10"]
 
 
 def test_a_bare_dispatch_error_is_a_validation_result(kernel: KernelClient) -> None:
