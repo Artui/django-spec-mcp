@@ -106,7 +106,10 @@ The `SERVER_INFO` keys flow into both:
     `scopes=` gate does not count. With the setting off, one declaring
     `permissions=None` warns at registration and each call runs under a
     kernel `Grant` built for that spec and that caller, so it is called
-    with no permission check. See
+    with no permission check. A kernel spec that does declare checks has them
+    asked before any rate limit is charged. A call whose arguments fail the
+    kernel's argument check, and a completion, are judged as a filtered listing
+    judges the spec: its checks asked on no arguments. See
     [Kernel specs](concepts.md#kernel-specs).
 
     The same check runs on `register_resource` and `register_prompt`: the
@@ -244,7 +247,9 @@ The paths that name no tool call judge these as `request.data`:
 `prompts/get` also replaces the endpoint's query string with an empty one.
 `completion/complete` on a resource template names the template rather than a
 URI, so a template whose permission scopes by a URI variable completes for
-nobody. The listings filter is described
+nobody. A kernel resource's spec checks are asked on no arguments in the same
+way, and refuse the completion whether a check guards against the missing
+arguments or raises on them. The listings filter is described
 [below](#filtering-listings-by-permissions).
 
 ### Object-level permissions
@@ -261,6 +266,9 @@ stand-in that sees the same request, so a call asks `has_permission` twice per
 class, a streamed call once more in its pre-flight, and a retry whose answers
 change the arguments once more again, on the arguments they produce.
 `call_tool`, which judges no stand-in, asks it once.
+A kernel spec's own checks are asked once on a plain call, and on a streamed
+call once in its pre-flight and once more when the call runs, when its
+arguments pass the kernel's argument check.
 `resources/read` runs drf-services' `enforce_permissions`, both halves, on the
 selector's return. A `LIST` / collection
 result gets the class-level check only — object permissions are a per-row
@@ -278,13 +286,32 @@ call's arguments — see
 `SPEC_MCP["FILTER_LISTINGS_BY_PERMISSIONS"] = True` to drop
 bindings whose permissions deny the caller before paginating.
 
-This is **binding-level** gating — permissions are evaluated against a
-synthetic data-less request, so a permission whose decision depends on
-the call arguments will conservatively deny at list time. Mark such a
-binding with `always_listed=True` to keep it visible as a discovery aid;
-the permission still gates the actual invocation. Custom permissions can
-declare an `is_listable(token)` method to override the list-time check
-independently of `has_permission(request, token)`.
+This is **binding-level** gating. A binding's own permissions, a
+drf-services binding's or a kernel binding's `scopes=` gate, are evaluated
+against a synthetic data-less request, so a permission whose decision depends
+on the call arguments will conservatively deny at list time. A tool or
+resource whose operation is a `django_service_specs` spec is judged by its
+spec's own checks as well, asked through the kernel's `authorize` with no
+arguments, because a listing has none; a create, a service spec with no
+instance or collection selector, is also asked each check's
+`has_scope_permission` of `None`, as every call to it is. Both questions get
+the caller's principal, the server's pool seeds and a `call_context` whose
+request carries the token, as a call does. A caller the checks refuse is not
+shown the binding, and neither is a deactivated caller. A spec declaring
+`permissions=None` is listed only where its call is granted, as `register_tool`
+grants it with `REQUIRE_TOOL_PERMISSIONS` off.
+
+A check whose decision depends on the call arguments cannot answer at list time
+and will conservatively deny: when asking it raises, that binding alone is
+hidden and the rest of the listing is unaffected. Mark such a binding with
+`always_listed=True` to keep it visible as a discovery aid; the check still
+gates the actual invocation. An `ImproperlyConfigured` raised by a check is not
+a refusal: it is raised and fails the listing, because the call raises it too.
+For the binding-level permissions that sit beside a spec's checks, such as
+`ScopeRequired`, a custom permission can declare an `is_listable(token)` method
+to override the list-time check independently of
+`has_permission(request, token)`; a kernel check has no such method, and
+`always_listed` is its way back.
 
 ## Audience binding (RFC 8707)
 

@@ -112,7 +112,7 @@ def test_a_lookup_key_declared_as_a_serializer_field_is_refused() -> None:
     drf-services withholds a name the target lookup reads from the input serializer's
     data, so a serializer declaring it as a writable field would see it missing on every
     call. Registration refuses it, naming the field and the lookup; every registrar and
-    binding is a case of ``tests/adapters/test_lookup_key_input_field.py``.
+    binding is a case of ``tests/adapters/test_lookup_key_input_field_drfs.py``.
     """
     server = _server()
     with pytest.raises(ImproperlyConfigured, match=r"declares field\(s\) \['pk'\]"):
