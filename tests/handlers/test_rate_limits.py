@@ -1,11 +1,25 @@
-"""Per-binding rate limit wiring through tools/call, resources/read, prompts/get."""
+"""Per-binding rate limits on kernel tools and resources, and on prompts, over both handlers.
+
+Asks of specs registered with ``register_tool`` / ``register_resource`` what the
+original, kept beside this file as ``test_rate_limits_drfs.py``, asks of
+hand-built drf-services bindings: ``rate_limits=`` stays a per-binding knob, and
+a limiter reporting the limit spent answers ``-32005`` with its ``retryAfter``
+before the spec runs. ``consume_rate_limits`` and the prompt cases name no spec,
+and are asked here as the original asks them so they outlive it.
+"""
 
 from __future__ import annotations
 
-from django.http import HttpRequest
-from django_service_specs import SelectorKind
-from rest_framework_services.types.service_spec import ServiceSpec
+from collections.abc import Callable
+from typing import Any
 
+import pytest
+from asgiref.sync import async_to_sync
+from django.http import HttpRequest
+from django_service_specs import SelectorKind, SelectorSpec, ServiceSpec, Unrestricted
+
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_prompts_get import handle_prompts_get
 from django_spec_mcp.handlers.handle_prompts_get_async import handle_prompts_get_async
@@ -16,12 +30,9 @@ from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_a
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import consume_rate_limits
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
-from django_spec_mcp.registry.prompt_registry import PromptRegistry
-from django_spec_mcp.registry.resource_registry import ResourceRegistry
-from django_spec_mcp.registry.tool_registry import ToolRegistry
 from django_spec_mcp.registry.types.prompt_binding import PromptBinding
-from django_spec_mcp.registry.types.resource_binding import ResourceBinding
-from django_spec_mcp.registry.types.tool_binding import ToolBinding
+
+OPEN = [Unrestricted()]
 
 
 class _AlwaysDeny:
@@ -39,14 +50,24 @@ class _AlwaysAllow:
         return None
 
 
-def _ctx(*, tools=None, resources=None, prompts=None) -> MCPCallContext:
+def _ctx(server: MCPServer) -> MCPCallContext:
     return MCPCallContext(
         http_request=HttpRequest(),
         token=TokenInfo(user=None),
-        tools=tools or ToolRegistry(),
-        resources=resources or ResourceRegistry(),
-        prompts=prompts or PromptRegistry(),
+        tools=server.tools,
+        resources=server.resources,
+        prompts=server.prompts,
         protocol_version="2025-11-25",
+    )
+
+
+def _server() -> MCPServer:
+    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+
+
+def _both(sync: Callable[..., Any], asynchronous: Callable[..., Any]) -> Any:
+    return pytest.mark.parametrize(
+        "handle", [sync, async_to_sync(asynchronous)], ids=["sync", "async"]
     )
 
 
@@ -54,118 +75,65 @@ def _ctx(*, tools=None, resources=None, prompts=None) -> MCPCallContext:
 
 
 def test_consume_rate_limits_returns_none_when_all_allow() -> None:
-    assert (
-        consume_rate_limits((_AlwaysAllow(), _AlwaysAllow()), HttpRequest(), TokenInfo(user=None))
-        is None
-    )
+    limits = (_AlwaysAllow(), _AlwaysAllow())
+    assert consume_rate_limits(limits, HttpRequest(), TokenInfo(user=None)) is None
 
 
 def test_consume_rate_limits_short_circuits_on_first_denial() -> None:
-    out = consume_rate_limits(
-        (_AlwaysDeny(retry=5), _AlwaysAllow()), HttpRequest(), TokenInfo(user=None)
-    )
-    assert out == 5
+    limits = (_AlwaysDeny(retry=5), _AlwaysAllow())
+    assert consume_rate_limits(limits, HttpRequest(), TokenInfo(user=None)) == 5
 
 
 def test_consume_rate_limits_empty_tuple_allows() -> None:
     assert consume_rate_limits((), HttpRequest(), TokenInfo(user=None)) is None
 
 
-# ---------- tools/call ----------
+# ---------- tools/call, resources/read, prompts/get ----------
 
 
-def test_tools_call_returns_rate_limited_envelope() -> None:
-    tools = ToolRegistry()
-    tools.register(
-        ToolBinding(
-            name="t",
-            description=None,
-            spec=ServiceSpec(service=lambda: None, atomic=False),
-            rate_limits=(_AlwaysDeny(retry=42),),
+@_both(handle_tools_call, handle_tools_call_async)
+def test_a_kernel_tool_answers_rate_limited_before_it_runs(handle: Callable[..., Any]) -> None:
+    ran: list[int] = []
+    server = _server()
+    server.register_tool(
+        ServiceSpec(service=lambda: ran.append(1), permissions=OPEN, atomic=False),
+        name="t",
+        rate_limits=[_AlwaysDeny(retry=42)],
+    )
+    out = handle({"name": "t", "arguments": {}}, _ctx(server))
+    assert isinstance(out, JsonRpcError)
+    assert (out.code, out.data) == (-32005, {"retryAfter": 42})
+    assert ran == []
+
+
+@_both(handle_resources_read, handle_resources_read_async)
+def test_a_kernel_resource_answers_rate_limited_before_it_reads(
+    handle: Callable[..., Any],
+) -> None:
+    ran: list[int] = []
+    server = _server()
+    server.register_resource(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE, selector=lambda: ran.append(1) or {}, permissions=OPEN
+        ),
+        name="r",
+        uri_template="r://",
+        rate_limits=[_AlwaysDeny(retry=7)],
+    )
+    out = handle({"uri": "r://"}, _ctx(server))
+    assert isinstance(out, JsonRpcError)
+    assert (out.code, out.data) == (-32005, {"retryAfter": 7})
+    assert ran == []
+
+
+@_both(handle_prompts_get, handle_prompts_get_async)
+def test_a_prompt_answers_rate_limited(handle: Callable[..., Any]) -> None:
+    server = _server()
+    server.prompts.register(
+        PromptBinding(
+            name="p", description=None, render=lambda **_: "x", rate_limits=(_AlwaysDeny(retry=3),)
         )
     )
-    out = handle_tools_call({"name": "t", "arguments": {}}, _ctx(tools=tools))
+    out = handle({"name": "p", "arguments": {}}, _ctx(server))
     assert isinstance(out, JsonRpcError)
     assert out.code == -32005
-    assert out.data == {"retryAfter": 42}
-
-
-async def test_async_tools_call_returns_rate_limited_envelope() -> None:
-    tools = ToolRegistry()
-    tools.register(
-        ToolBinding(
-            name="t",
-            description=None,
-            spec=ServiceSpec(service=lambda: None, atomic=False),
-            rate_limits=(_AlwaysDeny(retry=11),),
-        )
-    )
-    out = await handle_tools_call_async({"name": "t", "arguments": {}}, _ctx(tools=tools))
-    assert isinstance(out, JsonRpcError)
-    assert out.code == -32005
-
-
-# ---------- resources/read ----------
-
-
-def test_resources_read_returns_rate_limited_envelope() -> None:
-    resources = ResourceRegistry()
-    resources.register(
-        ResourceBinding(
-            name="r",
-            uri_template="r://",
-            description=None,
-            selector=lambda: {},
-            kind=SelectorKind.LIST,
-            rate_limits=(_AlwaysDeny(retry=7),),
-        )
-    )
-    out = handle_resources_read({"uri": "r://"}, _ctx(resources=resources))
-    assert isinstance(out, JsonRpcError) and out.code == -32005
-
-
-async def test_async_resources_read_returns_rate_limited_envelope() -> None:
-    resources = ResourceRegistry()
-    resources.register(
-        ResourceBinding(
-            name="r",
-            uri_template="r://",
-            description=None,
-            selector=lambda: {},
-            kind=SelectorKind.LIST,
-            rate_limits=(_AlwaysDeny(retry=9),),
-        )
-    )
-    out = await handle_resources_read_async({"uri": "r://"}, _ctx(resources=resources))
-    assert isinstance(out, JsonRpcError) and out.code == -32005
-
-
-# ---------- prompts/get ----------
-
-
-def test_prompts_get_returns_rate_limited_envelope() -> None:
-    prompts = PromptRegistry()
-    prompts.register(
-        PromptBinding(
-            name="p",
-            description=None,
-            render=lambda **_: "x",
-            rate_limits=(_AlwaysDeny(retry=3),),
-        )
-    )
-    out = handle_prompts_get({"name": "p", "arguments": {}}, _ctx(prompts=prompts))
-    assert isinstance(out, JsonRpcError) and out.code == -32005
-
-
-async def test_async_prompts_get_returns_rate_limited_envelope() -> None:
-    prompts = PromptRegistry()
-    prompts.register(
-        PromptBinding(
-            name="p",
-            description=None,
-            render=lambda **_: "x",
-            rate_limits=(_AlwaysDeny(retry=3),),
-        )
-    )
-    out = await handle_prompts_get_async({"name": "p", "arguments": {}}, _ctx(prompts=prompts))
-    assert isinstance(out, JsonRpcError) and out.code == -32005

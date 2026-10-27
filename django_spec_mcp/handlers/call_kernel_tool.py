@@ -7,6 +7,7 @@ from django_service_specs import DispatchError, PoolSeeds, ServiceError, dispatc
 from django_spec_mcp.config.types.mcp_config import MCPConfig
 from django_spec_mcp.handlers.answer_kernel_refusal import answer_kernel_refusal
 from django_spec_mcp.handlers.kernel_utils import (
+    bound_unpaginated_rows,
     call_context,
     not_found_result,
     page_request,
@@ -66,7 +67,10 @@ def call_kernel_tool(
         return answer
     if result.kind == "not_found":
         return not_found_result(binding)
-    payload: Any = present_tool_result(binding, result, page)
+    bounded = bound_unpaginated_rows(binding, result, page, config)
+    if isinstance(bounded, ToolResult):
+        return bounded
+    payload: Any = present_tool_result(binding, bounded, page)
     return tool_result(binding, payload, output_format=None, config=config)
 
 

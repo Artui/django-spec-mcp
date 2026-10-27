@@ -8,6 +8,7 @@ from django_spec_mcp._compat.acall import acall
 from django_spec_mcp.elicitation.types.resolved_input import ResolvedInput
 from django_spec_mcp.handlers.answer_kernel_refusal import answer_kernel_refusal
 from django_spec_mcp.handlers.kernel_utils import (
+    bound_unpaginated_rows,
     call_context,
     carry_token,
     not_found_result,
@@ -22,6 +23,7 @@ from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.types.kernel_input_round import KernelInputRound
 from django_spec_mcp.handlers.types.kernel_refusal_scene import KernelRefusalScene
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.protocol.types.tool_result import ToolResult
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 
 
@@ -72,7 +74,11 @@ async def run_kernel_tool_async(
         return on_the_wire(answer_kernel_refusal(exc, scene))
     if result.kind == "not_found":
         return not_found_result(binding).to_dict()
-    payload: Any = await acall(present_tool_result, binding, result, page)
+    # Off the loop, as the presenter is: the bound's slice runs the query.
+    bounded = await acall(bound_unpaginated_rows, binding, result, page, context.config)
+    if isinstance(bounded, ToolResult):
+        return bounded.to_dict()
+    payload: Any = await acall(present_tool_result, binding, bounded, page)
     return tool_result(
         binding, payload, output_format=params.get("outputFormat"), config=context.config
     ).to_dict()

@@ -1,0 +1,470 @@
+from __future__ import annotations
+
+import asyncio
+from collections.abc import Mapping
+from dataclasses import dataclass, replace
+from typing import Any
+
+from django.http import HttpRequest
+from django_service_specs import SelectorKind, ServiceValidationError
+from rest_framework import serializers as drf_serializers
+from rest_framework_services.types.selector_spec import SelectorSpec
+from rest_framework_services.types.service_spec import ServiceSpec
+
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.handlers.async_dispatch import adispatch
+from django_spec_mcp.handlers.handle_resources_read_async import handle_resources_read_async
+from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.registry.prompt_registry import PromptRegistry
+from django_spec_mcp.registry.resource_registry import ResourceRegistry
+from django_spec_mcp.registry.tool_registry import ToolRegistry
+from django_spec_mcp.registry.types.resource_binding import ResourceBinding
+from django_spec_mcp.registry.types.tool_binding import ToolBinding
+from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
+from tests.utils import tool_error
+
+
+@dataclass
+class _BareDC:
+    name: str
+
+
+def _ctx(tools: ToolRegistry, resources: ResourceRegistry | None = None) -> MCPCallContext:
+    return MCPCallContext(
+        http_request=HttpRequest(),
+        token=TokenInfo(user=None),
+        tools=tools,
+        resources=resources or ResourceRegistry(),
+        prompts=PromptRegistry(),
+        protocol_version="2025-11-25",
+    )
+
+
+# ---------- tools/call async ----------
+
+
+async def test_async_service_tool_provider_receives_result_extra() -> None:
+    """Async service-tool dispatch forwards the ``result`` extra to the
+    output-context provider, mirroring the sync path."""
+
+    class _Out(drf_serializers.Serializer):
+        echoed = drf_serializers.SerializerMethodField()
+
+        def get_echoed(self, _: Any) -> int:
+            return self.context["seen"]
+
+    def _svc() -> dict[str, int]:
+        return {"raw": 5}
+
+    def _ctx_provider(view: Any, request: Any, *, result: Any) -> dict[str, Any]:  # noqa: ARG001
+        return {"seen": result["raw"]}
+
+    tools = ToolRegistry()
+    tools.register(
+        ToolBinding(
+            name="t",
+            description=None,
+            spec=ServiceSpec(
+                service=_svc,
+                output_selector_spec=SelectorSpec(
+                    kind=SelectorKind.RETRIEVE,
+                    output_serializer=_Out,
+                    output_serializer_context=_ctx_provider,
+                ),
+                atomic=False,
+            ),
+        )
+    )
+    out = await handle_tools_call_async({"name": "t", "arguments": {}}, _ctx(tools))
+    assert isinstance(out, dict)
+    assert out["structuredContent"] == {"echoed": 5}
+
+
+async def test_async_tools_call_rejects_non_dict_params() -> None:
+    out = await handle_tools_call_async(None, _ctx(ToolRegistry()))
+    assert isinstance(out, JsonRpcError) and out.code == -32602
+
+
+async def test_async_tools_call_rejects_missing_name() -> None:
+    out = await handle_tools_call_async({}, _ctx(ToolRegistry()))
+    assert isinstance(out, JsonRpcError) and out.code == -32602
+
+
+async def test_async_tools_call_rejects_non_string_name() -> None:
+    out = await handle_tools_call_async({"name": 7}, _ctx(ToolRegistry()))
+    assert isinstance(out, JsonRpcError) and out.code == -32602
+
+
+async def test_async_tools_call_unknown_tool() -> None:
+    out = await handle_tools_call_async({"name": "nope"}, _ctx(ToolRegistry()))
+    assert isinstance(out, JsonRpcError) and out.code == -32602
+
+
+async def test_async_tools_call_rejects_non_dict_arguments() -> None:
+    tools = ToolRegistry()
+    tools.register(
+        ToolBinding(
+            name="t", description=None, spec=ServiceSpec(service=lambda: None, atomic=False)
+        )
+    )
+    out = await handle_tools_call_async({"name": "t", "arguments": [1, 2]}, _ctx(tools))
+    assert isinstance(out, JsonRpcError) and out.code == -32602
+
+
+async def test_async_tools_call_invalid_input() -> None:
+    """A bare-dataclass input that fails validation surfaces the detail."""
+
+    def svc(*, data: _BareDC) -> dict[str, Any]:
+        return {"name": data.name}
+
+    tools = ToolRegistry()
+    tools.register(
+        ToolBinding(
+            name="t",
+            description=None,
+            spec=ServiceSpec(service=svc, input_serializer=_BareDC, atomic=False),
+        )
+    )
+    out = await handle_tools_call_async({"name": "t", "arguments": {}}, _ctx(tools))
+    error = tool_error(out)
+    assert error["type"] == "validation_error"
+    assert "name" in error["detail"]
+
+
+async def test_async_tools_call_translates_service_validation_error() -> None:
+    def svc() -> None:
+        raise ServiceValidationError({"f": ["bad"]})
+
+    tools = ToolRegistry()
+    tools.register(
+        ToolBinding(name="t", description=None, spec=ServiceSpec(service=svc, atomic=False))
+    )
+    out = await handle_tools_call_async({"name": "t", "arguments": {}}, _ctx(tools))
+    error = tool_error(out)
+    assert error["type"] == "validation_error"
+    assert error["detail"] == {"f": ["bad"]}
+
+
+async def test_async_tools_call_translates_service_error() -> None:
+    from django_service_specs import ServiceError
+
+    def svc() -> None:
+        raise ServiceError("nope")
+
+    tools = ToolRegistry()
+    tools.register(
+        ToolBinding(name="t", description=None, spec=ServiceSpec(service=svc, atomic=False))
+    )
+    out = await handle_tools_call_async({"name": "t", "arguments": {}}, _ctx(tools))
+    error = tool_error(out)
+    assert error["type"] == "service_error"
+    assert error["message"] == "nope"
+
+
+class _DenyEveryone:
+    def has_permission(self, request: HttpRequest, token: TokenInfo) -> bool:
+        return False
+
+    def required_scopes(self) -> list[str]:
+        return ["x"]
+
+
+async def test_async_tools_call_denied_by_permission() -> None:
+    def svc() -> None:
+        return None
+
+    tools = ToolRegistry()
+    tools.register(
+        ToolBinding(
+            name="t",
+            description=None,
+            spec=ServiceSpec(service=svc, atomic=False),
+            permissions=(_DenyEveryone(),),
+        )
+    )
+    out = await handle_tools_call_async({"name": "t", "arguments": {}}, _ctx(tools))
+    assert isinstance(out, JsonRpcError) and out.code == -32006
+
+
+async def test_async_tools_call_runs_async_service_natively() -> None:
+    """A coroutine-function service is awaited directly, not wrapped in a thread."""
+
+    async def aproduce() -> dict[str, Any]:
+        return {"async": True}
+
+    tools = ToolRegistry()
+    tools.register(
+        ToolBinding(name="t", description=None, spec=ServiceSpec(service=aproduce, atomic=False))
+    )
+    out = await handle_tools_call_async({"name": "t", "arguments": {}}, _ctx(tools))
+    assert isinstance(out, dict)
+    assert out["structuredContent"] == {"async": True}
+
+
+async def test_async_tools_call_with_async_output_selector() -> None:
+    def svc() -> dict[str, Any]:
+        return {"raw": True}
+
+    async def shape(*, result: dict[str, Any]) -> dict[str, Any]:
+        return {"shaped": result["raw"]}
+
+    tools = ToolRegistry()
+    tools.register(
+        ToolBinding(
+            name="t",
+            description=None,
+            spec=ServiceSpec(
+                service=svc,
+                output_selector_spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=shape),
+                atomic=False,
+            ),
+        )
+    )
+    out = await handle_tools_call_async({"name": "t", "arguments": {}}, _ctx(tools))
+    assert isinstance(out, dict)
+    assert out["structuredContent"] == {"shaped": True}
+
+
+# ---------- resources/read async ----------
+
+
+async def test_async_resources_read_rejects_non_dict_params() -> None:
+    out = await handle_resources_read_async(None, _ctx(ToolRegistry()))
+    assert isinstance(out, JsonRpcError) and out.code == -32602
+
+
+async def test_async_resources_read_rejects_missing_uri() -> None:
+    out = await handle_resources_read_async({}, _ctx(ToolRegistry()))
+    assert isinstance(out, JsonRpcError) and out.code == -32602
+
+
+async def test_async_resources_read_unknown_uri() -> None:
+    out = await handle_resources_read_async({"uri": "nope://x"}, _ctx(ToolRegistry()))
+    assert isinstance(out, JsonRpcError) and out.code == -32002
+
+
+async def test_async_resources_read_denied_by_permission() -> None:
+    def selector() -> dict[str, Any]:
+        return {}
+
+    resources = ResourceRegistry()
+    resources.register(
+        ResourceBinding(
+            name="r",
+            uri_template="r://",
+            description=None,
+            selector=selector,
+            kind=SelectorKind.LIST,
+            permissions=(_DenyEveryone(),),
+        )
+    )
+    out = await handle_resources_read_async({"uri": "r://"}, _ctx(ToolRegistry(), resources))
+    assert isinstance(out, JsonRpcError) and out.code == -32006
+
+
+async def test_async_resources_read_passes_through_when_no_serializer() -> None:
+    def selector(*, pk: str) -> dict[str, Any]:
+        return {"pk": pk}
+
+    resources = ResourceRegistry()
+    resources.register(
+        ResourceBinding(
+            name="r",
+            uri_template="r://{pk}",
+            description=None,
+            selector=selector,
+            kind=SelectorKind.RETRIEVE,
+        )
+    )
+    out = await handle_resources_read_async({"uri": "r://7"}, _ctx(ToolRegistry(), resources))
+    assert isinstance(out, dict)
+    assert '"pk": "7"' in out["contents"][0]["text"]
+
+
+async def test_async_dispatch_routes_prompts_get_to_async_handler() -> None:
+    """``adispatch`` recognises ``prompts/get`` and routes to the async handler."""
+    from django_spec_mcp.handlers.async_dispatch import adispatch
+    from django_spec_mcp.registry.prompt_registry import PromptRegistry
+    from django_spec_mcp.registry.types.prompt_binding import PromptBinding
+
+    prompts = PromptRegistry()
+    prompts.register(PromptBinding(name="p", description=None, render=lambda **_: "ok"))
+    ctx = MCPCallContext(
+        http_request=HttpRequest(),
+        token=TokenInfo(user=None),
+        tools=ToolRegistry(),
+        resources=ResourceRegistry(),
+        prompts=prompts,
+        protocol_version="2025-11-25",
+    )
+    out = await adispatch("prompts/get", {"name": "p", "arguments": {}}, ctx)
+    assert isinstance(out, dict)
+    assert out["messages"][0]["content"]["text"] == "ok"
+
+
+async def test_async_resources_read_runs_async_selector_natively() -> None:
+    async def aselector(*, pk: str) -> dict[str, Any]:
+        return {"async": True, "pk": pk}
+
+    resources = ResourceRegistry()
+    resources.register(
+        ResourceBinding(
+            name="r",
+            uri_template="r://{pk}",
+            description=None,
+            selector=aselector,
+            kind=SelectorKind.RETRIEVE,
+        )
+    )
+    out = await handle_resources_read_async({"uri": "r://9"}, _ctx(ToolRegistry(), resources))
+    assert isinstance(out, dict)
+    assert '"async": true' in out["contents"][0]["text"]
+
+
+async def test_async_tools_call_honors_include_structured_content_override() -> None:
+    """The per-binding override threads through the async dispatch path."""
+
+    def svc() -> dict[str, Any]:
+        return {"a": 1}
+
+    tools = ToolRegistry()
+    tools.register(
+        ToolBinding(
+            name="t",
+            description=None,
+            spec=ServiceSpec(service=svc, atomic=False),
+            include_structured_content=False,
+            include_output_schema=False,
+        )
+    )
+    out = await handle_tools_call_async({"name": "t", "arguments": {}}, _ctx(tools))
+    assert isinstance(out, dict)
+    assert "structuredContent" not in out
+
+
+# ---------- spec context plumbing (sister-repo 0.12+) ----------
+
+
+async def test_async_input_serializer_context_flows_into_validation() -> None:
+    received: dict[str, Any] = {}
+
+    class _CtxAwareInput(drf_serializers.Serializer):
+        x = drf_serializers.IntegerField()
+
+        def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+            received.update(self.context)
+            return attrs
+
+    def svc(*, data: dict[str, Any]) -> dict[str, Any]:
+        return {"got": data["x"]}
+
+    def ctx_provider(view: Any, request: Any) -> Mapping[str, Any]:  # noqa: ARG001
+        return {"k": "v"}
+
+    tools = ToolRegistry()
+    tools.register(
+        ToolBinding(
+            name="t",
+            description=None,
+            spec=ServiceSpec(
+                service=svc,
+                input_serializer=_CtxAwareInput,
+                input_serializer_context=ctx_provider,
+                atomic=False,
+            ),
+        )
+    )
+    out = await handle_tools_call_async({"name": "t", "arguments": {"x": 1}}, _ctx(tools))
+    assert isinstance(out, dict)
+    # The provider's keys, merged over DRF's baseline (drf-services >= 0.29).
+    assert received["k"] == "v"
+    assert set(received) == {"k", "request", "format", "view"}
+
+
+async def test_async_output_serializer_context_flows_into_render() -> None:
+    class _Out(drf_serializers.Serializer):
+        tag = drf_serializers.SerializerMethodField()
+
+        def get_tag(self, _: Any) -> str:
+            return self.context["who"]
+
+    def svc() -> dict[str, str]:
+        return {}
+
+    def ctx_provider(view: Any, request: Any) -> Mapping[str, Any]:  # noqa: ARG001
+        return {"who": "async"}
+
+    tools = ToolRegistry()
+    tools.register(
+        ToolBinding(
+            name="t",
+            description=None,
+            spec=ServiceSpec(
+                service=svc,
+                output_selector_spec=SelectorSpec(
+                    kind=SelectorKind.RETRIEVE,
+                    output_serializer=_Out,
+                    output_serializer_context=ctx_provider,
+                ),
+                atomic=False,
+            ),
+        )
+    )
+    out = await handle_tools_call_async({"name": "t", "arguments": {}}, _ctx(tools))
+    assert isinstance(out, dict)
+    assert out["structuredContent"] == {"tag": "async"}
+
+
+# ---------- the sync fall-through ----------
+
+
+class _LoopSniffingTaskStore:
+    """A task store that records whether it was read from the event loop."""
+
+    def __init__(self) -> None:
+        self.on_loop: bool | None = None
+
+    def _note(self) -> None:
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            self.on_loop = False
+        else:
+            self.on_loop = True
+
+    def get(self, task_id: str) -> Any:  # noqa: ARG002
+        self._note()
+        return None
+
+    def create(self, record: Any) -> None: ...  # pragma: no cover - unused here
+
+    def save(self, record: Any) -> None: ...  # pragma: no cover - unused here
+
+    def delete(self, task_id: str) -> None: ...  # pragma: no cover - unused here
+
+
+async def test_the_sync_handler_table_does_not_run_on_the_event_loop() -> None:
+    """``tasks/get`` reads the task store, and the default store is the Django
+    cache — which, configured as ``DatabaseCache``, reaches ``django.db`` and
+    raises ``SynchronousOnlyOperation`` off the loop. The client can then create
+    tasks it can never collect, ``tasks/get`` being the only way to collect one.
+    The list handlers have the same shape: they evaluate binding permissions,
+    where a consumer's ``DjangoPermRequired`` runs a query.
+    """
+    store = _LoopSniffingTaskStore()
+    context = replace(
+        _ctx(ToolRegistry()),
+        tasks=store,
+        client_capabilities={"extensions": {TASKS_EXTENSION_ID: {}}},
+    )
+    result = await adispatch("tasks/get", {"taskId": "nope"}, context)
+    # The handler ran and answered; what matters is the thread it ran on.
+    assert isinstance(result, JsonRpcError)
+    assert store.on_loop is False
+
+
+async def test_the_fall_through_still_returns_the_handler_result() -> None:
+    """The thread hop must be invisible to the wire: ``ping`` still answers."""
+    assert await adispatch("ping", None, _ctx(ToolRegistry())) == {}

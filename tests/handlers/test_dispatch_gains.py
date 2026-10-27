@@ -1,30 +1,32 @@
-"""Wire-level coverage for the 0.8.0 dispatch "gains".
+"""A kernel service tool's bulk write and object-level permission, over ``tools/call``.
 
-Routing service tools through drf-services' ``dispatch_spec`` gained two
-capabilities the pre-0.8 pool-based path lacked — collection (bulk) mutations
-via ``collection_selector_spec`` and object-level permission enforcement via the
-``on_target_resolved=enforce_permissions`` hook. Both were shipped untested;
-these exercise them over ``tools/call``.
-
-(A ``many=True`` *list-payload* bulk create never carries a bare list over MCP,
-whose ``arguments`` is always a JSON object: the list travels under the spec's
-``many_argument``, which ``tests/handlers/test_many_argument_tools.py`` covers.
-The bulk gain exercised here is ``collection_selector_spec`` — a filtered-set
-mutation driven by object-shaped arguments.)
+Asks of kernel specs registered with ``register_tool`` what the original, kept
+beside this file as ``test_dispatch_gains_drfs.py``, asks of drf-services ones:
+a ``collection_selector_spec`` narrowed by a FilterSet hands the service the
+whole collection to write, and a permission's ``has_object_permission`` judges
+the row an ``instance_selector_spec`` resolved, refusing the call before the
+service runs. The kernel's ``dispatch`` owns both, so these hold that the
+transport hands it the arguments they read and maps its refusal to ``-32006``.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 import django_filters
 import pytest
 from django.http import HttpRequest
-from django_service_specs import SelectorKind
-from rest_framework import serializers as drf_serializers
-from rest_framework.permissions import BasePermission
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_service_specs import (
+    DataclassValidator,
+    Parameter,
+    Parameters,
+    PermissionCheck,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+)
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
@@ -32,13 +34,37 @@ from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
-from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from tests.testapp.models import Invoice
 
+OPEN = [Unrestricted()]
+
+pytestmark = pytest.mark.django_db
+
+
+@dataclass
+class _NumberInput:
+    number: str
+
+
+class _DenyObject(PermissionCheck):
+    def has_permission(self, principal: Any, spec: Any) -> bool:
+        return True
+
+    def has_object_permission(self, principal: Any, spec: Any, target: Any) -> bool:
+        return False
+
+
+class _UnsentFilterSet(django_filters.FilterSet):
+    sent = django_filters.BooleanFilter()
+
+    class Meta:
+        model = Invoice
+        fields = ["sent"]
+
 
 def _server() -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore())
+    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
 
 
 def _ctx(server: MCPServer) -> MCPCallContext:
@@ -52,42 +78,7 @@ def _ctx(server: MCPServer) -> MCPCallContext:
     )
 
 
-class _NumberInput(drf_serializers.Serializer):
-    number = drf_serializers.CharField()
-
-
-class _DenyObject(BasePermission):
-    def has_permission(self, request: Any, view: Any) -> bool:  # noqa: ARG002
-        return True
-
-    def has_object_permission(self, request: Any, view: Any, obj: Any) -> bool:  # noqa: ARG002
-        return False
-
-
-class _UnsentFilterSet(django_filters.FilterSet):
-    """A ``sent`` filter over invoices.
-
-    drf-services accepts only a django-filter ``FilterSet`` here, and off HTTP it
-    type-checks the value, so the call sends the boolean the filter declares.
-    """
-
-    sent = django_filters.BooleanFilter()
-
-    class Meta:
-        model = Invoice
-        fields = ["sent"]
-
-
-def _all_invoices() -> Any:
-    return Invoice.objects.all()
-
-
-def _invoice_by_pk(*, pk: int) -> Any:
-    return Invoice.objects.filter(pk=pk)
-
-
-@pytest.mark.django_db
-def test_collection_selector_spec_bulk_mutation_over_the_wire() -> None:
+def test_a_collection_selector_hands_the_service_the_filtered_collection() -> None:
     Invoice.objects.create(number="A", amount_cents=1, sent=False)
     Invoice.objects.create(number="B", amount_cents=1, sent=False)
     Invoice.objects.create(number="C", amount_cents=1, sent=True)
@@ -97,54 +88,57 @@ def test_collection_selector_spec_bulk_mutation_over_the_wire() -> None:
         return {"deleted": n}
 
     server = _server()
-    server.register_service_tool(
-        name="invoices.purge_unsent",
-        spec=ServiceSpec(
+    server.register_tool(
+        ServiceSpec(
             service=_bulk_delete,
             collection_selector_spec=SelectorSpec(
-                kind=SelectorKind.LIST, selector=_all_invoices, filter_set=_UnsentFilterSet
+                kind=SelectorKind.LIST,
+                selector=Invoice.objects.all,
+                filter_set=_UnsentFilterSet,
+                permissions=OPEN,
             ),
+            permissions=OPEN,
             atomic=False,
         ),
+        name="invoices.purge_unsent",
     )
     out = handle_tools_call(
         {"name": "invoices.purge_unsent", "arguments": {"sent": False}}, _ctx(server)
     )
-    assert isinstance(out, dict)
-    assert out.get("isError") is not True
+    assert out.get("isError") is not True, out
     assert out["structuredContent"] == {"deleted": 2}
     assert list(Invoice.objects.values_list("number", flat=True)) == ["C"]
 
 
-@pytest.mark.django_db
-def test_object_permission_denial_on_update_tool() -> None:
+def test_an_object_permission_denies_the_resolved_row_before_the_service_runs() -> None:
     invoice = Invoice.objects.create(number="A", amount_cents=1)
 
-    def _rename(*, instance: Invoice, data: dict[str, Any]) -> Invoice:
-        instance.number = data["number"]
+    def _rename(*, instance: Invoice, number: str) -> Invoice:
+        instance.number = number
         instance.save(update_fields=["number"])
         return instance
 
     server = _server()
-    server.register_service_tool(
-        name="invoices.rename",
-        spec=ServiceSpec(
+    server.register_tool(
+        ServiceSpec(
             service=_rename,
-            input_serializer=_NumberInput,
+            validator=DataclassValidator(_NumberInput),
             instance_selector_spec=SelectorSpec(
-                kind=SelectorKind.RETRIEVE, selector=_invoice_by_pk
+                kind=SelectorKind.RETRIEVE,
+                selector=lambda *, pk: Invoice.objects.filter(pk=pk),
+                reads=Parameters([Parameter("pk", "integer", required=True)]),
+                permissions=OPEN,
             ),
-            permission_classes=[_DenyObject],
+            permissions=[_DenyObject()],
             atomic=False,
         ),
+        name="invoices.rename",
     )
     out = handle_tools_call(
         {"name": "invoices.rename", "arguments": {"pk": invoice.pk, "number": "B"}},
         _ctx(server),
     )
-    # The object-level guard (on_target_resolved=enforce_permissions) fires on the
-    # resolved instance now that drf-services >= 0.21 runs it on the mutation path.
     assert isinstance(out, JsonRpcError)
     assert out.code == JsonRpcErrorCode.FORBIDDEN
     invoice.refresh_from_db()
-    assert invoice.number == "A"  # unchanged — denied before the service ran
+    assert invoice.number == "A"

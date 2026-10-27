@@ -1,83 +1,93 @@
-"""A refusal's ``code`` reaches the caller, on every path a ``ServiceError`` can take.
+"""A kernel refusal's ``code`` reaches the caller, on every route a kernel tool is called by.
 
-drf-services raises ``ActionUnavailable(reason, code=...)`` when a declared
-affordance refuses a call, and asks a transport serving an agent to pass on both:
-the reason is a sentence that gets reworded, the code is the name a client switches
-on. Every ``ServiceError`` arm here built its result from the message alone, so the
-code was dropped on all six of them.
+Asks of tools registered with ``register_tool`` what the original, kept beside
+this file as ``test_service_error_code_drfs.py``, asks of drf-services bindings:
+``ActionUnavailable(reason, code=...)`` serves its ``code`` beside the reason,
+because the reason is a sentence that gets reworded and the code is the name a
+client switches on, while a plain ``ServiceConflict`` serves no ``code`` key at
+all, not a null one.
 
-One test per arm rather than one parametrised over a shared harness, so each site
-is named where a reader -- and the coverage gate -- can see it held. Each asserts the
-whole served error object, because the contract is as much the key that is *not*
-there for a plain conflict as the one that is for a refusal.
+The original held one test per arm, six of them, because each drf-services path
+built its own result. A kernel tool has three: ``run_kernel_tool`` on the sync
+wire, ``run_kernel_tool_async`` on the async one and ``call_kernel_tool`` in
+process, and a service and a selector take the same arm, so each arm's test is
+parametrised over the two. A kernel selector's ``affordances`` name the operations
+on its row rather than refusing the read, so a precondition raising the refusal is
+how one reaches a selector tool, as in the original.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
+import pytest
+from asgiref.sync import async_to_sync
 from django.http import HttpRequest
-from django_service_specs import ActionUnavailable, Affordance, SelectorKind, ServiceConflict
-from rest_framework import serializers
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_service_specs import (
+    ActionUnavailable,
+    Affordance,
+    SelectorKind,
+    SelectorSpec,
+    ServiceConflict,
+    ServiceSpec,
+    Unrestricted,
+)
 
 from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.types.context import MCPCallContext
-from tests.testapp.affordances import fresh_server
 from tests.utils import tool_error
+
+OPEN = [Unrestricted()]
 
 _REFUSED: dict[str, Any] = {
     "type": "service_error",
     "message": "The books are closed.",
     "code": "books_closed",
 }
-"""What a refusal serves: the pre-existing ``type`` and ``message``, and the code."""
+"""What a refusal serves: the ``type`` and ``message``, and the code."""
 
 _CONFLICT: dict[str, Any] = {"type": "service_error", "message": "That slot is taken."}
 """What a plain ``ServiceConflict`` serves: no ``code`` key at all, not a null one."""
 
 
-class _RowSerializer(serializers.Serializer):
-    number = serializers.CharField()
+def _closed() -> list[Affordance]:
+    return [Affordance(code="books_closed", reason="The books are closed.", when=lambda: False)]
 
 
-def _refused_service() -> ServiceSpec[Any, Any, Any]:
-    """Refused by a declared affordance, the way a real refusal is raised."""
-    return ServiceSpec(
-        service=lambda **_: {"status": "ran"},
-        atomic=False,
-        affordances=[
-            Affordance(code="books_closed", reason="The books are closed.", when=lambda: False)
-        ],
-    )
-
-
-def _conflicting_service() -> ServiceSpec[Any, Any, Any]:
-    return ServiceSpec(
-        service=lambda **_: {"status": "ran"}, atomic=False, preconditions=[_raise_conflict]
-    )
-
-
-def _raise_refusal(**_: Any) -> None:
-    # A selector spec has no refusing affordances of its own, so a precondition
-    # raising the refusal by hand is the only way one reaches a selector tool.
+def _raise_refusal() -> None:
     raise ActionUnavailable("The books are closed.", code="books_closed")
 
 
-def _raise_conflict(**_: Any) -> None:
+def _raise_conflict() -> None:
     raise ServiceConflict("That slot is taken.")
 
 
-def _selector(precondition: Any) -> SelectorSpec[Any, Any]:
+def _spec(kind: str, outcome: str) -> Any:
+    """A service refused by an affordance, a selector by a precondition, or either conflicting."""
+    conflict: dict[str, Any] = {"preconditions": [_raise_conflict]}
+    if kind == "service":
+        return ServiceSpec(
+            service=lambda: {"status": "ran"},
+            permissions=OPEN,
+            atomic=False,
+            **({"affordances": _closed()} if outcome == "refused" else conflict),
+        )
     return SelectorSpec(
         kind=SelectorKind.RETRIEVE,
-        selector=lambda **_: {"number": "A-1"},
-        output_serializer=_RowSerializer,
-        preconditions=[precondition],
+        selector=lambda: {"number": "A-1"},
+        permissions=OPEN,
+        **({"preconditions": [_raise_refusal]} if outcome == "refused" else conflict),
     )
+
+
+def _server(kind: str, outcome: str) -> MCPServer:
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server.register_tool(_spec(kind, outcome), name="t")
+    return server
 
 
 def _ctx(server: MCPServer) -> MCPCallContext:
@@ -91,87 +101,32 @@ def _ctx(server: MCPServer) -> MCPCallContext:
     )
 
 
-def _call(server: MCPServer, name: str) -> Any:
-    return handle_tools_call({"name": name, "arguments": {}}, _ctx(server))
+CASES = pytest.mark.parametrize(
+    ("kind", "outcome", "served"),
+    [
+        ("service", "refused", _REFUSED),
+        ("service", "conflict", _CONFLICT),
+        ("selector", "refused", _REFUSED),
+        ("selector", "conflict", _CONFLICT),
+    ],
+    ids=["service-refused", "service-conflict", "selector-refused", "selector-conflict"],
+)
 
 
-# ---------- the service tool, sync transport (handle_tools_call) ----------
+@CASES
+def test_the_sync_wire_serves_the_code(kind: str, outcome: str, served: dict[str, Any]) -> None:
+    server = _server(kind, outcome)
+    assert tool_error(handle_tools_call({"name": "t", "arguments": {}}, _ctx(server))) == served
 
 
-def test_a_refused_service_tool_serves_the_code() -> None:
-    server = fresh_server()
-    server.register_service_tool(name="svc", spec=_refused_service(), permissions=[])
-
-    assert tool_error(_call(server, "svc")) == _REFUSED
-
-
-def test_a_conflicting_service_tool_serves_no_code_key() -> None:
-    server = fresh_server()
-    server.register_service_tool(name="svc", spec=_conflicting_service(), permissions=[])
-
-    assert tool_error(_call(server, "svc")) == _CONFLICT
+@CASES
+def test_the_async_wire_serves_the_code(kind: str, outcome: str, served: dict[str, Any]) -> None:
+    server = _server(kind, outcome)
+    out = async_to_sync(handle_tools_call_async)({"name": "t", "arguments": {}}, _ctx(server))
+    assert tool_error(out) == served
 
 
-# ---------- the service tool, async transport (handle_tools_call_async) ----------
-
-
-async def test_a_refused_service_tool_serves_the_code_over_the_async_transport() -> None:
-    server = fresh_server()
-    server.register_service_tool(name="svc", spec=_refused_service(), permissions=[])
-
-    assert tool_error(await server.acall_tool("svc", user=None)) == _REFUSED
-
-
-async def test_a_conflicting_service_tool_serves_no_code_key_over_the_async_transport() -> None:
-    server = fresh_server()
-    server.register_service_tool(name="svc", spec=_conflicting_service(), permissions=[])
-
-    assert tool_error(await server.acall_tool("svc", user=None)) == _CONFLICT
-
-
-# ---------- the in-process core (call_spec_tool) ----------
-
-
-def test_a_refused_service_tool_serves_the_code_through_call_tool() -> None:
-    server = fresh_server()
-    server.register_service_tool(name="svc", spec=_refused_service(), permissions=[])
-
-    assert tool_error(server.call_tool("svc", user=None).to_dict()) == _REFUSED
-
-
-def test_a_conflicting_service_tool_serves_no_code_key_through_call_tool() -> None:
-    server = fresh_server()
-    server.register_service_tool(name="svc", spec=_conflicting_service(), permissions=[])
-
-    assert tool_error(server.call_tool("svc", user=None).to_dict()) == _CONFLICT
-
-
-# ---------- the selector tool, both siblings (selector_tool_dispatch) ----------
-
-
-def test_a_refused_selector_tool_serves_the_code() -> None:
-    server = fresh_server()
-    server.register_selector_tool(name="sel", spec=_selector(_raise_refusal), permissions=[])
-
-    assert tool_error(_call(server, "sel")) == _REFUSED
-
-
-def test_a_conflicting_selector_tool_serves_no_code_key() -> None:
-    server = fresh_server()
-    server.register_selector_tool(name="sel", spec=_selector(_raise_conflict), permissions=[])
-
-    assert tool_error(_call(server, "sel")) == _CONFLICT
-
-
-async def test_a_refused_selector_tool_serves_the_code_over_the_async_transport() -> None:
-    server = fresh_server()
-    server.register_selector_tool(name="sel", spec=_selector(_raise_refusal), permissions=[])
-
-    assert tool_error(await server.acall_tool("sel", user=None)) == _REFUSED
-
-
-async def test_a_conflicting_selector_tool_serves_no_code_key_over_the_async_transport() -> None:
-    server = fresh_server()
-    server.register_selector_tool(name="sel", spec=_selector(_raise_conflict), permissions=[])
-
-    assert tool_error(await server.acall_tool("sel", user=None)) == _CONFLICT
+@CASES
+def test_call_tool_serves_the_code(kind: str, outcome: str, served: dict[str, Any]) -> None:
+    server = _server(kind, outcome)
+    assert tool_error(server.call_tool("t", user=None).to_dict()) == served

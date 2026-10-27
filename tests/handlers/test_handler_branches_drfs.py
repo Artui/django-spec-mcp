@@ -1,0 +1,613 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
+import pytest
+from django.contrib.auth.models import AnonymousUser
+from django.http import HttpRequest
+from django_service_specs import SelectorKind, ServiceValidationError
+from rest_framework.permissions import BasePermission
+from rest_framework_services.types.selector_spec import SelectorSpec
+from rest_framework_services.types.service_spec import ServiceSpec
+
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
+from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.handlers.utils import check_permissions
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.registry.prompt_registry import PromptRegistry
+from django_spec_mcp.registry.resource_registry import ResourceRegistry
+from django_spec_mcp.registry.tool_registry import ToolRegistry
+from django_spec_mcp.registry.types.resource_binding import ResourceBinding
+from django_spec_mcp.registry.types.tool_binding import ToolBinding
+from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
+from tests.utils import tool_error
+
+
+@dataclass
+class _BareDC:
+    name: str
+    qty: int = 0
+
+
+def _ctx(tools: ToolRegistry, resources: ResourceRegistry | None = None) -> MCPCallContext:
+    return MCPCallContext(
+        http_request=HttpRequest(),
+        token=TokenInfo(user=None),
+        tools=tools,
+        resources=resources or ResourceRegistry(),
+        prompts=PromptRegistry(),
+        protocol_version="2025-11-25",
+    )
+
+
+def test_tools_call_with_bare_dataclass_input() -> None:
+    """The dataclass input is auto-wrapped in a DataclassSerializer."""
+
+    def svc(*, data: _BareDC) -> dict[str, Any]:
+        return {"name": data.name, "qty": data.qty}
+
+    tools = ToolRegistry()
+    tools.register(
+        ToolBinding(
+            name="t",
+            description=None,
+            spec=ServiceSpec(service=svc, input_serializer=_BareDC, atomic=False),
+        )
+    )
+    out = handle_tools_call({"name": "t", "arguments": {"name": "x", "qty": 3}}, _ctx(tools))
+    assert isinstance(out, dict)
+    assert out["structuredContent"] == {"name": "x", "qty": 3}
+
+
+def test_tools_call_returns_empty_dict_when_service_returns_none() -> None:
+    """Tools that return None must still produce an object as ``structuredContent``."""
+
+    def svc() -> None:
+        return None
+
+    tools = ToolRegistry()
+    tools.register(
+        ToolBinding(name="t", description=None, spec=ServiceSpec(service=svc, atomic=False))
+    )
+    out = handle_tools_call({"name": "t", "arguments": {}}, _ctx(tools))
+    assert isinstance(out, dict)
+    assert out["structuredContent"] == {}
+
+
+def test_tools_call_translates_service_validation_error() -> None:
+    def svc() -> None:
+        raise ServiceValidationError({"field": ["bad"]})
+
+    tools = ToolRegistry()
+    tools.register(
+        ToolBinding(name="t", description=None, spec=ServiceSpec(service=svc, atomic=False))
+    )
+    out = handle_tools_call({"name": "t", "arguments": {}}, _ctx(tools))
+    error = tool_error(out)
+    assert error["type"] == "validation_error"
+    assert error["detail"] == {"field": ["bad"]}
+
+
+class _DenyEveryone:
+    def has_permission(self, request: HttpRequest, token: TokenInfo) -> bool:
+        return False
+
+    def required_scopes(self) -> list[str]:
+        return ["scope:x"]
+
+
+def test_tools_call_denied_by_permission() -> None:
+    def svc() -> None:
+        return None
+
+    tools = ToolRegistry()
+    tools.register(
+        ToolBinding(
+            name="t",
+            description=None,
+            spec=ServiceSpec(service=svc, atomic=False),
+            permissions=(_DenyEveryone(),),
+        )
+    )
+    out = handle_tools_call({"name": "t", "arguments": {}}, _ctx(tools))
+    assert isinstance(out, JsonRpcError)
+    assert out.code == -32006
+    assert out.data == {"requiredScopes": ["scope:x"]}
+
+
+class _DenySpecPermission(BasePermission):
+    """A DRF permission (``spec.permission_classes``) that denies every request."""
+
+    def has_permission(self, request: Any, view: Any) -> bool:
+        return False
+
+
+def test_tools_call_denied_by_spec_permission_is_forbidden() -> None:
+    """``spec.permission_classes`` now runs over MCP via the dispatch hook."""
+
+    def svc() -> None:
+        return None
+
+    tools = ToolRegistry()
+    tools.register(
+        ToolBinding(
+            name="t",
+            description=None,
+            spec=ServiceSpec(service=svc, atomic=False, permission_classes=[_DenySpecPermission]),
+        )
+    )
+    out = handle_tools_call({"name": "t", "arguments": {}}, _ctx(tools))
+    assert isinstance(out, JsonRpcError)
+    assert out.code == -32006
+
+
+async def test_async_tools_call_denied_by_spec_permission_is_forbidden() -> None:
+    def svc() -> None:
+        return None
+
+    tools = ToolRegistry()
+    tools.register(
+        ToolBinding(
+            name="t",
+            description=None,
+            spec=ServiceSpec(service=svc, atomic=False, permission_classes=[_DenySpecPermission]),
+        )
+    )
+    out = await handle_tools_call_async({"name": "t", "arguments": {}}, _ctx(tools))
+    assert isinstance(out, JsonRpcError)
+    assert out.code == -32006
+
+
+def test_tools_call_with_output_selector() -> None:
+    """The optional ``output_selector`` runs after the service returns."""
+
+    def svc() -> dict[str, Any]:
+        return {"raw": True}
+
+    def shape(*, result: dict[str, Any]) -> dict[str, Any]:
+        return {"shaped": result["raw"]}
+
+    tools = ToolRegistry()
+    tools.register(
+        ToolBinding(
+            name="t",
+            description=None,
+            spec=ServiceSpec(
+                service=svc,
+                output_selector_spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=shape),
+                atomic=False,
+            ),
+        )
+    )
+    out = handle_tools_call({"name": "t", "arguments": {}}, _ctx(tools))
+    assert isinstance(out, dict)
+    assert out["structuredContent"] == {"shaped": True}
+
+
+def test_resources_read_passes_through_when_no_output_serializer() -> None:
+    def selector(*, pk: str) -> dict[str, Any]:
+        return {"pk": pk}
+
+    resources = ResourceRegistry()
+    resources.register(
+        ResourceBinding(
+            name="r",
+            uri_template="r://{pk}",
+            description=None,
+            selector=selector,
+            kind=SelectorKind.RETRIEVE,
+        )
+    )
+    ctx = MCPCallContext(
+        http_request=HttpRequest(),
+        token=TokenInfo(user=None),
+        tools=ToolRegistry(),
+        resources=resources,
+        prompts=PromptRegistry(),
+        protocol_version="2025-11-25",
+    )
+    out = handle_resources_read({"uri": "r://7"}, ctx)
+    assert isinstance(out, dict)
+    assert '"pk": "7"' in out["contents"][0]["text"]
+
+
+def test_resources_read_denied_by_permission() -> None:
+    def selector() -> dict[str, Any]:
+        return {}
+
+    resources = ResourceRegistry()
+    resources.register(
+        ResourceBinding(
+            name="r",
+            uri_template="r://",
+            description=None,
+            selector=selector,
+            kind=SelectorKind.LIST,
+            permissions=(_DenyEveryone(),),
+        )
+    )
+    ctx = MCPCallContext(
+        http_request=HttpRequest(),
+        token=TokenInfo(user=None),
+        tools=ToolRegistry(),
+        resources=resources,
+        prompts=PromptRegistry(),
+        protocol_version="2025-11-25",
+    )
+    out = handle_resources_read({"uri": "r://"}, ctx)
+    assert isinstance(out, JsonRpcError)
+    assert out.code == -32006
+    assert out.data == {"requiredScopes": ["scope:x"]}
+
+
+def test_check_permissions_no_required_scopes() -> None:
+    """Denial without ``required_scopes`` returns an empty list."""
+
+    class _DenyNoScopes:
+        def has_permission(self, request: HttpRequest, token: TokenInfo) -> bool:
+            return False
+
+        def required_scopes(self) -> list[str]:
+            return []
+
+    allowed, scopes = check_permissions((_DenyNoScopes(),), HttpRequest(), TokenInfo(user=None))
+    assert allowed is False
+    assert scopes == []
+
+
+def test_check_permissions_all_allow() -> None:
+    class _AllowAll:
+        def has_permission(self, request: HttpRequest, token: TokenInfo) -> bool:
+            return True
+
+        def required_scopes(self) -> list[str]:
+            return []
+
+    allowed, scopes = check_permissions((_AllowAll(),), HttpRequest(), TokenInfo(user=None))
+    assert allowed is True
+    assert scopes == []
+
+
+def test_check_permissions_empty_tuple() -> None:
+    allowed, scopes = check_permissions((), HttpRequest(), TokenInfo(user=None))
+    assert allowed is True
+    assert scopes == []
+
+
+def test_tools_call_omits_structured_content_when_global_disabled(settings) -> None:
+    # Disabling structuredContent also requires disabling outputSchema —
+    # advertising the schema while suppressing the content is a spec
+    # violation that ``resolve_structured_output`` rejects.
+    settings.SPEC_MCP = {
+        "INCLUDE_STRUCTURED_CONTENT": False,
+        "INCLUDE_OUTPUT_SCHEMA": False,
+    }
+
+    def svc() -> dict[str, Any]:
+        return {"a": 1}
+
+    tools = ToolRegistry()
+    tools.register(
+        ToolBinding(name="t", description=None, spec=ServiceSpec(service=svc, atomic=False))
+    )
+    out = handle_tools_call({"name": "t", "arguments": {}}, _ctx(tools))
+    assert isinstance(out, dict)
+    assert "structuredContent" not in out
+    # The text rendering still carries the payload.
+    assert "a" in out["content"][0]["text"]
+
+
+def test_tools_call_per_binding_override_forces_off_when_global_on(settings) -> None:
+    # Per-binding override must drop the schema in lockstep — otherwise
+    # the resolver raises at request time.
+    settings.SPEC_MCP = {"INCLUDE_STRUCTURED_CONTENT": True}
+
+    def svc() -> dict[str, Any]:
+        return {"a": 1}
+
+    tools = ToolRegistry()
+    tools.register(
+        ToolBinding(
+            name="t",
+            description=None,
+            spec=ServiceSpec(service=svc, atomic=False),
+            include_structured_content=False,
+            include_output_schema=False,
+        )
+    )
+    out = handle_tools_call({"name": "t", "arguments": {}}, _ctx(tools))
+    assert isinstance(out, dict)
+    assert "structuredContent" not in out
+
+
+def test_tools_call_per_binding_override_forces_on_when_global_off(settings) -> None:
+    settings.SPEC_MCP = {"INCLUDE_STRUCTURED_CONTENT": False}
+
+    def svc() -> dict[str, Any]:
+        return {"a": 1}
+
+    tools = ToolRegistry()
+    tools.register(
+        ToolBinding(
+            name="t",
+            description=None,
+            spec=ServiceSpec(service=svc, atomic=False),
+            include_structured_content=True,
+        )
+    )
+    out = handle_tools_call({"name": "t", "arguments": {}}, _ctx(tools))
+    assert isinstance(out, dict)
+    assert out["structuredContent"] == {"a": 1}
+
+
+def test_tools_list_drops_output_schema_when_explicitly_disabled() -> None:
+    """``include_output_schema=False`` suppresses the schema even with an output_serializer."""
+    from rest_framework import serializers as drf_serializers
+
+    class _Ser(drf_serializers.Serializer):
+        a = drf_serializers.IntegerField()
+
+    def svc() -> dict[str, Any]:
+        return {"a": 1}
+
+    tools = ToolRegistry()
+    tools.register(
+        ToolBinding(
+            name="t",
+            description=None,
+            spec=ServiceSpec(
+                service=svc,
+                output_selector_spec=SelectorSpec(
+                    kind=SelectorKind.RETRIEVE, output_serializer=_Ser
+                ),
+                atomic=False,
+            ),
+            include_output_schema=False,
+        )
+    )
+    out = handle_tools_list(None, _ctx(tools))
+    assert isinstance(out, dict)
+    tool = out["tools"][0]
+    assert "outputSchema" not in tool
+
+
+def test_tools_list_drops_output_schema_when_global_setting_disabled(settings) -> None:
+    """``INCLUDE_OUTPUT_SCHEMA=False`` server-wide suppresses the schema for all bindings."""
+    from rest_framework import serializers as drf_serializers
+
+    settings.SPEC_MCP = {"INCLUDE_OUTPUT_SCHEMA": False}
+
+    class _Ser(drf_serializers.Serializer):
+        a = drf_serializers.IntegerField()
+
+    def svc() -> dict[str, Any]:
+        return {"a": 1}
+
+    tools = ToolRegistry()
+    tools.register(
+        ToolBinding(
+            name="t",
+            description=None,
+            spec=ServiceSpec(
+                service=svc,
+                output_selector_spec=SelectorSpec(
+                    kind=SelectorKind.RETRIEVE, output_serializer=_Ser
+                ),
+                atomic=False,
+            ),
+        )
+    )
+    out = handle_tools_list(None, _ctx(tools))
+    assert isinstance(out, dict)
+    tool = out["tools"][0]
+    assert "outputSchema" not in tool
+    # structuredContent is still emitted — that direction is spec-allowed.
+    call_out = handle_tools_call({"name": "t", "arguments": {}}, _ctx(tools))
+    assert isinstance(call_out, dict)
+    assert call_out["structuredContent"] == {"a": 1}
+
+
+def test_tools_list_emits_output_schema_when_structured_content_enabled() -> None:
+    """The default path still ships outputSchema when an output_serializer exists."""
+    from rest_framework import serializers as drf_serializers
+
+    class _Ser(drf_serializers.Serializer):
+        a = drf_serializers.IntegerField()
+
+    def svc() -> dict[str, Any]:
+        return {"a": 1}
+
+    tools = ToolRegistry()
+    tools.register(
+        ToolBinding(
+            name="t",
+            description=None,
+            spec=ServiceSpec(
+                service=svc,
+                output_selector_spec=SelectorSpec(
+                    kind=SelectorKind.RETRIEVE, output_serializer=_Ser
+                ),
+                atomic=False,
+            ),
+        )
+    )
+    out = handle_tools_list(None, _ctx(tools))
+    assert isinstance(out, dict)
+    tool = out["tools"][0]
+    assert "outputSchema" in tool
+
+
+# ---------- argument_binding: native parameter binding ----------
+
+
+def test_service_tool_with_merge_binding_spreads_args_to_callable_params() -> None:
+    """``ArgumentBinding.SPREAD_AUTHOR_WINS`` lets a service declare individual params."""
+    from rest_framework_services import ArgumentBinding
+
+    def svc(*, project_id: str, expand: bool = False) -> dict[str, Any]:
+        return {"pid": project_id, "expand": expand}
+
+    tools = ToolRegistry()
+    tools.register(
+        ToolBinding(
+            name="t",
+            description=None,
+            spec=ServiceSpec(service=svc, atomic=False),
+            argument_binding=ArgumentBinding.SPREAD_AUTHOR_WINS,
+        )
+    )
+    out = handle_tools_call(
+        {"name": "t", "arguments": {"project_id": "p1", "expand": True}}, _ctx(tools)
+    )
+    assert isinstance(out, dict)
+    assert out["structuredContent"] == {"pid": "p1", "expand": True}
+
+
+def test_service_tool_merge_pool_seeds_cannot_be_overridden_by_client() -> None:
+    """Reserved pool-seed keys (``user`` / ``request`` / ``data``) are stripped from spread."""
+    from rest_framework_services import ArgumentBinding
+
+    received: dict[str, Any] = {}
+
+    def svc(*, user: Any, ok: int) -> dict[str, Any]:
+        received["user"] = user
+        received["ok"] = ok
+        return {}
+
+    tools = ToolRegistry()
+    tools.register(
+        ToolBinding(
+            name="t",
+            description=None,
+            spec=ServiceSpec(service=svc, atomic=False),
+            argument_binding=ArgumentBinding.SPREAD_AUTHOR_WINS,
+        )
+    )
+    handle_tools_call({"name": "t", "arguments": {"user": "evil", "ok": 1}}, _ctx(tools))
+    # User came from the transport, not from the client: the test token carries
+    # ``user=None``, which drf-services seeds as the anonymous user.
+    assert isinstance(received["user"], AnonymousUser)
+    assert received["ok"] == 1
+
+
+# ---------- request-shape guards on tools/call ----------
+
+
+def _echo_tools() -> ToolRegistry:
+    def svc(**kwargs: Any) -> dict[str, Any]:
+        return dict(kwargs)
+
+    tools = ToolRegistry()
+    tools.register(
+        ToolBinding(name="t", description=None, spec=ServiceSpec(service=svc, atomic=False))
+    )
+    return tools
+
+
+@pytest.mark.parametrize("malformed", [[], "", 0, False])
+def test_a_falsy_non_object_arguments_field_is_named_as_the_fault(malformed: Any) -> None:
+    """``[]`` is not "no arguments" — it is a malformed ``arguments`` field.
+
+    Collapsing every falsy value into ``{}`` ran the tool with no arguments, so
+    a tool whose inputs are all optional executed a call the client never
+    intended in that shape, and every other tool answered with a confusing
+    missing-field validation error instead of naming the real fault.
+    """
+    out = handle_tools_call({"name": "t", "arguments": malformed}, _ctx(_echo_tools()))
+    assert isinstance(out, JsonRpcError)
+    assert out.code == JsonRpcErrorCode.INVALID_PARAMS
+    assert "'arguments'" in out.message
+
+
+@pytest.mark.parametrize("malformed", [[], "", 0, False])
+async def test_a_falsy_non_object_arguments_field_is_named_as_the_fault_async(
+    malformed: Any,
+) -> None:
+    out = await handle_tools_call_async({"name": "t", "arguments": malformed}, _ctx(_echo_tools()))
+    assert isinstance(out, JsonRpcError)
+    assert out.code == JsonRpcErrorCode.INVALID_PARAMS
+
+
+@pytest.mark.parametrize("params", [{"name": "t"}, {"name": "t", "arguments": None}])
+def test_a_missing_or_null_arguments_field_still_means_no_arguments(
+    params: dict[str, Any],
+) -> None:
+    out = handle_tools_call(params, _ctx(_echo_tools()))
+    assert isinstance(out, dict)
+    assert "isError" not in out
+
+
+@pytest.mark.parametrize("params", [{"name": "t"}, {"name": "t", "arguments": None}])
+async def test_a_missing_or_null_arguments_field_still_means_no_arguments_async(
+    params: dict[str, Any],
+) -> None:
+    out = await handle_tools_call_async(params, _ctx(_echo_tools()))
+    assert isinstance(out, dict)
+    assert "isError" not in out
+
+
+def test_an_unrenderable_output_format_is_rejected_before_the_tool_runs() -> None:
+    """A bad ``outputFormat`` must not surface as a 500 after the write committed.
+
+    The coercion used to sit at the end of dispatch, past the last ``except``,
+    so an unknown value raised ``ValueError`` out of the handler *after* the
+    mutation had committed. The caller got a bare 500 with no JSON-RPC envelope
+    and no way to tell whether retrying would apply the write twice.
+    """
+    ran: list[int] = []
+
+    def svc(**kwargs: Any) -> dict[str, Any]:
+        ran.append(1)
+        return {}
+
+    tools = ToolRegistry()
+    tools.register(
+        ToolBinding(name="t", description=None, spec=ServiceSpec(service=svc, atomic=False))
+    )
+    out = handle_tools_call({"name": "t", "arguments": {}, "outputFormat": "xml"}, _ctx(tools))
+    assert isinstance(out, JsonRpcError)
+    assert out.code == JsonRpcErrorCode.INVALID_PARAMS
+    assert "outputFormat" in out.message
+    assert ran == []
+
+
+async def test_an_unrenderable_output_format_is_rejected_before_the_tool_runs_async() -> None:
+    ran: list[int] = []
+
+    def svc(**kwargs: Any) -> dict[str, Any]:
+        ran.append(1)
+        return {}
+
+    tools = ToolRegistry()
+    tools.register(
+        ToolBinding(name="t", description=None, spec=ServiceSpec(service=svc, atomic=False))
+    )
+    out = await handle_tools_call_async(
+        {"name": "t", "arguments": {}, "outputFormat": "xml"}, _ctx(tools)
+    )
+    assert isinstance(out, JsonRpcError)
+    assert out.code == JsonRpcErrorCode.INVALID_PARAMS
+    assert ran == []
+
+
+@pytest.mark.parametrize("requested", ["json", "toon", "auto"])
+def test_the_supported_output_formats_still_pass_the_guard(requested: str) -> None:
+    out = handle_tools_call(
+        {"name": "t", "arguments": {}, "outputFormat": requested}, _ctx(_echo_tools())
+    )
+    assert isinstance(out, dict)
+
+
+def test_an_empty_output_format_is_read_as_unsupplied() -> None:
+    """The dispatch paths read the knob as ``... or binding.output_format``.
+
+    The guard mirrors that exactly, so validation and use cannot disagree about
+    which values count as "not asked for".
+    """
+    out = handle_tools_call({"name": "t", "arguments": {}, "outputFormat": ""}, _ctx(_echo_tools()))
+    assert isinstance(out, dict)
