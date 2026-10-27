@@ -47,6 +47,77 @@ carries; releases up to 0.54.0 are in
   type `"array"` and serves `[]` when it presents nothing, as the drf-services
   path does for the same declaration.
   The drf-services registration methods are unchanged.
+- **Listings are filtered by a kernel spec's checks.** With
+  `FILTER_LISTINGS_BY_PERMISSIONS` on, a kernel binding is listed only to a
+  caller its spec's checks admit, asked with no arguments through `authorize`
+  and, for a create, through `authorize_scope` of `None`. A check that cannot
+  answer without the call's arguments hides that binding alone, and
+  `always_listed=True` keeps it visible.
+- **A kernel spec's checks answer before the charge.** They are asked before
+  the rate limit is charged, on `tools/call`, `acall_tool` and
+  `resources/read`, so a caller they refuse is answered `-32006` uncharged;
+  `call_tool` raises the denial (`NotPermitted`, or `PrincipalUnavailable` for a
+  deactivated principal) before it checks the arguments. A hand-built binding
+  that declares a task policy asks them before it creates a task, and its
+  worker asks them again. They are shown the arguments as the kernel's argument
+  check reads them, `"8"` for an `integer` as `8`, and are asked once per call
+  whose arguments pass that check, twice when the call streams progress (only
+  the async transport streams).
+- **A call failing the argument check is judged as a listing judges the
+  spec.** Its checks are asked on no arguments. Refused, it is `-32006` before
+  the charge; admitted, a tool call is told which argument is wrong after the
+  charge. A `many` call whose rows alone are refused keeps the answer its
+  checks gave the rest of its arguments; admitted, its checks are asked twice,
+  or three times when it streams. A `many` call whose Validator refuses some rows
+  and also the list itself, a length cap say, is answered the `validation_error`
+  result: the rows keyed by index, the list's own message under
+  `non_field_errors`.
+- **A streamed denial is a `403`.** A streamed `tools/call` whose spec's
+  checks deny the caller is answered `403` with a challenge, as the same call
+  without a progress token is, and a `ServiceError` a check raises on a streamed tool call is
+  an `isError` result inside the stream, as on a plain call.
+- **Completion is judged as the listing judges.** `completion/complete` of a
+  kernel resource asks the spec's checks on no arguments before its rate limit.
+  A check that refuses or raises on no arguments, a `ServiceError` included,
+  refuses it with `-32006`; a configuration error a check raises
+  (`ImproperlyConfigured`) fails the completion, as it fails the listing.
+- **Resource reads answer an invalid URI variable.** An admitted reader of a
+  URI whose variable fails the argument check is answered `-32602` with message
+  `Invalid arguments` and the kernel's detail in `data`; `INCLUDE_VALIDATION_VALUE`
+  adds the variables sent under `data.value`. The checks are shown the
+  variables read as the spec's types, `true` for a `boolean` as `True`.
+- **A kernel resource is watchable only by a caller who may read it.** Its
+  spec's checks are asked as the read asks them.
+- **`build_requested_schema` takes `admitted=`.** The argument names a tool
+  takes from a client, for a caller that knows them: a property outside the set
+  is refused with `ImproperlyConfigured` when the schema is built, since the
+  answer comes back as an argument the call would refuse as unknown after the
+  user filled it in. `None`, the default, asks nothing of the names.
+- **Kernel tool registration rules.** A kernel `LIST` tool registered without
+  `paginate=True` warns `UnboundedListWarning`, and `REQUIRE_LIST_PAGINATION` refuses it. A paginated
+  `LIST` whose spec declares a read named `page` or `limit` is refused, since
+  pagination takes both names from the arguments before the selector runs. A
+  presenter whose audience markings cannot be projected is refused, naming the
+  tool. `display_name` and `display_description` are labels for in-process
+  consumers, never sent on the wire. `UndescribedToolWarning` and
+  `UnboundedListWarning` raised while registering a kernel spec with
+  `register_tool` or `register_tools` name the line that registered it, not a
+  line inside django-spec-mcp, so a warnings filter keyed on the registering
+  module matches them.
+- **An unpaginated kernel `LIST` tool is held to the row ceiling.** Its own
+  `max_page_size`, deferring to the server's `MAX_PAGE_SIZE`, is the most rows
+  one result carries. A result over it is refused as `result_too_large` rather
+  than truncated, since an unpaginated payload carries nothing to say rows were
+  dropped. One row past the ceiling is read, as a `LIMIT` on a QuerySet and a
+  slice of any other iterable, so a table is not fetched whole to be refused.
+  A disabled ceiling serves the result whole.
+- **A kernel tool's operation conditions are asked at list time with the seeds
+  its call resolves.** `tools/list` resolves the server's `pool_seeds` per
+  conditioned kernel tool against that tool's own `call_context`, as the call
+  does, so a seed whose resolver declares `request`, `view` or `call_context`
+  reads what the call hands it. A registered seed's resolver runs once per
+  conditioned kernel tool per listing, as it runs once per call, so a seed that
+  queries is paid for per tool.
 
 ### Changed
 

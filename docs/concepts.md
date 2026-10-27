@@ -296,8 +296,8 @@ nothing. A value of the returned `TypedDict` that does not resolve makes only
 its own key one the provider may decline, offered and not required, while the
 other keys stay filled and hidden.
 
-**A call that leaves out a required parameter is refused before the selector
-runs**, with a `validation_error` result naming what is missing, keyed in
+**A call to a drf-services tool that leaves out a required parameter is refused
+before the selector runs**, with a `validation_error` result naming what is missing, keyed in
 `detail` the way a serializer keys a missing field, on every route (both
 transports and eras, `call_tool` and `acall_tool`):
 
@@ -317,6 +317,10 @@ names checked are the ones the `inputSchema` requires of the selectors, read
 from the same reflection, so what a call is refused for is what the client was
 told. A service tool's own input serializer still answers for its fields, and a
 `many=True` service declares no target lookup to ask for anything.
+
+A kernel tool never reads `missing_arguments`: an admitted call missing an
+argument answers `"Invalid arguments"` with the kernel's per-field detail, the
+same `detail` shape as above.
 
 The check runs **after the permission and rate-limit answers** (and, on a
 selector tool, after its `input_serializer`), as every other argument check
@@ -941,7 +945,23 @@ What changes against the drf-services tools:
 - **The call is the kernel's `dispatch` / `adispatch`.** The principal is the
   token's user, an `AnonymousUser` for `call_tool(..., user=None)`, and `call_context["request"]` is the transport's request, with
   the resolved token as `request.mcp_token`. The spec's own `permissions`
-  answer the call: a refused principal is `-32006` "Insufficient permission".
+  answer the call, before the rate limit is charged: a refused principal is
+  `-32006` "Insufficient permission", uncharged, and `call_tool`, which charges
+  nothing, raises the denial before it checks the arguments. A check declaring
+  `arguments` is shown them as the kernel's argument check reads them, so `"8"`
+  sent for an `integer` reaches it as `8`, and a URI's `true` for a `boolean` as
+  `True`. The checks are asked once per call whose arguments pass that check,
+  twice when the call streams progress (only the async transport streams). A
+  call whose arguments fail that check is never shown them: it is judged as a
+  filtered listing judges the spec, its checks asked on no arguments, and is
+  refused `-32006` before the charge when they refuse; otherwise a tool call is
+  told which argument is wrong after the charge. A `many` call whose top level
+  passes and whose rows do not is the exception: its checks answer on the
+  checked top level, a refusal as `-32006` before the charge, and an admitted
+  caller is told the rows after it. A kernel resource's completion has no
+  arguments and is judged the same way. A hand-built binding that declares a
+  task policy has the checks asked before its task is created, and again by the
+  task's worker; `register_tool` refuses any task policy but the default.
 - **The schemas are the kernel's** `spec_input_schema` / `spec_output_schema`.
   A service tool's arguments are its spec's parameters, spread at the top level
   of `arguments`, with no `data` key around them. `unknown_arguments=` reaches
@@ -974,7 +994,13 @@ What changes against the drf-services tools:
   the default (not yet supported), and `UnknownArguments.PASSTHROUGH`.
 - **A resource is a `RETRIEVE`.** `register_resource` takes the spec
   positionally, and the `selector=` form keeps the drf-services path; a `LIST`
-  spec is refused, as is a knob of the `selector=` form beside a spec.
+  spec is refused, as is a knob of the `selector=` form beside a spec. A reader
+  the spec's checks refuse is answered `-32006` and is not charged. A reader
+  they admit is charged, and a URI variable that fails the spec's argument
+  check is then answered `-32602` with message `Invalid arguments` and the
+  kernel's detail tree under `data.detail`, as an admitted tool call is told
+  which argument is wrong; `INCLUDE_VALIDATION_VALUE` adds the variables sent
+  under `data.value`.
 
 `register_tools(registry, overrides={"invoices.create": {"scopes": ("billing",)}})`
 registers every entry of a kernel `SpecRegistry`, each under its registry name,
@@ -1150,16 +1176,21 @@ forms) accept three behavior knobs:
   refuses it right now (see [below](#a-tool-that-cannot-run-now-is-not-listed)).
   Setting `always_listed=True` keeps the binding visible through both as a
   discovery aid; the permission and the affordance still gate the actual
-  invocation.
+  invocation. For a kernel binding the permissions that deny include its spec's
+  own checks, asked with no arguments; see
+  [Filtering listings by permissions](auth.md#filtering-listings-by-permissions).
 
 ### A tool that cannot run now is not listed
 
 A service's `affordances` say when the operation is possible. A condition written
 as a callable is answered against the pool's seeds — `user`, `request`, `progress`,
 and any the server registers with [`pool_seeds=`](#pool-seeds) — and never
-against the call's arguments, so when it is unmet **every** call of
+against the call's arguments. (A kernel tool's condition has no `request` seed: it
+reads the transport's request from `call_context`, beside a pool of `user`,
+`progress` and the registered seeds.) So when a condition is unmet **every** call of
 the tool is refused, whatever the client sends. `tools/list` therefore asks each
-such condition, through drf-services' `unmet_operation_affordance`, and leaves the
+such condition, through drf-services' `unmet_operation_affordance` (the kernel's, for a kernel
+tool), and leaves the
 tool out while any is unmet:
 
 ```python
@@ -1182,9 +1213,12 @@ server.register_service_tool(
 ```
 
 - **Asked on every `tools/list`, with the request and user a call would use.** The
-  condition sees the same kind of `request` a call's condition sees — the DRF
-  `Request` built around the transport's own, method `POST`, with no arguments and
-  no query string — and the token's user. It is not gated by
+  condition sees the same kind of `request` a call's condition sees. For a
+  drf-services tool that is the DRF `Request` built around the transport's own,
+  method `POST`, with no arguments and no query string. A kernel condition has no
+  `request` seed: it reads the call's `call_context`, whose `request` is the
+  transport's own `HttpRequest` carrying the token as `mcp_token` and whose
+  `action` is the tool's name. Either sees the token's user. It is not gated by
   `FILTER_LISTINGS_BY_PERMISSIONS`: that setting is off by default because a
   permission may read arguments that do not exist at list time, and a condition
   answered against the seeds cannot read arguments at all.
@@ -1192,9 +1226,12 @@ server.register_service_tool(
   (`when=~Q(status="shipped")`) has no row at list time; it is skipped without a
   query and goes on being answered per object at the call. A tool declaring only
   those is always listed.
-- **Declaring nothing costs nothing.** A listing builds one pool, and only once a
-  listed tool declares a condition on the operation; each such condition then runs
-  once per listing, so keep it cheap. One that raises fails the listing, as it would fail the call.
+- **Declaring nothing costs nothing.** A pool is built only for a listed tool that
+  declares a condition on the operation. The drf-services tools of a listing share
+  one; each kernel tool gets its own from that tool's own call context, as its call
+  builds one, so each registered seed's resolver runs once per such kernel tool
+  per listing. Each condition runs once per listing for its tool, so keep them
+  and the seeds cheap. One that raises fails the listing, as it would fail the call.
 - **Selector tools are never left out.** A `SelectorSpec`'s `affordances` names
   *other* operations to project onto its rows; it is not a condition on the read.
 - **Resources and prompts are unaffected.** They are reads, and neither holds a
@@ -1550,7 +1587,7 @@ Each field is one sentence, and lands in exactly these places:
 | `handle_field_description` | The `outputSchema` description of a handle field that declares none of its own ([Hide plumbing from the model](recipes/agent-audience.md)). | The field is left undescribed. |
 | `handle_line` | The line appended to the description of a tool whose output carries a handle. | The line is dropped, with its ``Identify records by `<label>`.`` prefix. |
 | `query_param_on_pages` | The end of a read-shaping query param's description on a paged tool, and the end of the `isError` message when a value it supplied is refused while rendering ([On a paged tool](#query-param-per-item)). | Dropped from both. |
-| `missing_arguments` | The message of a call refused for leaving out an argument the selectors require, or a `UrlKwarg(required=True)` ([Which selector parameters a client is asked for](#selector-requiredness)). | Refused with `ImproperlyConfigured`, as is an empty or whitespace-only string: it is the result's whole message. |
+| `missing_arguments` | The message of a drf-services call refused for leaving out an argument the selectors require, or a `UrlKwarg(required=True)` ([Which selector parameters a client is asked for](#selector-requiredness)). A kernel tool never reads it: a call missing an argument answers `Invalid arguments`, with the kernel's per-field detail. | Refused with `ImproperlyConfigured`, as is an empty or whitespace-only string: it is the result's whole message. |
 
 `AgentConventions()` is the default, and a server given none uses it. Change one
 field and the others keep the package's wording, so a later correction to a
@@ -1560,7 +1597,9 @@ The server still decides **whether** a sentence appears: a tool with no handle
 gets no handle line, and an unpaginated tool gets no scope sentence, whatever the
 conventions say. A field changes **what it says**. The wording reaches every
 route a server answers on: both transports in both eras, `call_tool`,
-`acall_tool`, `list_tools`, and a task's worker.
+`acall_tool`, `list_tools`, and a task's worker. `missing_arguments` reaches
+only drf-services tools: a kernel tool answers `Invalid arguments` with the
+kernel's per-field detail.
 
 Every field is a `str.format` template, rendered wherever it lands whether or
 not it has a placeholder, so a literal brace is written twice, `{{` or `}}`, in
@@ -1843,9 +1882,11 @@ rather than to a stream, and the client polls for them.
     a `200` — losing the `403` the authorization spec makes normative. The
     permission stack therefore runs once at the transport before the stream is
     opened, so a denied call still gets `403` and a `WWW-Authenticate`
-    challenge. Rate limits stay inside the handler: consuming one is not
-    idempotent, and a rate-limit rejection was already a `200` with the detail
-    in the body.
+    challenge. For a kernel tool that stack is its `scopes=` gate and the spec's
+    own checks, through the kernel's `check_call`; the handler asks the spec's
+    checks once more before it charges the call. Rate limits stay inside the
+    handler: consuming one is not idempotent, and a rate-limit rejection was
+    already a `200` with the detail in the body.
 
 ## Server-pushed notifications: subscriptions
 
@@ -1988,7 +2029,8 @@ service.
 Subscribing to a resource requires the same permission as reading it. Otherwise
 a subscription would be a side channel around `resources/read`: a caller denied
 the body could still learn every time it changed, and *when* something changes
-is often the more sensitive signal. A task may be watched only by the principal
+is often the more sensitive signal. For a kernel resource that is the spec's own
+permissions as well as its `scopes=`. A task may be watched only by the principal
 that created it.
 
 A refused entry is **dropped from the acknowledgement**, not turned into an
@@ -2305,7 +2347,10 @@ revision — the SSE stream and session termination were both removed there.
     **`resources/read`** answers a missing URI with `-32002` for a legacy caller
     and `-32602` for a modern one, because the revision that retired `-32002`
     also told clients to keep recognising it, so neither value is safe to send
-    to both.
+    to both. A kernel resource read whose URI variable fails the spec's argument
+    check, by a reader the spec's checks admit, is answered `-32602` for both
+    callers, with the kernel's detail under `data.detail` where a missing URI
+    carries `data.uri`.
 
     **The advertised capabilities** follow the caller, not the server. A
     capability is a promise, and two of them can only be kept for a modern
