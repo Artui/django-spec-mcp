@@ -25,6 +25,7 @@ import pytest
 from asgiref.sync import sync_to_async
 from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest
+from django.test import Client, override_settings
 from django_service_specs import (
     DEFAULT_POOL_SEEDS,
     DataclassValidator,
@@ -52,15 +53,22 @@ from django_spec_mcp.handlers.handle_resources_read_async import handle_resource
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.is_binding_listable import is_binding_listable
+from django_spec_mcp.handlers.kernel_utils import resource_refusal
 from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.handlers.types.kernel_refusal_scene import KernelRefusalScene
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
+from django_spec_mcp.schema.types.agent_conventions import AgentConventions
 from django_spec_mcp.server.utils import UnguardedToolWarning
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from django_spec_mcp.transport.progress_dispatch import preflight_permissions
+from django_spec_mcp.types.internal_error_message import INTERNAL_ERROR_MESSAGE
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from django_spec_mcp.types.task_policy import TaskPolicy
 from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
+from tests.kernel_client import KernelClient
+from tests.testapp.auth_backend import HeaderAuthBackend
+from tests.testapp.urlconf_for import urlconf_for
 from tests.utils import RefusingRateLimit, tool_error
 
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -910,17 +918,97 @@ async def test_a_reader_refused_on_a_malformed_variable_is_told_so(is_async: boo
 
 
 @_ASYNC
-async def test_an_admitted_reader_of_a_malformed_variable_is_charged_and_fails_the_read(
+async def test_an_admitted_reader_of_a_malformed_variable_is_charged_and_told_which(
     is_async: bool,
 ) -> None:
-    # The judgment admits, so the read is charged and fails on the variable as
-    # it did before the judgment: ``resources/read`` has no answer for invalid
-    # arguments, so the refusal is raised on, to the transport's internal error.
+    # The judgment admits, so the read is charged and then refused on the
+    # variable, as an admitted tool call is told which argument is wrong after
+    # its charge: ``-32602`` with the kernel's detail in ``data``.
     limit = _CountingLimit()
 
-    with pytest.raises(InvalidArguments):
-        await _read(_resource_server(_Counted(admits=True), limit), "rows://abc", is_async=is_async)
+    out = await _read(
+        _resource_server(_Counted(admits=True), limit), "rows://abc", is_async=is_async
+    )
+
+    assert isinstance(out, JsonRpcError), out
+    assert out.code == JsonRpcErrorCode.INVALID_PARAMS
+    assert out.message == "Invalid arguments"
+    assert list(out.data["detail"]) == ["pk"]
     assert limit.consumed == 1
+
+
+@pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
+def test_an_admitted_reader_of_a_malformed_variable_is_told_which_over_http(
+    is_async: bool, client: Client
+) -> None:
+    ran: list[int] = []
+
+    def selector(*, pk: int) -> dict[str, int]:
+        ran.append(pk)
+        return {"pk": pk}
+
+    limit = _CountingLimit()
+    server = MCPServer(name="t", auth_backend=HeaderAuthBackend(), session_store=None)
+    server.register_resource(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=selector,
+            reads=Parameters([_PK]),
+            permissions=[_Counted(admits=True)],
+        ),
+        name="row",
+        uri_template="rows://{pk}",
+        rate_limits=[limit],
+    )
+
+    with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=is_async)):
+        caller = KernelClient(client)
+        caller.initialize()
+        response = caller.post("resources/read", {"uri": "rows://abc"})
+
+    body = response.json()
+    assert response.status_code == 200, body
+    assert body["error"]["code"] == -32602, body
+    assert body["error"]["message"] == "Invalid arguments"
+    # Not the backstop's answer, which is what this read used to get.
+    assert body["error"]["message"] != INTERNAL_ERROR_MESSAGE
+    assert body["error"]["data"]["detail"]["pk"], body
+    assert limit.consumed == 1
+    assert ran == []
+
+
+@pytest.mark.parametrize("include_value", [False, True], ids=["bare", "with-value"])
+def test_a_reader_told_its_arguments_are_invalid_gets_the_detail_as_json_would_write_it(
+    include_value: bool,
+) -> None:
+    # A many call's node mixes integer row indices with ``non_field_errors``, which
+    # a sorted-key encoder refuses; the data is the tree with its keys as strings.
+    scene = KernelRefusalScene(
+        arguments={"pk": "abc"},
+        config=replace(build_mcp_config(), include_validation_value=include_value),
+        conventions=AgentConventions(),
+    )
+    refusal = InvalidArguments({"rows": {1: {"pk": ["Bad."]}, "non_field_errors": ["Too many."]}})
+
+    out = resource_refusal(refusal, scene)
+
+    assert out.code == JsonRpcErrorCode.INVALID_PARAMS
+    assert out.data["detail"] == {
+        "rows": {"1": {"pk": ["Bad."]}, "non_field_errors": ["Too many."]}
+    }
+    assert out.data.get("value") == ({"pk": "abc"} if include_value else None)
+    json.dumps(out.to_dict())
+
+
+def test_a_refusal_that_is_no_invalid_argument_is_still_raised_on_by_a_read() -> None:
+    # The arm is ``InvalidArguments`` alone: a bare ``DispatchError`` stays the
+    # transport's internal error, as before.
+    scene = KernelRefusalScene(
+        arguments={}, config=build_mcp_config(), conventions=AgentConventions()
+    )
+
+    with pytest.raises(DispatchError):
+        resource_refusal(DispatchError("no"), scene)
 
 
 @_ASYNC

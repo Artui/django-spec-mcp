@@ -13,9 +13,9 @@ original asks them so they outlive it. The resource cases are asked of a kernel
 a reserved seed, and the kernel refuses a spec declaring a read of that name, so
 the runtime lock is reached only by a binding built by hand: there the kernel's
 argument check refuses ``user`` as an argument the spec does not declare, and
-the selector never runs under the name the URI carried: the refusal is raised
-on to the transport's internal error, as any resource refusal with no JSON-RPC
-answer is. That is the only outcome on this path: a resource read dispatches
+the selector never runs under the name the URI carried: the read is answered
+``-32602`` with the kernel's detail, as any admitted read of arguments the check
+refuses is. That is the only outcome on this path: a resource read dispatches
 under the kernel's default ``REJECT``, and ``register_resource`` takes no
 ``unknown_arguments`` knob, so the ``IGNORE`` case the tool path asks (in
 ``test_handler_branches.py``) has no resource counterpart.
@@ -30,7 +30,6 @@ from asgiref.sync import async_to_sync
 from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest
 from django_service_specs import (
-    InvalidArguments,
     Parameter,
     Parameters,
     SelectorKind,
@@ -48,8 +47,10 @@ from django_spec_mcp.handlers.handle_prompts_get_async import handle_prompts_get
 from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
 from django_spec_mcp.handlers.handle_resources_read_async import handle_resources_read_async
 from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.registry.resource_registry import ResourceRegistry
 from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
+from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 
 _CALLER = "alice"
 
@@ -219,18 +220,19 @@ def _handbuilt_notes() -> ResourceRegistry:
     ids=["sync", "async"],
 )
 def test_a_uri_template_variable_named_user_cannot_replace_the_caller(read: Any) -> None:
-    """The kernel's argument check refuses ``user`` as undeclared, and a refusal
-    with no JSON-RPC answer is raised on to the transport's internal error, so the
-    selector never runs under the name the URI carried."""
+    """The kernel's argument check refuses ``user`` as undeclared, and the read is
+    answered ``-32602`` naming it, so the selector never runs under the name the
+    URI carried."""
     # Changed by design: the original ran the selector with the caller's own
     # ``user`` and the URI's value dropped. The kernel declares no such read, so
     # the argument check refuses the hand-built binding outright: the outcome
     # that matters, that the selector never runs under the URI's name, holds
     # either way, and an error is the louder way to hold it.
     ran.clear()
-    with pytest.raises(InvalidArguments) as refused:
-        read({"uri": "notes://victim/1"}, _ctx(_server(), resources=_handbuilt_notes()))
-    assert refused.value.detail == {"user": ["Unknown argument."]}
+    refused = read({"uri": "notes://victim/1"}, _ctx(_server(), resources=_handbuilt_notes()))
+    assert isinstance(refused, JsonRpcError), refused
+    assert refused.code == JsonRpcErrorCode.INVALID_PARAMS
+    assert refused.data["detail"] == {"user": ["Unknown argument."]}
     assert ran == []
 
 

@@ -6,6 +6,7 @@ the two paths share only the helpers they call by name.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from itertools import islice
@@ -45,6 +46,7 @@ from django_spec_mcp.handlers.utils import (
     resolve_bound,
     resource_cache_hints,
     resource_not_found_code,
+    validation_error_data,
 )
 from django_spec_mcp.observability import get_logger
 from django_spec_mcp.output.encode_json import encode_json
@@ -449,10 +451,9 @@ def admit_kernel_read(
     judged on no arguments, as ``admit_kernel_call`` judges any failed shape: a
     reader that judgment refuses is ``-32006`` before the charge
     (``test_a_reader_refused_on_a_malformed_variable_is_told_so``), and one it
-    admits is charged and the read fails on the variable as it did before this
-    step, an internal error, since ``resources/read`` has no answer for
-    invalid arguments
-    (``test_an_admitted_reader_of_a_malformed_variable_is_charged_and_fails_the_read``).
+    admits is charged and then told which variable is wrong, ``-32602`` with the
+    kernel's detail (``resource_refusal``,
+    ``test_an_admitted_reader_of_a_malformed_variable_is_charged_and_told_which``).
 
     ``REJECT`` is the read's own policy, the one ``read_kernel_resource``
     dispatches under, and it answers as ``IGNORE`` would only while every
@@ -709,11 +710,33 @@ def resource_read_result(
 def resource_refusal(exc: DispatchError | ServiceError, scene: KernelRefusalScene) -> JsonRpcError:
     """A kernel refusal on ``resources/read``, where there is no ``isError`` result.
 
-    The map's answer when it is a JSON-RPC error, which is a denied or
+    ``InvalidArguments`` is ``-32602`` with the kernel's ``detail`` tree in
+    ``data`` (``test_an_admitted_reader_of_a_malformed_variable_is_charged_and_told_which``
+    and its HTTP twin), the reader having been admitted and charged, as an
+    admitted tool call is told which argument is wrong after its charge. The
+    message is fixed and carries no value; the detail names the variable and the
+    kernel's own problem with it, and ``include_validation_value`` adds what was
+    sent, as it does for a tool. Only a read reaches this arm: the prelude and a
+    completion hand this function a denial.
+
+    Otherwise the map's answer when it is a JSON-RPC error, which is a denied or
     deactivated principal's ``-32006``. Any other refusal is raised on, to the
     transport's internal error, which is how the drf-services read answers a
     selector that raises.
     """
+    if isinstance(exc, InvalidArguments):
+        data = validation_error_data(
+            exc.detail, scene.arguments, include_value=scene.config.include_validation_value
+        )
+        # The tree is written as JSON would write it, so the integer row keys a
+        # many call's detail carries are strings, as they are in a tool's result.
+        # Not ``encode_json``, whose sorted keys refuse a node mixing those
+        # indices with ``non_field_errors``.
+        return JsonRpcError(
+            JsonRpcErrorCode.INVALID_PARAMS,
+            "Invalid arguments",
+            data=json.loads(json.dumps(data, default=str)),
+        )
     answer = answer_kernel_refusal(exc, scene)
     if isinstance(answer, JsonRpcError):
         return answer
