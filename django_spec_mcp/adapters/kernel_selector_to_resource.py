@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any
 
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import SelectorKind, SelectorSpec, UnsetType
 
+from django_spec_mcp.adapters.kernel_scopes import kernel_scopes
 from django_spec_mcp.auth.permissions.scope_required import ScopeRequired
 from django_spec_mcp.protocol.types.icon import Icon
 from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
@@ -25,7 +26,7 @@ def kernel_selector_to_resource(
     always_listed: bool,
     cache_ttl_ms: int | UnsetType,
     completions: dict[str, Callable[..., Any]] | None,
-    scopes: tuple[str, ...] | None,
+    scopes: str | Sequence[str] | None,
 ) -> KernelResourceBinding:
     """Build the binding ``MCPServer.register_resource`` registers for a kernel spec.
 
@@ -46,11 +47,7 @@ def kernel_selector_to_resource(
             f"Resource {name!r}: a kernel resource reads one row, so its SelectorSpec "
             f"is a RETRIEVE, not a {spec.kind.name}. Register a LIST as a selector tool."
         )
-    if scopes is not None and not scopes:
-        raise ImproperlyConfigured(
-            f"Resource {name!r}: scopes=() permits every caller while reading as a gate. "
-            "Name at least one scope, or leave scopes=None for no scope gate."
-        )
+    gate: tuple[str, ...] | None = kernel_scopes(f"Resource {name!r}", scopes)
     return KernelResourceBinding(
         name=name,
         uri_template=uri_template,
@@ -58,8 +55,8 @@ def kernel_selector_to_resource(
         selector=spec.selector,
         kind=spec.kind,
         spec=spec,
-        scopes=None if scopes is None else tuple(scopes),
-        permissions=(ScopeRequired(list(scopes)),) if scopes else (),
+        scopes=gate,
+        permissions=(ScopeRequired(list(gate)),) if gate else (),
         rate_limits=rate_limits,
         annotations=dict(annotations or {}),
         meta=dict(meta or {}),

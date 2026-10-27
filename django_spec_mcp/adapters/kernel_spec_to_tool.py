@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 from django.core.exceptions import ImproperlyConfigured
@@ -15,6 +16,7 @@ from django_service_specs import (
     spec_output_schema,
 )
 
+from django_spec_mcp.adapters.kernel_scopes import kernel_scopes
 from django_spec_mcp.adapters.utils import merge_tool_annotations
 from django_spec_mcp.protocol.types.icon import Icon
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
@@ -45,7 +47,7 @@ def kernel_spec_to_tool(
     dispatch_timeout: float | None | UnsetType,
     always_listed: bool,
     rate_limits: tuple[Any, ...],
-    scopes: tuple[str, ...] | None,
+    scopes: str | Sequence[str] | None,
     unknown_arguments: UnknownArguments,
     server_arguments: ServerArguments | None,
 ) -> KernelToolBinding:
@@ -60,7 +62,8 @@ def kernel_spec_to_tool(
       service tool or a ``RETRIEVE``, ``invalidates`` on a selector tool.
     - a ``task_policy`` other than ``FORBIDDEN``, which the task path does not
       run for a kernel spec yet.
-    - ``scopes=()``, which reads as a gate and admits everyone.
+    - ``scopes=()``, which reads as a gate and admits everyone. A bare string
+      is one scope, as ``ScopeRequired`` reads it.
     - ``UnknownArguments.PASSTHROUGH``, which the kernel never honours: an
       argument a spec does not declare reaches no callable.
 
@@ -86,13 +89,7 @@ def kernel_spec_to_tool(
             f"Tool {name!r}: task_policy={task_policy.name} is not yet supported for a "
             "kernel spec; such a tool runs inline. Leave task_policy at its default."
         )
-    # ``test_an_empty_scope_tuple_is_refused`` holds ``not scopes``, and
-    # ``test_scopes_become_the_scope_gate_and_none_is_no_gate`` holds the ``None`` test.
-    if scopes is not None and not scopes:
-        raise ImproperlyConfigured(
-            f"Tool {name!r}: scopes=() permits every caller while reading as a gate. "
-            "Name at least one scope, or leave scopes=None for no scope gate."
-        )
+    gate: tuple[str, ...] | None = kernel_scopes(f"Tool {name!r}", scopes)
     if unknown_arguments is UnknownArguments.PASSTHROUGH:
         raise ImproperlyConfigured(
             f"Tool {name!r}: UnknownArguments.PASSTHROUGH is not honoured by the kernel, "
@@ -127,7 +124,7 @@ def kernel_spec_to_tool(
         dispatch_timeout=dispatch_timeout,
         always_listed=always_listed,
         rate_limits=rate_limits,
-        scopes=None if scopes is None else tuple(scopes),
+        scopes=gate,
         unknown_arguments=unknown_arguments,
         server_arguments=server_arguments or ServerArguments(),
     )

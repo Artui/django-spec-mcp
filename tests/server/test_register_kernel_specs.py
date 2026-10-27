@@ -260,3 +260,16 @@ def test_a_kernel_resource_carries_its_scope_gate() -> None:
     )
     (gate,) = binding.permissions
     assert gate.required_scopes() == ["read"]
+
+
+def test_a_bare_string_scope_is_one_scope() -> None:
+    server = _server()
+    tool = server.register_tool(_service(), name="t", scopes="billing")
+    resource = server.register_resource(
+        _selector(SelectorKind.RETRIEVE), name="r", uri_template="r://{pk}", scopes="billing"
+    )
+    assert tool.scopes == resource.scopes == ("billing",)
+    assert [p.required_scopes() for p in (*tool.permissions, *resource.permissions)] == [
+        ["billing"],
+        ["billing"],
+    ]

@@ -672,7 +672,7 @@ class MCPServer:
         dispatch_timeout: float | None | UnsetType = UNSET,
         always_listed: bool = False,
         rate_limits: list[Any] | None = None,
-        scopes: tuple[str, ...] | None = None,
+        scopes: str | Sequence[str] | None = None,
         unknown_arguments: UnknownArguments = UnknownArguments.REJECT,
         server_arguments: ServerArguments | None = None,
     ) -> KernelToolBinding:
@@ -694,7 +694,8 @@ class MCPServer:
 
         ``scopes`` are the OAuth scopes the caller's token must carry, every one
         of them; a token missing one is answered ``-32006`` with the missing
-        scopes in ``requiredScopes``. ``scopes=()`` is refused, since it would
+        scopes in ``requiredScopes``. A bare string is one scope, as
+        ``ScopeRequired`` reads it. ``scopes=()`` is refused, since it would
         read as a gate and admit every caller. The scope gate is a transport
         check and does not count as the tool's guard for
         ``REQUIRE_TOOL_PERMISSIONS``, which reads the spec's own
@@ -1294,7 +1295,7 @@ class MCPServer:
         always_listed: bool = False,
         cache_ttl_ms: int | UnsetType = UNSET,
         completions: dict[str, Callable[..., Any]] | None = None,
-        scopes: tuple[str, ...] | None = None,
+        scopes: str | Sequence[str] | None = None,
     ) -> ResourceBinding:
         """Register a ``SelectorSpec`` as an MCP resource.
 
@@ -1438,7 +1439,7 @@ class MCPServer:
         always_listed: bool,
         cache_ttl_ms: int | UnsetType,
         completions: dict[str, Callable[..., Any]] | None,
-        scopes: tuple[str, ...] | None,
+        scopes: str | Sequence[str] | None,
         drf_services_knobs: Mapping[str, bool],
     ) -> KernelResourceBinding:
         """``register_resource``'s kernel form, past the split on its first argument.

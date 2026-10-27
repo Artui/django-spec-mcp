@@ -949,7 +949,8 @@ What changes against the drf-services tools:
   the schema and filled by the server.
 - **`scopes=` is the transport's gate.** A token must carry every scope named;
   one that is missing any is answered `-32006` with the missing ones in
-  `requiredScopes`. `scopes=()` is refused, since it reads as a gate and admits
+  `requiredScopes`. A bare string is one scope, as `ScopeRequired` reads it.
+  `scopes=()` is refused, since it reads as a gate and admits
   everyone.
 - **Registration refuses what a kernel tool cannot mean**: a spec that is not a
   kernel spec (`TypeError`), `paginate=` / `max_page_size=` on a service tool or
