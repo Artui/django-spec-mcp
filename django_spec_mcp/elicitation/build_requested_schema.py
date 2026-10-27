@@ -30,13 +30,12 @@ def build_requested_schema(
     wrong.
 
     **``admitted`` is the argument names the tool takes from a client**, when
-    the caller knows them: a kernel spec's parameters, less the keys the server
-    owns, under a closed argument set. The answer comes back as an ordinary
-    argument, so a property outside that set is one the call then refuses as
-    unknown, after the user has filled it in; it is refused here instead, as an
-    unrenderable one is. ``None`` asks nothing of the names, for a caller that
-    does not know the set: a drf-services tool, or a kernel one passing unknown
-    arguments through.
+    the caller knows them: a kernel spec's parameters, less the names the server
+    fills. The answer comes back as an ordinary argument, so a property outside
+    that set is one the call then refuses as unknown (or drops), after the user
+    has filled it in; it is refused here instead, as an unrenderable one is.
+    ``None`` asks nothing of the names, for a caller that does not know the set:
+    a drf-services tool.
     """
     properties: dict[str, Any] = {}
     required: list[str] = []

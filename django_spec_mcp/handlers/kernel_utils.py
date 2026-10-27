@@ -35,6 +35,7 @@ from django_service_specs import (
     is_queryset,
     paginate_output,
     present_for_audience,
+    server_owned_keys,
     spec_output_schema,
 )
 
@@ -762,6 +763,29 @@ def resource_refusal(exc: DispatchError | ServiceError, scene: KernelRefusalScen
     if isinstance(answer, JsonRpcError):
         return answer
     raise exc
+
+
+def admitted_arguments(binding: KernelToolBinding, pool_seeds: PoolSeeds) -> frozenset[str]:
+    """The argument names a client may answer an ``AdditionalInputRequired`` under.
+
+    The spec's parameters less every name the server fills, since an answer comes
+    back as an argument the closed set refuses by name: the binding's
+    ``server_arguments`` (a parameter the server answers per mount) and the
+    kernel's ``server_owned_keys`` (what a provider or a pool seed always fills),
+    the two lists ``kernel_tool_input_schema`` withholds from the advertised
+    schema. The set is closed under every ``unknown_arguments`` a kernel tool can
+    register with: ``REJECT`` refuses an answer under any other name and
+    ``IGNORE`` drops it, so the service would ask again (``PASSTHROUGH`` is
+    refused at registration).
+
+    Each subtraction is held by a test that fails without it:
+    ``test_a_question_whose_answer_the_spec_refuses_is_an_internal_error`` (the
+    parameters), ``test_a_field_the_server_fills_is_not_admitted`` (the server
+    arguments) and ``test_a_key_a_provider_fills_is_not_admitted`` (the owned keys).
+    """
+    return frozenset(binding.spec.parameters().names()) - (
+        binding.server_arguments.names() | server_owned_keys(binding.spec, pool_seeds=pool_seeds)
+    )
 
 
 def _coerce_int(value: Any, *, default: int) -> int:

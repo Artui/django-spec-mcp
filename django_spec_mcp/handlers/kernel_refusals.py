@@ -93,7 +93,12 @@ def _input_required(
     (no round, so a service error)."""
     if scene.input_round is None:
         return service_error_result(exc)
-    return ask_for_input(exc, scene.input_round.prior, scene.input_round.context)
+    return ask_for_input(
+        exc,
+        scene.input_round.prior,
+        scene.input_round.context,
+        admitted=scene.input_round.admitted,
+    )
 
 
 def _service_error(exc: ServiceError, scene: KernelRefusalScene) -> ToolResult:

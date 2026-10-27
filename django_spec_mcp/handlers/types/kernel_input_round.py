@@ -17,6 +17,8 @@ class KernelInputRound:
 
     prior: ResolvedInput
     context: MCPCallContext
+    admitted: frozenset[str]
+    """The argument names an answer may be given under (``admitted_arguments``)."""
 
 
 __all__ = ["KernelInputRound"]

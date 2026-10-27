@@ -14,6 +14,7 @@ registration.
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from typing import Any
 
 from django.core.exceptions import ImproperlyConfigured
@@ -93,6 +94,8 @@ def ask_for_input(
     exc: AdditionalInputRequired,
     prior: ResolvedInput,
     context: MCPCallContext,
+    *,
+    admitted: Collection[str] | None = None,
 ) -> dict[str, Any] | JsonRpcError:
     """Turn a service's *"I need something else"* into whatever this client can use.
 
@@ -112,6 +115,11 @@ def ask_for_input(
     elicitation client and a task worker with nobody to ask are all served
     better by being told what is missing — a model reading the requested shape
     can supply the argument itself on the next call.
+
+    ``admitted`` is the argument names a kernel tool takes (``admitted_arguments``):
+    a question for any other name is the malformed schema of (1), since its answer
+    would come back as an argument the call refuses or drops. ``None`` for a
+    drf-services tool, which has no such set.
     """
     if not exc.schema:
         # A message with no schema says *something* is needed without saying
@@ -119,7 +127,7 @@ def ask_for_input(
         return _degraded(exc)
 
     try:
-        requested_schema: dict[str, Any] = build_requested_schema(exc.schema)
+        requested_schema: dict[str, Any] = build_requested_schema(exc.schema, admitted=admitted)
     except ImproperlyConfigured as bad_schema:
         return JsonRpcError(JsonRpcErrorCode.INTERNAL_ERROR, str(bad_schema))
 
