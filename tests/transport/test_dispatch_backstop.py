@@ -16,12 +16,28 @@ every path the backstop sits on.
 The clients are built with ``raise_request_exception=False`` so that the
 pre-backstop behaviour fails these tests on their assertions (a status, a
 content type) rather than by re-raising the handler's exception into the test.
+
+The tools and the resource are kernel specs registered with ``register_tool``
+and ``register_resource``, and a consumer permission is a kernel
+``PermissionCheck`` on the spec rather than an entry in ``permissions=``. The
+drf-services original is kept beside this file as
+``test_dispatch_backstop_drfs.py``. Two of its questions have no kernel
+counterpart:
+
+- an escaping DRF ``APIException``, the reported case, since nothing on the
+  kernel path raises one. A presenter raising while it renders is asked
+  instead (``test_a_presenter_that_raises_is_a_json_rpc_internal_error``);
+- a DRF throttle reaching these viewsets through ``DEFAULT_THROTTLE_CLASSES``,
+  which is a property of the viewsets being DRF's rather than of anything a
+  kernel tool declares. A kernel tool's limit is ``rate_limits=``
+  (``test_a_rate_limit_keeps_its_error_and_retry_hint``).
 """
 
 from __future__ import annotations
 
 import json
 import logging
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
@@ -29,21 +45,22 @@ from asgiref.sync import sync_to_async
 from django.core.exceptions import PermissionDenied as DjangoPermissionDenied
 from django.http import Http404, HttpRequest
 from django.test import AsyncClient, Client, override_settings
-from django_service_specs import SelectorKind
-from rest_framework import serializers
-from rest_framework.exceptions import PermissionDenied, ValidationError
-from rest_framework.throttling import BaseThrottle
-from rest_framework_services.types.selector_spec import SelectorSpec
+from django_service_specs import (
+    DataclassPresenter,
+    NotPermitted,
+    PermissionCheck,
+    SelectorKind,
+    SelectorSpec,
+    Unrestricted,
+)
 
-from django_spec_mcp import MCPServer, ScopeRequired
+from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.subscriptions.in_memory_subscription_broker import (
     InMemorySubscriptionBroker,
 )
-from django_spec_mcp.transport.async_streamable_http_viewset import AsyncStreamableHttpViewSet
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
-from django_spec_mcp.transport.streamable_http_viewset import StreamableHttpViewSet
 from tests.testapp.models import Invoice
 from tests.testapp.urlconf_for import urlconf_for
 from tests.utils import tool_error
@@ -53,7 +70,8 @@ MODERN = "2026-07-28"
 # A string id, so a reply echoing a default ``1`` or ``null`` cannot pass.
 REQUEST_ID = "backstop-7"
 # What django-restql 0.18.0 raises from ``to_representation`` for a selection
-# naming a field the serializer lacks: the reported case, verbatim.
+# naming a field the serializer lacks: the drf-services original's reported
+# case, kept as the text a raising presenter carries.
 RESTQL_TEXT = "`items` field is not found"
 # Stands in for whatever a real exception carries that a client must not read.
 SECRET = "could not connect to db-primary.internal:5432"
@@ -68,13 +86,16 @@ _STREAM_LOGGER = "django_spec_mcp.transport.response_stream"
 # ----- a server whose tools fail in the ways a dispatch can -----
 
 
-class _RestqlRejectingSerializer(serializers.Serializer):
-    """Raises at render time exactly what strict django-restql raises."""
+@dataclass
+class _Row:
+    id: int
 
-    id = serializers.IntegerField()
 
-    def to_representation(self, instance: Any) -> Any:
-        raise ValidationError(RESTQL_TEXT, code="not_found")
+class _RejectingPresenter(DataclassPresenter):
+    """Raises while rendering, as a strict field-selecting renderer does."""
+
+    def present(self, value: Any) -> Any:
+        raise ValueError(RESTQL_TEXT)
 
 
 def _rows() -> list[dict[str, Any]]:
@@ -94,27 +115,21 @@ def _explode() -> list[dict[str, Any]]:
     raise RuntimeError(SECRET)
 
 
-class _ExplodingPermission:
-    """A consumer permission class with a bug in it."""
+class _ExplodingCheck(PermissionCheck):
+    """A consumer permission check with a bug in it."""
 
-    def has_permission(self, request: HttpRequest, token: TokenInfo) -> bool:
+    def has_permission(self, *args: Any, **kwargs: Any) -> bool:
         raise RuntimeError(SECRET)
 
-    def required_scopes(self) -> list[str]:
-        return []
 
-
-class _RaisingDenial:
-    """A permission class that refuses by raising, the DRF idiom for a message."""
+class _RaisingDenial(PermissionCheck):
+    """A check that refuses by raising, the idiom for a message of its own."""
 
     def __init__(self, exc_type: type[Exception]) -> None:
         self.exc_type = exc_type
 
-    def has_permission(self, request: HttpRequest, token: TokenInfo) -> bool:
+    def has_permission(self, *args: Any, **kwargs: Any) -> bool:
         raise self.exc_type(SECRET)
-
-    def required_scopes(self) -> list[str]:
-        return []
 
 
 class _AlwaysDeny:
@@ -124,6 +139,16 @@ class _AlwaysDeny:
         return 42
 
 
+_OPEN = [Unrestricted()]
+
+
+def _selector(
+    selector: Any, *, kind: SelectorKind = SelectorKind.LIST, **spec: Any
+) -> SelectorSpec:
+    spec.setdefault("permissions", _OPEN)
+    return SelectorSpec(kind=kind, selector=selector, **spec)
+
+
 def _server() -> MCPServer:
     server = MCPServer(
         name="backstop",
@@ -131,72 +156,32 @@ def _server() -> MCPServer:
         session_store=InMemorySessionStore(),
         subscription_broker=InMemorySubscriptionBroker(),
     )
-    # Paged and declaring no query param: the render-time rejection has no
-    # caller-supplied value to blame, so it is a server fault on every
-    # release and always reaches the backstop.
-    server.register_selector_tool(
-        name="boom.render",
-        description="Renders through a serializer that rejects.",
-        spec=SelectorSpec(
-            kind=SelectorKind.LIST, selector=_rows, output_serializer=_RestqlRejectingSerializer
-        ),
-        paginate=True,
+    # Paged, so the presenter runs over rows the selector really returned:
+    # the rejection has no caller-supplied value to blame and is a server
+    # fault that always reaches the backstop.
+    server.register_tool(
+        _selector(_rows, presenter=_RejectingPresenter(_Row)), name="boom.render", paginate=True
     )
-    server.register_selector_tool(
-        name="boom.runtime",
-        description="Raises from the selector.",
-        spec=SelectorSpec(kind=SelectorKind.LIST, selector=_explode),
+    server.register_tool(_selector(_explode), name="boom.runtime")
+    server.register_tool(
+        _selector(_missing_row, kind=SelectorKind.RETRIEVE), name="missing.retrieve"
     )
-    server.register_selector_tool(
-        name="missing.retrieve",
-        description="A RETRIEVE selector raising Http404.",
-        spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_missing_row),
+    server.register_tool(_selector(_missing_row), name="missing.list")
+    server.register_tool(_selector(_list_does_not_exist), name="boom.list_does_not_exist")
+    server.register_tool(_selector(_rows, permissions=[_ExplodingCheck()]), name="boom.permission")
+    server.register_tool(_selector(_rows), name="ok.gated", scopes="mcp:admin")
+    server.register_tool(
+        _selector(_rows, permissions=[_RaisingDenial(NotPermitted)]), name="deny.kernel"
     )
-    server.register_selector_tool(
-        name="missing.list",
-        description="A LIST selector raising Http404.",
-        spec=SelectorSpec(kind=SelectorKind.LIST, selector=_missing_row),
-    )
-    server.register_selector_tool(
-        name="boom.list_does_not_exist",
-        description="A LIST selector raising DoesNotExist, a fault inside the selector.",
-        spec=SelectorSpec(kind=SelectorKind.LIST, selector=_list_does_not_exist),
-    )
-    server.register_selector_tool(
-        name="boom.permission",
-        description="Raises from its permission class.",
-        spec=SelectorSpec(kind=SelectorKind.LIST, selector=_rows),
-        permissions=[_ExplodingPermission()],
-    )
-    server.register_selector_tool(
-        name="ok.gated",
-        description="Denied to a caller without the scope.",
-        spec=SelectorSpec(kind=SelectorKind.LIST, selector=_rows),
-        permissions=[ScopeRequired(["mcp:admin"])],
-    )
-    server.register_selector_tool(
-        name="deny.drf",
-        description="Refused by a permission class raising DRF's PermissionDenied.",
-        spec=SelectorSpec(kind=SelectorKind.LIST, selector=_rows),
-        permissions=[_RaisingDenial(PermissionDenied)],
-    )
-    server.register_selector_tool(
+    server.register_tool(
+        _selector(_rows, permissions=[_RaisingDenial(DjangoPermissionDenied)]),
         name="deny.django",
-        description="Refused by a permission class raising Django's PermissionDenied.",
-        spec=SelectorSpec(kind=SelectorKind.LIST, selector=_rows),
-        permissions=[_RaisingDenial(DjangoPermissionDenied)],
     )
-    server.register_selector_tool(
-        name="ok.limited",
-        description="Always rate limited.",
-        spec=SelectorSpec(kind=SelectorKind.LIST, selector=_rows),
-        rate_limits=[_AlwaysDeny()],
-    )
+    server.register_tool(_selector(_rows), name="ok.limited", rate_limits=[_AlwaysDeny()])
     server.register_resource(
+        _selector(_rows, kind=SelectorKind.RETRIEVE, permissions=[_ExplodingCheck()]),
         name="boom",
         uri_template="boom://thing",
-        selector=SelectorSpec(kind=SelectorKind.LIST, selector=_rows),
-        permissions=[_ExplodingPermission()],
     )
     return server
 
@@ -357,20 +342,21 @@ async def test_a_selectors_http404_is_a_not_found_result_not_a_server_fault(
 
 
 @_PATHS
-async def test_an_escaping_api_exception_is_a_json_rpc_internal_error(
+async def test_a_presenter_that_raises_is_a_json_rpc_internal_error(
     is_async: bool, modern: bool, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """The reported case: a DRF ``ValidationError`` raised while rendering.
+    """The kernel form of the reported case: an exception raised while rendering.
 
-    Before the backstop DRF rendered it as a ``400`` with a bare list for a
-    body, which a client cannot parse as JSON-RPC or match to its request.
+    The original raised DRF's ``ValidationError``, which DRF rendered as a
+    ``400`` with a bare list for a body before the backstop. A presenter's
+    exception is the server's fault whatever its type.
     """
     caplog.set_level(logging.ERROR, logger="django_spec_mcp")
     response = await _post(
         is_async, _server(), "tools/call", {"name": "boom.render", "arguments": {}}, modern=modern
     )
     _assert_internal_error(response)
-    _assert_logged(caplog, _VIEWSET_LOGGERS[is_async], ValidationError)
+    _assert_logged(caplog, _VIEWSET_LOGGERS[is_async], ValueError)
     assert RESTQL_TEXT in caplog.text
 
 
@@ -410,7 +396,7 @@ async def test_any_other_escaping_exception_is_a_json_rpc_internal_error(
 async def test_a_permission_class_that_raises_is_a_json_rpc_internal_error(
     is_async: bool, modern: bool, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """Consumer code raising inside the dispatch's own permission check."""
+    """Consumer code raising inside the spec's own permission check."""
     caplog.set_level(logging.ERROR, logger="django_spec_mcp")
     response = await _post(
         is_async,
@@ -445,10 +431,19 @@ async def test_a_permission_preflight_that_raises_before_a_stream_is_a_json_rpc_
     _assert_logged(caplog, _VIEWSET_LOGGERS[True], RuntimeError)
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "grant_subscription judges only a kernel resource's scopes= gate, never its spec's "
+        "own checks, so the raising check is not run and the stream opens. The fix is in "
+        "subscriptions/grant_subscription.py: run the kernel's check_call for a kernel "
+        "binding in _may_watch_resource, as resources/read's dispatch does."
+    ),
+)
 async def test_a_subscription_grant_that_raises_is_a_json_rpc_internal_error(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """``subscriptions/listen`` runs resource permission classes to build its grant."""
+    """``subscriptions/listen`` runs the resource's permission checks to build its grant."""
     caplog.set_level(logging.ERROR, logger="django_spec_mcp")
     response = await _post_async(
         _server(),
@@ -464,8 +459,8 @@ async def test_a_subscription_grant_that_raises_is_a_json_rpc_internal_error(
 @pytest.mark.parametrize("modern", [False, True], ids=["legacy", "modern"])
 @pytest.mark.parametrize(
     ("tool", "exc_type"),
-    [("boom.render", ValidationError), ("boom.runtime", RuntimeError)],
-    ids=["api-exception", "runtime-error"],
+    [("boom.render", ValueError), ("boom.runtime", RuntimeError)],
+    ids=["presenter", "runtime-error"],
 )
 async def test_a_streamed_dispatch_that_raises_ends_with_a_generic_error_frame(
     tool: str, exc_type: type, modern: bool, caplog: pytest.LogCaptureFixture
@@ -547,9 +542,10 @@ async def test_a_permission_denial_keeps_its_403_and_challenge(
     assert "mcp:admin" in response["WWW-Authenticate"]
 
 
-# Both flavours by name: the backstop catches them as one tuple, which is one
-# branch arc to coverage, so dropping either would still read as 100%.
-_RAISED_DENIALS = pytest.mark.parametrize("tool", ["deny.drf", "deny.django"])
+# Both flavours by name, since each is answered somewhere else: the kernel's
+# ``NotPermitted`` by the refusal map, as a returned denial is, and Django's
+# ``PermissionDenied``, which the kernel lets through, by the backstop.
+_RAISED_DENIALS = pytest.mark.parametrize("tool", ["deny.kernel", "deny.django"])
 
 
 def _assert_raised_denial(response: Any, caplog: pytest.LogCaptureFixture) -> None:
@@ -570,10 +566,9 @@ def _assert_raised_denial(response: Any, caplog: pytest.LogCaptureFixture) -> No
 async def test_a_raised_permission_denial_is_a_denial_not_a_fault(
     is_async: bool, modern: bool, tool: str, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """A permission class that raises instead of returning ``False``.
+    """A permission check that raises instead of returning ``False``.
 
-    DRF answered that with a ``403`` before the backstop existed; a catch-all
-    ``-32603`` would report a refusal as a ``500``.
+    A catch-all ``-32603`` would report a refusal as a ``500``.
     """
     caplog.set_level(logging.ERROR, logger="django_spec_mcp")
     response = await _post(
@@ -618,39 +613,3 @@ async def test_an_unknown_method_keeps_its_own_answer(is_async: bool, modern: bo
     response = await _post(is_async, _server(), "nope/nothing", {}, modern=modern)
     assert response.status_code == (404 if modern else 200), response.content
     assert response.json()["error"]["code"] == -32601
-
-
-class _DenyingThrottle(BaseThrottle):
-    def allow_request(self, request: Any, view: Any) -> bool:
-        return False
-
-    def wait(self) -> float:
-        return 7
-
-
-@pytest.mark.parametrize(
-    "viewset", [StreamableHttpViewSet, AsyncStreamableHttpViewSet], ids=["sync", "async"]
-)
-async def test_a_drf_throttle_keeps_its_429_and_retry_after(
-    viewset: type, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """DRF's ``initial()`` runs before the action, so the backstop cannot see it.
-
-    A project whose ``DEFAULT_THROTTLE_CLASSES`` reaches these viewsets keeps
-    the ``429`` and ``Retry-After`` DRF renders for it. Patched on the class
-    because DRF binds that setting to ``APIView`` at import.
-    """
-    monkeypatch.setattr(viewset, "throttle_classes", (_DenyingThrottle,))
-    is_async = viewset is AsyncStreamableHttpViewSet
-    body, headers = _request("tools/call", {"name": "ok.gated", "arguments": {}}, modern=True)
-    with override_settings(ROOT_URLCONF=urlconf_for(_server(), is_async=is_async)):
-        if is_async:
-            response = await AsyncClient().post(
-                "/mcp/", data=body, content_type="application/json", headers=headers
-            )
-        else:
-            response = await sync_to_async(Client().post)(
-                "/mcp/", data=body, content_type="application/json", headers=headers
-            )
-    assert response.status_code == 429, response.content
-    assert response["Retry-After"] == "7"

@@ -46,7 +46,7 @@ repos:
         entry: '(?<![A-Za-z0-9])(SPEC|SURF|DISP|KEY|FILT|BULK|NEST|NAME|THINK|VOICE|THEME|WELL|PAGE|CARD|REST|I18N|CUST|TOOL|PAI|AUTHZ|CONF|AGH|OAS|WCH|HYG|ADOPT|ANNO|ASYNC|ERR|DUP|PROTO|SEC|VER|GATE|STATE|SESS|CTX|AUDIT|HITL|CODE|STEP|SHARE|SKILL|CAP|MOUNT|SAN|PF|PROV|SCH|LIFE|SUB|CI|DOC|EX|HOST|WIN|REL|CONV|COMM|LINT|PURGE|MCPX|A2A|ATT|ADMIN|MULTI|OFFK|QP|DEPS|CORE|NAV|TSET|MRTR|BOUND|CHAT|NICE|PRE|PIPE|EMIT|SEED|POOL)-\d|(?<![A-Za-z0-9])(Phase|Wave)\s\d'
         language: pygrep
         types: [text]
-        exclude: '^(\.pre-commit-config\.yaml|tests/transport/test_async_streamable_http_view\.py)$'
+        exclude: '^(\.pre-commit-config\.yaml|tests/transport/test_async_streamable_http_view(_drfs)?\.py)$'
 
 
       # Scoped to the package, because that is exactly what ty checks. Under

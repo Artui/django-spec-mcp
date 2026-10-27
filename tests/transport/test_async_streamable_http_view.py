@@ -1,3 +1,18 @@
+"""The async streamable HTTP view, serving the kernel twins of the test app's operations.
+
+Every call here reaches a kernel spec registered with ``register_tool`` or
+``register_resource``: ``build_kernel_server`` mounted on the async URL conf,
+whose ``invoices.create`` and ``invoice`` resource carry the names the
+drf-services server gives them. The drf-services original read
+``tests.testapp.async_urls`` and is kept beside this file as
+``test_async_streamable_http_view_drfs.py``.
+
+One of its questions has no kernel counterpart: an exception inside an action
+being routed through DRF's ``handle_exception``. That is a property of the view
+being a DRF viewset, not of anything a kernel spec declares, and what a kernel
+tool raising is answered with is held by ``test_dispatch_backstop.py``.
+"""
+
 from __future__ import annotations
 
 import asyncio
@@ -8,7 +23,10 @@ import pytest
 from django import VERSION as DJANGO_VERSION
 from django.http import HttpRequest
 from django.test import AsyncClient, RequestFactory, override_settings
+from django_service_specs import PermissionCheck, ServiceSpec, Unrestricted
 
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.registry.resource_registry import ResourceRegistry
@@ -18,15 +36,15 @@ from django_spec_mcp.transport.async_streamable_http_viewset import (
     AsyncStreamableHttpViewSet,
 )
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
-from tests.testapp.mcp import build_server
+from tests.testapp.mcp import build_kernel_server
 from tests.testapp.urlconf_for import urlconf_for
 from tests.utils import nested_past_the_decoders_limit_here, on_a_bounded_stack
 
 
 @pytest.fixture
 def async_urlconf():
-    """Switch the test app to its async URL conf for the duration of one test."""
-    with override_settings(ROOT_URLCONF="tests.testapp.async_urls"):
+    """Mount the kernel twin server on the async URL conf for one test."""
+    with override_settings(ROOT_URLCONF=urlconf_for(build_kernel_server(), is_async=True)):
         yield
 
 
@@ -73,7 +91,7 @@ async def test_async_tools_list(async_urlconf) -> None:
 
 @pytest.mark.django_db(transaction=True)
 async def test_async_tools_call_creates_invoice(async_urlconf) -> None:
-    """The async dispatch path runs ``arun_service`` end-to-end against a real DB."""
+    """The async dispatch path runs the kernel's ``adispatch`` end-to-end against a real DB."""
     client = AsyncClient()
     sid = await _initialize(client)
     response = await client.post(
@@ -312,7 +330,7 @@ async def test_async_missing_protocol_version(async_urlconf) -> None:
 
 
 async def test_async_post_missing_protocol_version_allowed_when_disabled() -> None:
-    server = build_server(
+    server = build_kernel_server(
         config=build_mcp_config(allowed_origins=["*"], require_protocol_version_header=False)
     )
     with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=True)):
@@ -335,7 +353,7 @@ async def test_async_get_missing_protocol_version_allowed_when_disabled() -> Non
     on, the request progresses past that check and 404s on the missing session
     id instead — which is what we assert here.
     """
-    server = build_server(
+    server = build_kernel_server(
         config=build_mcp_config(allowed_origins=["*"], require_protocol_version_header=False)
     )
     with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=True)):
@@ -344,7 +362,9 @@ async def test_async_get_missing_protocol_version_allowed_when_disabled() -> Non
 
 
 async def test_async_body_too_large() -> None:
-    server = build_server(config=build_mcp_config(allowed_origins=["*"], max_request_bytes=10))
+    server = build_kernel_server(
+        config=build_mcp_config(allowed_origins=["*"], max_request_bytes=10)
+    )
     with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=True)):
         response = await AsyncClient().post(
             "/mcp/", data=b"X" * 256, content_type="application/json"
@@ -353,7 +373,9 @@ async def test_async_body_too_large() -> None:
 
 
 async def test_async_blocked_origin_post() -> None:
-    server = build_server(config=build_mcp_config(allowed_origins=["https://allowed.example"]))
+    server = build_kernel_server(
+        config=build_mcp_config(allowed_origins=["https://allowed.example"])
+    )
     with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=True)):
         response = await AsyncClient().post(
             "/mcp/",
@@ -368,14 +390,18 @@ async def test_async_blocked_origin_post() -> None:
 
 
 async def test_async_blocked_origin_get() -> None:
-    server = build_server(config=build_mcp_config(allowed_origins=["https://allowed.example"]))
+    server = build_kernel_server(
+        config=build_mcp_config(allowed_origins=["https://allowed.example"])
+    )
     with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=True)):
         response = await AsyncClient().get("/mcp/", headers={"Origin": "https://blocked.example"})
     assert response.status_code == 403
 
 
 async def test_async_blocked_origin_delete() -> None:
-    server = build_server(config=build_mcp_config(allowed_origins=["https://allowed.example"]))
+    server = build_kernel_server(
+        config=build_mcp_config(allowed_origins=["https://allowed.example"])
+    )
     with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=True)):
         response = await AsyncClient().delete(
             "/mcp/", headers={"Origin": "https://blocked.example"}
@@ -554,42 +580,6 @@ async def test_acall_invokes_sync_function_via_thread() -> None:
     assert await acall(produce, 21) == 42
 
 
-async def test_async_dispatch_routes_exceptions_through_handle_exception() -> None:
-    """An exception inside an action surfaces via DRF's ``handle_exception``.
-
-    The async ``dispatch`` mirrors :meth:`APIView.dispatch`'s ``try/except``
-    so DRF's error handling (e.g. ``exception_handler`` setting) keeps
-    working. Trigger by giving the view a handler that raises.
-    """
-    from rest_framework.exceptions import APIException
-
-    from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-    from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
-
-    class _RaisingViewSet(AsyncStreamableHttpViewSet):
-        async def handle_jsonrpc(self, request):  # noqa: ARG002
-            raise APIException("boom")
-
-    view = _RaisingViewSet.as_view(
-        ASYNC_STREAMABLE_HTTP_ACTION_MAP,
-        tools=ToolRegistry(),
-        resources=ResourceRegistry(),
-        auth_backend=AllowAnyBackend(),
-        session_store=InMemorySessionStore(),
-    )
-    factory = RequestFactory()
-    request = factory.post(
-        "/mcp/",
-        data="{}",
-        content_type="application/json",
-        headers={"Mcp-Protocol-Version": "2025-11-25"},
-    )
-    response = await view(request)
-    # DRF's default ``handle_exception`` maps ``APIException`` to its
-    # configured status (500 for the base class without ``status_code``).
-    assert response.status_code == 500
-
-
 # ----- middleware opt-out flags -----
 #
 # Django's ``CsrfViewMiddleware`` and ``LoginRequiredMiddleware`` read their
@@ -646,57 +636,76 @@ async def test_async_delete_passes_csrf_middleware(async_urlconf) -> None:
     assert response.status_code == 204
 
 
-@pytest.mark.django_db(transaction=True)
-async def test_async_permission_denial_is_403_with_a_scope_challenge() -> None:
-    """The async transport maps a denial the same way the sync one does.
+class _Deny(PermissionCheck):
+    def has_permission(self, *args: Any, **kwargs: Any) -> bool:
+        return False
 
-    Added because the 403 mapping landed in both viewsets but only the sync
-    path had a denial test — the async branch was live and uncovered, which
-    is how the two paths drift.
+
+def _gated_server() -> MCPServer:
+    """A tool behind a scope the ``AllowAnyBackend`` token lacks, and one its spec denies.
+
+    ``AllowAnyBackend`` authenticates the request but issues no scopes, so the
+    first denial is a *scope* failure, the branch that carries ``scope=`` in
+    the challenge. The second is the spec's own check, which names no scope.
     """
-    from rest_framework_services.types.service_spec import ServiceSpec
-
-    from django_spec_mcp import MCPServer, ScopeRequired
-    from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-
-    def _noop() -> dict[str, str]:
-        return {}
-
-    # AllowAnyBackend authenticates the request but issues no scopes, so the
-    # denial is a *scope* failure — the branch that carries `scope=` in the
-    # challenge. Without an explicit backend this server would default to DOT's
-    # and 401 before ever reaching the permission check.
     server = MCPServer(
-        name="async-gated",
-        auth_backend=AllowAnyBackend(),
-        session_store=InMemorySessionStore(),
+        name="async-gated", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore()
     )
-    server.register_service_tool(
+    server.register_tool(
+        ServiceSpec(service=lambda: {}, permissions=[Unrestricted()]),
         name="gated",
-        spec=ServiceSpec(service=_noop, atomic=False),
         description="Needs a scope the AllowAnyBackend token does not carry.",
-        permissions=[ScopeRequired(["invoices:write"])],
+        scopes="invoices:write",
     )
+    server.register_tool(
+        ServiceSpec(service=lambda: {}, permissions=[_Deny()]),
+        name="denied",
+        description="Denied by its spec's own check.",
+    )
+    return server
 
-    with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=True)):
+
+async def _call_gated(name: str) -> Any:
+    with override_settings(ROOT_URLCONF=urlconf_for(_gated_server(), is_async=True)):
         client = AsyncClient()
         sid = await _initialize(client)
-        response = await client.post(
+        return await client.post(
             "/mcp/",
             data=json.dumps(
                 {
                     "jsonrpc": "2.0",
                     "id": 9,
                     "method": "tools/call",
-                    "params": {"name": "gated", "arguments": {}},
+                    "params": {"name": name, "arguments": {}},
                 }
             ),
             content_type="application/json",
             headers={"Mcp-Protocol-Version": "2025-11-25", "Mcp-Session-Id": sid},
         )
 
+
+@pytest.mark.django_db(transaction=True)
+async def test_async_permission_denial_is_403_with_a_scope_challenge() -> None:
+    """The async transport maps a denial the same way the sync one does.
+
+    Added because the 403 mapping landed in both viewsets but only the sync
+    path had a denial test: the async branch was live and uncovered, which
+    is how the two paths drift.
+    """
+    response = await _call_gated("gated")
     assert response.status_code == 403, response.content
     assert response.json()["error"]["data"]["requiredScopes"] == ["invoices:write"]
     challenge = response["WWW-Authenticate"]
     assert 'error="insufficient_scope"' in challenge
     assert 'scope="invoices:write"' in challenge
+
+
+@pytest.mark.django_db(transaction=True)
+async def test_async_spec_check_denial_is_403_with_a_plain_challenge() -> None:
+    """The kernel's ``NotPermitted`` reaches the wire as the scope gate's denial
+    does, a ``403`` with ``-32006``, and its challenge names no scope, since the
+    check asked for none."""
+    response = await _call_gated("denied")
+    assert response.status_code == 403, response.content
+    assert response.json()["error"] == {"code": -32006, "message": "Insufficient permission"}
+    assert "scope=" not in response["WWW-Authenticate"]
