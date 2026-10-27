@@ -883,6 +883,104 @@ ever be tools. The resource surface fits the plain, addressable read — a singl
 object by URI, no filtering, no gate beyond `permission_classes` — and the
 richer the spec, the more likely a tool is the honest home for it.
 
+## Kernel specs: `register_tool` { #kernel-specs }
+
+A `django_service_specs` `ServiceSpec` or `SelectorSpec` registers through
+`MCPServer.register_tool`, beside the drf-services path rather than in place of
+it. The spec's class decides the kind of tool: a `ServiceSpec` is a service
+tool, a `SelectorSpec` a selector tool.
+
+```python
+from django_service_specs import (
+    DataclassPresenter,
+    DataclassValidator,
+    Parameter,
+    Parameters,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+)
+
+server.register_tool(
+    ServiceSpec(
+        service=record_invoice,
+        validator=DataclassValidator(InvoiceInput),
+        presenter=DataclassPresenter(InvoiceOutput),
+        permissions=[Unrestricted()],
+    ),
+    name="invoices.create",
+    description="Create an invoice.",
+)
+server.register_tool(
+    SelectorSpec(
+        kind=SelectorKind.LIST,
+        selector=list_invoices,
+        presenter=DataclassPresenter(InvoiceOutput),
+        permissions=[Unrestricted()],
+    ),
+    name="invoices.list",
+    description="List invoices.",
+    paginate=True,
+)
+server.register_resource(
+    SelectorSpec(
+        kind=SelectorKind.RETRIEVE,
+        selector=invoice_by_pk,
+        reads=Parameters([Parameter("pk", "integer", required=True)]),
+        presenter=DataclassPresenter(InvoiceOutput),
+        permissions=[Unrestricted()],
+    ),
+    name="invoice",
+    uri_template="invoices://{pk}",
+)
+```
+
+What changes against the drf-services tools:
+
+- **The call is the kernel's `dispatch` / `adispatch`.** The principal is the
+  token's user, an `AnonymousUser` for `call_tool(..., user=None)`, and `call_context["request"]` is the transport's request, with
+  the resolved token as `request.mcp_token`. The spec's own `permissions`
+  answer the call: a refused principal is `-32006` "Insufficient permission".
+- **The schemas are the kernel's** `spec_input_schema` / `spec_output_schema`.
+  A service tool's arguments are its spec's parameters, spread at the top level
+  of `arguments`, with no `data` key around them. `unknown_arguments=` reaches
+  both the schema and the call, and `server_arguments=` names are left out of
+  the schema and filled by the server.
+- **`scopes=` is the transport's gate.** A token must carry every scope named;
+  one that is missing any is answered `-32006` with every declared scope in
+  `requiredScopes`, not only the missing ones. A bare string is one scope, as
+  `ScopeRequired` reads it. `scopes=()` is refused, since it reads as a gate
+  and admits everyone. A `KernelToolBinding` or `KernelResourceBinding` built
+  by hand and passed to `server.tools.register` or `server.resources.register`
+  derives the same gate from its own `scopes` and refuses `()` the same way.
+- **A spec declaring `permissions=None` is unguarded.** With
+  `REQUIRE_TOOL_PERMISSIONS` on, the default, registering one is refused. With
+  it off, the tool or resource registers with one `UnguardedToolWarning` and
+  every call runs without a permission check, under a kernel `Grant` minted for
+  that spec and the calling principal. A spec with permissions of its own is
+  never granted: its checks run whatever the setting says. Only
+  `register_tool` and `register_resource` grant; a kernel `SpecRegistry`
+  refuses such a spec when it is built, so `register_tools` never receives
+  one. A `KernelToolBinding` or `KernelResourceBinding`
+  built by hand and passed to `server.tools.register` or
+  `server.resources.register` is never granted, whatever the setting, so the
+  kernel refuses its unguarded spec at the call and the operation does not run.
+  An operation open to every caller declares `[Unrestricted()]` instead. The
+  scope gate does not count as a guard.
+- **Registration refuses what a kernel tool cannot mean**: a spec that is not a
+  kernel spec (`TypeError`), `paginate=` / `max_page_size=` on a service tool or
+  a `RETRIEVE`, `invalidates=` on a selector tool, a `task_policy=` other than
+  the default (not yet supported), and `UnknownArguments.PASSTHROUGH`.
+- **A resource is a `RETRIEVE`.** `register_resource` takes the spec
+  positionally, and the `selector=` form keeps the drf-services path; a `LIST`
+  spec is refused, as is a knob of the `selector=` form beside a spec.
+
+`register_tools(registry, overrides={"invoices.create": {"scopes": ("billing",)}})`
+registers every entry of a kernel `SpecRegistry`, each under its registry name,
+with per-name keyword overrides; an override for a name the registry does not
+hold is a `ValueError`.
+
 ## Per-tool registration kwargs
 
 Beyond `permissions=`, `output_format=`, and `include_structured_content=`,

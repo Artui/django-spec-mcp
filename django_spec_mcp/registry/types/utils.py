@@ -1,4 +1,4 @@
-"""Shared validation and derivation for the three tool bindings.
+"""Shared validation and derivation for the tool and kernel resource bindings.
 
 In a sibling ``utils.py`` rather than its own leaf module because it is
 internal infrastructure for ``registry.types``, not part of the exported
@@ -7,6 +7,7 @@ type surface.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 from django.core.exceptions import ImproperlyConfigured
@@ -15,6 +16,7 @@ from rest_framework_services import can_present_nothing as spec_can_present_noth
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
+from django_spec_mcp.auth.permissions.scope_required import ScopeRequired
 from django_spec_mcp.types.tool_content_kind import ToolContentKind
 
 _MEDIA_KINDS: frozenset[ToolContentKind] = frozenset({ToolContentKind.IMAGE, ToolContentKind.AUDIO})
@@ -121,4 +123,38 @@ def can_present_nothing(spec: ServiceSpec[Any, Any, Any] | SelectorSpec[Any, Any
     return spec_can_present_nothing(spec)
 
 
-__all__ = ["can_present_nothing", "rendered_kind", "validate_content_kind"]
+def kernel_scope_gate(
+    label: str, scopes: str | Sequence[str] | None
+) -> tuple[tuple[str, ...] | None, tuple[Any, ...]]:
+    """A kernel binding's ``scopes`` as it holds them, and the gate they build.
+
+    Returns the scope names as a tuple, or ``None`` for no scope gate, and the
+    transport checks the shared shell judges: one ``ScopeRequired`` naming every
+    scope, or none. Run by each kernel binding's ``__post_init__``, so a binding
+    built by hand gates as one the registrar built does.
+
+    A bare string is the single-scope case, as ``ScopeRequired`` reads it:
+    ``tuple("billing")`` would be seven one-character scopes no token carries
+    (``test_a_handbuilt_kernel_resource_reads_a_bare_string_scope_as_one``). An
+    empty sequence is refused, since it reads as a gate and admits every caller
+    (``test_a_handbuilt_kernel_binding_refuses_an_empty_scope_tuple``). Each
+    half of that guard is held by a test:
+    ``test_a_kernel_resource_carries_its_scope_gate`` fails without the
+    emptiness test, and
+    ``test_a_handbuilt_kernel_resource_without_scopes_has_no_gate`` without the
+    ``None`` one.
+    """
+    if isinstance(scopes, str):
+        scopes = (scopes,)
+    if scopes is not None and not scopes:
+        raise ImproperlyConfigured(
+            f"{label}: scopes=() permits every caller while reading as a gate. "
+            "Name at least one scope, or leave scopes=None for no scope gate."
+        )
+    if scopes is None:
+        return None, ()
+    names: tuple[str, ...] = tuple(scopes)
+    return names, (ScopeRequired(list(names)),)
+
+
+__all__ = ["can_present_nothing", "kernel_scope_gate", "rendered_kind", "validate_content_kind"]

@@ -16,9 +16,11 @@ from django_spec_mcp.elicitation.types.resolved_input import ResolvedInput
 from django_spec_mcp.handlers.input_dispatch import (
     ask_for_input,
     refusal_result,
-    resolve_prior_input,
 )
 from django_spec_mcp.handlers.invalidation_dispatch import announce_invalidations
+from django_spec_mcp.handlers.resolve_call_input import resolve_call_input
+from django_spec_mcp.handlers.run_kernel_tool import run_kernel_tool
+from django_spec_mcp.handlers.runs_on_kernel import runs_on_kernel
 from django_spec_mcp.handlers.selector_tool_dispatch import (
     dispatch_selector_tool,
     enforce_object_permissions,
@@ -189,7 +191,7 @@ def _dispatch_tool_call(
         # cancelled answer merges nothing, and is answered after the rate
         # limit below, as any call the service does not run is. Merged with no
         # ``requestState`` too, so a first call can carry one.
-        prior: ResolvedInput = resolve_prior_input(params, binding.name, arguments_raw, context)
+        prior: ResolvedInput = resolve_call_input(binding, params, arguments_raw, context)
         # Applied again over what the answers produced, since the merge takes
         # any key: an answer naming a bound argument would otherwise replace the
         # server's value (``test_an_answer_cannot_replace_a_bound_value``).
@@ -291,7 +293,13 @@ def _run_service_tool(
     tool ran with beside every result. ``arguments_raw`` carries a retry's
     answers; ``prior`` is what ``ask_for_input`` needs to carry them into a
     further round.
+
+    A kernel binding leaves here for ``run_kernel_tool``, the shell above having
+    run for it as for any other; a kernel selector tool reaches this function
+    too, since it is not a ``SelectorToolBinding``.
     """
+    if runs_on_kernel(binding):
+        return run_kernel_tool(binding, params, arguments_raw, prior, context, otel_span)
     argument_binding, unknown_arguments = services_dispatch_policies(binding)
     # Inside the ``try``: the strict ``split_url_kwargs`` raises DRF's
     # ``ValidationError`` for an omitted ``required=True`` kwarg, and that

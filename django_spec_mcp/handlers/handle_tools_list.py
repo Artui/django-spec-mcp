@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
+from django_spec_mcp.handlers.kernel_tool_entry import kernel_tool_entry
 from django_spec_mcp.handlers.listable_tool_bindings import listable_tool_bindings
 from django_spec_mcp.handlers.offered_tools import offered_tools
 from django_spec_mcp.handlers.pagination import paginate
+from django_spec_mcp.handlers.runs_on_kernel import runs_on_kernel
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import (
     advertises_closed_items,
@@ -17,6 +19,7 @@ from django_spec_mcp.handlers.utils import (
 from django_spec_mcp.output.resolve_structured_output import resolve_structured_output
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.protocol.types.tool import Tool
+from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
 from django_spec_mcp.schema.agent_conventions import append_agent_conventions
 from django_spec_mcp.schema.output_schema import build_output_schema
@@ -80,6 +83,10 @@ def handle_tools_list(
 
     tools: list[dict[str, Any]] = []
     for binding in page:
+        # A kernel tool's entry is built from the kernel's own schemas.
+        if runs_on_kernel(binding):
+            tools.append(kernel_tool_entry(cast(KernelToolBinding, binding), context))
+            continue
         # Selector tools merge filter / ordering / pagination args in; service
         # tools expose what drf-services' dispatch declares for them: the input
         # serializer's schema, or without one a spread service's own

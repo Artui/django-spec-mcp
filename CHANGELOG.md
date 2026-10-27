@@ -11,6 +11,35 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+### Added
+
+- **Kernel specs register as tools and resources.** `MCPServer.register_tool(spec, *, name, ...)`
+  takes a `django_service_specs` `ServiceSpec` or `SelectorSpec`, and the spec's
+  class decides whether it is a service tool or a selector tool;
+  `MCPServer.register_tools(registry, *, overrides=)` registers every entry of a
+  kernel `SpecRegistry`; and `register_resource` takes a `RETRIEVE` spec
+  positionally, beside its `selector=` form. The call runs through the kernel's
+  `dispatch` / `adispatch` with the token's user as the principal and the request,
+  carrying the token as `request.mcp_token`, in `call_context`; the advertised
+  schemas are the kernel's, so a service tool's arguments sit at the top level
+  with no `data` key. Each kernel refusal is answered as the drf-services path
+  answers its counterpart. `scopes=` gates a tool or resource on every scope it
+  names, answering `-32006` with `requiredScopes`; a `KernelToolBinding` or
+  `KernelResourceBinding` built by hand derives the same gate from its own
+  `scopes`, and refuses `scopes=()`. Registration refuses a spec
+  that is not a kernel spec, a knob of the other kind of tool, `scopes=()`,
+  `UnknownArguments.PASSTHROUGH` and, for now, any `task_policy` but the default.
+  A spec declaring `permissions=None` is refused under
+  `REQUIRE_TOOL_PERMISSIONS`; with the setting off it registers with an
+  `UnguardedToolWarning` and is called without a permission check, under a
+  kernel `Grant` minted per call for that spec and principal. Only
+  `register_tool` and `register_resource` grant, since a kernel `SpecRegistry`
+  refuses such a spec before `register_tools` sees it; a kernel binding built
+  by hand and passed to
+  `server.tools.register` or `server.resources.register` is never granted, so
+  the kernel refuses its unguarded spec at the call.
+  The drf-services registration methods are unchanged.
+
 ### Changed
 
 - **`django-service-specs` 0.18.0 is the floor.** Its root holds every kernel name

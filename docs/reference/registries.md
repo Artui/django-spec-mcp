@@ -26,6 +26,13 @@ to each item in `items`, never to the envelope — and its description in the
 
 ::: django_spec_mcp.registry.types.tool_binding.ToolBinding
 ::: django_spec_mcp.registry.types.selector_tool_binding.SelectorToolBinding
+
+A kernel spec registered through `register_tool` or `register_resource` is held
+by a binding of its own, which the same registries accept beside the others. See
+[Kernel specs](../concepts.md#kernel-specs).
+
+::: django_spec_mcp.registry.types.kernel_tool_binding.KernelToolBinding
+::: django_spec_mcp.registry.types.kernel_resource_binding.KernelResourceBinding
 ::: rest_framework_services.types.url_kwarg.UrlKwarg
 ::: rest_framework_services.types.query_param.QueryParam
 

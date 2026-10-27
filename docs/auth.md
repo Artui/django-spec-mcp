@@ -101,6 +101,14 @@ The `SERVER_INFO` keys flow into both:
     Set `SPEC_MCP["REQUIRE_TOOL_PERMISSIONS"] = False` to downgrade
     that to an `UnguardedToolWarning` while migrating a large surface.
 
+    A kernel spec registered through `register_tool` or
+    `register_resource` is guarded by its own `permissions` alone; a
+    `scopes=` gate does not count. With the setting off, one declaring
+    `permissions=None` warns at registration and each call runs under a
+    kernel `Grant` built for that spec and that caller, so it is called
+    with no permission check. See
+    [Kernel specs](concepts.md#kernel-specs).
+
     The same check runs on `register_resource` and `register_prompt`: the
     identical selector reaches the identical rows whichever surface exposes
     it. Interactive **views** (`register_ui_resource`) are the one exemption,
