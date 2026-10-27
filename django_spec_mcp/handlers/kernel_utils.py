@@ -6,7 +6,6 @@ the two paths share only the helpers they call by name.
 
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from itertools import islice
@@ -295,7 +294,20 @@ def refuses_a_row_alone(spec: Any, refusal: InvalidArguments) -> bool:
     refused row
     (``test_an_array_argument_failing_at_an_index_is_no_refused_row``); without
     the second every shape failure of a ``many`` spec does
-    (``test_a_many_list_that_is_no_list_is_a_failed_shape``).
+    (``test_a_many_list_that_is_no_list_is_a_failed_shape``); without the
+    argument's own name a ``many`` spec naming its list something but ``items``
+    reads as a failed shape
+    (``test_a_refused_row_under_a_named_many_argument_keeps_its_admission``).
+
+    **A known hole, until the kernel marks the refusal.** The tree is the only
+    sign, so a check or a seed resolver that itself raises an
+    ``InvalidArguments`` shaped like a refused row (``{many_argument: {0: ...}}``)
+    reads as one: the caller keeps its admission, is charged, and is handed that
+    detail. Probed with a class-level check raising it and with a pool seed
+    resolver raising it, both charged once and both answered the raised tree as
+    the validation result. Not held by a test, since the answer is the kernel's
+    to make distinguishable and closing it here would mean guessing which
+    ``InvalidArguments`` a check meant.
     """
     return bool(getattr(spec, "many", False)) and isinstance(
         refusal.detail.get(spec.many_argument), Mapping
@@ -544,9 +556,10 @@ def _presents_a_list(binding: KernelToolBinding) -> bool:
     The root ``kernel_tool_output_schema`` restates as ``"array"``: a ``many`` or
     ``returns_many`` service's rows, or ``None``.
     """
-    # A spec with no presenter has no output schema, and presents nothing at all
-    # (``test_kernel_shell_knobs``). The type keeps a single row that presents
-    # nothing serving ``{}`` (``test_a_result_that_presents_nothing_conforms_to_its_schema``).
+    # A spec with no presenter has no output schema
+    # (``test_no_presenter_yields_no_schema``), so it is no list. The type keeps
+    # a single row that presents nothing serving ``{}``
+    # (``test_a_result_that_presents_nothing_conforms_to_its_schema``).
     schema = spec_output_schema(binding.spec)
     return schema is not None and schema.get("type") == ["array", "null"]
 
@@ -725,17 +738,12 @@ def resource_refusal(exc: DispatchError | ServiceError, scene: KernelRefusalScen
     selector that raises.
     """
     if isinstance(exc, InvalidArguments):
-        data = validation_error_data(
-            exc.detail, scene.arguments, include_value=scene.config.include_validation_value
-        )
-        # The tree is written as JSON would write it, so the integer row keys a
-        # many call's detail carries are strings, as they are in a tool's result.
-        # Not ``encode_json``, whose sorted keys refuse a node mixing those
-        # indices with ``non_field_errors``.
         return JsonRpcError(
             JsonRpcErrorCode.INVALID_PARAMS,
             "Invalid arguments",
-            data=json.loads(json.dumps(data, default=str)),
+            data=validation_error_data(
+                exc.detail, scene.arguments, include_value=scene.config.include_validation_value
+            ),
         )
     answer = answer_kernel_refusal(exc, scene)
     if isinstance(answer, JsonRpcError):

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import json
 from collections.abc import Awaitable, Iterable, Mapping, Sequence
 from typing import Any
 
@@ -782,8 +783,17 @@ def validation_error_data(detail: Any, value: Any, *, include_value: bool) -> di
     ``MCPConfig.include_validation_value``) also echoes ``value`` back; off by
     default because it may carry PII or secrets that must not flow back to the
     client or into client-side logs.
+
+    ``detail`` is written as JSON would write it, so the integer row indices a
+    kernel ``many`` call's tree carries are strings, as they are on the wire. That
+    is also what lets the tree be encoded with sorted keys: a node mixing those
+    indices with ``non_field_errors``, which the kernel raises when a list is
+    refused as a whole beside its failing rows, cannot be ordered otherwise
+    (``test_a_many_call_refused_by_row_and_as_a_whole_is_a_validation_result``).
+    A tool result encodes it sorted, so its row order is the sort's; a JSON-RPC
+    error's ``data`` keeps the kernel's.
     """
-    payload: dict[str, Any] = {"detail": detail}
+    payload: dict[str, Any] = {"detail": json.loads(json.dumps(detail, default=str))}
     if include_value:
         payload["value"] = value
     return payload

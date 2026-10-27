@@ -23,6 +23,7 @@ from typing import Any
 
 import pytest
 from asgiref.sync import sync_to_async
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest
 from django.test import Client, override_settings
@@ -61,6 +62,7 @@ from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from django_spec_mcp.schema.types.agent_conventions import AgentConventions
 from django_spec_mcp.server.utils import UnguardedToolWarning
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from django_spec_mcp.transport.progress_dispatch import preflight_permissions
 from django_spec_mcp.types.internal_error_message import INTERNAL_ERROR_MESSAGE
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
@@ -593,6 +595,37 @@ async def test_a_many_call_with_a_refused_row_is_answered_on_its_checked_top_lev
 
 
 @_ASYNC
+async def test_a_refused_row_under_a_named_many_argument_keeps_its_admission(
+    is_async: bool,
+) -> None:
+    # The rows travel under the argument ``many_argument`` names, ``lines`` here,
+    # so the refused row is read there: a guard that looked under ``items`` alone
+    # would read this tree as a failed shape and judge the call on no arguments,
+    # which this check, indexing ``tenant`` unguarded, refuses.
+    limit = _CountingLimit()
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server.register_tool(
+        ServiceSpec(
+            service=lambda *, data, tenant: data,
+            many=True,
+            many_argument="lines",
+            validator=DataclassValidator(_Line),
+            reads=Parameters([Parameter("tenant", "integer", required=True)]),
+            permissions=[_TenantOne()],
+        ),
+        name="get",
+        rate_limits=[limit],
+    )
+
+    out = await _call(server, {"tenant": 1, "lines": _BAD_ROW}, is_async=is_async)
+
+    assert tool_error(out)["detail"] == {
+        "lines": {"0": {"amount_cents": ["Expected an integer."]}}
+    }, out
+    assert limit.consumed == 1
+
+
+@_ASYNC
 async def test_an_array_argument_failing_at_an_index_is_no_refused_row(is_async: bool) -> None:
     # A spec that is not ``many`` fails an array argument's item at its index,
     # under the argument's name, ``items`` here: a failed shape all the same,
@@ -770,6 +803,61 @@ def test_a_completion_is_judged_with_the_servers_seeds_and_setting(case: str) ->
         assert out["completion"]["values"] == ["1"], out
     else:
         assert _forbidden(out), out
+
+
+class _AliceWithHerToken(PermissionCheck):
+    """Admits a signed-in ``alice`` whose call carries her token and the resource's name."""
+
+    def has_permission(self, principal: Any, spec: Any, *, call_context: Any) -> bool:
+        request = call_context.get("request")
+        return (
+            getattr(principal, "username", None) == "alice"
+            and getattr(request, "mcp_token", None) is not None
+            and call_context.get("action") == "invoice"
+        )
+
+
+@pytest.mark.parametrize(
+    ("user", "admitted"), [("alice", True), (None, False)], ids=["signed-in", "anonymous"]
+)
+def test_a_completion_is_judged_with_the_callers_principal_and_context(
+    client: Client, user: str | None, admitted: bool
+) -> None:
+    # The completion asks the spec as the read does: for the token's user (the
+    # principal is ``None`` without ``principal_of(context.token.user)``), with a
+    # call context (``call_context=None`` fails it) whose request carries the
+    # token (``carry_token`` dropped fails it) and the binding's name as action.
+    get_user_model().objects.create_user("alice")
+    server = MCPServer(
+        name="t", auth_backend=HeaderAuthBackend(), session_store=InMemorySessionStore()
+    )
+    server.register_resource(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=lambda *, pk: {"pk": pk},
+            reads=Parameters([_PK]),
+            permissions=[_AliceWithHerToken()],
+        ),
+        name="invoice",
+        uri_template="invoices://{pk}",
+        completions={"pk": lambda: ["1"]},
+    )
+
+    with override_settings(ROOT_URLCONF=urlconf_for(server)):
+        caller = KernelClient(client, user=user)
+        caller.initialize()
+        body = caller.post(
+            "completion/complete",
+            {
+                "ref": {"type": "ref/resource", "uri": "invoices://{pk}"},
+                "argument": {"name": "pk", "value": ""},
+            },
+        ).json()
+
+    if admitted:
+        assert body["result"]["completion"]["values"] == ["1"], body
+    else:
+        assert body["error"]["code"] == JsonRpcErrorCode.FORBIDDEN, body
 
 
 @_ASYNC
