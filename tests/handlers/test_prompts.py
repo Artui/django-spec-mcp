@@ -347,6 +347,7 @@ def test_prompt_message_text_helper() -> None:
     assert msg.role == "assistant"
     assert msg.content == {"type": "text", "text": "hi"}
 
+
 class _Recording:
     """An ``MCPPermission`` refusing every call, recording what each check was handed."""
 
