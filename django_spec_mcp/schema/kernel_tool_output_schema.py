@@ -22,12 +22,38 @@ def kernel_tool_output_schema(
     """
     if binding.content_kind in (ToolContentKind.IMAGE, ToolContentKind.AUDIO):
         return None
-    return spec_output_schema(
+    schema: dict[str, Any] | None = spec_output_schema(
         binding.spec,
         paginate=binding.paginate,
         projection=binding.audience_projection,
         handle_description=handle_description,
     )
+    if schema is None or schema.get("type") != _OBJECT_OR_NULL:
+        return schema
+    return _admitting_nothing(schema)
+
+
+# The root type the kernel gives a spec that can present nothing
+# (``can_present_nothing``): its item, or ``None``.
+_OBJECT_OR_NULL: list[str] = ["object", "null"]
+
+
+def _admitting_nothing(schema: dict[str, Any]) -> dict[str, Any]:
+    """A nothing-presenting spec's schema, as an ``outputSchema`` can state it.
+
+    MCP requires an ``outputSchema`` of type ``"object"``, and a ``None`` is
+    served as the empty ``structuredContent`` ``{}``, which the kernel's
+    ``["object", "null"]`` with every field required does not admit. So the
+    root is ``"object"``, and its ``required`` becomes the drf-services
+    shape (``build_output_schema``'s ``may_be_empty``): either every field or
+    none at all (``test_a_result_that_presents_nothing_conforms_to_its_schema``).
+    A schema with nothing required admits ``{}`` already and keeps no ``anyOf``.
+    """
+    admitting: dict[str, Any] = {k: v for k, v in schema.items() if k != "required"}
+    admitting["type"] = "object"
+    if schema.get("required"):
+        admitting["anyOf"] = [{"required": schema["required"]}, {"maxProperties": 0}]
+    return admitting
 
 
 __all__ = ["kernel_tool_output_schema"]
