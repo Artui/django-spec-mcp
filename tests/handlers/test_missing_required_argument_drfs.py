@@ -832,7 +832,7 @@ def test_an_owned_lookup_key_a_field_declares_is_refused_at_registration() -> No
     # drf-services withholds a name the target lookup reads from the
     # serializer's data, so a writable ``tenant`` field could never be filled,
     # owned or not. Registration refuses it, as it does any lookup key a field
-    # declares (``tests/adapters/test_lookup_key_input_field.py``).
+    # declares (``tests/adapters/test_lookup_key_input_field_drfs.py``).
     with pytest.raises(ImproperlyConfigured, match=r"declares field\(s\) \['tenant'\]"):
         _owned_tenant_server(_NumberAndTenantInput)
 
