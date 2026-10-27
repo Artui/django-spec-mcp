@@ -712,6 +712,68 @@ class MCPServer:
         ``AdditionalInputRequired`` as MRTR's ``input_required``, and any other
         ``ServiceError`` as the ``service_error`` result.
         """
+        binding = self._kernel_tool_binding(
+            spec,
+            name=name,
+            description=description,
+            title=title,
+            icons=icons,
+            annotations=annotations,
+            meta=meta,
+            ui=ui,
+            output_format=output_format,
+            content_kind=content_kind,
+            content_mime_type=content_mime_type,
+            include_structured_content=include_structured_content,
+            include_output_schema=include_output_schema,
+            task_policy=task_policy,
+            invalidates=invalidates,
+            paginate=paginate,
+            max_page_size=max_page_size,
+            max_result_bytes=max_result_bytes,
+            dispatch_timeout=dispatch_timeout,
+            always_listed=always_listed,
+            rate_limits=rate_limits,
+            scopes=scopes,
+            unknown_arguments=unknown_arguments,
+            server_arguments=server_arguments,
+        )
+        self._tools.register(binding)
+        return binding
+
+    def _kernel_tool_binding(
+        self,
+        spec: KernelServiceSpec | KernelSelectorSpec,
+        *,
+        name: str,
+        description: str | None = None,
+        title: str | None = None,
+        icons: tuple[Icon, ...] = (),
+        annotations: dict[str, Any] | None = None,
+        meta: dict[str, Any] | None = None,
+        ui: UIToolMeta | None = None,
+        output_format: OutputFormat | str = OutputFormat.JSON,
+        content_kind: ToolContentKind = ToolContentKind.TEXT,
+        content_mime_type: str | None = None,
+        include_structured_content: bool | None = None,
+        include_output_schema: bool | None = None,
+        task_policy: TaskPolicy = TaskPolicy.FORBIDDEN,
+        invalidates: tuple[str, ...] | list[str] = (),
+        paginate: bool = False,
+        max_page_size: int | None | UnsetType = UNSET,
+        max_result_bytes: int | None | UnsetType = UNSET,
+        dispatch_timeout: float | None | UnsetType = UNSET,
+        always_listed: bool = False,
+        rate_limits: list[Any] | None = None,
+        scopes: str | Sequence[str] | None = None,
+        unknown_arguments: UnknownArguments = UnknownArguments.REJECT,
+        server_arguments: ServerArguments | None = None,
+    ) -> KernelToolBinding:
+        """``register_tool`` up to the registration: the binding, built and checked.
+
+        Split out so ``register_tools`` can build and check every entry before it
+        registers any.
+        """
         ui_meta = build_ui_tool_meta(
             name=name,
             ui=ui,
@@ -762,7 +824,6 @@ class MCPServer:
             default_output_schema=self._config.include_output_schema,
             default_structured_content=self._config.include_structured_content,
         )
-        self._tools.register(binding)
         return binding
 
     def register_tools(
@@ -778,8 +839,9 @@ class MCPServer:
         direct ``register_tool`` of the same spec are the same tool. An
         ``overrides`` key the registry does not hold raises ``ValueError``, as
         a typo rather than a no-op, and an entry that is not a kernel
-        ``ServiceSpec`` or ``SelectorSpec`` is refused as ``register_tool``
-        refuses it.
+        ``ServiceSpec`` or ``SelectorSpec`` (a ``SpecSource`` among them) is
+        refused as ``register_tool`` refuses it. A refusal of any entry
+        registers none of them: every entry is built and checked first.
 
         Not to be confused with the module function
         ``django_spec_mcp.registry.register_tools.register_tools``, which takes
@@ -794,14 +856,28 @@ class MCPServer:
                 f"overrides name specs not in this SpecRegistry: {unknown}. "
                 f"Registered names: {sorted(entry.name for entry in registry.all())}."
             )
-        return tuple(
-            self.register_tool(
+        bindings = tuple(
+            self._kernel_tool_binding(
                 cast(KernelServiceSpec | KernelSelectorSpec, entry.spec),
                 name=entry.name,
                 **dict(override_map.get(entry.name, {})),
             )
             for entry in registry.all()
         )
+        # Every refusal is reached before the first registration, so a refused
+        # entry registers nothing
+        # (``test_register_tools_registers_nothing_when_an_entry_is_refused``): a
+        # scratch registry runs the registry's own checks over the batch, and a
+        # name this server already holds is refused against the live one.
+        trial = ToolRegistry(pool_seeds=self._pool_seeds)
+        for binding in bindings:
+            trial.register(binding)
+        taken = sorted(binding.name for binding in bindings if binding.name in self._tools)
+        if taken:
+            raise ValueError(f"Duplicate MCP tool name(s): {taken}")
+        for binding in bindings:
+            self._tools.register(binding)
+        return bindings
 
     def register_specs(
         self,

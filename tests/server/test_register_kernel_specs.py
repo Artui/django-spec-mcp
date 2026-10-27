@@ -306,3 +306,43 @@ def test_a_kernel_resource_refuses_a_completion_for_no_variable() -> None:
             uri_template="r://{pk}",
             completions={"nope": lambda value: ["1"]},
         )
+
+
+class _Source:
+    """A ``SpecSource``: compiles to a kernel spec, but is not one."""
+
+    def as_kernel_spec(self) -> ServiceSpec:
+        return _service()
+
+
+@pytest.mark.parametrize(
+    ("late", "overrides", "refusal"),
+    [
+        pytest.param(_Source(), {}, TypeError, id="spec-source"),
+        pytest.param(_service(), {"late": {"paginate": True}}, ImproperlyConfigured, id="knob"),
+        pytest.param(_service(), {}, ValueError, id="name-taken"),
+    ],
+)
+def test_register_tools_registers_nothing_when_an_entry_is_refused(
+    late: Any, overrides: dict[str, Any], refusal: type[Exception]
+) -> None:
+    server = _server()
+    server.register_tool(_service(), name="taken")
+    registry = SpecRegistry(
+        [
+            RegisteredSpec(name="early", spec=_service()),
+            RegisteredSpec(name="taken" if refusal is ValueError else "late", spec=late),
+        ]
+    )
+    with pytest.raises(refusal):
+        server.register_tools(registry, overrides=overrides)
+    assert [binding.name for binding in server.tools.all()] == ["taken"]
+
+
+def test_the_kernel_bindings_are_exported_beside_the_others() -> None:
+    from django_spec_mcp.registry import types
+    from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
+
+    assert types.KernelToolBinding is KernelToolBinding
+    assert types.KernelResourceBinding is KernelResourceBinding
+    assert {"KernelToolBinding", "KernelResourceBinding"} <= set(types.__all__)
