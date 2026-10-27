@@ -5,13 +5,13 @@ The resource half registers kernel ``RETRIEVE`` specs through
 ``register_resource(spec, uri_template=..., name=...)``, whose ``reads`` are the
 template's variables. A completion is a read of what it completes, so a kernel
 resource's spec permissions answer it as they answer ``resources/read``: the
-class-level checks, asked through the kernel's ``authorize`` with no arguments,
-since a completion names a template rather than a URI, and after the rate
+class-level checks, judged as the listing judges the spec, on no arguments,
+since a completion names a template rather than a URI, and before the rate
 limit, as the read asks them. A check reading ``arguments`` is handed ``None``
 there and refuses, whether it guards against ``None`` or raises on it, which is
 the kernel form of the original's route-scoped template completing for nobody;
-a ``ServiceError`` or a configuration error it raises fails the completion as
-it fails the read.
+a ``ServiceError`` it raises refuses the completion as it hides the template,
+and a configuration error fails the completion as it fails the read.
 
 Not carried: that a ``DRFPermissionAdapter`` on a prompt sees ``{}`` as
 ``request.data`` and ``None`` as ``view.action`` at completion. A DRF class has
@@ -45,12 +45,14 @@ from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_completion_complete import handle_completion_complete
 from django_spec_mcp.handlers.handle_initialize import handle_initialize
 from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
+from django_spec_mcp.handlers.is_binding_listable import is_binding_listable
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.kernel_client import KernelClient
 from tests.testapp.auth_backend import HeaderAuthBackend
 from tests.testapp.urlconf_for import urlconf_for
+from tests.utils import RefusingRateLimit
 
 LANGUAGES = ["python", "pytorch", "pyside", "ruby"]
 
@@ -397,10 +399,13 @@ class _RaisesNotFound(PermissionCheck):
         raise ServiceNotFound("no such tenant")
 
 
-def test_a_check_raising_a_service_error_fails_the_completion_as_the_read() -> None:
-    # ``authorize`` lets a check's ``ServiceError`` through, and the read
-    # raises it on to the transport's internal error; the completion does the
-    # same rather than answering with a refusal the read would not give.
+def test_a_check_raising_a_service_error_refuses_the_completion_as_the_listing() -> None:
+    # A completion names a template rather than a URI, so it has no arguments
+    # and is judged as the listing judges the spec, where a check that raises
+    # rather than answering refuses: hidden from the listing, a read of a URI
+    # whose variable has no checked form is ``-32006``, and so is the
+    # completion. A read with a checked form dispatches, and raises the
+    # check's ``ServiceError`` on to the transport's internal error.
     server = _server()
     server.register_resource(
         _invoice(_RaisesNotFound()),
@@ -408,9 +413,15 @@ def test_a_check_raising_a_service_error_fails_the_completion_as_the_read() -> N
         uri_template="invoices://{pk}",
         completions={"pk": lambda: ["1"]},
     )
+    context = _ctx(server)
+    binding = server.resources.by_uri_template("invoices://{pk}")
 
-    with pytest.raises(ServiceNotFound):
-        _complete(server, _INVOICE_PK)
+    completed = _complete(server, _INVOICE_PK)
+    malformed = handle_resources_read({"uri": "invoices://abc"}, context)
+
+    assert is_binding_listable(binding, context.http_request, context.token) is False
+    assert isinstance(completed, JsonRpcError) and completed.code == -32006, completed
+    assert isinstance(malformed, JsonRpcError) and malformed.code == -32006, malformed
     with pytest.raises(ServiceNotFound):
         handle_resources_read({"uri": "invoices://1"}, _ctx(server))
 
@@ -515,14 +526,33 @@ def test_completion_runs_the_bindings_rate_limits() -> None:
     assert result.data == {"retryAfter": 30}
 
 
-def test_a_kernel_resources_spec_is_asked_after_its_rate_limit() -> None:
-    # The read's dispatch asks the spec's checks after the transport's rate
-    # limit, so a caller over the limit learns only that, and the check, which
-    # may query, is not asked for a request that is turned away anyway.
+def test_a_kernel_resources_spec_is_asked_before_its_rate_limit() -> None:
+    # Asked before the charge, as the read asks it, so a caller the spec
+    # refuses is told that and is charged nothing on either.
     check = _Refuses()
+    limit = RefusingRateLimit()
     server = _server()
     server.register_resource(
         _invoice(check),
+        name="invoice",
+        uri_template="invoices://{pk}",
+        rate_limits=[limit],
+        completions={"pk": lambda: ["1"]},
+    )
+
+    result = _complete(server, _INVOICE_PK)
+
+    assert isinstance(result, JsonRpcError)
+    assert result.code == -32006
+    assert check.asked == 1
+    assert limit.consumed == 0
+
+
+def test_a_kernel_resource_its_spec_admits_is_still_charged() -> None:
+    # The other half: a caller the spec admits meets the rate limit after it.
+    server = _server()
+    server.register_resource(
+        _invoice(),
         name="invoice",
         uri_template="invoices://{pk}",
         rate_limits=[_AlwaysLimited()],
@@ -533,7 +563,6 @@ def test_a_kernel_resources_spec_is_asked_after_its_rate_limit() -> None:
 
     assert isinstance(result, JsonRpcError)
     assert result.code == -32005
-    assert check.asked == 0
 
 
 def test_unknown_prompt_is_invalid_params() -> None:

@@ -144,7 +144,7 @@ def test_an_output_serializer_beside_a_kernel_spec_is_refused() -> None:
     strict=True,
     reason=(
         "register_resource does not compare a kernel spec's reads with the template's "
-        "variables, so every read of this resource is refused as an internal error; the "
+        "variables, so every read of this resource is refused as invalid params; the "
         "fix is a check in MCPServer._register_kernel_resource."
     ),
 )

@@ -8,7 +8,10 @@ out fails a named test even where the map stays total:
   ``test_a_denied_principal_is_insufficient_permission``,
   ``test_a_deactivated_principal_is_insufficient_permission``;
 - ``InvalidArguments`` (falls to ``DispatchError``):
-  ``test_invalid_arguments_carry_their_per_field_detail``;
+  ``test_invalid_arguments_carry_their_per_field_detail``, and for a ``many`` call
+  refused by row and as a whole, whose detail mixes integer indices with
+  ``non_field_errors``:
+  ``test_a_many_call_refused_by_row_and_as_a_whole_is_a_validation_result``;
 - ``DispatchError`` (unanswered without it):
   ``test_a_bare_dispatch_error_is_a_validation_result`` and the totality test;
 - ``AdditionalInputRequired`` (falls to ``ServiceError``):
@@ -28,17 +31,20 @@ tool serves for it: ``test_a_denial_is_answered_as_the_drf_services_path_answers
 from __future__ import annotations
 
 import json
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
 from django.contrib.auth import get_user_model
 from django.test import Client, override_settings
 from django_service_specs import (
+    NON_FIELD_ERRORS,
     ActionUnavailable,
     AdditionalInputRequired,
     DataclassValidator,
     DispatchError,
+    InvalidArguments,
     PermissionCheck,
     SelectorKind,
     SelectorSpec,
@@ -77,6 +83,21 @@ def _raising(exc: BaseException) -> Any:
     return service
 
 
+@dataclass
+class _Line:
+    number: str
+    amount_cents: int
+
+
+class _CappedLines(DataclassValidator):
+    """A Validator that refuses the list it is handed as a whole, as a cap on its length would."""
+
+    def validated_many(
+        self, rows: Mapping[int, Mapping[str, Any]], *args: Any, **kwargs: Any
+    ) -> Any:
+        raise InvalidArguments({NON_FIELD_ERRORS: ["Too many lines."]})
+
+
 def _service(exc: BaseException) -> ServiceSpec:
     return ServiceSpec(service=_raising(exc), permissions=[Unrestricted()])
 
@@ -91,6 +112,24 @@ def _build() -> MCPServer:
             permissions=[Unrestricted()],
         ),
         name="validated",
+    )
+    server.register_tool(
+        ServiceSpec(
+            service=lambda *, data: data,
+            many=True,
+            validator=_CappedLines(_Line),
+            permissions=[Unrestricted()],
+        ),
+        name="bulk",
+    )
+    server.register_tool(
+        ServiceSpec(
+            service=lambda *, data: data,
+            many=True,
+            validator=DataclassValidator(_Line),
+            permissions=[Unrestricted()],
+        ),
+        name="many",
     )
     server.register_tool(_service(DispatchError("the call cannot run")), name="bare")
     server.register_tool(
@@ -156,6 +195,40 @@ def test_invalid_arguments_carry_their_per_field_detail(kernel: KernelClient) ->
     assert error["message"] == "Invalid arguments"
     # The refusal's own map, not the non-field sentence a bare DispatchError gets.
     assert set(error["detail"]) == {"number"}
+
+
+def test_a_many_call_refused_by_row_and_as_a_whole_is_a_validation_result(
+    kernel: KernelClient,
+) -> None:
+    # Row 1 fails the shape check and the Validator refuses the list it is handed,
+    # so the kernel's detail node mixes the integer index with ``non_field_errors``,
+    # which a sorted-key encoder cannot order: it answered a 500.
+    lines = [{"number": "A", "amount_cents": 1}, {"number": "B", "amount_cents": "x"}]
+
+    body = kernel.call("bulk", {"items": lines})
+
+    error = _error(body)
+    assert error["type"] == "validation_error"
+    assert error["detail"] == {
+        "items": {
+            "1": {"amount_cents": ["Expected an integer."]},
+            "non_field_errors": ["Too many lines."],
+        }
+    }
+    # The kernel's reading order: the rows by index, then the list's own message.
+    assert list(error["detail"]["items"]) == ["1", "non_field_errors"]
+
+
+def test_a_many_calls_refused_rows_are_listed_in_index_order(kernel: KernelClient) -> None:
+    # Rows 2 and 10 fail: the text a model reads lists them as the kernel does,
+    # by number, where a sort of the stringified keys would put "10" first.
+    lines = [{"number": str(n), "amount_cents": 1} for n in range(12)]
+    lines[2]["amount_cents"] = "x"
+    lines[10]["amount_cents"] = "x"
+
+    error = _error(kernel.call("many", {"items": lines}))
+
+    assert list(error["detail"]["items"]) == ["2", "10"]
 
 
 def test_a_bare_dispatch_error_is_a_validation_result(kernel: KernelClient) -> None:

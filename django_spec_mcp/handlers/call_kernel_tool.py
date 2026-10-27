@@ -7,14 +7,12 @@ from django_service_specs import DispatchError, PoolSeeds, ServiceError, dispatc
 from django_spec_mcp.config.types.mcp_config import MCPConfig
 from django_spec_mcp.handlers.answer_kernel_refusal import answer_kernel_refusal
 from django_spec_mcp.handlers.kernel_utils import (
+    admit_kernel_call,
     bound_unpaginated_rows,
-    call_context,
     not_found_result,
     page_request,
     present_tool_result,
-    principal_of,
     tool_result,
-    unguarded_grant,
 )
 from django_spec_mcp.handlers.types.kernel_refusal_scene import KernelRefusalScene
 from django_spec_mcp.protocol.types.tool_result import ToolResult
@@ -37,8 +35,12 @@ def call_kernel_tool(
     ``arguments`` already carry the binding's server arguments. The scope gate
     is not judged here: there is no token in process, as there is none for the
     drf-services path's in-process call, whose transport permissions it skips
-    alike. The spec's own permissions are the kernel's, and ``dispatch`` asks
-    them of ``user``.
+    alike. The spec's own permissions are the kernel's, asked of ``user``
+    before ``dispatch`` checks the arguments, as on the wire
+    (``admit_kernel_call``), so a caller they refuse is told that rather than
+    which argument it left out
+    (``test_call_tool_refuses_a_caller_the_spec_denies_before_the_argument_is_checked``);
+    ``dispatch`` runs under the grant they gave.
 
     A refusal the wire answers ``-32006`` is raised as it is, the
     ``NotPermitted`` or ``PrincipalUnavailable`` itself, for the caller to map
@@ -47,16 +49,26 @@ def call_kernel_tool(
     there is no further round to ask in.
     """
     dispatched, page = page_request(binding, arguments, config)
-    principal: Any = principal_of(user)
     try:
+        # Inside the ``try``, so the one thing it raises, a denial, meets the
+        # arm below, which raises it on as it raises dispatch's own.
+        admission = admit_kernel_call(
+            binding,
+            dispatched,
+            user=user,
+            request=request,
+            config=config,
+            pool_seeds=pool_seeds,
+            unknown_arguments=binding.unknown_arguments,
+        )
         result = dispatch(
             binding.spec,
-            principal=principal,
-            grant=unguarded_grant(binding, principal, config),
+            principal=admission.principal,
+            grant=admission.grant,
             arguments=dispatched,
             pool_seeds=pool_seeds,
             unknown_arguments=binding.unknown_arguments,
-            call_context=call_context(request, binding.name),
+            call_context=admission.call_context,
         )
     except (DispatchError, ServiceError) as exc:
         answer = answer_kernel_refusal(

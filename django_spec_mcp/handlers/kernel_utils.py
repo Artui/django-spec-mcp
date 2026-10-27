@@ -6,19 +6,32 @@ the two paths share only the helpers they call by name.
 
 from __future__ import annotations
 
+import json
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from itertools import islice
 from typing import Any
 
 from django.contrib.auth.models import AnonymousUser
+from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import (
     DEFAULT_PAGE_SIZE,
     DispatchError,
     DispatchResult,
     Grant,
+    InvalidArguments,
+    NotPermitted,
     OutputPage,
+    PoolSeeds,
+    PrincipalUnavailable,
     SelectorKind,
     ServiceError,
+    ServiceSpec,
+    UnknownArguments,
+    authorize,
+    authorize_scope,
+    check_call,
+    coerce_flat,
     is_queryset,
     paginate_output,
     present_for_audience,
@@ -33,6 +46,7 @@ from django_spec_mcp.handlers.utils import (
     resolve_bound,
     resource_cache_hints,
     resource_not_found_code,
+    validation_error_data,
 )
 from django_spec_mcp.observability import get_logger
 from django_spec_mcp.output.encode_json import encode_json
@@ -53,6 +67,36 @@ logger = get_logger(__name__)
 # The two arguments a paginated ``LIST`` tool takes for its page, which the
 # kernel's argument check would refuse as undeclared if they reached dispatch.
 _PAGE_ARGUMENTS: frozenset[str] = frozenset({"page", "limit"})
+
+
+# The two refusals the kernel's prelude answers before the call is anyone's to
+# charge: a principal its checks refuse, and one with no active account. Both
+# are ``-32006`` in ``KERNEL_REFUSALS``. One arc to coverage at every
+# ``except``: ``PrincipalUnavailable`` is held by
+# ``test_a_deactivated_principal_is_not_charged`` and
+# ``test_a_deactivated_reader_is_not_charged``, ``NotPermitted`` by
+# ``test_a_caller_the_spec_refuses_is_not_charged``.
+_DENIALS: tuple[type[DispatchError], ...] = (NotPermitted, PrincipalUnavailable)
+
+
+@dataclass(frozen=True)
+class KernelAdmission:
+    """A kernel call its spec's class-level checks admitted, as ``dispatch`` is to run it.
+
+    ``principal`` is the very object the grant was minted for, since a grant
+    covers its principal by identity and ``principal_of`` builds a fresh
+    ``AnonymousUser`` on each call
+    (``test_an_anonymous_in_process_caller_reaches_a_kernel_tool``).
+    ``call_context`` is the dict the checks were handed. ``grant`` is the one
+    dispatch runs under:
+    the checks' own, so a call whose arguments pass is not asked again
+    (``test_a_check_is_asked_once_per_call``), or what dispatch would have
+    been handed without this step, for a call whose shape check answers first.
+    """
+
+    principal: Any
+    grant: Grant | None
+    call_context: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -132,6 +176,330 @@ def carry_token(request: Any, token: Any) -> Any:
     return request
 
 
+def admits_without_arguments(
+    binding: KernelToolBinding | KernelResourceBinding,
+    principal: Any,
+    *,
+    config: MCPConfig,
+    pool_seeds: PoolSeeds,
+    call_context: dict[str, Any],
+) -> bool:
+    """Whether ``binding``'s spec lets ``principal`` past its checks, asked with no arguments.
+
+    The question a listing filtered by permission asks of a kernel spec
+    (``is_binding_listable``), the one a completion is asked, since it has no
+    arguments (``handle_completion_complete``), and the one a call whose
+    arguments fail the shape check is asked (``admit_kernel_call``), so a
+    caller is refused
+    before it learns which argument it left out exactly when that listing
+    would hide the tool from it
+    (``test_a_call_failing_its_shape_is_refused_first_exactly_when_the_listing_hides_it``).
+    ``always_listed`` lists a tool without changing this answer
+    (``test_an_always_listed_tool_still_refuses_a_call_failing_its_shape``).
+    Asked with what a call hands dispatch: the same principal, the grant only
+    the registrar's mark earns, the server's pool seeds, and a call context
+    whose request carries the token. No arguments: a listing has none, a call
+    failing its shape has no checked ones, and ``None`` is the kernel's word
+    for that.
+
+    Two questions, the two a call asks before it reads anything. ``authorize``
+    is the class-level one. ``authorize_scope`` of ``None`` is the scope-level
+    one dispatch asks of a create, a service spec with neither an instance nor
+    a collection selector, which resolves no row to ask about; any other spec's
+    scope question is of a row or a set that only the call's arguments name, and
+    stays unasked.
+
+    Refused when either is (``NotPermitted``), when the principal is
+    deactivated (``PrincipalUnavailable``, which ``authorize`` raises when
+    handed pool seeds as dispatch does, ahead of any grant, so on an unguarded
+    spec too), and when a check cannot answer without the call's arguments and
+    raises on their absence. A configuration error (``ImproperlyConfigured``)
+    is raised, as the call raises it.
+    """
+    grant = unguarded_grant(binding, principal, config)
+    if grant is None and binding.spec.permissions is None:
+        # A spec declaring no checks with no grant is refused at every call, so
+        # it is admitted to no one; asking ``authorize`` would raise its
+        # configuration error and fail the whole listing instead. Both halves
+        # are held: without the grant's, a marked binding granted by a server
+        # with the setting off is hidden
+        # (test_a_registered_unguarded_tool_is_listed_where_its_call_is_granted);
+        # without the permissions', every guarded spec is
+        # (test_a_tool_whose_checks_admit_the_caller_is_listed).
+        return False
+    # Whether dispatch asks this spec the scope question of nothing, as it does
+    # a create (``conclude_service`` in the kernel). One arc to coverage, so each
+    # conjunct is held by its own test: the first by
+    # test_a_selector_tool_is_not_asked_the_scope_of_nothing, the second by
+    # test_a_service_with_a_target_is_not_asked_the_scope_of_nothing.
+    asks_scope_of_nothing = (
+        isinstance(binding.spec, ServiceSpec) and binding.spec.target_selector_spec() is None
+    )
+    try:
+        granted = authorize(
+            binding.spec,
+            principal,
+            grant=grant,
+            arguments=None,
+            pool_seeds=pool_seeds,
+            call_context=call_context,
+        )
+        if asks_scope_of_nothing:
+            authorize_scope(
+                binding.spec,
+                principal,
+                None,
+                grant=granted,
+                arguments=None,
+                pool_seeds=pool_seeds,
+                call_context=call_context,
+            )
+    except ImproperlyConfigured:
+        # A configuration error the call raises as well, so the listing and
+        # the call fail with it rather than refusing for it: without this
+        # clause the arm below would swallow it
+        # (test_a_check_left_awaiting_its_answer_still_fails_the_listing,
+        # test_a_misconfigured_check_fails_a_call_failing_its_shape_as_it_fails_the_listing).
+        raise
+    except Exception:
+        # Refused, and only this binding. Every way the kernel has of saying no
+        # is an exception: a refusal (``NotPermitted``), a deactivated caller
+        # (``PrincipalUnavailable``), and a check that cannot decide without
+        # the call's arguments, which it is not handed, so it raises on their
+        # absence (a ``TypeError`` or ``KeyError`` on ``None``). The last is
+        # the docs' "conservatively deny at list time"; failing the listing
+        # for it would hide every other binding too. Held by
+        # test_a_tool_is_hidden_from_the_caller_its_spec_s_checks_refuse,
+        # test_a_deactivated_caller_is_listed_nothing and
+        # test_a_check_reading_arguments_hides_its_tool_and_no_other.
+        return False
+    return True
+
+
+def refuses_a_row_alone(spec: Any, refusal: InvalidArguments) -> bool:
+    """Whether ``check_call`` raised ``refusal`` for a ``many`` call's rows, after its checks.
+
+    ``check_call`` raises a refused row of a ``many`` call as
+    ``InvalidArguments``, as it raises a failed shape, but only after its
+    class-level check admitted the checked top level, so that admission is
+    the call's and the row is dispatch's to report, after the charge. Told
+    apart by its tree, keyed by row index under ``many_argument`` alone: a
+    failed top level is raised before the check and without the rows, whose
+    refusals are carried to dispatch's Validator step
+    (``test_check_call_raises_a_refused_row_only_after_admitting_the_top_level``
+    pins both). Until ``check_call`` marks a refused row distinctly, which is
+    asked of the kernel, the tree is the only public sign.
+
+    One arc to coverage. Without the first conjunct an array parameter of a
+    spec that is not ``many``, whose items fail at their index, reads as a
+    refused row
+    (``test_an_array_argument_failing_at_an_index_is_no_refused_row``); without
+    the second every shape failure of a ``many`` spec does
+    (``test_a_many_list_that_is_no_list_is_a_failed_shape``); without the
+    argument's own name a ``many`` spec naming its list something but ``items``
+    reads as a failed shape
+    (``test_a_refused_row_under_a_named_many_argument_keeps_its_admission``).
+
+    **A known hole, until the kernel marks the refusal.** The tree is the only
+    sign, so a check or a seed resolver that itself raises an
+    ``InvalidArguments`` shaped like a refused row (``{many_argument: {0: ...}}``)
+    reads as one: the caller keeps its admission, is charged, and is handed that
+    detail. Probed with a class-level check raising it and with a pool seed
+    resolver raising it, both charged once and both answered the raised tree as
+    the validation result. Not held by a test, since the answer is the kernel's
+    to make distinguishable and closing it here would mean guessing which
+    ``InvalidArguments`` a check meant.
+    """
+    return bool(getattr(spec, "many", False)) and isinstance(
+        refusal.detail.get(spec.many_argument), Mapping
+    )
+
+
+def admit_kernel_call(
+    binding: KernelToolBinding | KernelResourceBinding,
+    arguments: dict[str, Any],
+    *,
+    user: Any,
+    request: Any,
+    config: MCPConfig,
+    pool_seeds: PoolSeeds,
+    unknown_arguments: UnknownArguments,
+) -> KernelAdmission:
+    """Ask a kernel spec's class-level checks about a call before the transport acts on it.
+
+    The kernel's ``dispatch`` checks a call's arguments before it asks the
+    spec's checks, and a kernel binding's own ``permissions`` hold only its
+    ``scopes=`` gate. So every route that charges a rate limit, creates a task
+    or answers a missing argument asks the spec first, here, as the
+    drf-services path judged the spec's permission classes in the binding's
+    stack: a caller the tool is not for is refused before it is charged
+    (``test_a_caller_the_spec_refuses_is_not_charged``) and before it learns
+    which arguments the tool takes
+    (``test_a_caller_the_spec_denies_is_refused_before_the_argument_is_checked``).
+
+    ``arguments`` are the ones dispatch is to receive. The checks are asked on
+    them as dispatch asks them, through ``check_call``, the kernel's own
+    prelude, rather than through ``authorize`` on the arguments as sent:
+    ``authorize`` hands a check declaring ``arguments`` the shape check's
+    output, which is not what was sent. ``"8"`` for an ``integer`` reaches the
+    run as ``8``, so a check shown the string compared ``"8" != 8``, admitted,
+    and the run went ahead on the row it refuses
+    (``test_a_check_reads_the_arguments_as_the_shape_check_reads_them``).
+    Nor ``coerce_flat``, which reads flat strings and is not the shape check.
+
+    A call whose arguments fail the shape check has no checked form, and a
+    check is never shown the arguments as sent, a third input no check is
+    written for. It is judged instead as a listing filtered by permission
+    judges the spec, on no arguments (``admits_without_arguments``). Whatever
+    that says, the call cannot run, so it only chooses which refusal is told:
+    ``-32006`` before the charge, exactly when that listing would hide the
+    tool from this caller
+    (``test_a_call_failing_its_shape_is_refused_first_exactly_when_the_listing_hides_it``),
+    or, when it admits, the shape check's, from dispatch after the charge, as
+    drf-services answered an admitted caller's missing argument
+    (``test_an_admitted_caller_missing_an_argument_is_charged_and_told_which``).
+    dispatch is then handed what it would have been handed without this step.
+
+    A ``many`` call whose top level passes and whose rows do not is no
+    failed shape: ``check_call`` asked the checks on the checked top level
+    before it raised the row (``refuses_a_row_alone``), so their answer
+    stands, a refusal as ``-32006`` and an admission leaving the row to
+    dispatch, never judged again on no arguments
+    (``test_a_many_call_with_a_refused_row_is_answered_on_its_checked_top_level``).
+
+    So the checks are asked once on a call whose arguments pass, and once on
+    one whose arguments fail, by that judgment, since dispatch refuses the
+    shape before it asks them. An admitted ``many`` call with a refused row is
+    asked twice: ``check_call`` hands back no grant when it raises the row, so
+    dispatch asks again before it reports the row beside the Validator's
+    refusals of the other rows, which ``check_call`` does not run
+    (``test_a_many_call_with_a_refused_row_is_asked_by_its_prelude_and_by_dispatch``).
+    A task's worker asks them again when it runs the call.
+
+    Raises a denial, ``NotPermitted`` or ``PrincipalUnavailable``, for the
+    caller to answer as ``KERNEL_REFUSALS`` does. Any other refusal is left to
+    dispatch, which raises it again in its own order and is answered as before.
+    What is no refusal, a configuration error
+    (``test_a_handbuilt_unguarded_kernel_tool_is_never_called``) or a check
+    that raises, is raised here, before the charge, as dispatch would have
+    raised it after; on a streamed call that is still before the stream
+    commits its status
+    (``test_a_permission_preflight_that_raises_before_a_stream_is_a_json_rpc_error``).
+    """
+    principal: Any = principal_of(user)
+    context = call_context(request, binding.name)
+    unchecked = unguarded_grant(binding, principal, config)
+    keywords: dict[str, Any] = {"pool_seeds": pool_seeds, "call_context": context}
+    try:
+        _checked, grant = check_call(
+            binding.spec,
+            principal=principal,
+            arguments=arguments,
+            grant=unchecked,
+            unknown_arguments=unknown_arguments,
+            **keywords,
+        )
+    except _DENIALS:
+        raise
+    except InvalidArguments as refusal:
+        if not refuses_a_row_alone(binding.spec, refusal) and not admits_without_arguments(
+            binding, principal, config=config, pool_seeds=pool_seeds, call_context=context
+        ):
+            raise NotPermitted() from None
+        grant = unchecked
+    except (DispatchError, ServiceError):
+        # A refusal that is no denial, such as a ``ServiceError`` a check or a
+        # seed's resolver raises: dispatch raises it again and the call's own
+        # arms answer it, after the charge, as before, and on a stream inside
+        # it (``test_a_service_error_a_check_raises_streams_the_plain_calls_answer``).
+        # One arc to coverage, each kind held by its case of
+        # ``test_a_check_raising_a_refusal_that_is_no_denial_is_answered_as_before``.
+        grant = unchecked
+    return KernelAdmission(principal=principal, grant=grant, call_context=context)
+
+
+def admit_kernel_tool_call(
+    binding: KernelToolBinding, arguments: dict[str, Any], context: MCPCallContext
+) -> KernelAdmission | JsonRpcError:
+    """``admit_kernel_call`` for a ``tools/call`` over the wire, a denial as its answer.
+
+    ``arguments`` carry the server's arguments and any answers merged in; the
+    page a paginated tool takes is split off, as ``run_kernel_tool`` splits it
+    before dispatch, and the shape is checked under the tool's own
+    ``unknown_arguments``, as dispatch checks it. Otherwise an admitted call
+    would fail its shape here alone, be judged on no arguments, and be asked
+    again by dispatch (``test_a_paged_call_is_asked_once``,
+    ``test_a_stray_argument_a_tool_ignores_is_asked_once``).
+    """
+    dispatched, _page = page_request(binding, arguments, context.config)
+    try:
+        return admit_kernel_call(
+            binding,
+            dispatched,
+            user=context.token.user,
+            request=carry_token(context.http_request, context.token),
+            config=context.config,
+            pool_seeds=context.pool_seeds,
+            unknown_arguments=binding.unknown_arguments,
+        )
+    except _DENIALS as exc:
+        return resource_refusal(
+            exc,
+            KernelRefusalScene(
+                arguments=arguments, config=context.config, conventions=context.conventions
+            ),
+        )
+
+
+def admit_kernel_read(
+    binding: KernelResourceBinding, variables: dict[str, str], context: MCPCallContext
+) -> KernelAdmission | JsonRpcError:
+    """``admit_kernel_call`` for a ``resources/read``, a denial as its answer.
+
+    Asked on the URI's variables read as the spec's types, the arguments
+    ``read_kernel_resource`` dispatches with: ``true`` reaches the read as
+    ``True``, so a check refusing ``True`` refuses before the charge
+    (``test_a_reader_is_judged_on_the_variables_the_read_dispatches``). A
+    variable ``coerce_flat`` cannot read has no checked form, so the call is
+    judged on no arguments, as ``admit_kernel_call`` judges any failed shape: a
+    reader that judgment refuses is ``-32006`` before the charge
+    (``test_a_reader_refused_on_a_malformed_variable_is_told_so``), and one it
+    admits is charged and then told which variable is wrong, ``-32602`` with the
+    kernel's detail (``resource_refusal``,
+    ``test_an_admitted_reader_of_a_malformed_variable_is_charged_and_told_which``).
+
+    ``REJECT`` is the read's own policy, the one ``read_kernel_resource``
+    dispatches under, and it answers as ``IGNORE`` would only while every
+    variable a URI template names is a read the spec declares. Registration
+    does not refuse a template naming another yet
+    (``test_a_template_variable_no_read_declares_is_refused_at_registration``,
+    a strict xfail); until it does, such a variable fails the shape check here
+    as it fails it in dispatch, and the call is judged on no arguments.
+    """
+    arguments: dict[str, Any]
+    try:
+        arguments = coerce_flat(binding.spec.parameters(), variables)
+    except InvalidArguments:
+        arguments = dict(variables)
+    try:
+        return admit_kernel_call(
+            binding,
+            arguments,
+            user=context.token.user,
+            request=carry_token(context.http_request, context.token),
+            config=context.config,
+            pool_seeds=context.pool_seeds,
+            unknown_arguments=UnknownArguments.REJECT,
+        )
+    except _DENIALS as exc:
+        return resource_refusal(
+            exc,
+            KernelRefusalScene(
+                arguments=variables, config=context.config, conventions=context.conventions
+            ),
+        )
+
+
 def page_request(
     binding: KernelToolBinding, arguments: dict[str, Any], config: MCPConfig
 ) -> tuple[dict[str, Any], KernelPageRequest | None]:
@@ -189,9 +557,13 @@ def _presents_a_list(binding: KernelToolBinding) -> bool:
     The root ``kernel_tool_output_schema`` restates as ``"array"``: a ``many`` or
     ``returns_many`` service's rows, or ``None``.
     """
-    # A spec with no presenter has no output schema, and presents nothing at all
-    # (``test_kernel_shell_knobs``). The type keeps a single row that presents
-    # nothing serving ``{}`` (``test_a_result_that_presents_nothing_conforms_to_its_schema``).
+    # A spec with no presenter has no output schema (``test_no_presenter_yields_no_schema``),
+    # and what it returns as nothing is served as the object ``{}``, not a list
+    # (``test_a_service_returning_none_still_serves_an_object``,
+    # ``test_an_allow_none_retrieve_returns_an_empty_result_not_an_error``: both
+    # reach this with no schema, which the ``is not None`` conjunct answers).
+    # The type keeps a single row that presents nothing serving ``{}``
+    # (``test_a_result_that_presents_nothing_conforms_to_its_schema``).
     schema = spec_output_schema(binding.spec)
     return schema is not None and schema.get("type") == ["array", "null"]
 
@@ -355,11 +727,37 @@ def resource_read_result(
 def resource_refusal(exc: DispatchError | ServiceError, scene: KernelRefusalScene) -> JsonRpcError:
     """A kernel refusal on ``resources/read``, where there is no ``isError`` result.
 
-    The map's answer when it is a JSON-RPC error, which is a denied or
+    ``InvalidArguments`` is ``-32602`` with the kernel's ``detail`` tree in
+    ``data`` (``test_an_admitted_reader_of_a_malformed_variable_is_charged_and_told_which``
+    and its HTTP twin), the reader having been admitted and charged, as an
+    admitted tool call is told which argument is wrong after its charge. The
+    message is fixed and carries no value; the detail names the variable and the
+    kernel's own problem with it, and ``include_validation_value`` adds what was
+    sent, as it does for a tool. Only a read reaches this arm: the prelude and a
+    completion hand this function a denial.
+
+    Otherwise the map's answer when it is a JSON-RPC error, which is a denied or
     deactivated principal's ``-32006``. Any other refusal is raised on, to the
     transport's internal error, which is how the drf-services read answers a
     selector that raises.
     """
+    if isinstance(exc, InvalidArguments):
+        # Written as JSON writes it, so the integer row indices of a many call's
+        # tree are strings, as in a tool result; the kernel's order is kept.
+        return JsonRpcError(
+            JsonRpcErrorCode.INVALID_PARAMS,
+            "Invalid arguments",
+            data=json.loads(
+                json.dumps(
+                    validation_error_data(
+                        exc.detail,
+                        scene.arguments,
+                        include_value=scene.config.include_validation_value,
+                    ),
+                    default=str,
+                )
+            ),
+        )
     answer = answer_kernel_refusal(exc, scene)
     if isinstance(answer, JsonRpcError):
         return answer
@@ -386,7 +784,13 @@ def _coerce_int(value: Any, *, default: int) -> int:
 
 
 __all__ = [
+    "KernelAdmission",
     "KernelPageRequest",
+    "admit_kernel_call",
+    "admit_kernel_read",
+    "admit_kernel_tool_call",
+    "admits_without_arguments",
+    "refuses_a_row_alone",
     "bound_unpaginated_rows",
     "call_context",
     "carry_token",

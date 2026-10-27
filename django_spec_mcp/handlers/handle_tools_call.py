@@ -18,6 +18,7 @@ from django_spec_mcp.handlers.input_dispatch import (
     refusal_result,
 )
 from django_spec_mcp.handlers.invalidation_dispatch import announce_invalidations
+from django_spec_mcp.handlers.kernel_utils import KernelAdmission, admit_kernel_tool_call
 from django_spec_mcp.handlers.resolve_call_input import resolve_call_input
 from django_spec_mcp.handlers.run_kernel_tool import run_kernel_tool
 from django_spec_mcp.handlers.runs_on_kernel import runs_on_kernel
@@ -235,7 +236,27 @@ def _dispatch_tool_call(
                 return _forbidden(required_scopes), answered
         arguments_raw = answered
 
-        # After both checks, so a caller either one denies is never charged:
+        # A kernel spec's own checks, which the binding's ``permissions`` above
+        # do not hold, asked here on the arguments the tool will run with: after
+        # the answers are merged, so a route an answer names is the one judged,
+        # and before the charge and the shape check inside dispatch, so a
+        # caller they refuse is neither charged
+        # (``test_a_caller_the_spec_refuses_is_not_charged``) nor told which
+        # argument it left out
+        # (``test_a_caller_the_spec_denies_is_refused_before_the_argument_is_checked``),
+        # as the drf-services spec classes judged above refuse it.
+        # ``admit_kernel_call`` says what the checks are shown and how often
+        # they are asked: the grant it returns is what dispatch runs under, so
+        # when the arguments pass the shape check dispatch does not ask them
+        # again, and a streamed call's pre-flight asks them once more.
+        admission: KernelAdmission | None = None
+        if runs_on_kernel(binding):
+            admitted = admit_kernel_tool_call(binding, arguments_raw, context)
+            if isinstance(admitted, JsonRpcError):
+                return admitted, arguments_raw
+            admission = admitted
+
+        # After every check, so a caller one denies is never charged:
         # charged between them, a caller refused on the route its answer names
         # had spent a unit, and against a spent quota was told ``RATE_LIMITED``
         # rather than that the route is not its to name
@@ -261,6 +282,13 @@ def _dispatch_tool_call(
         if prior.refused_with is not None:
             return refusal_result(prior.refused_with), arguments_raw
 
+        if admission is not None:
+            return (
+                run_kernel_tool(
+                    binding, params, arguments_raw, admission, prior, context, otel_span
+                ),
+                arguments_raw,
+            )
         result = _run_service_tool(binding, params, arguments_raw, prior, context, otel_span)
         return result, arguments_raw
 
@@ -294,12 +322,10 @@ def _run_service_tool(
     answers; ``prior`` is what ``ask_for_input`` needs to carry them into a
     further round.
 
-    A kernel binding leaves here for ``run_kernel_tool``, the shell above having
-    run for it as for any other; a kernel selector tool reaches this function
-    too, since it is not a ``SelectorToolBinding``.
+    A kernel binding never reaches here: ``_dispatch_tool_call`` hands it to
+    ``run_kernel_tool`` with the admission its spec's checks gave, a kernel
+    selector tool included, since it is not a ``SelectorToolBinding``.
     """
-    if runs_on_kernel(binding):
-        return run_kernel_tool(binding, params, arguments_raw, prior, context, otel_span)
     argument_binding, unknown_arguments = services_dispatch_policies(binding)
     # Inside the ``try``: the strict ``split_url_kwargs`` raises DRF's
     # ``ValidationError`` for an omitted ``required=True`` kwarg, and that

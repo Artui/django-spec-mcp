@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from django_spec_mcp.handlers.kernel_utils import admit_kernel_tool_call
+from django_spec_mcp.handlers.runs_on_kernel import runs_on_kernel
 from django_spec_mcp.handlers.tasks_utils import (
     declares_tasks_extension,
     missing_capability_error,
@@ -96,7 +98,18 @@ def maybe_create_task(
             data={"requiredScopes": required_scopes} if required_scopes else None,
         )
 
-    # After the permission check and before anything durable exists: a denied
+    # A kernel spec's own checks, which the binding's ``permissions`` above do
+    # not hold, as the inline call asks them before its charge: without this
+    # the plain route queued a call its worker would refuse, where the
+    # streamed route's pre-flight answered ``403``
+    # (``test_a_caller_the_spec_refuses_gets_no_task``). Its grant is not kept,
+    # since the worker's replay is a later call, judged again.
+    if runs_on_kernel(binding):
+        admitted = admit_kernel_tool_call(binding, arguments, context)
+        if isinstance(admitted, JsonRpcError):
+            return admitted
+
+    # After the permission checks and before anything durable exists: a denied
     # caller should not spend a quota, and a caller who has spent one should
     # not be told so only once a record has been written and queued.
     retry_after: int | None = consume_rate_limits(

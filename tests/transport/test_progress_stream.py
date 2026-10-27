@@ -42,6 +42,7 @@ from django_service_specs import (
     SelectorKind,
     SelectorSpec,
     ServerArguments,
+    ServiceNotFound,
     ServiceSpec,
     UnknownArguments,
     Unrestricted,
@@ -376,10 +377,10 @@ async def test_the_server_arguments_are_laid_without_a_second_warning(
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("paging", [{"page": 2}, {"limit": 5}])
 async def test_a_paged_call_its_spec_denies_keeps_its_403(paging: dict[str, int]) -> None:
-    """``page`` and ``limit`` are the transport's, split off before dispatch, so
-    the pre-flight splits them too: left in, the kernel refused them as unknown
-    arguments ahead of the permission check, the pre-flight stood aside, and
-    the denial streamed inside a ``200``."""
+    """``page`` and ``limit`` are the transport's, split off before the checks
+    are asked on either path, so a caller the spec denies is a ``403`` whether
+    the call streams or not. The split itself is held by
+    ``test_a_paged_call_is_asked_once``."""
     streamed, plain = await _both(_server(), name="p.pages", arguments=paging)
     assert streamed.status_code == 403
     assert _wire(streamed, streamed.json()) == _wire(plain, plain.json())
@@ -400,19 +401,87 @@ async def test_a_check_reading_the_token_sees_the_calls_request(
 
 @pytest.mark.django_db(transaction=True)
 async def test_a_refusal_that_is_not_a_denial_is_left_to_the_handler() -> None:
-    """An unknown argument is an ``isError`` result on both paths, never a ``403``.
+    """An unknown argument from a caller the spec admits is an ``isError`` result
+    on both paths, never a ``403``.
 
     The pre-flight answers only the refusals ``KERNEL_REFUSALS`` answers
-    ``-32006``. The kernel checks the arguments before the permissions, so
-    even a caller ``_Deny`` would refuse is told about the argument first, as
-    dispatch tells it.
+    ``-32006``, and leaves every other one to the handler, which answers it in
+    the stream as it would without one.
     """
-    streamed, plain = await _both(_server(), name="p.denied", arguments={"stray": 1})
+    streamed, plain = await _both(_server(), name="p.export", arguments={"stray": 1})
     assert streamed.status_code == 200
     assert streamed["Content-Type"] == "text/event-stream"
     answer = await _answer(streamed)
     assert answer["result"]["isError"] is True
     assert answer == plain.json()
+
+
+class _LooksUpATenant(PermissionCheck):
+    """Raises a ``ServiceError`` rather than answering, as a check looking a tenant up may."""
+
+    def has_permission(self, principal: Any, spec: Any) -> bool:
+        raise ServiceNotFound("No such tenant.")
+
+
+@pytest.mark.django_db(transaction=True)
+async def test_a_service_error_a_check_raises_streams_the_plain_calls_answer() -> None:
+    """A ``ServiceError`` from a check is no denial, so the pre-flight leaves it
+    to the handler, which answers it as an ``isError`` result in the stream,
+    the answer the same call gets without a progress token."""
+    server = _bare()
+    server.register_tool(
+        ServiceSpec(service=lambda: {}, permissions=[_LooksUpATenant()]), name="p.tenant"
+    )
+
+    streamed, plain = await _both(server, name="p.tenant")
+
+    assert streamed.status_code == 200
+    answer = await _answer(streamed)
+    assert answer["result"]["isError"] is True
+    assert "No such tenant." in json.dumps(answer)
+    assert answer == plain.json()
+
+
+@pytest.mark.django_db(transaction=True)
+async def test_a_caller_the_spec_denies_is_refused_before_its_unknown_argument() -> None:
+    """A caller ``_Deny`` refuses is a ``403`` on both paths, its stray argument unread.
+
+    The transport asks the spec's checks before it reads the call's shape, on
+    both paths, so a caller the tool is not for learns nothing of the
+    arguments it takes.
+    """
+    streamed, plain = await _both(_server(), name="p.denied", arguments={"stray": 1})
+    assert streamed.status_code == 403
+    assert _wire(streamed, streamed.json()) == _wire(plain, plain.json())
+
+
+class _Counted(PermissionCheck):
+    """Admits everyone, counting how often it is asked."""
+
+    def __init__(self) -> None:
+        self.asked = 0
+
+    def has_permission(self, principal: Any, spec: Any) -> bool:
+        self.asked += 1
+        return True
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize(("token", "asked"), [("abc123", 2), (None, 1)], ids=["streamed", "plain"])
+async def test_a_streamed_call_asks_the_spec_once_more_than_a_plain_one(
+    token: Any, asked: int
+) -> None:
+    """Once by the pre-flight, before a stream commits its status, and once by the
+    handler, before the charge; ``adispatch`` runs under the handler's grant and
+    asks nothing again."""
+    check = _Counted()
+    server = _bare()
+    server.register_tool(ServiceSpec(service=lambda: {}, permissions=[check]), name="p.counted")
+
+    response = await _post(server, name="p.counted", token=token)
+
+    assert (await _answer(response))["result"]["structuredContent"] == {}
+    assert check.asked == asked
 
 
 @pytest.mark.django_db(transaction=True)
@@ -421,9 +490,8 @@ async def test_a_denied_call_the_spec_ignores_unknown_arguments_for_keeps_its_40
 
     A tool registered with ``UnknownArguments.IGNORE`` drops the stray
     argument and reaches its permission check, so a denied caller is a ``403``
-    on both paths. Judged under the default ``REJECT`` the pre-flight saw an
-    unknown-argument refusal, stood aside, and the denial streamed as
-    ``-32006`` inside a ``200``.
+    on both paths. That the policy is the binding's is held by
+    ``test_a_stray_argument_a_tool_ignores_is_asked_once``.
     """
     server = _bare()
     server.register_tool(

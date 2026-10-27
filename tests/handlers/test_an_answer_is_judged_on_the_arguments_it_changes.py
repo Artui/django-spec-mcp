@@ -18,10 +18,9 @@ The original is kept beside this file as
 ``test_an_answer_is_judged_on_the_arguments_it_changes_drfs.py``.
 
 Its last question, that a caller the spec refuses is not charged the rate
-limit, does not hold on the kernel path, answered or not: the spec's checks run
-inside ``dispatch``, after the shell has charged the call, so every refused
-caller is charged. Held as a strict ``xfail``, fixed by the shell judging a
-kernel spec's checks before the charge, as drfs did.
+limit, is asked as it was, answered or not: the shell asks a kernel spec's
+checks before the charge (``admit_kernel_call``), as drfs judged them in the
+binding's stack.
 """
 
 from __future__ import annotations
@@ -193,16 +192,6 @@ async def test_a_streamed_answer_changing_a_value_the_permission_reads_is_refuse
     assert ran == []
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "A kernel spec's checks run inside dispatch, after handle_tools_call*.py has charged "
-        "the rate limit, so every caller they refuse, answering or not, is charged and, "
-        "against a spent quota, told RATE_LIMITED. Fixed by the shell judging a kernel "
-        "spec's checks before the charge, as drfs did: on the merged arguments, before "
-        "consume_rate_limits, handing dispatch the grant."
-    ),
-)
 @pytest.mark.parametrize(
     ("sent", "answer"),
     [({"project": "7"}, {"project": "8"}), ({"project": "8"}, None)],

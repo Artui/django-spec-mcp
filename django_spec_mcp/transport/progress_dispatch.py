@@ -4,22 +4,9 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from django.http import StreamingHttpResponse
-from django_service_specs import (
-    DispatchError,
-    NotPermitted,
-    PrincipalUnavailable,
-    ProgressReporter,
-    apply_server_arguments,
-    check_call,
-)
+from django_service_specs import ProgressReporter, apply_server_arguments
 
-from django_spec_mcp.handlers.kernel_utils import (
-    call_context,
-    carry_token,
-    page_request,
-    principal_of,
-    unguarded_grant,
-)
+from django_spec_mcp.handlers.kernel_utils import admit_kernel_tool_call
 from django_spec_mcp.handlers.runs_on_kernel import runs_on_kernel
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import judge_tool_permissions
@@ -133,71 +120,59 @@ def preflight_permissions(method: str, params: Any, context: MCPCallContext) -> 
 
 
 def _kernel_refuses(binding: Any, arguments: dict[str, Any], context: MCPCallContext) -> bool:
-    """Whether the kernel's prelude refuses this call as a permission denial.
+    """Whether the kernel spec's own checks deny this call.
 
     A kernel binding's ``permissions`` hold only its ``scopes=`` gate, which
-    ``judge_tool_permissions`` has judged. The spec's own permission checks run
-    inside ``adispatch``, after a stream has committed its ``200``, so a
-    call they deny streamed ``-32006`` where the same call without a progress
-    token was a ``403`` with a challenge
+    ``judge_tool_permissions`` has judged. The handler asks the spec's checks
+    before it charges the call, but inside the stream, after it has committed
+    its ``200``, so a call they deny streamed ``-32006`` where the same call
+    without a progress token was a ``403`` with a challenge
     (``test_a_spec_check_denying_a_streamed_call_keeps_its_403_and_challenge``).
 
-    ``check_call`` is dispatch's own prelude, in dispatch's order, rather than
-    ``authorize`` alone: dispatch refuses a deactivated principal first
-    (``test_a_deactivated_principal_is_refused_before_the_stream``) and checks
-    the arguments before the permissions, so a denied caller sending an
-    unknown argument is told about the argument on both paths
-    (``test_a_refusal_that_is_not_a_denial_is_left_to_the_handler``, which
-    ``authorize`` fails).
+    Asked through ``admit_kernel_tool_call``, the step the handler asks them
+    in, so the two paths ask them alike: a deactivated principal is refused
+    (``test_a_deactivated_principal_is_refused_before_the_stream``), and a
+    caller they deny is refused before its arguments are checked, so it is
+    not told about an unknown argument it sent on either path
+    (``test_a_caller_the_spec_denies_is_refused_before_its_unknown_argument``).
+    That step splits a paged tool's ``page`` and ``limit`` off, so an admitted
+    paged call is asked on its arguments rather than judged on none
+    (``test_a_paged_call_is_asked_once``); hands the checks the
+    call context carrying the token
+    (``test_a_check_reading_the_token_sees_the_calls_request``), the grant of
+    an unguarded spec
+    (``test_an_unguarded_spec_streams_under_the_grant_its_call_carries``) and
+    the server's own ``pool_seeds``
+    (``test_a_check_reading_a_servers_own_seed_is_judged_on_that_seed``); and
+    checks the arguments under the binding's own ``unknown_arguments`` policy,
+    since a tool that ignores strays shows its checks the arguments without
+    them (``test_a_stray_argument_a_tool_ignores_is_asked_once``).
 
-    It is handed what ``run_kernel_tool_async`` hands ``adispatch``:
+    Handed the server's arguments laid over the caller's, since the handler
+    lays them only after this runs
+    (``test_a_check_reading_arguments_is_judged_on_the_servers_value``),
+    through the kernel's rule rather than ``apply_tool_server_arguments``,
+    which would log the dropped value a second time
+    (``test_the_server_arguments_are_laid_without_a_second_warning``).
 
-    - the server's arguments laid over the caller's, since the handler lays
-      them only after this runs
-      (``test_a_check_reading_arguments_is_judged_on_the_servers_value``),
-      through the kernel's rule rather than ``apply_tool_server_arguments``,
-      which would log the dropped value a second time
-      (``test_the_server_arguments_are_laid_without_a_second_warning``);
-    - a paged tool's arguments with ``page`` and ``limit`` split off, or the
-      kernel refuses them as unknown ahead of the permission check
-      (``test_a_paged_call_its_spec_denies_keeps_its_403``);
-    - the call context carrying the token
-      (``test_a_check_reading_the_token_sees_the_calls_request``);
-    - the grant of an unguarded spec
-      (``test_an_unguarded_spec_streams_under_the_grant_its_call_carries``);
-    - the binding's own ``unknown_arguments`` policy, since a tool that ignores
-      strays reaches its permission check where the default rejects them first
-      (``test_a_denied_call_the_spec_ignores_unknown_arguments_for_keeps_its_403``);
-    - and the server's own ``pool_seeds``, which a check naming a seed is
-      handed (``test_a_check_reading_a_servers_own_seed_is_judged_on_that_seed``).
-
-    Only the two refusals ``KERNEL_REFUSALS`` answers ``-32006`` deny here. Any
-    other is left to the handler, which answers it in the stream as it would
-    without one (``test_a_refusal_that_is_not_a_denial_is_left_to_the_handler``).
+    Only a denial, which ``KERNEL_REFUSALS`` answers ``-32006``, is answered
+    here. Any other refusal is left to the handler, which answers it in the
+    stream as it would without one
+    (``test_a_refusal_that_is_not_a_denial_is_left_to_the_handler``).
     Arguments a retry's answers would merge in are not seen here, as the
     drf-services pre-flight does not see them either: the handler judges
-    those again.
+    those again. So when the arguments pass the shape check the checks are
+    asked twice for a streamed call, here and in the handler, and once for a
+    plain one; ``adispatch`` runs under the handler's grant and asks them no
+    third time
+    (``test_a_streamed_call_asks_the_spec_once_more_than_a_plain_one``). A
+    call failing it is asked here as ``admit_kernel_call`` counts, so an
+    admitted ``many`` call with a refused row is asked three times streamed,
+    once here and twice in the handler
+    (``test_a_many_call_with_a_refused_row_is_asked_by_its_prelude_and_by_dispatch``).
     """
-    principal: Any = principal_of(context.token.user)
     laid: dict[str, Any] = apply_server_arguments(binding.spec, arguments, binding.server_arguments)
-    dispatched, _ = page_request(binding, laid, context.config)
-    try:
-        check_call(
-            binding.spec,
-            principal=principal,
-            arguments=dispatched,
-            grant=unguarded_grant(binding, principal, context.config),
-            pool_seeds=context.pool_seeds,
-            unknown_arguments=binding.unknown_arguments,
-            call_context=call_context(
-                carry_token(context.http_request, context.token), binding.name
-            ),
-        )
-    except (NotPermitted, PrincipalUnavailable):
-        return True
-    except DispatchError:
-        return False
-    return False
+    return isinstance(admit_kernel_tool_call(binding, laid, context), JsonRpcError)
 
 
 def _tool_binding(params: dict[str, Any], context: MCPCallContext) -> Any:

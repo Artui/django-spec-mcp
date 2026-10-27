@@ -7,16 +7,13 @@ from django_service_specs import DispatchError, ServiceError, dispatch
 from django_spec_mcp.elicitation.types.resolved_input import ResolvedInput
 from django_spec_mcp.handlers.answer_kernel_refusal import answer_kernel_refusal
 from django_spec_mcp.handlers.kernel_utils import (
+    KernelAdmission,
     bound_unpaginated_rows,
-    call_context,
-    carry_token,
     not_found_result,
     on_the_wire,
     page_request,
     present_tool_result,
-    principal_of,
     tool_result,
-    unguarded_grant,
 )
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.types.kernel_input_round import KernelInputRound
@@ -30,6 +27,7 @@ def run_kernel_tool(
     binding: KernelToolBinding,
     params: dict[str, Any],
     arguments: dict[str, Any],
+    admission: KernelAdmission,
     prior: ResolvedInput,
     context: MCPCallContext,
     otel_span: Any,
@@ -37,9 +35,13 @@ def run_kernel_tool(
     """Dispatch an admitted kernel tool call through ``dispatch`` and render its result.
 
     Reached from ``handle_tools_call`` once the shared shell has applied the
-    server arguments, judged the scope gate, merged a retry's answers and
-    charged the rate limits, so this is only the call: the kernel's
-    ``dispatch`` with the request's principal, a refusal answered through
+    server arguments, judged the scope gate, merged a retry's answers, asked
+    the spec's checks (``admit_kernel_call``) and charged the rate limits, so
+    this is only the call: the kernel's ``dispatch`` under ``admission``, the
+    principal, grant and call context the checks were asked with, so a call
+    whose arguments passed the shape check is not asked again (a call whose
+    arguments failed it is counted in ``admit_kernel_call``), a refusal
+    answered through
     ``KERNEL_REFUSALS``, a ``not_found`` worded as the drf-services path words
     it, and the presented value as the tool result.
     """
@@ -54,19 +56,16 @@ def run_kernel_tool(
         input_round=None if binding.is_selector else KernelInputRound(prior, context),
         span=otel_span,
     )
-    principal: Any = principal_of(context.token.user)
     try:
         result = dispatch(
             binding.spec,
-            principal=principal,
-            grant=unguarded_grant(binding, principal, context.config),
+            principal=admission.principal,
+            grant=admission.grant,
             arguments=dispatched,
             pool_seeds=context.pool_seeds,
             unknown_arguments=binding.unknown_arguments,
             progress=context.progress,
-            call_context=call_context(
-                carry_token(context.http_request, context.token), binding.name
-            ),
+            call_context=admission.call_context,
         )
     except (DispatchError, ServiceError) as exc:
         return on_the_wire(answer_kernel_refusal(exc, scene))
