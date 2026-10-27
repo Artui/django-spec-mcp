@@ -7,9 +7,10 @@ kernel path the first two are the kernel's own ``CALL_SEEDS``, read off the
 call's context, and ``serializer`` is an ordinary argument, since a kernel
 Validator binds nothing of that name. So this asks what each of the three is to
 a kernel tool: ``serializer`` is advertised and received; a read or a top-level
-Validator field named ``request`` or ``view`` should be refused at registration,
-because no caller's value of either name reaches the service. Both register and
-are listed today, which is the defect the strict xfail below holds.
+Validator field named ``request`` or ``view``, or after a seed the server
+registers, should be refused at registration, because no caller's value of that
+name reaches the service. Both register and are listed today, which is the
+defect the strict xfail below holds.
 
 The drf-services original pinned the constant to drf-services' own
 ``EDGE_SEEDS`` and ``DROPPED_EDGE_SEEDS``; it is kept beside this file as
@@ -25,6 +26,7 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import (
     CALL_SEEDS,
+    DEFAULT_POOL_SEEDS,
     RESERVED_POOL_SEEDS,
     DataclassValidator,
     Parameter,
@@ -49,8 +51,18 @@ def _echoed(out: Any, name: str) -> Any:
     return out["structuredContent"][name]
 
 
+SEEDS = DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme")
+
+EDGE_NAMES = sorted(CALL_SEEDS | {"serializer"})
+"""The constant's names, spelled out: the constant goes with the drfs registrars,
+and these questions outlive it."""
+
+
 def _server(spec: ServiceSpec) -> MCPServer:
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    # A registered seed beside the call's own, so ``tenant`` is asked as a seed's name.
+    server = MCPServer(
+        name="t", auth_backend=AllowAnyBackend(), session_store=None, pool_seeds=SEEDS
+    )
     server.register_tool(spec, name="echo", description="Echo the arguments.")
     return server
 
@@ -98,15 +110,16 @@ def _declaring(name: str, declaration: str) -> ServiceSpec:
     raises=pytest.fail.Exception,
     reason=(
         "register_tool admits a declaration no caller's value can reach: a read named "
-        "after a CALL_SEEDS name raises ImproperlyConfigured out of every dispatch, and a "
-        "top-level Validator field of that name is advertised while the service is handed "
-        "the call's own request or view (None in process). Fix: refuse both in "
-        "MCPServer._kernel_tool_binding, as the drfs registrars refuse a TOOL_EDGE_SEEDS name."
+        "after a CALL_SEEDS name or a registered seed raises ImproperlyConfigured out of "
+        "every dispatch, and a top-level Validator field of that name is advertised while "
+        "the service is handed the call's request or view (None in process) or the seed's "
+        "value. Fix: refuse both at registration, as the drfs registrars refuse a "
+        "TOOL_EDGE_SEEDS or pool_seeds name, or have the kernel refuse or honour them."
     ),
 )
 @pytest.mark.parametrize("declaration", ["read", "validator field"])
-@pytest.mark.parametrize("name", sorted(CALL_SEEDS))
-def test_a_declaration_named_after_a_call_seed_is_refused_at_registration(
+@pytest.mark.parametrize("name", [*sorted(CALL_SEEDS), "tenant"])
+def test_a_declaration_named_after_a_seed_is_refused_at_registration(
     name: str, declaration: str
 ) -> None:
     with pytest.raises(ImproperlyConfigured, match=rf"\['{name}'\]"):

@@ -64,13 +64,16 @@ def test_a_kernel_tool_carries_display_metadata(spec: Any) -> None:
     assert (binding.display_name, binding.display_description) == ("Nice Tool", "Does nice things")
 
 
+@pytest.mark.xfail(
+    strict=True,
+    raises=AttributeError,
+    reason="KernelToolBinding has no display_name / display_description fields yet.",
+)
 def test_the_binding_defaults_to_no_display_metadata() -> None:
-    # ``getattr`` with a default, as the catalog reads it: a binding without
-    # the fields and one with them unset both read as ``None`` here.
-    binding = _server().register_tool(_service(), name="t")
+    binding: Any = _server().register_tool(_service(), name="t")
 
-    assert getattr(binding, "display_name", None) is None
-    assert getattr(binding, "display_description", None) is None
+    assert binding.display_name is None
+    assert binding.display_description is None
 
 
 @_NOT_YET
