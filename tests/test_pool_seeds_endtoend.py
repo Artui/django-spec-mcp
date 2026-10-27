@@ -264,6 +264,9 @@ def test_a_kernel_tool_cannot_run_as_a_task_yet() -> None:
 )
 @pytest.mark.django_db(transaction=True)
 def test_a_client_argument_named_after_a_seed_is_refused(in_process: bool, spec: Any) -> None:
+    # Changed by design: the drfs path let the seed win over a client argument of
+    # its name and answered 200; the kernel refuses the argument as unknown, so no
+    # client value ever competes with a seed.
     # No validator stands in front of a selector, so this is the path where an
     # unreserved name would be client-controlled. Whether the selector reads the
     # seed undeclared or declares it ``reflected``, the caller's key is not one
