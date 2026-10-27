@@ -5,7 +5,7 @@ from typing import Any
 
 from django.core.exceptions import ImproperlyConfigured
 
-from django_spec_mcp.constants import ELICITATION_SCALAR_TYPES
+from django_spec_mcp.types.elicitation_scalar_types import ELICITATION_SCALAR_TYPES
 
 
 def build_requested_schema(schema: Mapping[str, Any]) -> dict[str, Any]:

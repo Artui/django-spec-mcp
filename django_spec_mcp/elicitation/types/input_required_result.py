@@ -4,8 +4,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from django_spec_mcp.constants import ResultType
 from django_spec_mcp.elicitation.types.elicit_request import ElicitRequest
+from django_spec_mcp.types.result_type import ResultType
 
 
 @dataclass(frozen=True)

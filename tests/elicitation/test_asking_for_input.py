@@ -16,10 +16,11 @@ import pytest
 from django.core import signing
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.constants import ELICITATION_KEY, REQUEST_STATE_SALT
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
+from django_spec_mcp.types.request_state_salt import REQUEST_STATE_SALT
 from tests.elicitation.conftest import TOOL, context
 from tests.utils import tool_error
 

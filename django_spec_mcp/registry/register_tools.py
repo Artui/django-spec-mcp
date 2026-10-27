@@ -32,13 +32,13 @@ import dataclasses
 from collections.abc import Iterable
 from typing import Any
 
-from django_spec_mcp.constants import ToolKind
 from django_spec_mcp.registry.types.selector_defaults import SelectorDefaults
 from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
 from django_spec_mcp.registry.types.service_defaults import ServiceDefaults
 from django_spec_mcp.registry.types.tool_binding import ToolBinding
 from django_spec_mcp.registry.types.tool_definition import ToolDefinition
 from django_spec_mcp.server.mcp_server import MCPServer
+from django_spec_mcp.types.tool_kind import ToolKind
 
 # Stripped before forwarding: these are the registration method's own
 # positional kwargs, or the discriminator, not values merged with defaults.

@@ -10,7 +10,6 @@ from django_spec_mcp._compat.acall import acall
 from django_spec_mcp._compat.tracing import span
 from django_spec_mcp._compat.utils import arun_selector_sync_safe
 from django_spec_mcp.auth.permissions.utils import DispatchShape
-from django_spec_mcp.constants import JsonRpcErrorCode
 from django_spec_mcp.handlers.guard_resource_object import guard_resource_object
 from django_spec_mcp.handlers.handle_tools_call import _span_attrs
 from django_spec_mcp.handlers.types.context import MCPCallContext
@@ -25,6 +24,7 @@ from django_spec_mcp.handlers.utils import (
 from django_spec_mcp.output.build_resource_contents import build_resource_contents
 from django_spec_mcp.output.enforce_result_bytes import enforce_result_bytes
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 
 
 async def handle_resources_read_async(

@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from django_spec_mcp.constants import JSONRPC_VERSION, JsonRpcId
+from django_spec_mcp.types.json_rpc_id import JsonRpcId
+from django_spec_mcp.types.jsonrpc_version import JSONRPC_VERSION
 
 
 @dataclass(frozen=True)

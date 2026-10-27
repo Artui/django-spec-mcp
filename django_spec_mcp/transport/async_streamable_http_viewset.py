@@ -19,14 +19,6 @@ from django_spec_mcp._compat.acall import acall
 from django_spec_mcp.auth.principal_for_token import principal_for_token
 from django_spec_mcp.auth.types.auth_backend import MCPAuthBackend
 from django_spec_mcp.config.types.mcp_config import MCPConfig
-from django_spec_mcp.constants import (
-    INTERNAL_ERROR_MESSAGE,
-    MCP_ERROR_HEADER,
-    MODERN_PROTOCOL_VERSIONS,
-    SESSIONLESS_METHODS,
-    SUBSCRIPTIONS_LISTEN_METHOD,
-    JsonRpcErrorCode,
-)
 from django_spec_mcp.handlers.async_dispatch import adispatch
 from django_spec_mcp.handlers.tasks_utils import (
     declares_tasks_extension,
@@ -74,6 +66,12 @@ from django_spec_mcp.transport.utils import (
     session_gate_failure,
 )
 from django_spec_mcp.transport.validate_modern_request import validate_modern_request
+from django_spec_mcp.types.internal_error_message import INTERNAL_ERROR_MESSAGE
+from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
+from django_spec_mcp.types.mcp_error_header import MCP_ERROR_HEADER
+from django_spec_mcp.types.modern_protocol_versions import MODERN_PROTOCOL_VERSIONS
+from django_spec_mcp.types.sessionless_methods import SESSIONLESS_METHODS
+from django_spec_mcp.types.subscriptions_listen_method import SUBSCRIPTIONS_LISTEN_METHOD
 
 _SESSION_HEADER: str = "Mcp-Session-Id"
 _VERSION_HEADER: str = "Mcp-Protocol-Version"

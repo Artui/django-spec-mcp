@@ -8,9 +8,9 @@ from rest_framework_services.types.selector_spec import SelectorSpec
 
 from django_spec_mcp.adapters.utils import merge_meta, validate_serializer_shapes
 from django_spec_mcp.auth.permissions.wrap_spec_permissions import wrap_spec_permissions
-from django_spec_mcp.constants import ResourceEncoding
 from django_spec_mcp.protocol.types.icon import Icon
 from django_spec_mcp.registry.types.resource_binding import ResourceBinding
+from django_spec_mcp.types.resource_encoding import ResourceEncoding
 
 # Every ``SelectorSpec`` field this adapter cannot carry, paired with the value
 # that means "not set". ``resources/read`` dispatches the bare callable through

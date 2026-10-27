@@ -31,12 +31,13 @@ from rest_framework_services.types.service_spec import ServiceSpec
 from django_spec_mcp import DRFPermissionAdapter, MCPServer, QueryParam
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
-from django_spec_mcp.constants import ELICITATION_KEY, JsonRpcErrorCode
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
+from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from tests.testapp.urlconf_for import urlconf_for
 from tests.utils import RefusingRateLimit
 

@@ -26,7 +26,7 @@ for when to turn either off, and
 schema an agent sees — field markings project the payload and the advertised
 `outputSchema` from the same declaration.
 
-::: django_spec_mcp.constants.OutputFormat
+::: django_spec_mcp.types.OutputFormat
 ::: django_spec_mcp.output.encode_json.encode_json
 ::: django_spec_mcp.output.encode_toon.encode_toon
 ::: django_spec_mcp.output.tool_result.build_tool_result

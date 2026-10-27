@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from django_spec_mcp.constants import JsonRpcErrorCode
 from django_spec_mcp.handlers.handle_completion_complete import handle_completion_complete
 from django_spec_mcp.handlers.handle_initialize import handle_initialize
 from django_spec_mcp.handlers.handle_ping import handle_ping
@@ -23,6 +22,7 @@ from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.protocol.types.initialize_result import InitializeResult
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 
 # Method dispatch table. The values return either:
 #   - a result payload (anything JSON-encodable),

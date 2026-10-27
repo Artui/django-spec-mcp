@@ -9,9 +9,10 @@ from typing import Any
 
 from django.core.exceptions import ImproperlyConfigured
 
-from django_spec_mcp.constants import UI_META_KEY, UI_RESOURCE_MIME_TYPE
 from django_spec_mcp.registry.resource_registry import ResourceRegistry
 from django_spec_mcp.registry.types.ui_tool_meta import UIToolMeta
+from django_spec_mcp.types.ui_meta_key import UI_META_KEY
+from django_spec_mcp.types.ui_resource_mime_type import UI_RESOURCE_MIME_TYPE
 
 
 class UnguardedToolWarning(UserWarning):

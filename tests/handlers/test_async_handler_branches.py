@@ -12,7 +12,6 @@ from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
 from django_spec_mcp.auth.types.token_info import TokenInfo
-from django_spec_mcp.constants import TASKS_EXTENSION_ID
 from django_spec_mcp.handlers.async_dispatch import adispatch
 from django_spec_mcp.handlers.handle_resources_read_async import handle_resources_read_async
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
@@ -23,6 +22,7 @@ from django_spec_mcp.registry.resource_registry import ResourceRegistry
 from django_spec_mcp.registry.tool_registry import ToolRegistry
 from django_spec_mcp.registry.types.resource_binding import ResourceBinding
 from django_spec_mcp.registry.types.tool_binding import ToolBinding
+from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
 from tests.utils import tool_error
 
 

@@ -3,9 +3,9 @@ from __future__ import annotations
 from typing import Any
 
 from django_spec_mcp.conf import get_setting
-from django_spec_mcp.constants import IconTheme
 from django_spec_mcp.protocol.types.icon import Icon
 from django_spec_mcp.protocol.types.implementation import Implementation
+from django_spec_mcp.types.icon_theme import IconTheme
 from django_spec_mcp.version import __version__ as package_version
 
 

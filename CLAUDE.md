@@ -8,11 +8,12 @@ Rules are non-negotiable unless flagged as a heuristic.
 1. **One exported class or function per file.** File name = `snake_case` of the symbol.
    `MCPServer` → `mcp_server.py`; `resolve_callable_kwargs` → `resolve_callable_kwargs.py`,
    or live in a sibling `utils.py` if used by several files in the same package.
-   **Exception:** `django_spec_mcp/constants.py` is the package's single home for
-   enums and constant-like module-level values (`OutputFormat`, `JsonRpcErrorCode`,
-   `ArgumentBinding`, `JSONRPC_VERSION`, reserved-key sets, etc.) and is the only
-   file allowed to export multiple symbols. New enums and shared constants go there,
-   not into their own leaf files.
+   There is no exception. The package's enums and shared constants (`OutputFormat`,
+   `JsonRpcErrorCode`, `JSONRPC_VERSION`, the reserved-key sets and the rest) live
+   one per file in the root `types/` package, `OutputFormat` in
+   `types/output_format.py`, and a new one goes there the same way. **`types/`
+   imports nothing else in the package**, so every subpackage can read it without
+   a cycle, and `tests/types/test_types_imports.py` holds that.
 2. **Private helpers used in only one file** stay there with a leading `_`.
 3. **Non-exported helpers shared across files** go into a sibling `utils.py`. Classes
    are allowed in `utils.py` if they are internal infrastructure.
@@ -41,7 +42,8 @@ Rules are non-negotiable unless flagged as a heuristic.
     types move into a `types/` sibling and are re-exported from the package's
     `__init__.py` for ergonomic imports. Example: `registry/types/tool_binding.py`
     holds the dataclass; `registry/tool_registry.py` holds the functional class.
-    `constants.py` remains the multi-export exception.
+    The root `types/` re-exports its whole surface from `types/__init__.py`, and the
+    package root re-exports only the public subset of it.
 
 ## API style rules
 
@@ -170,10 +172,10 @@ them from:
 
 A local copy of any of them is the drift this section exists to prevent, so the
 internal import is the lesser cost. Move each to the root import when drf-services
-exports it, and add nothing else to that module's list. `constants.TOOL_EDGE_SEEDS`
-is written out rather than composed from it, and a test pins it to
-`DROPPED_EDGE_SEEDS | EDGE_SEEDS`, so that the public constant does not import an
-internal module either.
+exports it, and add nothing else to that module's list. `TOOL_EDGE_SEEDS`
+(`types/tool_edge_seeds.py`) is written out rather than composed from it, and a
+test pins it to `DROPPED_EDGE_SEEDS | EDGE_SEEDS`, so that the public constant
+does not import an internal module either.
 
 Validation, output-serializer rendering, and kwarg-pool construction are **not**
 reproduced locally. The `handlers/` layer delegates to the sister repo's

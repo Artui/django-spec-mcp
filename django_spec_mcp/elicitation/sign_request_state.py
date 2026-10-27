@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from django.core import signing
 
-from django_spec_mcp.constants import REQUEST_STATE_SALT
 from django_spec_mcp.elicitation.types.request_state import RequestState
+from django_spec_mcp.types.request_state_salt import REQUEST_STATE_SALT
 
 
 def sign_request_state(state: RequestState) -> str:

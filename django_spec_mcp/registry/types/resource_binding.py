@@ -6,8 +6,8 @@ from typing import Any, Generic, TypeVar
 
 from django_service_specs import UNSET, SelectorKind, UnsetType
 
-from django_spec_mcp.constants import ResourceEncoding
 from django_spec_mcp.protocol.types.icon import Icon
+from django_spec_mcp.types.resource_encoding import ResourceEncoding
 
 ResultT = TypeVar("ResultT")
 
@@ -51,7 +51,7 @@ class ResourceBinding(Generic[ResultT]):
     """How the selector's value becomes the ``resources/read`` body. Declared rather
     than inferred from ``mime_type``, so advertising a new mime type never silently
     changes the encoding. See
-    [`ResourceEncoding`][django_spec_mcp.constants.ResourceEncoding]."""
+    [`ResourceEncoding`][django_spec_mcp.types.ResourceEncoding]."""
 
     permissions: tuple[Any, ...] = ()
     rate_limits: tuple[Any, ...] = ()

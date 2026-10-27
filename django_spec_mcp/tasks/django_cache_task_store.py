@@ -6,10 +6,10 @@ from typing import Any
 
 from django.core.cache import cache
 
-from django_spec_mcp.constants import TaskStatus
 from django_spec_mcp.protocol.types.task import Task
 from django_spec_mcp.tasks.types.task_record import TaskRecord
 from django_spec_mcp.tasks.utils import is_wellformed_task_id
+from django_spec_mcp.types.task_status import TaskStatus
 
 _KEY_PREFIX: str = "spec-mcp:task:"
 _NAMESPACE_DIGEST_CHARS: int = 12

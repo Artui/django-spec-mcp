@@ -5,8 +5,8 @@ from collections.abc import Mapping
 from typing import Any
 from urllib.parse import urlsplit
 
-from django_spec_mcp.constants import ToolContentKind
 from django_spec_mcp.protocol.types.tool_content_block import ToolContentBlock
+from django_spec_mcp.types.tool_content_kind import ToolContentKind
 
 # RFC 3986 §3.1 scheme syntax. A resource link is a URI a host resolves, so it
 # must be absolute; a bare string is not a link.

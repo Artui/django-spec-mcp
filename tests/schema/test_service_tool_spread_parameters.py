@@ -19,13 +19,13 @@ from typing import Any, TypedDict
 import pytest
 from asgiref.sync import sync_to_async
 from django.http import HttpRequest
-from django_service_specs import DEFAULT_POOL_SEEDS, UnsetType
+from django_service_specs import DEFAULT_POOL_SEEDS, UnknownArguments, UnsetType
+from rest_framework_services import ArgumentBinding
 from rest_framework_services.types.service_spec import ServiceSpec
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
-from django_spec_mcp.constants import ArgumentBinding, UnknownArguments
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.types.context import MCPCallContext

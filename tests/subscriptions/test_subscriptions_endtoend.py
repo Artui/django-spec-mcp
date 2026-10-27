@@ -14,8 +14,8 @@ from rest_framework_services.types.selector_spec import SelectorSpec
 
 from django_spec_mcp import MCPServer, SubscriptionFilter
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.constants import SUBSCRIPTION_ID_META_KEY
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp.types.subscription_id_meta_key import SUBSCRIPTION_ID_META_KEY
 from tests.subscriptions.urls import SERVER
 
 MODERN = "2026-07-28"

@@ -4,18 +4,15 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from django_service_specs import ServerArguments
+from django_service_specs import ServerArguments, UnknownArguments
+from rest_framework_services import ArgumentBinding
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from django_spec_mcp.constants import (
-    ArgumentBinding,
-    OutputFormat,
-    ToolKind,
-    UnknownArguments,
-)
 from django_spec_mcp.registry.types.query_param import QueryParam
 from django_spec_mcp.registry.types.url_kwarg import UrlKwarg
+from django_spec_mcp.types.output_format import OutputFormat
+from django_spec_mcp.types.tool_kind import ToolKind
 
 
 @dataclass(frozen=True)
@@ -27,7 +24,7 @@ class ToolDefinition:
     [`MCPServer.register_service_tool`][django_spec_mcp.server.mcp_server.MCPServer.register_service_tool]
     or
     [`MCPServer.register_selector_tool`][django_spec_mcp.server.mcp_server.MCPServer.register_selector_tool],
-    plus a [`ToolKind`][django_spec_mcp.constants.ToolKind] discriminator selecting
+    plus a [`ToolKind`][django_spec_mcp.types.ToolKind] discriminator selecting
     between them at dispatch time.
 
     Construct via ``service`` / ``selector``, which enforce the

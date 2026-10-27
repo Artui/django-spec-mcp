@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from django_spec_mcp.constants import ELICITATION_CREATE_METHOD
+from django_spec_mcp.types.elicitation_create_method import ELICITATION_CREATE_METHOD
 
 
 @dataclass(frozen=True)

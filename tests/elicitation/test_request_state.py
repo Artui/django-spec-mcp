@@ -12,11 +12,11 @@ from typing import Any
 import pytest
 from django.core import signing
 
-from django_spec_mcp.constants import REQUEST_STATE_SALT
 from django_spec_mcp.elicitation.fingerprint_request import fingerprint_request
 from django_spec_mcp.elicitation.sign_request_state import sign_request_state
 from django_spec_mcp.elicitation.types.request_state import RequestState
 from django_spec_mcp.elicitation.verify_request_state import verify_request_state
+from django_spec_mcp.types.request_state_salt import REQUEST_STATE_SALT
 
 PRINCIPAL: str = "7"
 FINGERPRINT: str = "a" * 64

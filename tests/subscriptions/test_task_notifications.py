@@ -17,7 +17,6 @@ from rest_framework_services.types.service_spec import ServiceSpec
 from django_spec_mcp import MCPServer, SubscriptionFilter
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
-from django_spec_mcp.constants import TaskStatus
 from django_spec_mcp.handlers.handle_tasks_cancel import handle_tasks_cancel
 from django_spec_mcp.handlers.handle_tasks_update import handle_tasks_update
 from django_spec_mcp.subscriptions.in_memory_subscription_broker import (
@@ -27,6 +26,7 @@ from django_spec_mcp.subscriptions.utils import topic_for_task
 from django_spec_mcp.tasks.create_task import create_task
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from django_spec_mcp.tasks.transition_task import transition_task
+from django_spec_mcp.types.task_status import TaskStatus
 from tests.subscriptions.test_subscription_core import _context
 from tests.tasks.conftest import RecordingExecutor, slow_service
 
@@ -172,7 +172,7 @@ MODERN = "2026-07-28"
 
 
 def _listen(client: Any, task_ids: list[str], *, declares: bool) -> Any:
-    from django_spec_mcp.constants import TASKS_EXTENSION_ID
+    from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
 
     return client.post(
         "/mcp/",

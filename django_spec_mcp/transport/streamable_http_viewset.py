@@ -16,13 +16,6 @@ from django_spec_mcp._compat.reject_awaitable import reject_awaitable
 from django_spec_mcp.auth.principal_for_token import principal_for_token
 from django_spec_mcp.auth.types.auth_backend import MCPAuthBackend
 from django_spec_mcp.config.types.mcp_config import MCPConfig
-from django_spec_mcp.constants import (
-    INTERNAL_ERROR_MESSAGE,
-    MCP_ERROR_HEADER,
-    MODERN_PROTOCOL_VERSIONS,
-    SESSIONLESS_METHODS,
-    JsonRpcErrorCode,
-)
 from django_spec_mcp.handlers.dispatch import dispatch
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.observability import get_logger, session_fingerprint
@@ -51,6 +44,11 @@ from django_spec_mcp.transport.utils import (
     session_gate_failure,
 )
 from django_spec_mcp.transport.validate_modern_request import validate_modern_request
+from django_spec_mcp.types.internal_error_message import INTERNAL_ERROR_MESSAGE
+from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
+from django_spec_mcp.types.mcp_error_header import MCP_ERROR_HEADER
+from django_spec_mcp.types.modern_protocol_versions import MODERN_PROTOCOL_VERSIONS
+from django_spec_mcp.types.sessionless_methods import SESSIONLESS_METHODS
 
 _SESSION_HEADER: str = "Mcp-Session-Id"
 _VERSION_HEADER: str = "Mcp-Protocol-Version"

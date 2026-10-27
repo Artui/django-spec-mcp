@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from django_service_specs import SelectorKind
+from django_service_specs import RESERVED_POOL_SEEDS, SelectorKind
 from rest_framework import serializers as drf_serializers
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_services.dispatch.utils import EDGE_SEEDS
@@ -27,7 +27,6 @@ from django_spec_mcp import (
     register_tools,
 )
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.constants import RESERVED_POOL_SEEDS
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.testapp.models import Invoice
 

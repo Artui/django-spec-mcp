@@ -26,11 +26,18 @@ from asgiref.sync import sync_to_async
 from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest
 from django.test import Client
-from django_service_specs import DEFAULT_POOL_SEEDS, UNSET, PoolSeeds, SelectorKind, UnsetType
+from django_service_specs import (
+    DEFAULT_POOL_SEEDS,
+    UNSET,
+    PoolSeeds,
+    SelectorKind,
+    UnknownArguments,
+    UnsetType,
+)
 from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import BasePermission, IsAuthenticated
-from rest_framework_services import InputRequired, NotClientInput
+from rest_framework_services import ArgumentBinding, InputRequired, NotClientInput
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 from typing_extensions import TypedDict
@@ -39,7 +46,6 @@ from django_spec_mcp import AgentConventions, MCPServer, UrlKwarg
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
-from django_spec_mcp.constants import ArgumentBinding, JsonRpcErrorCode, UnknownArguments
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.types.context import MCPCallContext
@@ -47,6 +53,7 @@ from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.registry.types.tool_binding import ToolBinding
 from django_spec_mcp.schema.utils import required_arguments
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from tests.conftest import post_jsonrpc
 from tests.testapp.models import Invoice
 from tests.testapp.serializers import InvoiceOutputSerializer

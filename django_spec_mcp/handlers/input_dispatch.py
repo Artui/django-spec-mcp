@@ -20,7 +20,6 @@ from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import AdditionalInputRequired
 
 from django_spec_mcp.auth.principal_for_token import principal_for_token
-from django_spec_mcp.constants import ELICITATION_KEY, ElicitAction, JsonRpcErrorCode
 from django_spec_mcp.elicitation.build_requested_schema import build_requested_schema
 from django_spec_mcp.elicitation.can_ask_client import can_ask_client
 from django_spec_mcp.elicitation.fingerprint_request import fingerprint_request
@@ -35,6 +34,9 @@ from django_spec_mcp.elicitation.verify_request_state import verify_request_stat
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.output.error_tool_result import build_error_tool_result
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.types.elicit_action import ElicitAction
+from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
+from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 
 TOOLS_CALL_METHOD: str = "tools/call"
 

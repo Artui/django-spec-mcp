@@ -22,7 +22,6 @@ from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.config.types.mcp_config import MCPConfig
-from django_spec_mcp.constants import JsonRpcErrorCode
 from django_spec_mcp.handlers.async_dispatch import adispatch
 from django_spec_mcp.handlers.handle_prompts_get import handle_prompts_get
 from django_spec_mcp.handlers.handle_prompts_get_async import handle_prompts_get_async
@@ -35,6 +34,7 @@ from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import resolve_bound, run_with_deadline
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from tests.testapp.models import Invoice
 from tests.testapp.serializers import InvoiceOutputSerializer
 from tests.utils import tool_error

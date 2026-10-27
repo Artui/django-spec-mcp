@@ -17,6 +17,7 @@ from typing import Any
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import (
     DEFAULT_POOL_SEEDS,
+    RESERVED_POOL_SEEDS,
     PoolSeeds,
     SelectorKind,
     ServerArguments,
@@ -24,15 +25,10 @@ from django_service_specs import (
 )
 from rest_framework import serializers as drf_serializers
 from rest_framework_dataclasses.serializers import DataclassSerializer
+from rest_framework_services import ArgumentBinding
 from rest_framework_services.dispatch.utils import DROPPED_EDGE_SEEDS
 from rest_framework_services.types.validate_channel_names import validate_channel_names
 
-from django_spec_mcp.constants import (
-    RESERVED_POOL_SEEDS,
-    RESERVED_POST_FETCH_KEYS,
-    TOOL_EDGE_SEEDS,
-    ArgumentBinding,
-)
 from django_spec_mcp.registry.types.query_param import QueryParam
 from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
 from django_spec_mcp.registry.types.tool_binding import ToolBinding
@@ -50,6 +46,8 @@ from django_spec_mcp.schema.utils import (
     selector_tool_inputs,
     target_lookup,
 )
+from django_spec_mcp.types.reserved_post_fetch_keys import RESERVED_POST_FETCH_KEYS
+from django_spec_mcp.types.tool_edge_seeds import TOOL_EDGE_SEEDS
 
 
 def validate_serializer_shapes(

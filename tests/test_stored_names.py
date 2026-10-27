@@ -19,7 +19,6 @@ from django_spec_mcp.auth.rate_limits import (
     token_bucket_rate_limit,
 )
 from django_spec_mcp.conf import DEFAULTS, get_setting
-from django_spec_mcp.constants import REQUEST_STATE_SALT
 from django_spec_mcp.subscriptions import redis_subscription_broker
 from django_spec_mcp.tasks import django_cache_task_store
 from django_spec_mcp.transport import (
@@ -27,6 +26,7 @@ from django_spec_mcp.transport import (
     redis_sse_broker,
     redis_sse_replay_buffer,
 )
+from django_spec_mcp.types.request_state_salt import REQUEST_STATE_SALT
 
 
 def test_every_stored_prefix_is_this_packages() -> None:

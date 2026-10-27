@@ -43,7 +43,6 @@ from django_spec_mcp import AgentConventions, MCPServer, QueryParam
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
-from django_spec_mcp.constants import TaskStatus
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.utils import read_shaping_error_result
@@ -51,6 +50,7 @@ from django_spec_mcp.schema.agent_conventions import PAGED_QUERY_PARAM_SCOPE
 from django_spec_mcp.tasks.create_task import create_task
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp.types.task_status import TaskStatus
 from tests.conftest import post_jsonrpc
 from tests.tasks.conftest import RecordingExecutor
 from tests.testapp.models import Invoice

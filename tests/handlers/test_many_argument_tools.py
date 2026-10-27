@@ -21,7 +21,7 @@ import jsonschema
 import pytest
 from django.http import HttpRequest
 from django.test import Client, override_settings
-from django_service_specs import SelectorKind, ServiceValidationError
+from django_service_specs import SelectorKind, ServiceValidationError, UnknownArguments
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
@@ -29,7 +29,6 @@ from django_spec_mcp import MCPServer, QueryParam, UrlKwarg
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
-from django_spec_mcp.constants import UnknownArguments
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.handle_tools_list import handle_tools_list

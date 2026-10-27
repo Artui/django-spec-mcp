@@ -14,10 +14,10 @@ from rest_framework_services.types.service_spec import ServiceSpec
 from django_spec_mcp import MCPServer, TaskPolicy
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
-from django_spec_mcp.constants import TASKS_EXTENSION_ID
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
 
 
 class RecordingExecutor:

@@ -5,12 +5,12 @@ from typing import Any
 
 from django_spec_mcp.auth.principal_for_token import principal_for_token
 from django_spec_mcp.auth.types.token_info import TokenInfo
-from django_spec_mcp.constants import TaskStatus
 from django_spec_mcp.protocol.types.task import Task
 from django_spec_mcp.tasks.types.task_executor import TaskExecutor
 from django_spec_mcp.tasks.types.task_record import TaskRecord
 from django_spec_mcp.tasks.types.task_store import TaskStore
 from django_spec_mcp.tasks.utils import new_task_id, now_iso
+from django_spec_mcp.types.task_status import TaskStatus
 
 
 def create_task(

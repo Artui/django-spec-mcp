@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from django_spec_mcp.constants import JsonRpcErrorCode, ResultType, TaskPolicy
 from django_spec_mcp.handlers.tasks_utils import (
     declares_tasks_extension,
     missing_capability_error,
@@ -16,6 +15,9 @@ from django_spec_mcp.handlers.utils import (
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.protocol.types.task import Task
 from django_spec_mcp.tasks.create_task import create_task
+from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
+from django_spec_mcp.types.result_type import ResultType
+from django_spec_mcp.types.task_policy import TaskPolicy
 
 
 def maybe_create_task(
@@ -29,7 +31,7 @@ def maybe_create_task(
     the caller runs the tool inline. Anything else is the response.
 
     **Three conditions, and all three must hold**: the binding opts in
-    ([`TaskPolicy`][django_spec_mcp.constants.TaskPolicy]), the server can actually
+    ([`TaskPolicy`][django_spec_mcp.types.TaskPolicy]), the server can actually
     run tasks, and the client declared the extension **on this request**. Each failure
     answers differently. A binding that says no runs inline. A server that cannot run
     tasks runs inline unless the policy is ``REQUIRED``, which makes it a

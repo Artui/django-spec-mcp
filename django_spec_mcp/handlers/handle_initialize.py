@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from django_spec_mcp.constants import TASKS_EXTENSION_ID, JsonRpcErrorCode
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.protocol.build_server_info import build_server_info
 from django_spec_mcp.protocol.types.implementation import Implementation
@@ -10,6 +9,8 @@ from django_spec_mcp.protocol.types.initialize_params import InitializeParams
 from django_spec_mcp.protocol.types.initialize_result import InitializeResult
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.protocol.types.server_capabilities import ServerCapabilities
+from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
+from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
 
 
 def handle_initialize(

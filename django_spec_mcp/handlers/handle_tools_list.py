@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from django_spec_mcp.constants import JsonRpcErrorCode, ToolContentKind
 from django_spec_mcp.handlers.listable_tool_bindings import listable_tool_bindings
 from django_spec_mcp.handlers.offered_tools import offered_tools
 from django_spec_mcp.handlers.pagination import paginate
@@ -23,6 +22,8 @@ from django_spec_mcp.schema.agent_conventions import append_agent_conventions
 from django_spec_mcp.schema.output_schema import build_output_schema
 from django_spec_mcp.schema.selector_tool_schema import build_selector_tool_input_schema
 from django_spec_mcp.schema.service_tool_schema import build_service_tool_input_schema
+from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
+from django_spec_mcp.types.tool_content_kind import ToolContentKind
 
 
 def handle_tools_list(

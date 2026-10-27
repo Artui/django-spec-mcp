@@ -20,7 +20,7 @@ from typing import Any
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest
-from django_service_specs import SelectorKind
+from django_service_specs import SelectorKind, UnknownArguments
 from rest_framework import serializers
 from rest_framework.permissions import AllowAny
 from rest_framework_services.types.selector_spec import SelectorSpec
@@ -29,7 +29,6 @@ from typing_extensions import TypedDict, Unpack
 from django_spec_mcp import MCPServer, UrlKwarg
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
-from django_spec_mcp.constants import UnknownArguments
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.registry.prompt_registry import PromptRegistry

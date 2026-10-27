@@ -1,16 +1,13 @@
 from __future__ import annotations
 
-from django_service_specs import SelectorKind
+from django_service_specs import SelectorKind, UnknownArguments
+from rest_framework_services import ArgumentBinding
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from django_spec_mcp.constants import (
-    ArgumentBinding,
-    OutputFormat,
-    ToolKind,
-    UnknownArguments,
-)
 from django_spec_mcp.registry.types.tool_definition import ToolDefinition
+from django_spec_mcp.types.output_format import OutputFormat
+from django_spec_mcp.types.tool_kind import ToolKind
 
 
 def _svc() -> None:

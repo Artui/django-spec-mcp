@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from typing import Any
 
-from django_spec_mcp.constants import TaskStatus
 from django_spec_mcp.protocol.types.task import Task
+from django_spec_mcp.types.task_status import TaskStatus
 
 
 @dataclass(frozen=True)

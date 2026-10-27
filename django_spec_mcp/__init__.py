@@ -13,6 +13,9 @@ Import them from ``rest_framework_services``, which is where they are declared
 and where that package's own ``__init__`` keeps them stable.
 """
 
+from django_service_specs import UnknownArguments
+from rest_framework_services import ArgumentBinding
+
 from django_spec_mcp.auth.permissions.django_perm_required import DjangoPermRequired
 from django_spec_mcp.auth.permissions.drf_permission_adapter import DRFPermissionAdapter
 from django_spec_mcp.auth.permissions.scope_required import ScopeRequired
@@ -20,23 +23,6 @@ from django_spec_mcp.auth.permissions.types.mcp_permission import MCPPermission
 from django_spec_mcp.auth.types.auth_backend import MCPAuthBackend
 from django_spec_mcp.auth.types.self_checking import SelfChecking
 from django_spec_mcp.auth.types.token_info import TokenInfo
-from django_spec_mcp.constants import (
-    UI_EXTENSION_ID,
-    UI_RESOURCE_MIME_TYPE,
-    ArgumentBinding,
-    IconTheme,
-    JsonRpcErrorCode,
-    NotificationKind,
-    OutputFormat,
-    ResourceEncoding,
-    TaskPolicy,
-    TaskStatus,
-    ToolContentKind,
-    ToolKind,
-    UIPermission,
-    UIVisibility,
-    UnknownArguments,
-)
 from django_spec_mcp.protocol.types.icon import Icon
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.protocol.types.prompt_argument import PromptArgument
@@ -74,6 +60,19 @@ from django_spec_mcp.transport.in_memory_sse_replay_buffer import InMemorySSERep
 from django_spec_mcp.transport.types.session_store import SessionStore
 from django_spec_mcp.transport.types.sse_broker import SSEBroker
 from django_spec_mcp.transport.types.sse_replay_buffer import SSEReplayBuffer
+from django_spec_mcp.types.icon_theme import IconTheme
+from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
+from django_spec_mcp.types.notification_kind import NotificationKind
+from django_spec_mcp.types.output_format import OutputFormat
+from django_spec_mcp.types.resource_encoding import ResourceEncoding
+from django_spec_mcp.types.task_policy import TaskPolicy
+from django_spec_mcp.types.task_status import TaskStatus
+from django_spec_mcp.types.tool_content_kind import ToolContentKind
+from django_spec_mcp.types.tool_kind import ToolKind
+from django_spec_mcp.types.ui_extension_id import UI_EXTENSION_ID
+from django_spec_mcp.types.ui_permission import UIPermission
+from django_spec_mcp.types.ui_resource_mime_type import UI_RESOURCE_MIME_TYPE
+from django_spec_mcp.types.ui_visibility import UIVisibility
 from django_spec_mcp.ui.build_app_document import build_app_document
 from django_spec_mcp.version import __version__
 

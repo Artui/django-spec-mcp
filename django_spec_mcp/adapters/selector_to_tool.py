@@ -10,8 +10,10 @@ from django_service_specs import (
     FieldMarking,
     PoolSeeds,
     ServerArguments,
+    UnknownArguments,
     UnsetType,
 )
+from rest_framework_services import ArgumentBinding
 from rest_framework_services.types.selector_spec import SelectorSpec
 
 from django_spec_mcp.adapters.utils import (
@@ -26,18 +28,14 @@ from django_spec_mcp.adapters.utils import (
     validate_url_kwargs,
 )
 from django_spec_mcp.auth.permissions.wrap_spec_permissions import wrap_spec_permissions
-from django_spec_mcp.constants import (
-    ArgumentBinding,
-    OutputFormat,
-    TaskPolicy,
-    ToolContentKind,
-    UnknownArguments,
-)
 from django_spec_mcp.protocol.types.icon import Icon
 from django_spec_mcp.registry.types.query_param import QueryParam
 from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
 from django_spec_mcp.registry.types.url_kwarg import UrlKwarg
 from django_spec_mcp.schema.utils import selector_tool_inputs
+from django_spec_mcp.types.output_format import OutputFormat
+from django_spec_mcp.types.task_policy import TaskPolicy
+from django_spec_mcp.types.tool_content_kind import ToolContentKind
 
 
 def selector_spec_to_tool(

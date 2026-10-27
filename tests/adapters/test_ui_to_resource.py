@@ -9,16 +9,14 @@ from django.template import TemplateDoesNotExist
 from django_service_specs import SelectorKind
 
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.constants import (
-    UI_META_KEY,
-    UI_RESOURCE_MIME_TYPE,
-    ResourceEncoding,
-    UIPermission,
-)
 from django_spec_mcp.registry.types.ui_csp import UICsp
 from django_spec_mcp.registry.types.ui_resource_meta import UIResourceMeta
 from django_spec_mcp.server.mcp_server import MCPServer
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp.types.resource_encoding import ResourceEncoding
+from django_spec_mcp.types.ui_meta_key import UI_META_KEY
+from django_spec_mcp.types.ui_permission import UIPermission
+from django_spec_mcp.types.ui_resource_mime_type import UI_RESOURCE_MIME_TYPE
 
 
 def _make() -> MCPServer:

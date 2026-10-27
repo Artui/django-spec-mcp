@@ -17,12 +17,12 @@ import pytest
 from django.core.cache import cache
 from django.core.cache.backends.base import CacheKeyWarning
 
-from django_spec_mcp.constants import TaskStatus
 from django_spec_mcp.protocol.types.task import Task
 from django_spec_mcp.tasks.django_cache_task_store import DjangoCacheTaskStore
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from django_spec_mcp.tasks.types.task_record import TaskRecord
 from django_spec_mcp.tasks.utils import new_task_id
+from django_spec_mcp.types.task_status import TaskStatus
 
 
 def _record(task_id: str = "t1", **task_kwargs: Any) -> TaskRecord:

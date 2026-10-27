@@ -15,7 +15,7 @@ from typing import Any
 import pytest
 from django.test import Client
 
-from django_spec_mcp.constants import ELICITATION_KEY
+from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
 from tests.elicitation.conftest import TOOL
 
 MODERN = "2026-07-28"

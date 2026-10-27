@@ -16,8 +16,8 @@ from rest_framework_services.types.service_spec import ServiceSpec
 
 from django_spec_mcp import MCPServer, TaskPolicy
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.constants import TASKS_EXTENSION_ID
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
+from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
 from tests.tasks.conftest import RecordingExecutor, slow_service
 from tests.tasks.urls import EXECUTOR, SERVER
 

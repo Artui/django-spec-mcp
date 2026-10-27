@@ -10,12 +10,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from django_service_specs import UnknownArguments
 from rest_framework.permissions import AllowAny
+from rest_framework_services import ArgumentBinding
 from typing_extensions import TypedDict, Unpack
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.constants import ArgumentBinding, UnknownArguments
 
 server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
 
