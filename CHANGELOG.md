@@ -28,7 +28,10 @@ carries; releases up to 0.54.0 are in
   `KernelResourceBinding` built by hand derives the same gate from its own
   `scopes`, and refuses `scopes=()`. Registration refuses a spec
   that is not a kernel spec, a knob of the other kind of tool, `scopes=()`,
-  `UnknownArguments.PASSTHROUGH` and, for now, any `task_policy` but the default.
+  `UnknownArguments.PASSTHROUGH`, a resource's `uri_template` variable that no
+  read or shape of the spec declares or that the server fills (a reflected read, or
+  a key a `kwargs=` provider always fills), each named in the error, and, for now,
+  any `task_policy` but the default.
   A spec declaring `permissions=None` is refused under
   `REQUIRE_TOOL_PERMISSIONS`; with the setting off it registers with an
   `UnguardedToolWarning` and is called without a permission check, under a
@@ -88,11 +91,13 @@ carries; releases up to 0.54.0 are in
   variables read as the spec's types, `true` for a `boolean` as `True`.
 - **A kernel resource is watchable only by a caller who may read it.** Its
   spec's checks are asked as the read asks them.
-- **`build_requested_schema` takes `admitted=`.** The argument names a tool
-  takes from a client, for a caller that knows them: a property outside the set
-  is refused with `ImproperlyConfigured` when the schema is built, since the
-  answer comes back as an argument the call would refuse as unknown after the
-  user filled it in. `None`, the default, asks nothing of the names.
+- **A kernel tool's question is checked against the names it takes.** An
+  `AdditionalInputRequired` asking for a property that the spec does not declare,
+  or that the server fills for the call (a `server_arguments` name, a pool seed or
+  a key a provider always fills), is answered `-32603` naming the property and the
+  names the tool does take, instead of being put to the user whose answer the call
+  would then refuse, drop or replace. `build_requested_schema` takes the names as
+  `admitted=`; `None`, the default, asks nothing of them.
 - **Kernel tool registration rules.** A kernel `LIST` tool registered without
   `paginate=True` warns `UnboundedListWarning`, and `REQUIRE_LIST_PAGINATION` refuses it. A paginated
   `LIST` whose spec declares a read named `page` or `limit` is refused, since

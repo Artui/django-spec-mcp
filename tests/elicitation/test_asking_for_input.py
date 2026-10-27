@@ -446,6 +446,14 @@ def test_a_key_a_provider_fills_is_not_admitted() -> None:
     assert "'account'" in out.message
 
 
+def test_a_refused_question_fails_even_for_a_client_that_cannot_be_asked() -> None:
+    """As an unrenderable schema does: the check precedes the capability one."""
+    server = _asking_server(_asks_for_account)
+    out = handle_tools_call({"name": TOOL, "arguments": {}}, context(server, capabilities={}))
+    assert isinstance(out, JsonRpcError)
+    assert out.code == -32603
+
+
 def test_a_field_the_caller_sends_is_admitted() -> None:
     """The control for the two above: the same field with no server filling it is asked."""
     server = _asking_server(_asks_for_account, validator=DataclassValidator(_Scoped))

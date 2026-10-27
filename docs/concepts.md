@@ -1000,7 +1000,11 @@ What changes against the drf-services tools:
   check is then answered `-32602` with message `Invalid arguments` and the
   kernel's detail tree under `data.detail`, as an admitted tool call is told
   which argument is wrong; `INCLUDE_VALIDATION_VALUE` adds the variables sent
-  under `data.value`.
+  under `data.value`. A `uri_template` variable must be a read or shape of the
+  spec that the server does not fill: registration raises `ImproperlyConfigured`
+  naming the resource and the variable when no read declares it, and when a
+  reflected read or a key a `kwargs=` provider always fills makes it the server's,
+  since every read would be refused or would serve the provider's value for any URI.
 
 `register_tools(registry, overrides={"invoices.create": {"scopes": ("billing",)}})`
 registers every entry of a kernel `SpecRegistry`, each under its registry name,
@@ -2189,10 +2193,20 @@ def delete_rows(*, data):
     ...
 ```
 
-`confirmed` is an ordinary field on the tool's input serializer. The server turns
+`confirmed` is an ordinary argument of the tool. The server turns
 the raise into a question, the client puts it to the user, and the answer arrives
-back as that ordinary field — so the service reads it exactly as it would read
+back as that ordinary argument — so the service reads it exactly as it would read
 anything else a caller sent.
+
+A kernel tool admits an answer only under a name it takes from a client: a
+parameter the spec declares, less every name the server fills for the call (a
+`server_arguments` entry, a pool seed, or a key a `kwargs=` or `input_data=`
+provider always fills). A question for any other property is a `-32603` naming
+the property and the names the tool does take, whether or not the client can be
+asked, since the answer would come back as an argument the call refuses, drops
+or replaces. The author finds out on the first call, not when a user's answer is
+refused. A drf-services tool has no such set and asks for any property the
+schema can render.
 
 ### What goes over the wire
 
