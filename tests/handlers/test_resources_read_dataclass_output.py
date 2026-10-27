@@ -37,6 +37,7 @@ from django_service_specs import (
     SelectorSpec,
     Unrestricted,
 )
+from typing_extensions import TypedDict
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
@@ -150,8 +151,10 @@ def test_a_template_variable_no_read_declares_is_refused_at_registration() -> No
 
 
 def test_the_refusal_names_the_resource_and_each_variable_no_read_declares() -> None:
-    """``pk`` is declared and so is left out; the other two are listed, in order, which a
-    check naming only the first it found, or all of them, would not do."""
+    """``pk`` is declared and so is left out. The other six are listed sorted. The template
+    names them in reverse sorted order, so a list built in template order fails, and six
+    names make a set that happens to iterate sorted a one-in-720 chance per hash seed
+    (checked over ``PYTHONHASHSEED`` 0 to 7), so a list built from a set fails too."""
     server = MCPServer(name="t", auth_backend=AllowAnyBackend())
     with pytest.raises(ImproperlyConfigured) as raised:
         server.register_resource(
@@ -159,12 +162,126 @@ def test_the_refusal_names_the_resource_and_each_variable_no_read_declares() -> 
                 kind=SelectorKind.RETRIEVE, selector=_invoice, reads=_PK, permissions=OPEN
             ),
             name="bad",
-            uri_template="bad://{tenant}/{pk}/{area}",
+            uri_template="bad://{zone}/{yard}/{pk}/{mid}/{lane}/{bay}/{area}",
         )
     message = str(raised.value)
     assert "Resource 'bad'" in message
-    assert "['area', 'tenant']" in message
+    assert "['area', 'bay', 'lane', 'mid', 'yard', 'zone']" in message
     assert "'pk'" not in message
+    assert "fills" not in message
+
+
+class _PkScope(TypedDict):
+    pk: int
+
+
+def _provides_the_pk() -> _PkScope:
+    return {"pk": 1}
+
+
+class _ManyScope(TypedDict):
+    zone: str
+    yard: str
+    mid: str
+    lane: str
+    bay: str
+
+
+def _provides_many() -> _ManyScope:
+    return {"zone": "z", "yard": "y", "mid": "m", "lane": "l", "bay": "b"}
+
+
+def test_the_variables_a_provider_fills_are_listed_sorted() -> None:
+    """Five provider-filled names, in reverse sorted order in the template: the same two
+    ways to get the order wrong as the undeclared list, held for this one too."""
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend())
+    names = ["zone", "yard", "mid", "lane", "bay"]
+    with pytest.raises(ImproperlyConfigured) as raised:
+        server.register_resource(
+            SelectorSpec(
+                kind=SelectorKind.RETRIEVE,
+                selector=_invoice,
+                reads=Parameters([Parameter(name, "string") for name in names]),
+                kwargs=_provides_many,
+                permissions=OPEN,
+            ),
+            name="bad",
+            uri_template="bad://" + "/".join("{" + name + "}" for name in names),
+        )
+    assert "['bay', 'lane', 'mid', 'yard', 'zone']" in str(raised.value)
+
+
+def test_a_variable_a_reflected_read_the_server_fills_is_refused() -> None:
+    """A read named ``view`` and marked ``reflected`` is declared, and dispatch fills it from
+    the call and refuses a caller's argument of its name, so a ``{view}`` variable would
+    be answered ``Unknown argument.`` at every read."""
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend())
+    with pytest.raises(ImproperlyConfigured) as raised:
+        server.register_resource(
+            SelectorSpec(
+                kind=SelectorKind.RETRIEVE,
+                selector=_invoice,
+                reads=Parameters(
+                    [
+                        Parameter("pk", "integer", required=True),
+                        Parameter("view", "string", reflected=True),
+                    ]
+                ),
+                permissions=OPEN,
+            ),
+            name="bad",
+            uri_template="bad://{pk}/{view}",
+        )
+    message = str(raised.value)
+    assert "Resource 'bad'" in message
+    assert "['view']" in message
+    assert "server fills" in message
+    # Declared, so not the other clause.
+    assert "not among" not in message
+
+
+def test_a_variable_a_provider_always_fills_is_refused() -> None:
+    """A typed ``kwargs=`` provider that always returns ``pk`` replaces whatever the URI
+    carries, so the read would serve the provider's row for every URI."""
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend())
+    with pytest.raises(ImproperlyConfigured) as raised:
+        server.register_resource(
+            SelectorSpec(
+                kind=SelectorKind.RETRIEVE,
+                selector=_invoice,
+                reads=_PK,
+                kwargs=_provides_the_pk,
+                permissions=OPEN,
+            ),
+            name="bad",
+            uri_template="bad://{pk}",
+        )
+    message = str(raised.value)
+    assert "['pk']" in message
+    assert "server fills" in message
+    assert "not among" not in message
+
+
+def test_a_template_naming_both_kinds_of_bad_variable_says_both() -> None:
+    """The two clauses are independent: one undeclared variable and one the server fills."""
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend())
+    with pytest.raises(ImproperlyConfigured) as raised:
+        server.register_resource(
+            SelectorSpec(
+                kind=SelectorKind.RETRIEVE,
+                selector=_invoice,
+                reads=_PK,
+                kwargs=_provides_the_pk,
+                permissions=OPEN,
+            ),
+            name="bad",
+            uri_template="bad://{pk}/{other}",
+        )
+    message = str(raised.value)
+    assert "['other']" in message
+    assert "not among" in message
+    assert "['pk']" in message
+    assert "server fills" in message
 
 
 @pytest.mark.django_db
