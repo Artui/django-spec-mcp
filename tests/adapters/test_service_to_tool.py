@@ -4,9 +4,11 @@ A ``many=True`` spec validates a list of rows, and MCP ``arguments`` is always a
 JSON object, so the list travels under the one argument ``many_argument`` names.
 Asked of kernel specs registered with ``register_tool`` and ``register_tools``:
 such a spec registers, advertises the list under that name and delivers the
-validated rows to ``data``; and the declarations that would stop the list
-reaching dispatch are refused by the kernel, a read taking the argument's name
-and a target lookup beside the list.
+validated rows to ``data``; a row that fails validation is named by its index in
+the detail; and the declarations that would stop the list reaching dispatch are
+refused by the kernel, a read taking the name ``many_argument`` declares (and
+not the default ``items`` when it declares another) and a target lookup beside
+the list.
 
 The drf-services original also refused a ``UrlKwarg`` or ``QueryParam`` taking
 the argument's name and a spreading ``ArgumentBinding``; a kernel spec has
@@ -93,6 +95,34 @@ def test_a_payload_that_is_not_a_list_is_a_validation_error() -> None:
     out = server.call_tool("t", {"items": {"number": "A"}}, user=None).to_dict()
 
     assert tool_error(out)["type"] == "validation_error"
+
+
+def test_a_row_that_fails_validation_is_named_by_its_index_in_the_detail() -> None:
+    # The kernel keys the detail by the failing row's index under the argument
+    # that carries the list, whichever DRF is installed; the drf-services answer
+    # took its shape from the DRF version.
+    server = _registered(_many())
+
+    out = server.call_tool(
+        "t", {"items": [{"number": "A"}, {"amount_cents": 2}]}, user=None
+    ).to_dict()
+
+    error = tool_error(out)
+    assert error["type"] == "validation_error"
+    assert error["detail"] == {"items": {"1": {"number": ["This field is required."]}}}
+
+
+def test_a_many_spec_may_read_a_name_other_than_the_one_it_declares_for_the_list() -> None:
+    # The collision is with ``many_argument``, not with the default: under
+    # ``rows`` a read of ``items`` is free, and a read of ``rows`` is not.
+    spec = _many(many_argument="rows", reads=Parameters([Parameter("items", "string")]))
+
+    listed: Any = _registered(spec).list_tools(user=None)
+    schema = listed["tools"][0]["inputSchema"]
+
+    assert set(schema["properties"]) == {"rows", "items"}
+    with pytest.raises(ImproperlyConfigured, match="'rows'"):
+        _registered(_many(many_argument="rows", reads=Parameters([Parameter("rows", "string")])))
 
 
 def test_a_many_spec_in_a_registry_registers() -> None:

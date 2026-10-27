@@ -5,8 +5,8 @@ it verbatim: nothing here validates, reserves, or interprets a key. The
 registration parameter is spelled ``meta`` and lands on the binding as the single
 source of truth and on the listing payload. Asked here of the kernel route:
 ``register_tool``, ``register_tools(overrides=)`` and the kernel form of
-``register_resource``, through ``resources/templates/list`` and the
-``contents`` block of a read, sync and async; and of prompts, which are no spec
+``register_resource``, through ``resources/list``, ``resources/templates/list``
+and the ``contents`` block of a read, sync and async; and of prompts, which are no spec
 and register the same way on either route.
 
 :func:`merge_meta` is the one place contributions are combined, so a feature
@@ -15,9 +15,12 @@ rather than touching every binding.
 
 The drf-services original also asked it of the ``service_tool`` /
 ``selector_tool`` / ``resource`` decorators and of ``ToolDefinition`` entries,
-which build drf-services specs and have no kernel counterpart: a kernel spec is
+all of which build drf-services specs and have no kernel counterpart: a kernel spec is
 declared once and registered, and ``register_tools(overrides=)`` is the bulk
-form. It is kept beside this file as ``test_meta_passthrough_drfs.py``.
+form. ``test_prompt_decorator_accepts_meta`` is not among them: ``@server.prompt``
+builds no spec, so it is asked of the prompt registration below, which is the same
+call on either route. The original is kept beside this file as
+``test_meta_passthrough_drfs.py``.
 """
 
 from __future__ import annotations
@@ -41,6 +44,7 @@ from django_spec_mcp.adapters.utils import merge_meta
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_prompts_list import handle_prompts_list
+from django_spec_mcp.handlers.handle_resources_list import handle_resources_list
 from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
 from django_spec_mcp.handlers.handle_resources_read_async import handle_resources_read_async
 from django_spec_mcp.handlers.handle_resources_templates_list import (
@@ -85,6 +89,12 @@ def _thing() -> SelectorSpec:
         selector=lambda *, pk: {"pk": pk},
         permissions=[Unrestricted()],
         reads=Parameters([Parameter("pk", "string", required=True)]),
+    )
+
+
+def _fixed() -> SelectorSpec:
+    return SelectorSpec(
+        kind=SelectorKind.RETRIEVE, selector=lambda: {"all": True}, permissions=[Unrestricted()]
     )
 
 
@@ -172,6 +182,21 @@ def test_a_registry_override_carries_meta_to_one_entry() -> None:
 # ---------- resources ----------
 
 
+def test_resource_meta_reaches_resources_list() -> None:
+    # A fixed URI lists in ``resources/list``; a templated one is a template and
+    # lists in ``resources/templates/list`` below.
+    server = _server()
+    binding = server.register_resource(
+        _fixed(), name="thing", uri_template="things://all", meta=UI_META
+    )
+
+    payload = handle_resources_list(None, _ctx(server))
+
+    assert binding.meta == UI_META
+    assert _entry(payload, "resources", "thing")["_meta"] == UI_META
+    assert handle_resources_templates_list(None, _ctx(server))["resourceTemplates"] == []
+
+
 def test_resource_template_meta_reaches_templates_list() -> None:
     server = _resource(UI_META)
 
@@ -230,6 +255,17 @@ def test_prompt_meta_reaches_prompts_list() -> None:
 
     assert binding.meta == UI_META
     assert _entry(handle_prompts_list(None, _ctx(server)), "prompts", "greet")["_meta"] == UI_META
+
+
+def test_prompt_decorator_accepts_meta() -> None:
+    # Prompts are no spec, so the decorator is the same on either route.
+    server = _server()
+
+    @server.prompt(name="d.greet", meta=UI_META)
+    def greet(**_: Any) -> str:
+        return "hi"
+
+    assert _entry(handle_prompts_list(None, _ctx(server)), "prompts", "d.greet")["_meta"] == UI_META
 
 
 def test_a_prompt_without_meta_emits_no_meta_key() -> None:

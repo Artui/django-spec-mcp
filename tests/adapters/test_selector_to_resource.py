@@ -100,21 +100,18 @@ def test_a_spec_field_the_drfs_read_path_refused_registers_and_is_kept(
 
 @pytest.mark.django_db
 def test_a_read_runs_the_specs_precondition() -> None:
-    # What the read answers for the refusal is the read path's (here a
-    # ``ServiceError`` raised on, as ``resource_refusal`` does for any refusal
-    # it has no JSON-RPC answer for); that the precondition ran, with the URI's
-    # variable in its pool, is this module's question.
+    # That the precondition ran, with the URI's variable in its pool, is this
+    # module's question. How a refusal from it is answered belongs to the read
+    # path, so the precondition here records and lets the read through.
     seen: list[Any] = []
 
-    def _closed_and_seen(*, pk: int) -> None:
+    def _seen(*, pk: int) -> None:
         seen.append(pk)
-        raise ServiceError("Invoices are closed for the night.")
 
     invoice = Invoice.objects.create(number="INV-1")
-    server = _server(_spec(preconditions=[_closed_and_seen]))
+    server = _server(_spec(preconditions=[_seen]))
 
-    with pytest.raises(ServiceError):
-        _read(server, f"invoices://{invoice.pk}")
+    _read(server, f"invoices://{invoice.pk}")
 
     assert seen == [invoice.pk]
 

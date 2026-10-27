@@ -13,9 +13,11 @@ argument of one name meet in three ways:
   like the call's own ``request`` / ``view``, is refused by the kernel's
   ``dispatch`` on every call. ``register_tool`` registers it, so the tool is
   listed and no call to it can succeed. Those two tests are strict xfails until
-  registration refuses it, which needs the kernel to export the reader
-  ``dispatch`` refuses with and ``MCPServer`` to hand its ``pool_seeds`` to
-  ``kernel_spec_to_tool``.
+  registration refuses it. The kernel's ``check_call`` answers it today, off
+  label, as a side effect of running ``dispatch``'s prelude; the ask is a public
+  kernel reader of exactly this, preferred because every package registering
+  kernel specs needs the same registration-time answer, with ``MCPServer``
+  handing its ``pool_seeds`` to ``kernel_spec_to_tool``.
 
 The drf-services original asked this of an ``input_serializer`` field under each
 ``ArgumentBinding``, refused at registration because the seed silently won the
@@ -120,9 +122,10 @@ def test_a_validator_field_named_like_a_registered_seed_is_the_callers_and_reach
     raises=pytest.fail.Exception,
     reason=(
         "register_tool accepts a read a registered seed occupies, which dispatch refuses "
-        "on every call. Fix: the kernel exports the reader dispatch refuses with "
-        "(dispatch.utils.seed_named_parameters), kernel_spec_to_tool refuses what it "
-        "names, and MCPServer._kernel_tool_binding passes pool_seeds=self._pool_seeds."
+        "on every call. Fix: a public kernel reader of the parameters dispatch refuses "
+        "(preferred, as several packages need it; check_call detects them today, off "
+        "label), which kernel_spec_to_tool asks, with MCPServer._kernel_tool_binding "
+        "passing pool_seeds=self._pool_seeds."
     ),
 )
 def test_a_read_named_like_a_registered_seed_is_refused_at_registration() -> None:
@@ -144,9 +147,11 @@ def test_a_read_named_like_a_registered_seed_is_refused_at_registration() -> Non
     raises=pytest.fail.Exception,
     reason=(
         "register_tool accepts a read named request or view, which dispatch refuses on "
-        "every mount and every call. Fix: the kernel refuses a read of either name nobody "
-        "marked reflected when the spec is built, as it refuses RESERVED_POOL_SEEDS, or "
-        "exports the reader dispatch refuses with for kernel_spec_to_tool to ask."
+        "every mount and every call. Fix: a public kernel reader of the parameters "
+        "dispatch refuses (preferred, as several packages need it; check_call detects "
+        "them today, off label) for kernel_spec_to_tool to ask, or the kernel refusing "
+        "a read of either name nobody marked reflected when the spec is built, as it "
+        "refuses RESERVED_POOL_SEEDS."
     ),
 )
 @pytest.mark.parametrize("name", ["request", "view"])

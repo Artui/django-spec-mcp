@@ -11,11 +11,13 @@ where dispatch refuses an undeclared name; under ``IGNORE`` it carries no
 The drf-services original asked this per ``ArgumentBinding`` and of a
 precondition hiding a lookup key behind ``NotClientInput``; a kernel spec has
 one binding, and its arguments are what it declares, so neither has a kernel
-counterpart. Two answers changed by design: the refusal names the key in the
+counterpart. Three answers changed by design: the refusal names the key in the
 detail (``{"rogue": ["Unknown argument."]}``) where drf-services filed it under
-``non_field_errors``; and a service's bare ``**kwargs`` no longer opens the set,
-since an argument the spec does not declare never reaches a kernel callable. It is kept beside
-this file as ``test_closed_service_schema_drfs.py``.
+``non_field_errors``; a service's bare ``**kwargs`` no longer opens the set,
+since an argument the spec does not declare never reaches a kernel callable; and
+under ``IGNORE`` the schema omits ``additionalProperties`` where drf-services
+stamped ``additionalProperties: true``. It is kept beside this file as
+``test_closed_service_schema_drfs.py``.
 """
 
 from __future__ import annotations

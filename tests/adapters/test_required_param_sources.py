@@ -1,18 +1,25 @@
 """What fills a kernel callable's required parameter, and what registration does when nothing does.
 
-A kernel spec's callable receives, by name, what ``dispatch`` puts in its pool:
-the dispatcher's seeds (``user``, ``data``, ``call_context`` and the rest), the
-call's own ``request`` and ``view``, the spec's declared ``reads`` and
-Validator fields, and what a ``kwargs=`` provider returns. Each of those is
-asked here to fill a required parameter of a kernel spec registered with
-``register_tool``, end to end through ``call_tool``.
+A kernel service's callable receives, by name, what ``dispatch`` puts in its
+pool: the dispatcher's seeds (``user``, ``data``, ``call_context`` and the
+rest), the call's own ``request`` and ``view``, the spec's declared ``reads``
+and Validator fields, and what a ``kwargs=`` provider returns. A selector is
+handed the same except ``data``, which the kernel seeds for a service only.
+Each of those is asked here to fill a required parameter of a kernel spec
+registered with ``register_tool``, end to end through ``call_tool``. A
+var-positional parameter and a defaulted one need no source, and are asked
+here so a refusal of the unfilled cases cannot reach them.
 
 A required parameter none of them fills was refused at registration on the
 drf-services path, because every call to such a tool raises ``TypeError`` out of
-dispatch. The kernel route registers it, lists it, and raises on every call:
-the strict xfail below holds the cases until the kernel refuses such a spec when
-it is built, which is where the pool is known, rather than in a check of this
-package's own beside it.
+dispatch. The kernel route registers it, lists it, and raises on every call.
+The strict xfail below holds the cases until registration refuses them. The
+registered pool is not known when a spec is built (``lambda *, tenant: tenant``
+is valid on a server whose pool registers ``tenant``), so the ask is a kernel
+reader taking ``pool_seeds``, called at registration. The same holds for a
+Validator field the callable has no way to receive, which is advertised,
+accepted and silently dropped; the second xfail holds that, and the drf-services
+twin that refused it is ``test_input_serializer_validation_drfs.py``.
 
 The drf-services original asked this of trust mode, ``ArgumentBinding``,
 ``UrlKwarg`` sources and an ``input_serializer``'s fields under each binding;
@@ -23,11 +30,13 @@ is kept beside this file as ``test_required_param_sources_drfs.py``.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import (
+    DataclassValidator,
     Parameter,
     Parameters,
     SelectorKind,
@@ -40,6 +49,12 @@ from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 
 _PK = Parameters([Parameter("pk", "integer", required=True)])
+
+
+@dataclass
+class _Titled:
+    title: str
+    note: str = ""
 
 
 def _service(service: Any, **declared: Any) -> ServiceSpec:
@@ -92,15 +107,59 @@ def test_a_defaulted_parameter_nothing_fills_runs_on_its_default() -> None:
     assert _served(_retrieve(lambda *, pk=5: pk), {}) == 5
 
 
+def test_a_var_positional_parameter_needs_no_source() -> None:
+    # ``*tags`` has no default, so a check counting every parameter would call it
+    # required with no source; dispatch binds by keyword and leaves it empty.
+    assert _served(_service(lambda *tags: {"tags": list(tags)}), {}) == {"tags": []}
+
+
+def test_a_defaulted_positional_only_parameter_registers_and_runs_on_its_default() -> None:
+    # Positional-only cannot be bound by keyword, so a check reading the name
+    # alone would find no source for it; the default is what answers.
+    assert _served(_retrieve(lambda pk=5, /: {"pk": pk}), {}) == {"pk": 5}
+
+
+@pytest.mark.parametrize(
+    "service",
+    [
+        pytest.param(lambda *, title, note: note, id="by-name"),
+        pytest.param(lambda *, data: data.note, id="through-data"),
+        pytest.param(lambda **kwargs: kwargs["note"], id="through-kwargs"),
+    ],
+)
+def test_a_validator_field_reaches_a_callable_that_can_receive_it(
+    service: Callable[..., Any],
+) -> None:
+    # What the refusal below must leave alone: a field is not lost when the
+    # callable names it, takes ``data`` or takes ``**kwargs``.
+    spec = _service(service, validator=DataclassValidator(_Titled))
+
+    assert _served(spec, {"title": "a", "note": "kept"}) == "kept"
+
+
+def test_a_selector_requiring_the_view_registers_and_is_handed_it() -> None:
+    # The kernel's in-process route has no view, so ``view`` is ``None``; what
+    # is asked is that the parameter is filled rather than left to ``TypeError``.
+    # The selector returns a value, since a retrieve answering ``None`` is a miss.
+    seen: list[Any] = []
+
+    def _by_view(*, view: Any) -> dict[str, bool]:
+        seen.append(view)
+        return {"ran": True}
+
+    assert _served(_retrieve(_by_view), {}) == {"ran": True}
+    assert seen == [None]
+
+
 @pytest.mark.xfail(
     strict=True,
     # "DID NOT RAISE" only, so no other error can keep the test quietly xfailed.
     raises=pytest.fail.Exception,
     reason=(
         "register_tool accepts a callable whose required parameter nothing in the pool "
-        "fills, and every call raises TypeError out of dispatch. Fix: the kernel refuses "
-        "such a spec when it is built, naming the parameter, as it refuses a parameter "
-        "named after a reserved seed."
+        "fills, and every call raises TypeError out of dispatch. Fix: a kernel reader "
+        "taking pool_seeds, called at registration, because the registered pool is not "
+        "known when a spec is built."
     ),
 )
 @pytest.mark.parametrize(
@@ -114,6 +173,9 @@ def test_a_defaulted_parameter_nothing_fills_runs_on_its_default() -> None:
             lambda: _service(lambda *, instance: instance), id="instance-without-a-lookup"
         ),
         pytest.param(lambda: _retrieve(lambda pk, /: pk, reads=_PK), id="positional-only"),
+        # The kernel seeds ``data`` for a service only, so a selector requiring it
+        # is as unfilled as ``other``.
+        pytest.param(lambda: _retrieve(lambda *, data: data), id="selector-requiring-data"),
     ],
 )
 def test_a_required_parameter_nothing_fills_is_refused_at_registration(
@@ -121,3 +183,24 @@ def test_a_required_parameter_nothing_fills_is_refused_at_registration(
 ) -> None:
     with pytest.raises(ImproperlyConfigured):
         _server(build())
+
+
+@pytest.mark.xfail(
+    strict=True,
+    # "DID NOT RAISE" only, so no other error can keep the test quietly xfailed.
+    raises=pytest.fail.Exception,
+    reason=(
+        "register_tool accepts a Validator field the callable cannot receive, which is "
+        "advertised in inputSchema, accepted, and dropped without an error. Fix: the "
+        "kernel refuses a Validator field the callable takes neither by name nor through "
+        "data or **kwargs, as the drf-services path did "
+        "(test_input_serializer_validation_drfs.py)."
+    ),
+)
+def test_a_validator_field_the_callable_cannot_receive_is_refused_at_registration() -> None:
+    # ``note`` reaches a callable naming it, taking ``data`` or taking ``**kwargs``;
+    # this one takes ``title`` alone, so ``note`` would be lost.
+    with pytest.raises(ImproperlyConfigured, match="note"):
+        _server(
+            _service(lambda *, title: title, validator=DataclassValidator(_Titled)),
+        )
