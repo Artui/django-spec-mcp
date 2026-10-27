@@ -4,13 +4,15 @@ The three functions that own a task's life: ``create_task`` on the request
 path, ``transition_task`` wherever a status changes, and ``run_task`` in the
 worker.
 
-Only the questions that name no tool are asked here: the store, the
-transitions and the worker token. Every one that runs a registered tool
-(``run_task`` completing, redelivered, unknown, never queued, failing, raising
-or rate limited, and the store being durable before the executor is called) is
-asked of the drf-services ``server`` fixture, whose tools carry a
+Asked here without a spec: the store, the transitions, the worker token, the
+store being durable before the hand-off, and ``run_task`` on a task naming no
+live tool or on a server with no store, which this module's own ``server``
+fixture (a task-running server with no tool) answers. Each question that runs
+a registered tool is owed: ``run_task`` completing, a redelivered task, a
+protocol error and an unhandled exception failing it, and a worker not charging
+the rate limit twice. They register a drf-services tool with a
 ``task_policy``, which a kernel spec does not take yet (``register_tool``
-refuses it with ``ImproperlyConfigured``). They are owed until it does. The original is kept beside this
+refuses it with ``ImproperlyConfigured``). The original is kept beside this
 file as ``test_task_lifecycle_drfs.py``.
 """
 
@@ -22,6 +24,8 @@ from typing import Any
 import pytest
 from django.contrib.auth.models import AnonymousUser
 
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.protocol.types.task import Task
 from django_spec_mcp.tasks.build_worker_token import build_worker_token
@@ -298,3 +302,56 @@ def test_with_task_leaves_the_original_untouched() -> None:
     assert record.status is TaskStatus.WORKING
     assert changed.status is TaskStatus.COMPLETED
     assert replace(changed, enqueued=True).to_wire() is changed.task
+
+
+@pytest.fixture
+def server(store: InMemoryTaskStore, executor: RecordingExecutor) -> MCPServer:
+    """A task-running server with no tool, standing in for the conftest's
+    drf-services one: running a task that names no live tool asks nothing of
+    a spec."""
+    return MCPServer(
+        name="tasks-kernel",
+        auth_backend=AllowAnyBackend(),
+        task_store=store,
+        task_executor=executor,
+    )
+
+
+def test_the_task_is_durable_before_the_executor_is_called(
+    store: InMemoryTaskStore, executor: RecordingExecutor
+) -> None:
+    """Normative, and the one ordering that actually matters.
+
+    The spec: a server MUST NOT return a task handle until a ``tasks/get`` for
+    that id would resolve. A worker on another machine can pick the task up the
+    instant it is queued, so "write after queueing" is a race that hands out an
+    id nothing can find.
+    """
+    _create(store, executor)
+    assert executor.seen_in_store == [True]
+
+
+@pytest.mark.django_db
+def test_running_an_unknown_task_is_a_no_op(server: MCPServer) -> None:
+    server.run_task("never-existed")
+
+
+@pytest.mark.django_db
+def test_running_a_task_that_never_reached_the_queue_is_a_no_op(
+    server: MCPServer, store: InMemoryTaskStore
+) -> None:
+    task: Task = _create(store, BrokenExecutor())
+    server.run_task(task.task_id)
+    assert store.get(task.task_id).status is TaskStatus.FAILED
+
+
+def test_run_task_on_a_server_with_no_store_refuses_loudly() -> None:
+    """Silence here would look like success: the job would finish and the
+    client would poll a handle forever."""
+    from django.core.exceptions import ImproperlyConfigured
+
+    from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+
+    bare = MCPServer(name="bare", auth_backend=AllowAnyBackend())
+    with pytest.raises(ImproperlyConfigured, match="no task store"):
+        bare.run_task("anything")

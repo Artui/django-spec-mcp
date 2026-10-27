@@ -245,10 +245,10 @@ def _server(**kwargs: Any) -> MCPServer:
 def _context(server: MCPServer, **overrides: Any) -> MCPCallContext:
     request = HttpRequest()
     request.method = "POST"
-    request.user = AnonymousUser()
+    request.user = None
     base: dict[str, Any] = {
         "http_request": request,
-        "token": TokenInfo(user=AnonymousUser()),
+        "token": TokenInfo(user=None),
         "tools": server._tools,
         "resources": server._resources,
         "prompts": server._prompts,
@@ -369,6 +369,15 @@ def test_a_registered_unguarded_kernel_resource_is_watchable_with_the_setting_of
         SubscriptionFilter(resource_uris=("bare://1",)), _context(server, config=config)
     )
     assert granted.resource_uris == ("bare://1",)
+
+
+def test_a_uri_whose_variable_the_spec_cannot_read_is_dropped() -> None:
+    """``abc`` is no integer ``pk``, so the read would refuse it; the watch drops
+    that one entry rather than failing the stream on it."""
+    granted, _ = grant_subscription(
+        SubscriptionFilter(resource_uris=("open://abc", "open://1")), _context(_server())
+    )
+    assert granted.resource_uris == ("open://1",)
 
 
 def test_a_list_changed_kind_needs_a_registry_behind_it() -> None:

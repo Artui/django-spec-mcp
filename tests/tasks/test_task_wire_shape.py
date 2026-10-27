@@ -5,11 +5,11 @@ The remaining corners: the status-specific field ``Task.to_dict`` emits, the
 the async path's task branch, and settings whose ``None`` is meaningful.
 
 Only the questions that name no tool are asked here: the wire type and the
-two config scalars. The policy branches (the ``OPTIONAL`` fallbacks to inline,
-the denial before a task is created, a binding predating tasks, the async
-path's handle and the rate-limit charges) each need a tool with a
-``task_policy``, which a kernel spec does not take yet (``register_tool``
-refuses it with ``ImproperlyConfigured``). They are owed until it does. The original is kept beside this
+two config scalars. Each policy branch registers a drf-services tool with a
+``task_policy``: the ``OPTIONAL`` fallbacks to inline, the denial before a task
+is created, a binding predating tasks, the async path's handle and the three
+rate-limit charges. A kernel spec does not take one yet (``register_tool``
+refuses it with ``ImproperlyConfigured``), so they are owed until it does. The original is kept beside this
 file as ``test_task_wire_shape_drfs.py``.
 """
 

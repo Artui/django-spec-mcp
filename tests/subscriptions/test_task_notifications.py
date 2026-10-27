@@ -3,12 +3,12 @@
 Closes the loop the tasks extension describes: a client subscribes to task ids
 on ``subscriptions/listen`` and stops polling.
 
-Only the questions that need no registered tool are asked here. Those that
-run or cancel a task of one (a brokerless server, cancelling, answering an
-input request, a worker's outcome, the acknowledgement listing task ids) are
-asked of a drf-services tool with a ``task_policy``, which a kernel spec does
-not take yet (``register_tool`` refuses it with ``ImproperlyConfigured``).
-They are owed until it does. The original is kept beside this
+Only the questions that need no registered tool are asked here, a brokerless
+server transitioning silently among them. Those that run or cancel a task of
+one (cancelling, answering an input request, a worker's outcome, the
+acknowledgement listing task ids) register a drf-services tool with a
+``task_policy``, which a kernel spec does not take yet (``register_tool``
+refuses it with ``ImproperlyConfigured``), and are owed until it does. The original is kept beside this
 file as ``test_task_notifications_drfs.py``.
 """
 
@@ -168,3 +168,11 @@ async def test_declaring_the_capability_gets_a_stream_even_with_no_such_task() -
     frame = json.loads((await anext(response.streaming_content))[len(b"data: ") :].strip())
     assert frame["params"]["notifications"] == {}
     await response.streaming_content.aclose()
+
+
+def test_a_server_with_no_broker_transitions_silently() -> None:
+    store = InMemoryTaskStore()
+    task = _task(store)
+    assert transition_task(store, task.task_id, status=TaskStatus.COMPLETED).status is (
+        TaskStatus.COMPLETED
+    )
