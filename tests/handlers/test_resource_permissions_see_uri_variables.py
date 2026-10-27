@@ -169,11 +169,8 @@ async def test_a_resource_permission_reads_the_request_the_read_arrived_on(
 async def test_the_specs_check_answers_before_the_rate_limit(
     is_async: bool, uri: str, code: JsonRpcErrorCode, consumed: int
 ) -> None:
-    # Changed by design: the rate limit answered first, charging a caller the
-    # check would deny and never asking the check, while the spec's checks ran
-    # inside dispatch alone. Now a denied caller is refused and charged
-    # nothing, as on the drf-services read, and an admitted one is the one the
-    # rate limit then refuses, the check asked once either way.
+    # A denied caller is refused and charged nothing, and an admitted one is
+    # the one the rate limit then refuses, the check asked once either way.
     limiter = RefusingRateLimit()
     check = _GrantsProjectSeven()
 

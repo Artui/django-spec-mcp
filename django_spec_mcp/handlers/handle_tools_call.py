@@ -245,8 +245,10 @@ def _dispatch_tool_call(
         # argument it left out
         # (``test_a_caller_the_spec_denies_is_refused_before_the_argument_is_checked``),
         # as the drf-services spec classes judged above refuse it.
-        # ``admit_kernel_call`` says what the checks are shown, and the grant
-        # it returns is what dispatch runs under, so they are asked once.
+        # ``admit_kernel_call`` says what the checks are shown and how often
+        # they are asked: the grant it returns is what dispatch runs under, so
+        # dispatch does not ask them again, and a streamed call's pre-flight
+        # asks them once more.
         admission: KernelAdmission | None = None
         if runs_on_kernel(binding):
             admitted = admit_kernel_tool_call(binding, arguments_raw, context)

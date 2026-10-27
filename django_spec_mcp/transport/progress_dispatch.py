@@ -135,9 +135,9 @@ def _kernel_refuses(binding: Any, arguments: dict[str, Any], context: MCPCallCon
     caller they deny is refused before its arguments are checked, so it is
     not told about an unknown argument it sent on either path
     (``test_a_caller_the_spec_denies_is_refused_before_its_unknown_argument``).
-    That step splits a paged tool's ``page`` and ``limit`` off, or the kernel
-    refused them as unknown ahead of the checks
-    (``test_a_paged_call_its_spec_denies_keeps_its_403``); hands the checks the
+    That step splits a paged tool's ``page`` and ``limit`` off, so an admitted
+    paged call is asked on its arguments rather than judged on none
+    (``test_a_paged_call_is_asked_once``); hands the checks the
     call context carrying the token
     (``test_a_check_reading_the_token_sees_the_calls_request``), the grant of
     an unguarded spec
@@ -146,7 +146,7 @@ def _kernel_refuses(binding: Any, arguments: dict[str, Any], context: MCPCallCon
     (``test_a_check_reading_a_servers_own_seed_is_judged_on_that_seed``); and
     checks the arguments under the binding's own ``unknown_arguments`` policy,
     since a tool that ignores strays shows its checks the arguments without
-    them (``test_a_denied_call_the_spec_ignores_unknown_arguments_for_keeps_its_403``).
+    them (``test_a_stray_argument_a_tool_ignores_is_asked_once``).
 
     Handed the server's arguments laid over the caller's, since the handler
     lays them only after this runs

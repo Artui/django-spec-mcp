@@ -22,8 +22,10 @@ from typing import Any
 
 import pytest
 from asgiref.sync import sync_to_async
+from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest
 from django_service_specs import (
+    DataclassValidator,
     DispatchError,
     NotPermitted,
     Parameter,
@@ -32,6 +34,8 @@ from django_service_specs import (
     SelectorKind,
     SelectorSpec,
     ServiceNotFound,
+    ServiceSpec,
+    UnknownArguments,
 )
 
 from django_spec_mcp import MCPServer
@@ -41,6 +45,7 @@ from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
 from django_spec_mcp.handlers.handle_resources_read_async import handle_resources_read_async
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
+from django_spec_mcp.handlers.is_binding_listable import is_binding_listable
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
@@ -76,17 +81,10 @@ class _NotRowEight(PermissionCheck):
 
 
 class _OnlyRowOne(PermissionCheck):
-    """Admits row 1 alone, refusing anything else it is handed, a malformed value included."""
+    """Admits row 1 alone, reading ``pk`` with ``.get``, which raises on no arguments."""
 
     def has_permission(self, principal: Any, spec: Any, *, arguments: Any) -> bool:
         return arguments.get("pk") == 1
-
-
-class _BelowAHundred(PermissionCheck):
-    """Admits rows below 100, reading ``pk`` as the shape check promises it: present, an int."""
-
-    def has_permission(self, principal: Any, spec: Any, *, arguments: Any) -> bool:
-        return int(arguments["pk"]) < 100
 
 
 class _Raises(PermissionCheck):
@@ -242,6 +240,45 @@ async def test_a_check_is_asked_once_per_call(route: str) -> None:
     assert check.asked == 1
 
 
+def _rows() -> list[dict[str, int]]:
+    return [{"pk": 1}, {"pk": 2}, {"pk": 3}]
+
+
+@_ASYNC
+async def test_a_paged_call_is_asked_once(is_async: bool) -> None:
+    # The page is split off before the checks are asked, as ``run_kernel_tool``
+    # splits it before dispatch: asked with it, the shape check would refuse
+    # ``page`` and ``limit`` as unknown, the call would be judged on no
+    # arguments, and dispatch would ask again.
+    check = _Counted(admits=True)
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server.register_tool(
+        SelectorSpec(kind=SelectorKind.LIST, selector=_rows, permissions=[check]),
+        name="get",
+        paginate=True,
+    )
+
+    out = await _call(server, {"page": 1, "limit": 2}, is_async=is_async)
+
+    assert len(out["structuredContent"]["items"]) == 2, out
+    assert check.asked == 1
+
+
+@_ASYNC
+async def test_a_stray_argument_a_tool_ignores_is_asked_once(is_async: bool) -> None:
+    # Asked under the tool's own policy: under ``REJECT`` the stray argument
+    # would fail the shape check, the call would be judged on no arguments, and
+    # dispatch, which drops it, would ask again.
+    check = _Counted(admits=True)
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server.register_tool(_get(check), name="get", unknown_arguments=UnknownArguments.IGNORE)
+
+    out = await _call(server, {"pk": 1, "stray": 1}, is_async=is_async)
+
+    assert out["structuredContent"] == {"pk": 1}, out
+    assert check.asked == 1
+
+
 # ---------- tools/call: what a check reading ``arguments`` sees ----------
 
 
@@ -261,25 +298,12 @@ async def test_a_check_refusing_a_malformed_argument_is_answered_before_the_shap
     is_async: bool,
 ) -> None:
     # A call whose arguments fail the shape check has no checked arguments, so
-    # the check is asked on the arguments as sent. Whatever it admits is still
-    # refused by the shape check, so this only decides which refusal is told.
+    # the check is asked on none, as the listing asks it. Whatever it admits is
+    # still refused by the shape check, so this only decides which refusal is
+    # told, and ``.get`` on no arguments raises, which refuses.
     out = await _call(_server(_OnlyRowOne()), {"pk": "abc"}, is_async=is_async)
 
     assert _forbidden(out), out
-
-
-@pytest.mark.parametrize("arguments", [{"pk": "abc"}, {}], ids=["malformed", "missing"])
-@_ASYNC
-async def test_a_check_that_cannot_read_unchecked_arguments_leaves_them_to_the_shape_check(
-    arguments: dict[str, Any], is_async: bool
-) -> None:
-    # A check written to the kernel's promise of checked arguments raises on
-    # the ones a call sent malformed or left out, a ``ValueError`` or a
-    # ``KeyError``. That is no answer, so the shape check's refusal is the
-    # call's, as before, rather than an internal error.
-    out = await _call(_server(_BelowAHundred()), arguments, is_async=is_async)
-
-    assert tool_error(out)["type"] == "validation_error", out
 
 
 @pytest.mark.parametrize(
@@ -305,6 +329,165 @@ async def test_a_check_raising_a_refusal_that_is_no_denial_is_answered_as_before
     assert error["type"] == answered_as, error
     assert str(refusal) in str(error)
     assert limit.consumed == 1
+
+
+class _Reads(PermissionCheck):
+    """Decides by ``arguments``, through ``decide``."""
+
+    def __init__(self, decide: Any) -> None:
+        self.decide = decide
+
+    def has_permission(self, principal: Any, spec: Any, *, arguments: Any) -> bool:
+        return bool(self.decide(arguments))
+
+
+class _Rewrites(PermissionCheck):
+    """Admits every caller, setting ``pk`` to ``1`` in any ``dict`` it is handed as ``arguments``."""
+
+    def has_permission(self, principal: Any, spec: Any, *, arguments: Any) -> bool:
+        if isinstance(arguments, dict):
+            arguments["pk"] = 1
+        return True
+
+
+def _listed(server: MCPServer) -> bool:
+    # Whether ``tools/list`` shows the tool to the caller once listings are
+    # filtered by permission, the question ``is_binding_listable`` answers.
+    context = _ctx(server)
+    return is_binding_listable(
+        server.tools.get("get"),
+        context.http_request,
+        context.token,
+        config=context.config,
+        pool_seeds=context.pool_seeds,
+    )
+
+
+# Each shape a check reading ``arguments`` is written in, and whether the
+# listing, which hands it ``None``, shows the tool.
+_SHAPES = {
+    "class-level-admits": (lambda: _Counted(admits=True), True),
+    "class-level-refuses": (lambda: _Counted(admits=False), False),
+    "none-or": (lambda: _Reads(lambda a: a is None or a["pk"] == 1), True),
+    "not-none-and": (lambda: _Reads(lambda a: a is not None and a["pk"] == 1), False),
+    "unguarded-index": (lambda: _Reads(lambda a: a["pk"] == 1), False),
+}
+
+
+@pytest.mark.parametrize("arguments", [{"pk": "abc"}, {}], ids=["malformed", "missing"])
+@pytest.mark.parametrize("shape", list(_SHAPES))
+@_ASYNC
+async def test_a_call_failing_its_shape_is_refused_first_exactly_when_the_listing_hides_it(
+    shape: str, arguments: dict[str, Any], is_async: bool
+) -> None:
+    # A call with no checked arguments is judged as the listing judges, on no
+    # arguments at all, so a caller learns which argument it left out exactly
+    # when the tool is listed to it, and is otherwise refused uncharged.
+    build, listed = _SHAPES[shape]
+    limit = _CountingLimit()
+    server = _server(build(), limiter=limit)
+
+    out = await _call(server, arguments, is_async=is_async)
+
+    assert _listed(server) is listed
+    assert _forbidden(out) is not listed, out
+    assert limit.consumed == (1 if listed else 0)
+    if listed:
+        assert tool_error(out)["type"] == "validation_error", out
+
+
+@pytest.mark.parametrize("arguments", [{"pk": "abc"}, {}], ids=["malformed", "missing"])
+@_ASYNC
+async def test_a_misconfigured_check_fails_a_call_failing_its_shape_as_it_fails_the_listing(
+    arguments: dict[str, Any], is_async: bool
+) -> None:
+    server = _server(_Raises(ImproperlyConfigured("Declare the method with def.")))
+
+    with pytest.raises(ImproperlyConfigured):
+        _listed(server)
+    with pytest.raises(ImproperlyConfigured):
+        await _call(server, arguments, is_async=is_async)
+
+
+@pytest.mark.parametrize(
+    "decide",
+    [lambda a: a.get("pk") == 8, lambda a: a.get("pk") != 8],
+    ids=["admits-row-eight", "refuses-row-eight"],
+)
+@_ASYNC
+async def test_a_call_missing_an_argument_is_refused_by_a_check_the_listing_hides_it_for(
+    decide: Any, is_async: bool
+) -> None:
+    # ``"8"`` without the required ``name``: the check is never shown the
+    # string, which would read as a row it admits in one case and one it
+    # refuses in the other. ``.get`` on no arguments raises, so the listing
+    # hides the tool, and the call is refused uncharged in both.
+    limit = _CountingLimit()
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server.register_tool(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=lambda *, pk, name: {"pk": pk},
+            reads=Parameters([_PK, Parameter("name", "string", required=True)]),
+            permissions=[_Reads(decide)],
+        ),
+        name="get",
+        rate_limits=[limit],
+    )
+
+    out = await _call(server, {"pk": "8"}, is_async=is_async)
+
+    assert _forbidden(out), out
+    assert limit.consumed == 0
+    assert _listed(server) is False
+
+
+@_ASYNC
+async def test_a_check_never_writes_the_arguments_a_call_sent(is_async: bool) -> None:
+    # A check is handed no arguments for a call failing its shape, so nothing
+    # it writes reaches the call, which the shape check still refuses.
+    out = await _call(_server(_Rewrites()), {"pk": "abc"}, is_async=is_async)
+
+    assert tool_error(out)["type"] == "validation_error", out
+
+
+@dataclass
+class _Line:
+    number: str
+    amount_cents: int
+
+    def __post_init__(self) -> None:
+        if self.amount_cents < 0:
+            raise ValueError("Ensure this value is greater than or equal to 0.")
+
+
+def _issue(*, data: list[_Line]) -> list[_Line]:
+    return list(data)
+
+
+@_ASYNC
+async def test_a_many_call_with_a_refused_row_is_asked_three_times(is_async: bool) -> None:
+    # ``check_call`` raises the first row's refusal after its own ask, as it
+    # raises a failed shape, so the call is judged again on no arguments, and
+    # dispatch, which is what reports the second row's Validator refusal
+    # beside it, asks a third time. The answer is dispatch's, both rows named.
+    check = _Counted(admits=True)
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server.register_tool(
+        ServiceSpec(
+            service=_issue,
+            many=True,
+            validator=DataclassValidator(_Line),
+            permissions=[check],
+        ),
+        name="get",
+    )
+    rows = [{"number": "A-1", "amount_cents": "x"}, {"number": "A-2", "amount_cents": -5}]
+
+    out = await _call(server, {"items": rows}, is_async=is_async)
+
+    assert sorted(tool_error(out)["detail"]["items"]) == ["0", "1"], out
+    assert check.asked == 3
 
 
 def test_call_tool_refuses_a_caller_the_spec_refuses_on_a_malformed_argument() -> None:
@@ -354,7 +537,7 @@ async def test_a_caller_the_spec_refuses_gets_no_task(is_async: bool) -> None:
 
 
 @_ASYNC
-async def test_a_caller_the_spec_admits_gets_a_task(is_async: bool) -> None:
+async def test_a_caller_the_spec_admits_gets_a_task_its_worker_asks_again(is_async: bool) -> None:
     check = _Counted(admits=True)
     limit = _CountingLimit()
     server, executor = _task_server(check, limit)
@@ -365,6 +548,14 @@ async def test_a_caller_the_spec_admits_gets_a_task(is_async: bool) -> None:
     assert len(executor.enqueued) == 1
     assert limit.consumed == 1
     assert check.asked == 1
+
+    # The worker's replay asks the spec again, in full, and is not charged.
+    await sync_to_async(server.run_task)(executor.enqueued[0])
+
+    record: Any = server.task_store.get(executor.enqueued[0])
+    assert record.status.value == "completed", record
+    assert check.asked == 2
+    assert limit.consumed == 1
 
 
 # ---------- resources/read ----------

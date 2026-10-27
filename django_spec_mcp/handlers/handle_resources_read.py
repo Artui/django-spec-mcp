@@ -102,7 +102,7 @@ def handle_resources_read(
         # the spec's permission classes in the binding's stack above: a reader
         # they refuse is not charged
         # (``test_a_reader_the_spec_refuses_is_not_charged``). ``dispatch``
-        # runs under the grant they gave, so they are asked once
+        # runs under the grant they gave, so an admitted read asks them once
         # (``test_an_admitted_reader_is_charged_once_and_read_once``).
         admission: KernelAdmission | None = None
         if runs_on_kernel(binding):

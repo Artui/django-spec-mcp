@@ -181,9 +181,8 @@ async def test_a_denied_caller_is_answered_alike_for_a_row_that_exists_and_one_t
 async def test_a_denied_caller_missing_a_read_is_refused_before_its_shape_and_any_lookup(
     route: str, kind: str
 ) -> None:
-    # Changed by design: refused for its shape, the check never asked, while
-    # the kernel's own order was the call's. A shape answer describes a tool
-    # the caller may not call, which the listing hides from it.
+    # A shape answer describes a tool the caller may not call, which the
+    # listing hides from it.
     lookup = _Lookup()
     check = _Check(admits=False)
     server = _server(kind, check, lookup)

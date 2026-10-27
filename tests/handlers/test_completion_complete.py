@@ -517,10 +517,7 @@ def test_completion_runs_the_bindings_rate_limits() -> None:
 
 
 def test_a_kernel_resources_spec_is_asked_before_its_rate_limit() -> None:
-    # Changed by design: asked after the rate limit while the read asked the
-    # spec inside dispatch, after its own charge. The read now asks it before
-    # the charge, as the drf-services read and completion judged the spec's
-    # permission classes in the binding's own stack, so a caller the spec
+    # Asked before the charge, as the read asks it, so a caller the spec
     # refuses is told that and is charged nothing on either.
     check = _Refuses()
     limit = RefusingRateLimit()
