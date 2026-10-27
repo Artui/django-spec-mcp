@@ -247,8 +247,8 @@ def _dispatch_tool_call(
         # as the drf-services spec classes judged above refuse it.
         # ``admit_kernel_call`` says what the checks are shown and how often
         # they are asked: the grant it returns is what dispatch runs under, so
-        # dispatch does not ask them again, and a streamed call's pre-flight
-        # asks them once more.
+        # when the arguments pass the shape check dispatch does not ask them
+        # again, and a streamed call's pre-flight asks them once more.
         admission: KernelAdmission | None = None
         if runs_on_kernel(binding):
             admitted = admit_kernel_tool_call(binding, arguments_raw, context)

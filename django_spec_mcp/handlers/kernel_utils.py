@@ -86,7 +86,7 @@ class KernelAdmission:
     (``test_an_anonymous_in_process_caller_reaches_a_kernel_tool``).
     ``call_context`` is the dict the checks were handed. ``grant`` is the one
     dispatch runs under:
-    the checks' own, so they are not asked again
+    the checks' own, so a call whose arguments pass is not asked again
     (``test_a_check_is_asked_once_per_call``), or what dispatch would have
     been handed without this step, for a call whose shape check answers first.
     """
@@ -183,11 +183,14 @@ def admits_without_arguments(
 ) -> bool:
     """Whether ``binding``'s spec lets ``principal`` past its checks, asked with no arguments.
 
-    The listing's question (``is_binding_listable``), and the one a call whose
-    arguments fail the shape check is asked (``admit_kernel_call``), so a
-    caller is refused before it learns which argument it left out exactly when
-    the tool is hidden from it
+    The question a listing filtered by permission asks of a kernel spec
+    (``is_binding_listable``), and the one a call whose arguments fail the
+    shape check is asked (``admit_kernel_call``), so a caller is refused
+    before it learns which argument it left out exactly when that listing
+    would hide the tool from it
     (``test_a_call_failing_its_shape_is_refused_first_exactly_when_the_listing_hides_it``).
+    ``always_listed`` lists a tool without changing this answer
+    (``test_an_always_listed_tool_still_refuses_a_call_failing_its_shape``).
     Asked with what a call hands dispatch: the same principal, the grant only
     the registrar's mark earns, the server's pool seeds, and a call context
     whose request carries the token. No arguments: a listing has none, a call
@@ -302,10 +305,11 @@ def admit_kernel_call(
 
     A call whose arguments fail the shape check has no checked form, and a
     check is never shown the arguments as sent, a third input no check is
-    written for. It is judged instead as the listing judges it, on no
-    arguments (``admits_without_arguments``). Whatever that says, the call
-    cannot run, so it only chooses which refusal is told: ``-32006`` before
-    the charge, exactly when the listing hides the tool from this caller
+    written for. It is judged instead as a listing filtered by permission
+    judges the spec, on no arguments (``admits_without_arguments``). Whatever
+    that says, the call cannot run, so it only chooses which refusal is told:
+    ``-32006`` before the charge, exactly when that listing would hide the
+    tool from this caller
     (``test_a_call_failing_its_shape_is_refused_first_exactly_when_the_listing_hides_it``),
     or, when it admits, the shape check's, from dispatch after the charge, as
     drf-services answered an admitted caller's missing argument

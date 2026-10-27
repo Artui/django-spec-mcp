@@ -38,8 +38,10 @@ def run_kernel_tool(
     server arguments, judged the scope gate, merged a retry's answers, asked
     the spec's checks (``admit_kernel_call``) and charged the rate limits, so
     this is only the call: the kernel's ``dispatch`` under ``admission``, the
-    principal, grant and call context the checks were asked with, so they are
-    not asked again, a refusal answered through
+    principal, grant and call context the checks were asked with, so a call
+    whose arguments passed the shape check is not asked again (a call whose
+    arguments failed it is counted in ``admit_kernel_call``), a refusal
+    answered through
     ``KERNEL_REFUSALS``, a ``not_found`` worded as the drf-services path words
     it, and the presented value as the tool result.
     """

@@ -161,10 +161,15 @@ def _kernel_refuses(binding: Any, arguments: dict[str, Any], context: MCPCallCon
     (``test_a_refusal_that_is_not_a_denial_is_left_to_the_handler``).
     Arguments a retry's answers would merge in are not seen here, as the
     drf-services pre-flight does not see them either: the handler judges
-    those again. So the checks are asked twice for a streamed call, here and
-    in the handler, and once for a plain one; ``adispatch`` runs under the
-    handler's grant and asks them no third time
-    (``test_a_streamed_call_asks_the_spec_once_more_than_a_plain_one``).
+    those again. So when the arguments pass the shape check the checks are
+    asked twice for a streamed call, here and in the handler, and once for a
+    plain one; ``adispatch`` runs under the handler's grant and asks them no
+    third time
+    (``test_a_streamed_call_asks_the_spec_once_more_than_a_plain_one``). A
+    call failing it is asked here as ``admit_kernel_call`` counts, so a
+    ``many`` call with a refused row is asked five times streamed, twice here
+    and three times in the handler
+    (``test_a_many_call_with_a_refused_row_is_asked_three_times``).
     """
     laid: dict[str, Any] = apply_server_arguments(binding.spec, arguments, binding.server_arguments)
     return isinstance(admit_kernel_tool_call(binding, laid, context), JsonRpcError)

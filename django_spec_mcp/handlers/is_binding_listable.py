@@ -102,8 +102,10 @@ def _kernel_spec_admits(
     """Whether the kernel would let this caller past ``binding``'s spec's checks.
 
     ``admits_without_arguments``, the very question a call failing its shape
-    check is asked, so the two cannot drift: a tool is hidden from exactly the
-    callers it refuses before telling them which argument they left out.
+    check is asked, so the two cannot drift: a filtered listing hides a tool
+    from exactly the callers it refuses before telling them which argument
+    they left out. ``always_listed`` returns before this is asked, and so
+    lists a tool without changing that answer.
     """
     return admits_without_arguments(
         binding,
