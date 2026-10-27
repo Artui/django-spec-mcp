@@ -1,432 +1,257 @@
-"""A service tool advertises the lookup its target selector reads.
+"""A kernel service tool advertises the lookup its target selector reads.
 
-drf-services' dispatch hands a service spec's ``params`` to the one target
-lookup it declares (its ``collection_selector_spec`` or its
-``instance_selector_spec``) as well as to the input serializer, and its
-unknown-argument check admits whatever that lookup declares
-(``declared_input_keys``). So a call carrying the lookup is served, and the
-``inputSchema`` has to say the lookup exists, or a client that validates its
-arguments against the advertised schema can never send the one call that
-works. A spec declaring a lookup dispatch would not call, beside the other one
-or beside ``many=True``, is refused by drf-services when it is built.
+A kernel service spec acting on a row or a set of rows names the selector that
+finds them (``instance_selector_spec`` or ``collection_selector_spec``), and
+that selector's ``reads`` are arguments of the call like the Validator's
+fields: ``ServiceSpec.parameters()`` lists them first, and dispatch admits and
+checks them. So the ``inputSchema`` lists them too, or a client validating its
+arguments against it could never send the one call that works.
 
-A lookup is reflected the way a selector tool's own parameters are, told what
-this server fills (drf-services' ``supplied=``): a name the pool fills is not
-advertised, and every other lookup parameter without a default is required, so
-``task_by_pk(*, pk)`` asks for ``pk`` rather than offering it.
-
-Kept beside ``test_service_tool_schema.py`` rather than in it because these
-tests drive the whole path, from registration through ``tools/list`` to
-``tools/call``, and that file builds bindings directly.
+The drf-services original asked this of a reflected lookup signature, beside
+``UrlKwarg``, ``NotClientInput`` and ``InputRequired``; a kernel lookup declares
+its arguments, and none of those knobs exists. It is kept beside this file as
+``test_service_tool_target_lookup_drfs.py``.
 """
 
 from __future__ import annotations
 
-from typing import Annotated, Any
+from dataclasses import dataclass
+from typing import Any
 
 import jsonschema
 import pytest
+from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import (
     DEFAULT_POOL_SEEDS,
-    RESERVED_POOL_SEEDS,
+    DataclassPresenter,
+    DataclassValidator,
+    Parameter,
+    Parameters,
     SelectorKind,
-    UnknownArguments,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+    UnsetType,
 )
-from rest_framework import serializers
-from rest_framework.permissions import AllowAny
-from rest_framework_services import InputRequired, NotClientInput
-from rest_framework_services.dispatch.utils import declared_input_keys
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from typing_extensions import TypedDict
 
-from django_spec_mcp import MCPServer, UrlKwarg
+from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.registry.types.tool_binding import ToolBinding
-from django_spec_mcp.schema.service_tool_schema import build_service_tool_input_schema
+from tests.testapp.kernel_shapes import InvoiceOutput
 from tests.testapp.models import Invoice
-from tests.testapp.serializers import InvoiceOutputSerializer
 
 
-class _RenameInput(serializers.Serializer):
-    number = serializers.CharField(max_length=32)
+@dataclass
+class _Rename:
+    number: str
 
 
 def _invoice_by_pk(*, pk: int) -> Any:
     return Invoice.objects.filter(pk=pk)
 
 
-def _invoices_by_ids(*, ids: list[int], user: Any) -> Any:
-    # ``user`` is a transport seed: the reflection skips it, the bind exempts it.
+def _invoices_by_ids(*, ids: list[int]) -> Any:
     return Invoice.objects.filter(pk__in=ids)
 
 
-def _invoices_matching(**kwargs: Any) -> Any:
-    # A bare ``**kwargs`` leaves the key set this lookup declares open.
-    return Invoice.objects.filter(**kwargs)
-
-
-def _rename(*, instance: Invoice, data: dict[str, Any]) -> Invoice:
-    instance.number = data["number"]
+def _rename(*, instance: Invoice, number: str) -> Invoice:
+    instance.number = number
     instance.save(update_fields=["number"])
     return instance
 
 
-def _rename_all(*, collection: Any, data: dict[str, Any]) -> int:
+def _rename_all(*, collection: Any, number: str) -> None:
     # The collection lookup seeds ``collection``, never ``instance``.
-    return collection.update(number=data["number"])
+    collection.update(number=number)
 
 
-def _rename_each(*, data: list[dict[str, Any]]) -> None:
-    # ``many=True`` resolves no target, so the service takes only the list.
-    ...
+_PK = Parameter("pk", "integer", required=True)
+
+
+def _by_pk(*reads: Parameter, kwargs: Any = None) -> SelectorSpec:
+    return SelectorSpec(
+        kind=SelectorKind.RETRIEVE,
+        selector=_invoice_by_pk,
+        reads=Parameters(list(reads) or [_PK]),
+        kwargs=kwargs,
+    )
 
 
 def _rename_spec(**overrides: Any) -> ServiceSpec:
     declared: dict[str, Any] = {
         "service": _rename,
         "atomic": False,
-        "permission_classes": [AllowAny],
-        "input_serializer": _RenameInput,
-        "instance_selector_spec": SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_invoice_by_pk),
-        "output_selector_spec": SelectorSpec(
-            kind=SelectorKind.RETRIEVE, output_serializer=InvoiceOutputSerializer
-        ),
+        "permissions": [Unrestricted()],
+        "validator": DataclassValidator(_Rename),
+        "instance_selector_spec": _by_pk(),
+        "presenter": DataclassPresenter(InvoiceOutput),
         **overrides,
     }
     return ServiceSpec(**declared)
 
 
-def _binding(spec: ServiceSpec, **kwargs: Any) -> ToolBinding:
-    return ToolBinding(name="rename", description=None, spec=spec, **kwargs)
-
-
-def _listed_input_schema(spec: ServiceSpec) -> dict[str, Any]:
-    # Through ``tools/list``, because ``additionalProperties`` is stamped there
-    # rather than by the schema builder.
+def _server(spec: ServiceSpec) -> MCPServer:
     server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
-    server.register_service_tool(
-        name="rename_invoice", spec=spec, unknown_arguments=UnknownArguments.REJECT
-    )
-    tools = server.list_tools(user=None)["tools"]
-    return next(t for t in tools if t["name"] == "rename_invoice")["inputSchema"]
+    server.register_tool(spec, name="rename_invoice", description="Rename an invoice.")
+    return server
+
+
+def _schema(spec: ServiceSpec) -> dict[str, Any]:
+    listed: Any = _server(spec).list_tools(user=None)
+    (tool,) = listed["tools"]
+    return tool["inputSchema"]
 
 
 def test_the_instance_selectors_lookup_is_advertised() -> None:
-    schema = build_service_tool_input_schema(_binding(_rename_spec()))
+    schema = _schema(_rename_spec())
 
     assert set(schema["properties"]) == {"number", "pk"}
     assert schema["properties"]["pk"] == {"type": "integer"}
 
 
-def test_the_collection_selectors_lookup_is_advertised_without_its_seed() -> None:
+def test_the_collection_selectors_lookup_is_advertised() -> None:
     spec = _rename_spec(
         service=_rename_all,
         instance_selector_spec=None,
-        collection_selector_spec=SelectorSpec(kind=SelectorKind.LIST, selector=_invoices_by_ids),
-        output_selector_spec=None,
+        collection_selector_spec=SelectorSpec(
+            kind=SelectorKind.LIST,
+            selector=_invoices_by_ids,
+            reads=Parameters([Parameter("ids", "array", items="integer", required=True)]),
+        ),
+        presenter=None,
     )
 
-    schema = build_service_tool_input_schema(_binding(spec))
+    schema = _schema(spec)
 
     assert set(schema["properties"]) == {"number", "ids"}
+    assert schema["properties"]["ids"]["type"] == "array"
 
 
-def test_the_advertised_lookups_are_the_keys_the_bind_admits() -> None:
-    # The agreement the fix rests on, asked of drf-services rather than
-    # restated: every name its unknown-argument check admits beyond the
-    # serializer and the reserved seeds is a property, and nothing else is.
-    spec = _rename_spec(
-        service=_rename_all,
-        instance_selector_spec=None,
-        collection_selector_spec=SelectorSpec(kind=SelectorKind.LIST, selector=_invoices_by_ids),
-    )
-    admitted = declared_input_keys(spec, serializer=None)
-    assert admitted is not None
-
-    schema = build_service_tool_input_schema(_binding(spec))
+def test_the_advertised_arguments_are_the_ones_the_call_admits() -> None:
+    # The agreement asked of the kernel rather than restated: every parameter
+    # the spec declares is a property, and the schema is closed beside them.
+    spec = _rename_spec()
 
-    assert set(schema["properties"]) - {"number"} == admitted - RESERVED_POOL_SEEDS
-
-
-def test_a_list_payload_item_advertises_only_the_keys_the_bind_admits() -> None:
-    # ``many=True`` dispatch resolves no target, and declares no lookup, so
-    # drf-services admits only the input serializer's keys inside an item, and
-    # the item's schema offers only those.
-    spec = _rename_spec(
-        service=_rename_each, many=True, instance_selector_spec=None, output_selector_spec=None
-    )
-    admitted = declared_input_keys(spec, serializer=_RenameInput())
-    assert admitted is not None
+    schema = _schema(spec)
 
-    schema = build_service_tool_input_schema(_binding(spec))
-    item = schema["properties"][spec.many_argument]["items"]
+    assert set(schema["properties"]) == spec.parameters().names()
+    assert schema["additionalProperties"] is False
 
-    assert set(schema["properties"]) == {spec.many_argument}
-    assert set(item["properties"]) == admitted - RESERVED_POOL_SEEDS == {"number"}
 
+def test_a_lookup_declared_required_is_required_beside_the_validators_fields() -> None:
+    schema = _schema(_rename_spec())
 
-def test_an_open_target_lookup_leaves_the_schema_open() -> None:
-    # The lookup dispatch calls opens the set it reads, so nothing closed may
-    # be advertised.
-    spec = _rename_spec(
-        instance_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE, selector=_invoices_matching
-        ),
-    )
+    assert set(schema["required"]) == {"pk", "number"}
 
-    assert _listed_input_schema(spec)["additionalProperties"] is True
 
+def test_a_lookup_declared_optional_adds_nothing_to_required() -> None:
+    schema = _schema(_rename_spec(instance_selector_spec=_by_pk(Parameter("pk", "integer"))))
 
-def _invoice_in_tenant(*, pk: int, tenant: int) -> Any:
-    # Names ``tenant`` plainly and with no default: the lookup alone would
-    # advertise it and require it.
-    return Invoice.objects.filter(pk=pk)
+    assert schema["required"] == ["number"]
 
 
-def _same_tenant(*, tenant: Annotated[int, NotClientInput] = 1) -> None:
-    # The precondition owns ``tenant`` for the whole call.
-    return None
+def test_a_validator_field_named_like_the_lookup_is_refused_at_registration() -> None:
+    # Changed by design: the drf-services path let an input field override the
+    # reflected lookup of the same name. Two kernel declarations of one name
+    # are refused when the spec's parameters are assembled, which registration
+    # does to compile the schema, so no listing ever shows either.
+    @dataclass
+    class _Pk:
+        pk: int
 
+    with pytest.raises(ImproperlyConfigured, match="pk"):
+        _server(_rename_spec(validator=DataclassValidator(_Pk)))
 
-def test_a_lookup_key_a_precondition_hides_is_not_advertised_but_a_field_of_that_name_is() -> None:
-    # drf-services drops the caller's ``tenant`` before the lookup reads it and
-    # ``REJECT`` refuses it, because a precondition marks it ``NotClientInput``
-    # (``server_owned_keys``), so the schema does not ask for it. A serializer
-    # field of the same name is the caller's input, validated into ``data``, and
-    # stays advertised with the field's own schema.
-    class _WithTenant(_RenameInput):
-        tenant = serializers.IntegerField(help_text="The tenant to move the invoice to.")
 
-    lookup = SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_invoice_in_tenant)
-    hidden = _rename_spec(instance_selector_spec=lookup, preconditions=[_same_tenant])
-    kept = _rename_spec(
-        instance_selector_spec=lookup, preconditions=[_same_tenant], input_serializer=_WithTenant
-    )
+class _Tenant(TypedDict):
+    tenant: str
 
-    hidden_schema = build_service_tool_input_schema(_binding(hidden))
-    kept_schema = build_service_tool_input_schema(_binding(kept))
 
-    assert set(hidden_schema["properties"]) == {"number", "pk"}
-    assert "tenant" not in hidden_schema["required"]
-    assert declared_input_keys(hidden, serializer=_RenameInput()) == {"number", "pk"}
-    assert set(kept_schema["properties"]) == {"number", "pk", "tenant"}
-    assert "tenant" in kept_schema["required"]
-    assert kept_schema["properties"]["tenant"]["description"] == (
-        "The tenant to move the invoice to."
-    )
+def _tenant_of_record() -> _Tenant:
+    return {"tenant": "acme"}
 
 
-def _same_region(*, region: Annotated[str, NotClientInput] = "eu") -> None:
-    # Owns ``region`` for the whole call, a name the lookup does not read.
-    return None
+def test_a_lookup_read_its_selectors_provider_fills_is_not_advertised() -> None:
+    lookup = _by_pk(_PK, Parameter("tenant", "string", required=True), kwargs=_tenant_of_record)
 
+    schema = _schema(_rename_spec(instance_selector_spec=lookup))
 
-class _WithRegion(_RenameInput):
-    region = serializers.CharField(help_text="The region the invoice moves to.")
+    assert set(schema["properties"]) == {"number", "pk"}
+    assert set(schema["required"]) == {"number", "pk"}
 
 
-@pytest.mark.django_db
-def test_a_field_named_like_an_owned_key_the_lookup_does_not_read_stays_the_callers() -> None:
-    # The registrable half of the case above: ``region`` is owned, but no lookup
-    # reads it, so a field of that name registers. It stays advertised and
-    # required, and the caller's value reaches ``data``, so the subtraction from
-    # the owned set is what keeps the tool asking for the field it validates.
-    seen: list[dict[str, Any]] = []
+def test_a_lookup_read_beside_an_untyped_provider_is_offered_and_not_required() -> None:
+    # The lookup's provider reaches the lookup's reads and nothing else, so the
+    # Validator's ``number`` stays required.
+    lookup = _by_pk(kwargs=lambda: {})
 
-    def move(*, instance: Invoice, data: dict[str, Any]) -> Invoice:
-        seen.append(dict(data))
-        return instance
+    schema = _schema(_rename_spec(instance_selector_spec=lookup))
 
-    spec = _rename_spec(service=move, preconditions=[_same_region], input_serializer=_WithRegion)
-    invoice = Invoice.objects.create(number="INV-1")
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
-    server.register_service_tool(name="move", spec=spec)
-    listed: Any = server.list_tools(user=None)
-    schema = next(tool for tool in listed["tools"] if tool["name"] == "move")["inputSchema"]
+    assert set(schema["properties"]) == {"number", "pk"}
+    assert schema["required"] == ["number"]
 
-    result = server.call_tool(
-        "move", {"pk": invoice.pk, "number": "INV-2", "region": "us"}, user=None
-    ).to_dict()
 
-    assert schema["properties"]["region"]["description"] == "The region the invoice moves to."
-    assert "region" in schema["required"]
-    assert result.get("isError") is not True, result
-    assert seen == [{"number": "INV-2", "region": "us"}]
-
-
-def test_an_input_field_of_the_same_name_wins_over_the_reflected_lookup() -> None:
-    class _WithPk(_RenameInput):
-        pk = serializers.IntegerField(help_text="The invoice to rename.")
-
-    schema = build_service_tool_input_schema(_binding(_rename_spec(input_serializer=_WithPk)))
-
-    assert schema["properties"]["pk"]["description"] == "The invoice to rename."
-    assert "pk" in schema["required"]
-
-
-def test_a_url_kwarg_of_the_same_name_wins_over_the_reflected_lookup() -> None:
-    url_kwarg = UrlKwarg("pk", required=True, description="Route capture.")
-
-    schema = build_service_tool_input_schema(_binding(_rename_spec(), url_kwargs=(url_kwarg,)))
-
-    assert schema["properties"]["pk"] == url_kwarg.json_schema()
-    assert "pk" in schema["required"]
-
-
-def _invoice_by_marked_pk(*, pk: Annotated[int, InputRequired]) -> Any:
-    return Invoice.objects.filter(pk=pk)
-
-
-def test_a_lookup_without_a_default_is_required() -> None:
-    # Nothing this server fills supplies ``pk``, so the lookup cannot run without
-    # it, and the schema says so rather than leaving it to a marker.
-    schema = build_service_tool_input_schema(_binding(_rename_spec()))
-
-    assert schema["required"] == ["pk", "number"]
-
-
-def test_a_lookup_its_selector_marks_input_required_is_required() -> None:
-    # The marker still states it outright; a missing default now says the same.
-    spec = _rename_spec(
-        instance_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE, selector=_invoice_by_marked_pk
-        )
-    )
-
-    schema = build_service_tool_input_schema(_binding(spec))
-
-    assert schema["required"] == ["pk", "number"]
-
-
-def test_a_lookup_required_by_both_the_selector_and_the_serializer_is_required_once() -> None:
-    # Both sides contribute ``pk`` to ``required``. JSON Schema requires the
-    # entries of ``required`` to be unique, so a duplicate makes the whole
-    # ``inputSchema`` invalid as a schema, not merely untidy.
-    class _WithPk(_RenameInput):
-        pk = serializers.IntegerField()
-
-    spec = _rename_spec(
-        input_serializer=_WithPk,
-        instance_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE, selector=_invoice_by_marked_pk
-        ),
-    )
-
-    schema = build_service_tool_input_schema(_binding(spec))
-
-    assert sorted(schema["required"]) == ["number", "pk"]
-    jsonschema.Draft202012Validator.check_schema(schema)
-
-
-def _invoice_by_optional_pk(*, pk: int | None = None) -> Any:
-    return Invoice.objects.filter(pk=pk)
-
-
-def test_a_lookup_with_nothing_required_adds_no_required_list() -> None:
-    # No input serializer, and ``pk`` has a default.
-    spec = _rename_spec(
-        input_serializer=None,
-        instance_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE, selector=_invoice_by_optional_pk
-        ),
-    )
-
-    schema = build_service_tool_input_schema(_binding(spec))
-
-    assert set(schema["properties"]) == {"pk"}
-    assert "required" not in schema
-
-
-def test_a_serializer_field_keeps_its_property_and_the_lookup_its_requiredness() -> None:
-    # One argument feeds both, so the serializer's declaration describes the
-    # value and the lookup, which cannot run without it, makes it required even
-    # though the serializer would accept the call without it.
-    class _WithOptionalPk(_RenameInput):
-        pk = serializers.IntegerField(required=False, help_text="The invoice to rename.")
-
-    schema = build_service_tool_input_schema(
-        _binding(_rename_spec(input_serializer=_WithOptionalPk))
-    )
-
-    assert schema["properties"]["pk"]["description"] == "The invoice to rename."
-    assert "pk" in schema["required"]
-
-
-def _invoice_by_pk_for_tenant(*, pk: int, tenant: str) -> Any:
-    return Invoice.objects.filter(pk=pk, number__startswith=tenant)
-
-
-def test_a_lookup_parameter_the_server_seeds_is_not_advertised() -> None:
+def test_a_lookup_read_a_registered_seed_fills_is_not_advertised() -> None:
+    # A reflected read of the target's lookup is the server's once a seed of
+    # its name is registered on the mount, as a reflected read of the spec's own is.
+    lookup = _by_pk(_PK, Parameter("tenant", "string", required=True, reflected=True))
     server = MCPServer(
         name="t",
         auth_backend=AllowAnyBackend(),
         session_store=None,
-        pool_seeds=DEFAULT_POOL_SEEDS.extend(tenant=lambda: "INV"),
+        pool_seeds=DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme"),
     )
-    server.register_service_tool(
-        name="rename_invoice",
-        spec=_rename_spec(
-            instance_selector_spec=SelectorSpec(
-                kind=SelectorKind.RETRIEVE, selector=_invoice_by_pk_for_tenant
-            )
-        ),
+    server.register_tool(
+        _rename_spec(instance_selector_spec=lookup), name="rename_invoice", description="Rename."
+    )
+    listed: Any = server.list_tools(user=None)
+
+    (tool,) = listed["tools"]
+
+    assert set(tool["inputSchema"]["properties"]) == {"number", "pk"}
+
+
+class _MaybeTenant(TypedDict):
+    tenant: str | UnsetType
+
+
+def _maybe_tenant() -> _MaybeTenant:
+    return {"tenant": "acme"}
+
+
+def test_a_key_one_seat_may_decline_is_still_required_by_another() -> None:
+    # The lookup's provider may answer ``tenant``, but the lookup does not read
+    # it: the service's own read does, and no provider reaches that seat. So
+    # dispatch demands ``tenant`` of the caller, and the schema requires it.
+    spec = _rename_spec(
+        service=lambda *, instance, number, tenant: instance,
+        reads=Parameters([Parameter("tenant", "string", required=True)]),
+        instance_selector_spec=_by_pk(kwargs=_maybe_tenant),
     )
 
-    tool = next(t for t in server.list_tools(user=None)["tools"] if t["name"] == "rename_invoice")
+    schema = _schema(spec)
 
-    assert set(tool["inputSchema"]["properties"]) == {"pk", "number"}
-    assert tool["inputSchema"]["required"] == ["pk", "number"]
-
-
-def test_a_lookup_a_defaulted_url_kwarg_fills_is_not_required() -> None:
-    url_kwarg = UrlKwarg("pk", type="integer", default=1)
-
-    schema = build_service_tool_input_schema(_binding(_rename_spec(), url_kwargs=(url_kwarg,)))
-
-    assert schema["properties"]["pk"] == url_kwarg.json_schema()
-    assert schema["required"] == ["number"]
+    assert set(schema["properties"]) == {"number", "pk", "tenant"}
+    assert set(schema["required"]) == {"number", "pk", "tenant"}
 
 
 def test_a_spec_without_a_target_selector_advertises_only_its_input() -> None:
-    spec = _rename_spec(instance_selector_spec=None)
-
-    schema = build_service_tool_input_schema(_binding(spec))
+    schema = _schema(_rename_spec(service=lambda *, number: None, instance_selector_spec=None))
 
     assert set(schema["properties"]) == {"number"}
 
 
-def _invoice_for_user(*, user: Any) -> Any:
-    return Invoice.objects.all()
-
-
-def test_a_lookup_that_asks_nothing_leaves_the_schema_as_the_serializer_built_it() -> None:
-    # Its only parameter is a seed, so there is nothing to merge, and the
-    # serializer-less ``{"type": "object"}`` is served without an empty
-    # ``properties`` grafted onto it.
-    spec = _rename_spec(
-        input_serializer=None,
-        instance_selector_spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_invoice_for_user),
-    )
-
-    assert build_service_tool_input_schema(_binding(spec)) == {"type": "object"}
-
-
 @pytest.mark.django_db
 def test_a_call_valid_against_the_advertised_schema_renames_the_target() -> None:
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
-    server.register_service_tool(
-        name="rename_invoice",
-        spec=_rename_spec(),
-        unknown_arguments=UnknownArguments.REJECT,
-    )
     invoice = Invoice.objects.create(number="INV-1")
-    tool = next(t for t in server.list_tools(user=None)["tools"] if t["name"] == "rename_invoice")
+    server = _server(_rename_spec())
+    listed: Any = server.list_tools(user=None)
     arguments = {"pk": invoice.pk, "number": "INV-2"}
 
-    # The closed schema the issue reported refused ``pk``; the call needs it.
-    assert tool["inputSchema"]["additionalProperties"] is False
-    jsonschema.validate(arguments, tool["inputSchema"])
-    result = server.call_tool("rename_invoice", arguments, user=None).to_dict()
+    jsonschema.validate(arguments, listed["tools"][0]["inputSchema"])
+    out = server.call_tool("rename_invoice", arguments, user=None).to_dict()
 
-    assert not result.get("isError")
-    assert result["structuredContent"]["number"] == "INV-2"
+    assert out.get("isError") is not True, out
+    assert out["structuredContent"]["number"] == "INV-2"
+    invoice.refresh_from_db()
+    assert invoice.number == "INV-2"

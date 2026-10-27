@@ -1,18 +1,36 @@
+"""A kernel tool's two schemas, by what the spec declares.
+
+The input side is ``kernel_tool_input_schema`` over the kernel's
+``spec_input_schema``, the output side ``kernel_tool_output_schema`` over its
+``spec_output_schema``; both are read here as the listing serves them. The
+drf-services original asked the same of ``build_input_schema`` and
+``build_output_schema`` over serializers and dataclasses, and is kept beside
+this file as ``test_input_output_schema_drfs.py``; what a spec that may present
+nothing advertises is ``test_kernel_output_presents_nothing.py``'s.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import pytest
-from django_service_specs import SelectorKind
-from rest_framework import serializers
+from django import forms
+from django.core.exceptions import ImproperlyConfigured
+from django_service_specs import (
+    DataclassPresenter,
+    DataclassValidator,
+    FormValidator,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+)
 
-from django_spec_mcp.schema.input_schema import build_input_schema
-from django_spec_mcp.schema.output_schema import build_output_schema
-from tests.testapp.serializers import InvoiceOutputSerializer
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 
-
-class _Ser(serializers.Serializer):
-    x = serializers.IntegerField()
+OPEN = [Unrestricted()]
 
 
 @dataclass
@@ -21,145 +39,108 @@ class _DC:
     qty: int = 0
 
 
-def test_build_input_schema_none_returns_empty_object() -> None:
-    assert build_input_schema(None) == {"type": "object"}
+class _NameForm(forms.Form):
+    name = forms.CharField()
 
 
-def test_build_input_schema_serializer() -> None:
-    assert build_input_schema(_Ser)["properties"]["x"] == {"type": "integer"}
+def _tool(spec: Any, **knobs: Any) -> dict[str, Any]:
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server.register_tool(spec, name="t", description="A tool.", **knobs)
+    listed: Any = server.list_tools(user=None)
+    (tool,) = listed["tools"]
+    return tool
 
 
-def test_build_input_schema_dataclass() -> None:
-    out = build_input_schema(_DC)
-    assert out["properties"]["name"] == {"type": "string"}
-    assert out["required"] == ["name"]
+def _service(**declared: Any) -> ServiceSpec:
+    return ServiceSpec(service=lambda **_: None, atomic=False, permissions=OPEN, **declared)
 
 
-def test_build_input_schema_refuses_unknown_type() -> None:
-    # Before drf-services 0.50 this answered ``{"type": "object"}`` --
-    # byte-identical to a tool declaring no input, so the tool advertised no
-    # arguments and dispatch then refused every call. The package only passes the
-    # refusal through; registration refuses the shape before it gets here.
-    class NotASerializer:
-        pass
-
-    with pytest.raises(TypeError, match="must be a dataclass type or a Serializer subclass"):
-        build_input_schema(NotASerializer)
+def _selector(kind: SelectorKind, **declared: Any) -> SelectorSpec:
+    return SelectorSpec(
+        kind=kind,
+        selector=lambda: [],
+        presenter=DataclassPresenter(_DC),
+        permissions=OPEN,
+        **declared,
+    )
 
 
-def test_build_output_schema_refuses_unknown_type() -> None:
-    # Before drf-services 0.51 this answered ``None`` -- the answer for no output
-    # declared -- while rendering the same class raised at the first call. Passed
-    # through like the input side's refusal, and refused at registration first.
-    class NotASerializer:
-        pass
-
-    with pytest.raises(TypeError, match="must be a BaseSerializer subclass or a dataclass type"):
-        build_output_schema(NotASerializer)
+# ---------- inputSchema ----------
 
 
-def test_build_output_schema_none() -> None:
-    assert build_output_schema(None) is None
-
-
-def test_build_output_schema_serializer() -> None:
-    out = build_output_schema(_Ser)
-    assert out is not None
-    assert out["type"] == "object"
-
-
-def test_build_output_schema_dataclass() -> None:
-    out = build_output_schema(_DC)
-    assert out is not None
-    assert "name" in out["properties"]
-
-
-def test_build_output_schema_read_only_serializer_is_none() -> None:
-    # DRF's read-only pattern renders and declares no fields, so ``None`` -- no
-    # schema to advertise -- is the honest answer, and registration admits it.
-    # The boundary the refusal above must not cross.
-    class ReadOnly(serializers.BaseSerializer):
-        def to_representation(self, instance: object) -> dict[str, object]:
-            return {}
-
-    assert build_output_schema(ReadOnly) is None
-
-
-def test_build_input_schema_partial_drops_required() -> None:
-    out = build_input_schema(_DC, partial=True)
-    assert "required" not in out
-    assert out["properties"]["name"] == {"type": "string"}
-
-
-def test_build_output_schema_list_unpaginated_is_array() -> None:
-    out = build_output_schema(_Ser, kind=SelectorKind.LIST)
-    assert out is not None
-    assert out["type"] == "array"
-    assert out["items"]["type"] == "object"
-    assert "x" in out["items"]["properties"]
-
-
-def test_build_output_schema_list_paginated_is_envelope() -> None:
-    out = build_output_schema(_Ser, kind=SelectorKind.LIST, paginate=True)
-    assert out is not None
-    assert out["type"] == "object"
-    assert out["properties"]["items"]["type"] == "array"
-    assert out["properties"]["page"] == {"type": "integer"}
-    assert out["properties"]["totalPages"] == {"type": "integer"}
-    assert out["properties"]["hasNext"] == {"type": "boolean"}
-    assert out["required"] == ["items", "page", "totalPages", "hasNext"]
-
-
-def test_build_output_schema_retrieve_kind_is_item_schema() -> None:
-    out = build_output_schema(_Ser, kind=SelectorKind.RETRIEVE)
-    assert out is not None
-    assert out["type"] == "object"
-
-
-def test_build_output_schema_list_without_serializer_is_none() -> None:
-    assert build_output_schema(None, kind=SelectorKind.LIST, paginate=True) is None
-
-
-# ---------- may_be_empty: a result with nothing to present ----------
-
-
-def test_may_be_empty_moves_required_into_an_any_of_beside_the_empty_object() -> None:
-    strict = build_output_schema(InvoiceOutputSerializer)
-    admitting = build_output_schema(InvoiceOutputSerializer, may_be_empty=True)
-
-    assert strict is not None
-    assert admitting == {
-        **{key: value for key, value in strict.items() if key != "required"},
-        "anyOf": [{"required": strict["required"]}, {"maxProperties": 0}],
+def test_a_spec_declaring_no_arguments_is_a_closed_empty_object() -> None:
+    # Changed by design: the drf-services ``build_input_schema(None)`` answered
+    # an open ``{"type": "object"}``. The kernel's argument set is closed, so a
+    # spec declaring none takes no argument at all.
+    assert _tool(_service())["inputSchema"] == {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": False,
     }
-    # MCP requires the root of an ``outputSchema`` to be an object schema.
-    assert admitting["type"] == "object"
 
 
-def test_may_be_empty_leaves_a_schema_with_nothing_required_as_derived() -> None:
-    class _AllOptional(serializers.Serializer):
-        note = serializers.CharField(required=False)
+def test_a_dataclass_validators_fields_are_the_arguments() -> None:
+    schema = _tool(_service(validator=DataclassValidator(_DC)))["inputSchema"]
 
-    assert build_output_schema(_AllOptional, may_be_empty=True) == build_output_schema(_AllOptional)
+    assert schema["properties"]["name"] == {"type": "string"}
+    assert schema["properties"]["qty"] == {"type": "integer", "default": 0}
+    assert schema["required"] == ["name"]
 
 
-def test_may_be_empty_with_no_output_serializer_is_still_no_schema() -> None:
-    assert build_output_schema(None, may_be_empty=True) is None
+def test_a_validator_that_is_not_a_dataclass_is_refused_when_built() -> None:
+    # The original passed the drf-services builder's refusal through at
+    # ``tools/list``. The kernel's Validator refuses the shape when it is
+    # constructed, before any spec holds it.
+    class NotADataclass:
+        pass
+
+    with pytest.raises(ImproperlyConfigured, match="takes a dataclass type"):
+        DataclassValidator(NotADataclass)
+
+
+def test_partial_drops_required() -> None:
+    schema = _tool(_service(validator=FormValidator(_NameForm), partial=True))["inputSchema"]
+
+    assert "required" not in schema
+    assert schema["properties"]["name"]["type"] == "string"
+
+
+# ---------- outputSchema ----------
+
+
+def test_a_retrieve_is_its_item() -> None:
+    schema = _tool(_selector(SelectorKind.RETRIEVE))["outputSchema"]
+
+    assert schema["type"] == "object"
+    assert set(schema["properties"]) == {"name", "qty"}
+
+
+def test_an_unpaginated_list_is_an_array_of_its_item() -> None:
+    schema = _tool(_selector(SelectorKind.LIST))["outputSchema"]
+
+    assert schema["type"] == "array"
+    assert schema["items"]["type"] == "object"
+    assert "name" in schema["items"]["properties"]
+
+
+def test_a_paginated_list_is_the_envelope() -> None:
+    schema = _tool(_selector(SelectorKind.LIST), paginate=True)["outputSchema"]
+
+    assert schema["type"] == "object"
+    assert schema["properties"]["items"]["type"] == "array"
+    assert schema["properties"]["page"] == {"type": "integer"}
+    assert schema["properties"]["totalPages"] == {"type": "integer"}
+    assert schema["properties"]["hasNext"] == {"type": "boolean"}
+    assert schema["required"] == ["items", "page", "totalPages", "hasNext"]
 
 
 @pytest.mark.parametrize("paginate", [False, True], ids=["array", "envelope"])
-def test_may_be_empty_returns_a_list_schema_as_derived(paginate: bool) -> None:
-    # A list result is a list, empty at worst, and never nothing. The paged
-    # envelope requires all four of its keys, so the rewrite would otherwise
-    # move them into the ``anyOf`` and let ``{}`` pass for a page.
-    derived = build_output_schema(
-        InvoiceOutputSerializer, kind=SelectorKind.LIST, paginate=paginate
-    )
+def test_a_list_selector_under_allow_none_keeps_its_list_schema(paginate: bool) -> None:
+    # A ``LIST`` selector returning ``None`` has returned the empty list, so
+    # ``allow_none`` adds nothing to its schema: a list, empty at worst, and the
+    # envelope's four keys still required.
+    allowing = _tool(_selector(SelectorKind.LIST, allow_none=True), paginate=paginate)
+    strict = _tool(_selector(SelectorKind.LIST), paginate=paginate)
 
-    admitting = build_output_schema(
-        InvoiceOutputSerializer, kind=SelectorKind.LIST, paginate=paginate, may_be_empty=True
-    )
-
-    assert admitting == derived
-    assert derived is not None
-    assert "anyOf" not in derived
+    assert allowing["outputSchema"] == strict["outputSchema"]
+    assert "anyOf" not in allowing["outputSchema"]

@@ -235,8 +235,9 @@ dev = [
     "django-filter>=23",
     # Likewise drf-spectacular: drf-services reads its ``@extend_schema_*``
     # annotations into a tool's ``inputSchema``, the recipe documenting that
-    # imports it, and ``tests/schema/test_spectacular_annotations.py`` holds the
-    # recipe's claims. A project using the annotations has it installed already.
+    # imports it, and ``tests/schema/test_spectacular_annotations_drfs.py`` holds
+    # the recipe's claims. A project using the annotations has it installed
+    # already. Both leave with drf-services.
     "drf-spectacular>=0.27",
     # The ``test`` extra's dependency, declared here too because ``uv sync
     # --all-groups`` installs groups but not extras — the suite that covers the
@@ -316,7 +317,7 @@ ignore = [
 # This test's subject is a parameter annotation naming a type imported only for
 # type checking, so it needs the real guard: made a plain import, the hint
 # resolves and the test passes without exercising the unresolved path.
-"tests/schema/test_selector_tool_requiredness.py" = ["TID251"]
+"tests/schema/test_selector_tool_requiredness_drfs.py" = ["TID251"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["django_spec_mcp"]

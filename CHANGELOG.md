@@ -38,6 +38,14 @@ carries; releases up to 0.54.0 are in
   by hand and passed to
   `server.tools.register` or `server.resources.register` is never granted, so
   the kernel refuses its unguarded spec at the call.
+  A kernel tool's `inputSchema` leaves out every key the server fills, through
+  its own pool seeds or a typed `kwargs=` or `input_data=` provider that always
+  fills it, and offers without requiring a key a provider may fill; a paged
+  tool's shapes say they apply to each item in the server's
+  `AgentConventions.query_param_on_pages` wording. A `many` or `returns_many`
+  service declared `allow_none` advertises an `outputSchema` of
+  type `"array"` and serves `[]` when it presents nothing, as the drf-services
+  path does for the same declaration.
   The drf-services registration methods are unchanged.
 
 ### Changed

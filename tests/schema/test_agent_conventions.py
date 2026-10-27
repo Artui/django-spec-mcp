@@ -1,24 +1,55 @@
-"""``append_agent_conventions`` — the one line that has nowhere else to go."""
+"""``append_agent_conventions`` over a kernel spec's projection.
+
+The projection is the kernel's ``audience_projection_for_spec``, read off the
+``FieldMarking`` each presenter field declares in its ``Annotated`` extras,
+where the drf-services original read the markings off serializer ``style``.
+The original is kept beside this file as ``test_agent_conventions_drfs.py``.
+"""
 
 from __future__ import annotations
 
-from django_service_specs import FieldMarking
-from rest_framework import serializers
-from rest_framework_services import MARKING, build_audience_projection
+from dataclasses import dataclass
+from typing import Annotated, Any
 
+from django_service_specs import (
+    DataclassPresenter,
+    FieldMarking,
+    SelectorKind,
+    SelectorSpec,
+    Unrestricted,
+    audience_projection_for_spec,
+)
+
+from django_spec_mcp import AgentConventions, MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.schema.agent_conventions import append_agent_conventions
-from tests.testapp.serializers import AgentInvoiceSerializer, InvoiceOutputSerializer
+from tests.testapp.kernel_shapes import AgentInvoiceOutput, InvoiceOutput
+
+
+@dataclass
+class _Handles:
+    id: Annotated[int, FieldMarking.handle()]
+
+
+def _spec(presented: type) -> SelectorSpec:
+    return SelectorSpec(
+        kind=SelectorKind.RETRIEVE,
+        selector=lambda: None,
+        allow_none=True,
+        presenter=DataclassPresenter(presented),
+        permissions=[Unrestricted()],
+    )
+
+
+AGENT = audience_projection_for_spec(_spec(AgentInvoiceOutput))
 
 
 def test_a_tool_with_handles_gains_the_line() -> None:
-    result = append_agent_conventions(
-        "Fetch an invoice.", build_audience_projection(AgentInvoiceSerializer)
-    )
+    result = append_agent_conventions("Fetch an invoice.", AGENT)
 
     assert result is not None
     assert result.startswith("Fetch an invoice.\n\n")
     assert "Identify records by `number`." in result
-    # The advice the Pydantic-AI toolset gives; it was "never read them out".
     assert result.endswith(
         "pass them to other tools that ask for one; refer to records by their "
         "name in anything you say, never by the identifier."
@@ -26,16 +57,13 @@ def test_a_tool_with_handles_gains_the_line() -> None:
 
 
 def test_a_tool_without_handles_is_left_alone() -> None:
-    projection = build_audience_projection(InvoiceOutputSerializer)
+    projection = audience_projection_for_spec(_spec(InvoiceOutput))
 
     assert append_agent_conventions("Fetch an invoice.", projection) == "Fetch an invoice."
 
 
 def test_handles_without_a_label_still_get_the_line() -> None:
-    class _Handles(serializers.Serializer):
-        id = serializers.IntegerField(style={MARKING: FieldMarking.handle()})
-
-    result = append_agent_conventions(None, build_audience_projection(_Handles))
+    result = append_agent_conventions(None, audience_projection_for_spec(_spec(_Handles)))
 
     assert result is not None
     assert "Identify records by" not in result
@@ -43,21 +71,33 @@ def test_handles_without_a_label_still_get_the_line() -> None:
 
 
 def test_the_line_is_the_one_passed() -> None:
-    """A server's ``AgentConventions.handle_line`` arrives here as text."""
     result = append_agent_conventions(
-        "Fetch an invoice.",
-        build_audience_projection(AgentInvoiceSerializer),
-        handle_line="Use the ids for calls.",
+        "Fetch an invoice.", AGENT, handle_line="Use the ids for calls."
     )
 
-    # The label prefix is this transport's framing and stays.
     assert result == "Fetch an invoice.\n\nIdentify records by `number`. Use the ids for calls."
 
 
 def test_none_drops_the_line_and_its_prefix() -> None:
-    projection = build_audience_projection(AgentInvoiceSerializer)
-
-    assert append_agent_conventions("Fetch an invoice.", projection, handle_line=None) == (
+    assert append_agent_conventions("Fetch an invoice.", AGENT, handle_line=None) == (
         "Fetch an invoice."
     )
-    assert append_agent_conventions(None, projection, handle_line=None) is None
+    assert append_agent_conventions(None, AGENT, handle_line=None) is None
+
+
+def _listed_description(conventions: AgentConventions | None) -> Any:
+    server = MCPServer(
+        name="t", auth_backend=AllowAnyBackend(), session_store=None, conventions=conventions
+    )
+    server.register_tool(_spec(AgentInvoiceOutput), name="get", description="Fetch an invoice.")
+    listed: Any = server.list_tools(user=None)
+    return listed["tools"][0]["description"]
+
+
+def test_a_kernel_tools_listing_carries_the_servers_line() -> None:
+    # The binding's projection is the spec's, so the listing reads the same
+    # markings these unit cases do, in the server's own words.
+    described = _listed_description(AgentConventions(handle_line="Use the ids for calls."))
+
+    assert described == "Fetch an invoice.\n\nIdentify records by `number`. Use the ids for calls."
+    assert _listed_description(AgentConventions(handle_line=None)) == "Fetch an invoice."
