@@ -15,10 +15,16 @@ carries; releases up to 0.54.0 are in
 
 - **The package is `django-spec-mcp`, imported as `django_spec_mcp`.** Every
   import of `rest_framework_mcp` becomes `django_spec_mcp`, with the same module
-  paths below it. The settings key is `SPEC_MCP`; a `REST_FRAMEWORK_MCP` setting
+  paths below it, `constants` apart. The settings key is `SPEC_MCP`; a `REST_FRAMEWORK_MCP` setting
   is no longer read, and nothing warns about it, so rename the key. The
   `serverInfo.name` default is `django-spec-mcp`, and the logger and tracer names
   follow the import package.
+- **`rest_framework_mcp.constants` has no counterpart.** Its enums and constants
+  are importable from `django_spec_mcp.types`, each from a module of its own
+  (`django_spec_mcp.types.output_format` for `OutputFormat`), and the names the
+  root exported from it still are. `ArgumentBinding`, `UnknownArguments` and
+  `RESERVED_POOL_SEEDS` were re-exports: the root exports the first two, and
+  `django_service_specs`, which defines the third, exports it.
 - **Every name stored outside the process is new**: the cache and Redis
   prefixes are `spec-mcp:session:`, `spec-mcp:task:`, `spec-mcp:sse`,
   `spec-mcp:sse-replay`, `spec-mcp:sub`, `spec-mcp:rl`, `spec-mcp:rl-sw` and
