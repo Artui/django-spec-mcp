@@ -27,4 +27,10 @@ carries; releases up to 0.54.0 are in
   `MCPAuthBackend`. This package keeps the resource-server side: the backend
   protocol, the protected-resource metadata view and the challenge responses.
 
+- **The refusal of settings keys drf-mcp removed in its 0.12.0.**
+  `SPEC_MCP["AUTH_BACKEND"]`, `["SESSION_STORE"]` and `["AUTH_USER_ADAPTER"]` no
+  longer raise `ImproperlyConfigured` at `MCPServer(...)`: no project ever set
+  them under this package's settings key, so there is nothing to catch. Pass the
+  collaborators to `MCPServer(auth_backend=..., session_store=...)`, as before.
+
 [Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.0.0...HEAD

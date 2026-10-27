@@ -259,21 +259,6 @@ def test_a_hand_built_session_store_keeps_its_own_namespace() -> None:
     assert DjangoCacheSessionStore().owner(session_id) == "user:2"
 
 
-@pytest.mark.parametrize(
-    "removed",
-    [
-        {"AUTH_BACKEND": "some.dotted.Path"},
-        {"SESSION_STORE": "some.dotted.Path"},
-    ],
-)
-def test_removed_collaborator_settings_raise(settings, removed: dict[str, str]) -> None:
-    """Silently ignoring a stale AUTH_BACKEND would mean a project that thinks
-    it configured authentication has not — so it fails loudly instead."""
-    settings.SPEC_MCP = removed
-    with pytest.raises(ImproperlyConfigured, match="removed in 0.12.0"):
-        MCPServer(name="s")
-
-
 def test_resource_url_configures_the_default_backend() -> None:
     server = MCPServer(name="internal", resource_url="https://example.com/internal/mcp/")
     md = server.auth_backend.protected_resource_metadata()
@@ -290,12 +275,6 @@ def test_resource_url_with_a_custom_backend_raises() -> None:
             resource_url="https://example.com/mcp/",
             auth_backend=AllowAnyBackend(),
         )
-
-
-def test_removed_settings_error_names_the_replacement(settings) -> None:
-    settings.SPEC_MCP = {"AUTH_BACKEND": "some.dotted.Path"}
-    with pytest.raises(ImproperlyConfigured, match=r"auth_backend=YourAuthBackend\(\)"):
-        MCPServer(name="s")
 
 
 def test_register_tool_duplicate_raises() -> None:

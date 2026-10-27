@@ -18,12 +18,14 @@ import importlib.util
 import pytest
 
 from django_spec_mcp.conf import DEFAULTS
+from django_spec_mcp.server.mcp_server import MCPServer
 
 
 @pytest.mark.parametrize(
     "module",
     [
         "django_spec_mcp.contrib",
+        "django_spec_mcp.check_removed_settings",
     ],
 )
 def test_a_dropped_module_is_not_importable(module: str) -> None:
@@ -35,3 +37,9 @@ def test_a_dropped_module_is_not_importable(module: str) -> None:
 )
 def test_a_dropped_setting_has_no_default(key: str) -> None:
     assert key not in DEFAULTS
+
+
+def test_a_settings_key_drf_mcp_once_removed_is_not_refused(settings) -> None:
+    """A fresh package has no history of these keys, so nothing guards them."""
+    settings.SPEC_MCP = {"AUTH_BACKEND": "some.dotted.Path"}
+    MCPServer(name="dropped-surface")

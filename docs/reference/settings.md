@@ -38,9 +38,7 @@ server = MCPServer(name="internal", config=build_mcp_config(page_size=500))
 Collaborators are **not** configured here at all — the auth backend, session
 store, SSE broker, server identity and resource URL are passed to
 `MCPServer(...)` in `urls.py`, because a settings dict can't hold a live
-object. Three keys that once named a collaborator by dotted path were removed
-and now raise `ImproperlyConfigured` if still present: `AUTH_BACKEND`,
-`SESSION_STORE`, `AUTH_USER_ADAPTER`.
+object.
 
 ## Protocol
 

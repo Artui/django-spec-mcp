@@ -42,7 +42,6 @@ from django_spec_mcp.auth.protected_resource_metadata import ProtectedResourceMe
 from django_spec_mcp.auth.types.auth_backend import MCPAuthBackend
 from django_spec_mcp.auth.types.self_checking import SelfChecking
 from django_spec_mcp.auth.types.token_info import TokenInfo
-from django_spec_mcp.check_removed_settings import check_removed_settings
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.config.types.mcp_config import MCPConfig
 from django_spec_mcp.constants import (
@@ -208,7 +207,6 @@ class MCPServer:
         conventions: AgentConventions | None = None,
         url_namespace: str = "mcp",
     ) -> None:
-        check_removed_settings()
         # Identity is resolved once, here, so the instance is the single source
         # of truth on the wire. Every unset kwarg defers to ``SERVER_INFO`` —
         # including ``icons=()``, which is "unset" and not a way to suppress
