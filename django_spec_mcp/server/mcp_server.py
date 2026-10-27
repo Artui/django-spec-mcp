@@ -869,8 +869,9 @@ class MCPServer:
         # Every refusal is reached before the first registration, so a refused
         # entry registers nothing
         # (``test_register_tools_registers_nothing_when_an_entry_is_refused``): a
-        # scratch registry runs the registry's own checks over the batch, and a
-        # name this server already holds is refused against the live one.
+        # scratch registry runs the registry's own checks over the batch (its
+        # ``server-arguments`` case fails without it), and a name this server
+        # already holds is refused against the live one.
         trial = ToolRegistry(pool_seeds=self._pool_seeds)
         for binding in bindings:
             trial.register(binding)

@@ -13,6 +13,7 @@ from django_service_specs import (
     RegisteredSpec,
     SelectorKind,
     SelectorSpec,
+    ServerArguments,
     ServiceSpec,
     SpecRegistry,
     UnknownArguments,
@@ -316,15 +317,30 @@ class _Source:
 
 
 @pytest.mark.parametrize(
-    ("late", "overrides", "refusal"),
+    ("late", "overrides", "refusal", "match"),
     [
-        pytest.param(_Source(), {}, TypeError, id="spec-source"),
-        pytest.param(_service(), {"late": {"paginate": True}}, ImproperlyConfigured, id="knob"),
-        pytest.param(_service(), {}, ValueError, id="name-taken"),
+        pytest.param(_Source(), {}, TypeError, "takes a django_service_specs", id="spec-source"),
+        pytest.param(
+            _service(),
+            {"late": {"paginate": True}},
+            ImproperlyConfigured,
+            "paginate",
+            id="knob",
+        ),
+        # Refused by the tool registry's own check rather than the binding's, so
+        # only the trial registration of every entry keeps ``early`` out.
+        pytest.param(
+            _service(),
+            {"late": {"server_arguments": ServerArguments(values={"tenant": 1})}},
+            ImproperlyConfigured,
+            "ServerArguments names tenant, which the spec does not declare",
+            id="server-arguments",
+        ),
+        pytest.param(_service(), {}, ValueError, "Duplicate MCP tool name", id="name-taken"),
     ],
 )
 def test_register_tools_registers_nothing_when_an_entry_is_refused(
-    late: Any, overrides: dict[str, Any], refusal: type[Exception]
+    late: Any, overrides: dict[str, Any], refusal: type[Exception], match: str
 ) -> None:
     server = _server()
     server.register_tool(_service(), name="taken")
@@ -334,7 +350,7 @@ def test_register_tools_registers_nothing_when_an_entry_is_refused(
             RegisteredSpec(name="taken" if refusal is ValueError else "late", spec=late),
         ]
     )
-    with pytest.raises(refusal):
+    with pytest.raises(refusal, match=match):
         server.register_tools(registry, overrides=overrides)
     assert [binding.name for binding in server.tools.all()] == ["taken"]
 
