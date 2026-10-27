@@ -337,3 +337,19 @@ def test_unknown_arguments_reaches_the_schema_and_the_call(
     assert result.get("isError", False) is closed
     if not closed:
         assert result["structuredContent"] == {"number": "1"}
+
+
+def test_required_scopes_lists_every_declared_scope(client: Client) -> None:
+    """``requiredScopes`` is the gate's whole declaration, not what the token
+    lacks, as on a ``ScopeRequired`` permission: a token carrying one of two
+    scopes is told both."""
+    server = MCPServer(name="t", auth_backend=HeaderAuthBackend())
+    server.register_tool(
+        ServiceSpec(service=lambda: None, permissions=OPEN),
+        name="pair",
+        description="Needs both scopes.",
+        scopes=("read", "write"),
+    )
+    with override_settings(ROOT_URLCONF=urlconf_for(server)):
+        body = _caller(client, scopes="read").call("pair")
+    assert body["error"]["data"] == {"requiredScopes": ["read", "write"]}

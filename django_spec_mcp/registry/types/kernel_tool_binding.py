@@ -73,10 +73,11 @@ class KernelToolBinding:
     """The OAuth scopes a caller's token must carry, every one of them.
 
     ``None`` is no scope gate. Enforced as the ``ScopeRequired`` check on
-    ``permissions``, so a token missing one is answered ``-32006`` with the
-    missing scopes in ``requiredScopes``, as a ``ScopeRequired`` permission is
-    answered on every other binding. An empty tuple is refused at registration:
-    it would read as a gate and admit every caller."""
+    ``permissions``, so a token missing one is answered ``-32006`` with every
+    declared scope in ``requiredScopes``, not only the missing ones, as a
+    ``ScopeRequired`` permission is answered on every other binding. An empty
+    tuple is refused at registration: it would read as a gate and admit every
+    caller."""
     unknown_arguments: UnknownArguments = UnknownArguments.REJECT
     """Handed to the kernel's ``dispatch`` as ``unknown_arguments=``, and read by
     ``spec_input_schema`` so the advertised schema is closed exactly when the

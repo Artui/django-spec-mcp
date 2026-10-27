@@ -693,12 +693,12 @@ class MCPServer:
         ``invalidates`` on a selector tool.
 
         ``scopes`` are the OAuth scopes the caller's token must carry, every one
-        of them; a token missing one is answered ``-32006`` with the missing
-        scopes in ``requiredScopes``. A bare string is one scope, as
-        ``ScopeRequired`` reads it. ``scopes=()`` is refused, since it would
-        read as a gate and admit every caller. The scope gate is a transport
-        check and does not count as the tool's guard for
-        ``REQUIRE_TOOL_PERMISSIONS``, which reads the spec's own
+        of them; a token missing one is answered ``-32006`` with every declared
+        scope in ``requiredScopes``, as a ``ScopeRequired`` permission answers.
+        A bare string is one scope, as ``ScopeRequired`` reads it. ``scopes=()``
+        is refused, since it would read as a gate and admit every caller. The
+        scope gate is a transport check and does not count as the tool's guard
+        for ``REQUIRE_TOOL_PERMISSIONS``, which reads the spec's own
         ``permissions``.
 
         ``task_policy`` other than ``FORBIDDEN`` is refused: the task path does
