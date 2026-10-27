@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from rest_framework_mcp.registry.types.chain_tool_binding import ChainToolBinding
-from rest_framework_mcp.schema.input_schema import build_input_schema
+from django_spec_mcp.registry.types.chain_tool_binding import ChainToolBinding
+from django_spec_mcp.schema.input_schema import build_input_schema
 
 
 def build_chain_tool_input_schema(binding: ChainToolBinding) -> dict[str, Any]:

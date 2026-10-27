@@ -11,18 +11,18 @@ from typing import Any
 
 import pytest
 
-from rest_framework_mcp import MCPServer
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.constants import JsonRpcErrorCode, TaskStatus
-from rest_framework_mcp.handlers.handle_tasks_cancel import handle_tasks_cancel
-from rest_framework_mcp.handlers.handle_tasks_get import handle_tasks_get
-from rest_framework_mcp.handlers.handle_tasks_update import handle_tasks_update
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.protocol.types.task import Task
-from rest_framework_mcp.tasks.create_task import create_task
-from rest_framework_mcp.tasks.in_memory_task_store import InMemoryTaskStore
-from rest_framework_mcp.tasks.transition_task import transition_task
-from rest_framework_mcp.tasks.types.task_record import TaskRecord
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.constants import JsonRpcErrorCode, TaskStatus
+from django_spec_mcp.handlers.handle_tasks_cancel import handle_tasks_cancel
+from django_spec_mcp.handlers.handle_tasks_get import handle_tasks_get
+from django_spec_mcp.handlers.handle_tasks_update import handle_tasks_update
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.protocol.types.task import Task
+from django_spec_mcp.tasks.create_task import create_task
+from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
+from django_spec_mcp.tasks.transition_task import transition_task
+from django_spec_mcp.tasks.types.task_record import TaskRecord
 from tests.tasks.conftest import RecordingExecutor, context
 
 HANDLERS = [handle_tasks_get, handle_tasks_cancel, handle_tasks_update]

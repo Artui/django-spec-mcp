@@ -6,16 +6,16 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AbstractBaseUser
 from django.http import HttpRequest
 
-from rest_framework_mcp.conf import get_setting
+from django_spec_mcp.conf import get_setting
 
 
 class SimpleJWTCookieAdapter:
     """Reference
-    [`AuthUserAdapter`][rest_framework_mcp.contrib.oauth.adapters.types.auth_user_adapter.AuthUserAdapter]
+    [`AuthUserAdapter`][django_spec_mcp.contrib.oauth.adapters.types.auth_user_adapter.AuthUserAdapter]
     for SimpleJWT cookie-authenticated apps.
 
     Reads the access-token cookie (``cookie_name=``, defaulting to
-    ``REST_FRAMEWORK_MCP['SIMPLEJWT_ACCESS_COOKIE']``), decodes it with
+    ``SPEC_MCP['SIMPLEJWT_ACCESS_COOKIE']``), decodes it with
     ``rest_framework_simplejwt.tokens.AccessToken`` and looks the user up
     by primary key. Every failure mode — no cookie, malformed or expired
     token, unknown user — returns ``None``, so DOT's view falls back to its
@@ -44,7 +44,7 @@ class SimpleJWTCookieAdapter:
         except ImportError as exc:  # pragma: no cover - exercised by smoke job w/o simplejwt
             raise ImportError(
                 "SimpleJWTCookieAdapter requires `djangorestframework-simplejwt`. "
-                'Install it via `pip install "djangorestframework-mcp-server[jwt]"` '
+                'Install it via `pip install "django-spec-mcp[jwt]"` '
                 "or pass a different auth_user_adapter= to build_oauth_urlpatterns."
             ) from exc
 

@@ -27,7 +27,7 @@ test:
 
 lint:
 	uv run ruff check .
-	uv run ty check rest_framework_mcp
+	uv run ty check django_spec_mcp
 
 lint-fix:
 	uv run ruff check --fix .
@@ -39,7 +39,7 @@ format-check:
 	uv run ruff format --check --diff .
 
 type-check:
-	uv run ty check rest_framework_mcp
+	uv run ty check django_spec_mcp
 
 deps-bump:
 	uvx uv-upx upgrade run --profile with_pinned

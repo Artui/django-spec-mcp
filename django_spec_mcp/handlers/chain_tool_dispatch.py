@@ -71,12 +71,12 @@ from rest_framework_services.types.offline_context import OfflineContext
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp._compat.acall import acall
-from rest_framework_mcp.config.types.mcp_config import MCPConfig
-from rest_framework_mcp.constants import JsonRpcErrorCode, OutputFormat
-from rest_framework_mcp.handlers.selector_tool_dispatch import enforce_object_permissions
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.handlers.utils import (
+from django_spec_mcp._compat.acall import acall
+from django_spec_mcp.config.types.mcp_config import MCPConfig
+from django_spec_mcp.constants import JsonRpcErrorCode, OutputFormat
+from django_spec_mcp.handlers.selector_tool_dispatch import enforce_object_permissions
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.handlers.utils import (
     chain_shape,
     consume_rate_limits,
     effective_rate_limits,
@@ -86,14 +86,14 @@ from rest_framework_mcp.handlers.utils import (
     validation_error_data,
     validation_error_result,
 )
-from rest_framework_mcp.output.error_tool_result import build_error_tool_result
-from rest_framework_mcp.output.resolve_structured_output import resolve_structured_output
-from rest_framework_mcp.output.tool_result import build_tool_result
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.registry.types.chain_context import ChainContext
-from rest_framework_mcp.registry.types.chain_step import ChainStep
-from rest_framework_mcp.registry.types.chain_tool_binding import ChainToolBinding
-from rest_framework_mcp.registry.types.utils import rendered_kind
+from django_spec_mcp.output.error_tool_result import build_error_tool_result
+from django_spec_mcp.output.resolve_structured_output import resolve_structured_output
+from django_spec_mcp.output.tool_result import build_tool_result
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.registry.types.chain_context import ChainContext
+from django_spec_mcp.registry.types.chain_step import ChainStep
+from django_spec_mcp.registry.types.chain_tool_binding import ChainToolBinding
+from django_spec_mcp.registry.types.utils import rendered_kind
 
 
 class _MissingInstance(Exception):

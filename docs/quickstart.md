@@ -5,11 +5,11 @@ Take an existing service and expose it as an MCP tool in under five minutes.
 ## 1. Install
 
 ```bash
-pip install djangorestframework-mcp-server
+pip install django-spec-mcp
 ```
 
 If you don't already have `djangorestframework-services` configured, install it
-too — `djangorestframework-mcp-server` registers `ServiceSpec` instances directly, with
+too — `django-spec-mcp` registers `ServiceSpec` instances directly, with
 no DRF view layer involved.
 
 ```bash
@@ -58,7 +58,7 @@ class InvoiceOutputSerializer(serializers.ModelSerializer):
 from django_service_specs import SelectorKind
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
-from rest_framework_mcp import MCPServer
+from django_spec_mcp import MCPServer
 
 from invoices.serializers import InvoiceInputSerializer, InvoiceOutputSerializer
 from invoices.services import create_invoice

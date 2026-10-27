@@ -6,11 +6,11 @@ from typing import Any
 from django_service_specs import UNSET, UnsetType
 from rest_framework_services.types.selector_spec import SelectorSpec
 
-from rest_framework_mcp.adapters.utils import merge_meta, validate_serializer_shapes
-from rest_framework_mcp.auth.permissions.wrap_spec_permissions import wrap_spec_permissions
-from rest_framework_mcp.constants import ResourceEncoding
-from rest_framework_mcp.protocol.types.icon import Icon
-from rest_framework_mcp.registry.types.resource_binding import ResourceBinding
+from django_spec_mcp.adapters.utils import merge_meta, validate_serializer_shapes
+from django_spec_mcp.auth.permissions.wrap_spec_permissions import wrap_spec_permissions
+from django_spec_mcp.constants import ResourceEncoding
+from django_spec_mcp.protocol.types.icon import Icon
+from django_spec_mcp.registry.types.resource_binding import ResourceBinding
 
 # Every ``SelectorSpec`` field this adapter cannot carry, paired with the value
 # that means "not set". ``resources/read`` dispatches the bare callable through
@@ -57,7 +57,7 @@ def selector_to_resource(
     always_listed: bool = False,
 ) -> ResourceBinding:
     """Lift a ``SelectorSpec`` into a
-    [`ResourceBinding`][rest_framework_mcp.registry.types.resource_binding.ResourceBinding].
+    [`ResourceBinding`][django_spec_mcp.registry.types.resource_binding.ResourceBinding].
 
     Mirrors ``service_spec_to_tool`` — the unit of registration is always a
     spec from ``djangorestframework-services``. ``.selector`` must be set (there

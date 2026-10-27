@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from rest_framework_mcp.registry.types.chain_context import ChainContext
+from django_spec_mcp.registry.types.chain_context import ChainContext
 
 
 def test_getitem_and_contains() -> None:

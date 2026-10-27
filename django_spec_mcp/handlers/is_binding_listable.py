@@ -18,8 +18,8 @@ from typing import Any
 
 from django.http import HttpRequest
 
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.handlers.utils import permission_verdict
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.handlers.utils import permission_verdict
 
 
 def is_binding_listable(binding: Any, http_request: HttpRequest, token: TokenInfo) -> bool:

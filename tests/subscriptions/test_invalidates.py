@@ -14,17 +14,17 @@ from rest_framework.permissions import BasePermission
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import MCPServer
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.config.build_mcp_config import build_mcp_config
-from rest_framework_mcp.handlers.handle_tools_call import handle_tools_call
-from rest_framework_mcp.handlers.handle_tools_call_async import handle_tools_call_async
-from rest_framework_mcp.subscriptions.in_memory_subscription_broker import (
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.config.build_mcp_config import build_mcp_config
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
+from django_spec_mcp.subscriptions.in_memory_subscription_broker import (
     InMemorySubscriptionBroker,
 )
-from rest_framework_mcp.subscriptions.render_invalidations import render_invalidations
-from rest_framework_mcp.subscriptions.utils import topic_for_resource
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp.subscriptions.render_invalidations import render_invalidations
+from django_spec_mcp.subscriptions.utils import topic_for_resource
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.subscriptions.test_subscription_core import _context
 
 # ----- rendering -----
@@ -329,7 +329,7 @@ def test_the_async_path_announces_on_the_thread_that_did_the_write() -> None:
 
 @pytest.mark.django_db(transaction=True)
 async def test_publishing_nothing_is_a_no_op_on_both_paths() -> None:
-    from rest_framework_mcp.subscriptions.publish_invalidations import publish_invalidations
+    from django_spec_mcp.subscriptions.publish_invalidations import publish_invalidations
 
     broker = InMemorySubscriptionBroker()
     publish_invalidations(broker, ())
@@ -373,7 +373,7 @@ def test_a_selector_tool_has_no_invalidates_kwarg() -> None:
 def test_a_chain_tool_accepts_invalidates() -> None:
     """A chain is a sequence of writes by construction here, and it fires once
     after the whole chain succeeds rather than per step."""
-    from rest_framework_mcp import ChainStep
+    from django_spec_mcp import ChainStep
 
     server = MCPServer(name="chain", auth_backend=AllowAnyBackend())
     binding = server.register_chain_tool(
@@ -402,7 +402,7 @@ def test_the_wsgi_transport_hands_the_handler_a_broker() -> None:
     from asgiref.sync import async_to_sync
     from django.test import RequestFactory
 
-    from rest_framework_mcp.transport.streamable_http_viewset import (
+    from django_spec_mcp.transport.streamable_http_viewset import (
         STREAMABLE_HTTP_ACTION_MAP,
         StreamableHttpViewSet,
     )

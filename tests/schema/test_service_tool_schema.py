@@ -17,10 +17,10 @@ from rest_framework import serializers
 from rest_framework_services import spec_to_json_schema
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import QueryParam, UrlKwarg
-from rest_framework_mcp.registry.types.tool_binding import ToolBinding
-from rest_framework_mcp.schema.input_schema import build_input_schema
-from rest_framework_mcp.schema.service_tool_schema import build_service_tool_input_schema
+from django_spec_mcp import QueryParam, UrlKwarg
+from django_spec_mcp.registry.types.tool_binding import ToolBinding
+from django_spec_mcp.schema.input_schema import build_input_schema
+from django_spec_mcp.schema.service_tool_schema import build_service_tool_input_schema
 from tests.testapp.serializers import InvoiceInputSerializer
 
 

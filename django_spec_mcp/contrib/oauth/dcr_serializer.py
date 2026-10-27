@@ -7,7 +7,7 @@ from urllib.parse import urlsplit
 from rest_framework import serializers
 from rest_framework_dataclasses.serializers import DataclassSerializer
 
-from rest_framework_mcp.contrib.oauth.types.dynamic_client_registration_request import (
+from django_spec_mcp.contrib.oauth.types.dynamic_client_registration_request import (
     DynamicClientRegistrationRequest,
 )
 
@@ -121,12 +121,12 @@ class DynamicClientRegistrationSerializer(DataclassSerializer):
     Dynamic Client Registration is deprecated by MCP revision ``2026-07-28`` in
     favour of Client ID Metadata Documents; the timetable, the replacement and
     the reason this surface is nonetheless kept are recorded once, on
-    [`DynamicClientRegistrationViewSet`][rest_framework_mcp.contrib.oauth.dynamic_client_registration_viewset.DynamicClientRegistrationViewSet].
+    [`DynamicClientRegistrationViewSet`][django_spec_mcp.contrib.oauth.dynamic_client_registration_viewset.DynamicClientRegistrationViewSet].
 
     Wraps
-    [`DynamicClientRegistrationRequest`][rest_framework_mcp.contrib.oauth.types.dynamic_client_registration_request.DynamicClientRegistrationRequest]
+    [`DynamicClientRegistrationRequest`][django_spec_mcp.contrib.oauth.types.dynamic_client_registration_request.DynamicClientRegistrationRequest]
     so ``.save()`` hands
-    [`DynamicClientRegistrationViewSet`][rest_framework_mcp.contrib.oauth.dynamic_client_registration_viewset.DynamicClientRegistrationViewSet]
+    [`DynamicClientRegistrationViewSet`][django_spec_mcp.contrib.oauth.dynamic_client_registration_viewset.DynamicClientRegistrationViewSet]
     a typed dataclass instance. The field overrides replace the dataclass-derived
     defaults with shapes that validate the wire contract: ``redirect_uris`` is required,
     non-empty and absolute-URI-valued, and ``application_type`` is checked against

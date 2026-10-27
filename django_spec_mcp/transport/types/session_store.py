@@ -16,7 +16,7 @@ class SessionStore(Protocol):
 
     ``principal_id`` is an opaque string the transport derives from the
     authenticated token (see
-    ``rest_framework_mcp.auth.principal_for_token.principal_for_token``);
+    ``django_spec_mcp.auth.principal_for_token.principal_for_token``);
     stores persist and return it verbatim.
     """
 

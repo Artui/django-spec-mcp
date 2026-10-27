@@ -21,14 +21,14 @@ def _resolve_async_redis() -> Any:
 AsyncRedis: Any = _resolve_async_redis()
 
 
-_DEFAULT_CHANNEL_PREFIX: str = "drf-mcp:sse"
+_DEFAULT_CHANNEL_PREFIX: str = "spec-mcp:sse"
 
 
 class RedisSSEBroker:
     """Cross-process SSE broker backed by Redis pub/sub.
 
     Drop-in replacement for
-    [`InMemorySSEBroker`][rest_framework_mcp.transport.in_memory_sse_broker.InMemorySSEBroker]
+    [`InMemorySSEBroker`][django_spec_mcp.transport.in_memory_sse_broker.InMemorySSEBroker]
     when running multiple ASGI workers behind a load balancer. The streaming GET handler
     can land on any worker, and ``await server.notify(...)`` from a different worker
     still reaches the right session because every worker subscribes to the same Redis
@@ -36,12 +36,12 @@ class RedisSSEBroker:
     boundary, so app code pushes Python dicts and the streaming generator sees dicts
     too.
 
-    Wire it into [`MCPServer`][rest_framework_mcp.server.mcp_server.MCPServer]:
+    Wire it into [`MCPServer`][django_spec_mcp.server.mcp_server.MCPServer]:
 
     ```python
     from redis.asyncio import Redis
-    from rest_framework_mcp import MCPServer
-    from rest_framework_mcp.transport.redis_sse_broker import RedisSSEBroker
+    from django_spec_mcp import MCPServer
+    from django_spec_mcp.transport.redis_sse_broker import RedisSSEBroker
 
     broker = RedisSSEBroker(Redis.from_url("redis://localhost:6379/0"))
     server = MCPServer(name="my-app", sse_broker=broker)
@@ -56,7 +56,7 @@ class RedisSSEBroker:
       would otherwise accumulate every published payload in this worker's
       memory. Past ``max_queued_events`` the oldest is dropped.
     - Replay is a separate, opt-in collaborator — pair this with
-      [`RedisSSEReplayBuffer`][rest_framework_mcp.transport.redis_sse_replay_buffer.RedisSSEReplayBuffer]
+      [`RedisSSEReplayBuffer`][django_spec_mcp.transport.redis_sse_replay_buffer.RedisSSEReplayBuffer]
       for cross-worker ``Last-Event-ID`` resume.
     - The Redis client's lifecycle is the consumer's: close it during ASGI
       lifespan shutdown.
@@ -72,7 +72,7 @@ class RedisSSEBroker:
         if AsyncRedis is None:  # pragma: no cover - exercised by the no-extras smoke job
             raise ImportError(
                 "RedisSSEBroker requires the `redis` package. "
-                'Install with `pip install "djangorestframework-mcp-server[redis]"`.'
+                'Install with `pip install "django-spec-mcp[redis]"`.'
             )
         if max_queued_events <= 0:
             raise ValueError("max_queued_events must be positive")

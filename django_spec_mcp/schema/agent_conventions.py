@@ -5,7 +5,7 @@ is reading. drf-services supplies the markings and no wording at all: what a
 reader should *do* with an identifier depends on the reader.
 
 These are the defaults
-[`AgentConventions`][rest_framework_mcp.schema.types.agent_conventions.AgentConventions]
+[`AgentConventions`][django_spec_mcp.schema.types.agent_conventions.AgentConventions]
 carries, and what a server says unless it was given other wording with
 ``MCPServer(conventions=...)``. The functions that write each sentence take it
 as text, defaulting to the constant, so a caller outside a server gets exactly

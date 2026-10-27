@@ -5,7 +5,7 @@ import base64
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 
-from rest_framework_mcp.handlers.pagination import paginate
+from django_spec_mcp.handlers.pagination import paginate
 
 
 def test_no_cursor_starts_at_zero() -> None:

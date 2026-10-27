@@ -10,11 +10,11 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
 
-from rest_framework_mcp.contrib.oauth.dcr_serializer import DynamicClientRegistrationSerializer
-from rest_framework_mcp.contrib.oauth.types.dynamic_client_registration_response import (
+from django_spec_mcp.contrib.oauth.dcr_serializer import DynamicClientRegistrationSerializer
+from django_spec_mcp.contrib.oauth.types.dynamic_client_registration_response import (
     DynamicClientRegistrationResponse,
 )
-from rest_framework_mcp.contrib.oauth.utils import OPENID_SCOPE, resolve_id_token_algorithm
+from django_spec_mcp.contrib.oauth.utils import OPENID_SCOPE, resolve_id_token_algorithm
 
 
 class DynamicClientRegistrationViewSet(ViewSet):
@@ -49,7 +49,7 @@ class DynamicClientRegistrationViewSet(ViewSet):
     authentication guide — not on every request after it.
 
     Locked down by default: ``dcr_enabled=False`` answers 403 to every
-    request. Turn it on with ``REST_FRAMEWORK_MCP['DCR_ENABLED']`` and,
+    request. Turn it on with ``SPEC_MCP['DCR_ENABLED']`` and,
     recommended, a ``DCR_INITIAL_ACCESS_TOKEN`` clients must present. Wired as
     the ``create`` action: ``as_view({"post": "create"})``.
 
@@ -148,7 +148,7 @@ class DynamicClientRegistrationViewSet(ViewSet):
         except ImportError as exc:  # pragma: no cover - exercised by smoke job w/o DOT
             raise ImportError(
                 "DynamicClientRegistrationViewSet requires `django-oauth-toolkit`. "
-                'Install it via `pip install "djangorestframework-mcp-server[oauth]"`.'
+                'Install it via `pip install "django-spec-mcp[oauth]"`.'
             ) from exc
 
         # The RFC 7591 and DOT spellings are already reconciled and defaulted

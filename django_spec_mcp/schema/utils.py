@@ -19,10 +19,10 @@ from rest_framework_services.dispatch.utils import DROPPED_EDGE_SEEDS
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp.registry.types.selector_tool_binding import SelectorToolBinding
-from rest_framework_mcp.registry.types.tool_binding import ToolBinding
-from rest_framework_mcp.registry.types.url_kwarg import UrlKwarg
-from rest_framework_mcp.schema.input_schema import build_input_schema
+from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
+from django_spec_mcp.registry.types.tool_binding import ToolBinding
+from django_spec_mcp.registry.types.url_kwarg import UrlKwarg
+from django_spec_mcp.schema.input_schema import build_input_schema
 
 _SENTENCE_ENDINGS: tuple[str, ...] = (".", "!", "?")
 

@@ -6,13 +6,13 @@ tools that return long lists of similar dicts (catalog listings, search
 results, log slices), TOON cuts token usage in half or better.
 
 ```bash
-pip install "djangorestframework-mcp-server[toon]"
+pip install "django-spec-mcp[toon]"
 ```
 
 Pick the format per binding:
 
 ```python
-from rest_framework_mcp import OutputFormat
+from django_spec_mcp import OutputFormat
 from django_service_specs import SelectorKind
 from rest_framework_services import SelectorSpec
 

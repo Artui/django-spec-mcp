@@ -1,8 +1,8 @@
-site_name: djangorestframework-mcp-server
+site_name: django-spec-mcp
 site_description: Expose djangorestframework-services services and selectors as a Model Context Protocol (MCP) server.
-site_url: https://artui.github.io/djangorestframework-mcp-server/
-repo_url: https://github.com/Artui/djangorestframework-mcp-server
-repo_name: Artui/djangorestframework-mcp-server
+site_url: https://artui.github.io/django-spec-mcp/
+repo_url: https://github.com/Artui/django-spec-mcp
+repo_name: Artui/django-spec-mcp
 edit_uri: edit/main/docs/
 
 theme:

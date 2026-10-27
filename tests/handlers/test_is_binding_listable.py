@@ -9,11 +9,11 @@ from django_service_specs import SelectorKind
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.handlers.is_binding_listable import is_binding_listable
-from rest_framework_mcp.registry.types.resource_binding import ResourceBinding
-from rest_framework_mcp.registry.types.selector_tool_binding import SelectorToolBinding
-from rest_framework_mcp.registry.types.tool_binding import ToolBinding
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.handlers.is_binding_listable import is_binding_listable
+from django_spec_mcp.registry.types.resource_binding import ResourceBinding
+from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
+from django_spec_mcp.registry.types.tool_binding import ToolBinding
 
 
 class _AllowAll:

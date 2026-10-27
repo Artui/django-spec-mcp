@@ -17,7 +17,7 @@ class RequestState:
     spec requires integrity protection whenever the state influences
     authorization, resource access or business logic — which it does here, since
     ``answers`` becomes tool arguments. Signing is in
-    ``rest_framework_mcp.elicitation.sign_request_state``.
+    ``django_spec_mcp.elicitation.sign_request_state``.
     """
 
     principal: str

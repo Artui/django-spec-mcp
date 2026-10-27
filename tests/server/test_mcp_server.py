@@ -7,13 +7,13 @@ from rest_framework import serializers as drf_serializers
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.backends.django_oauth_toolkit_backend import (
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.backends.django_oauth_toolkit_backend import (
     DjangoOAuthToolkitBackend,
 )
-from rest_framework_mcp.server.mcp_server import MCPServer
-from rest_framework_mcp.transport.django_cache_session_store import DjangoCacheSessionStore
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp.server.mcp_server import MCPServer
+from django_spec_mcp.transport.django_cache_session_store import DjangoCacheSessionStore
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 
 
 def _make() -> MCPServer:
@@ -269,7 +269,7 @@ def test_a_hand_built_session_store_keeps_its_own_namespace() -> None:
 def test_removed_collaborator_settings_raise(settings, removed: dict[str, str]) -> None:
     """Silently ignoring a stale AUTH_BACKEND would mean a project that thinks
     it configured authentication has not — so it fails loudly instead."""
-    settings.REST_FRAMEWORK_MCP = removed
+    settings.SPEC_MCP = removed
     with pytest.raises(ImproperlyConfigured, match="removed in 0.12.0"):
         MCPServer(name="s")
 
@@ -293,7 +293,7 @@ def test_resource_url_with_a_custom_backend_raises() -> None:
 
 
 def test_removed_settings_error_names_the_replacement(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {"AUTH_BACKEND": "some.dotted.Path"}
+    settings.SPEC_MCP = {"AUTH_BACKEND": "some.dotted.Path"}
     with pytest.raises(ImproperlyConfigured, match=r"auth_backend=YourAuthBackend\(\)"):
         MCPServer(name="s")
 

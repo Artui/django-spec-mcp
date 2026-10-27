@@ -9,7 +9,7 @@ class SSEReplayBuffer(Protocol):
     """Pluggable per-session ring buffer for SSE event replay.
 
     Pair this with an
-    [`SSEBroker`][rest_framework_mcp.transport.types.sse_broker.SSEBroker] to support
+    [`SSEBroker`][django_spec_mcp.transport.types.sse_broker.SSEBroker] to support
     [``Last-Event-ID``](https://html.spec.whatwg.org/multipage/server-sent-events.html#last-event-id)
     resume: when a client reconnects with that header, the SSE response generator drains
     every event past the supplied ID *before* entering live mode, so the client sees no
@@ -25,7 +25,7 @@ class SSEReplayBuffer(Protocol):
     leaks when clients never reconnect.
 
     Resume is **opt-in**: pass ``sse_replay_buffer=...`` to
-    [`MCPServer`][rest_framework_mcp.server.mcp_server.MCPServer]. When omitted there
+    [`MCPServer`][django_spec_mcp.server.mcp_server.MCPServer]. When omitted there
     are no ``id:`` lines and ``Last-Event-ID`` is ignored."""
 
     async def record(self, session_id: str, payload: Any) -> str:

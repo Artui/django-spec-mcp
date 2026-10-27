@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from rest_framework_mcp.conf import get_setting
-from rest_framework_mcp.constants import IconTheme
-from rest_framework_mcp.protocol.types.icon import Icon
-from rest_framework_mcp.protocol.types.implementation import Implementation
-from rest_framework_mcp.version import __version__ as package_version
+from django_spec_mcp.conf import get_setting
+from django_spec_mcp.constants import IconTheme
+from django_spec_mcp.protocol.types.icon import Icon
+from django_spec_mcp.protocol.types.implementation import Implementation
+from django_spec_mcp.version import __version__ as package_version
 
 
 # Lives here rather than beside ``handle_initialize`` because ``MCPServer`` needs
@@ -33,18 +33,16 @@ def build_server_info(
     ``description`` is deliberately settings-only, with no parameter here: ``MCPServer``
     already spends the name ``description=`` on the ``initialize`` ``instructions``
     string.
-    [`Implementation`][rest_framework_mcp.protocol.types.implementation.Implementation]
+    [`Implementation`][django_spec_mcp.protocol.types.implementation.Implementation]
     documents the distinction.
 
     ``icons`` arriving from ``SERVER_INFO`` are plain data, so dicts are accepted
-    alongside [`Icon`][rest_framework_mcp.protocol.types.icon.Icon] instances and
+    alongside [`Icon`][django_spec_mcp.protocol.types.icon.Icon] instances and
     normalised here — ``Icon``'s scheme validation runs whichever form the project used.
     """
     server_info_settings: dict[str, Any] = get_setting("SERVER_INFO")
     return Implementation(
-        name=name
-        if name is not None
-        else server_info_settings.get("name", "djangorestframework-mcp-server"),
+        name=name if name is not None else server_info_settings.get("name", "django-spec-mcp"),
         version=version
         if version is not None
         else server_info_settings.get("version", package_version),
@@ -59,14 +57,14 @@ def build_server_info(
 
 def _coerce_icons(raw: Any) -> tuple[Icon, ...]:
     """Normalise the ``SERVER_INFO`` representation of ``icons`` into
-    [`Icon`][rest_framework_mcp.protocol.types.icon.Icon]s."""
+    [`Icon`][django_spec_mcp.protocol.types.icon.Icon]s."""
     if not raw:
         return ()
     return tuple(item if isinstance(item, Icon) else _icon_from_mapping(item) for item in raw)
 
 
 def _icon_from_mapping(item: Any) -> Icon:
-    """Build an [`Icon`][rest_framework_mcp.protocol.types.icon.Icon] from settings
+    """Build an [`Icon`][django_spec_mcp.protocol.types.icon.Icon] from settings
     data, which uses the wire spellings.
 
     Fields are read by name rather than splatted so ``mimeType`` maps to

@@ -1,7 +1,7 @@
 """``UrlKwarg`` — URL-derived values seeded into the off-HTTP ``view.kwargs``.
 
 The MCP counterpart of a nested route's URL captures. A registered
-:class:`~rest_framework_mcp.UrlKwarg` is advertised as a tool argument, popped at
+:class:`~django_spec_mcp.UrlKwarg` is advertised as a tool argument, popped at
 dispatch, and seeded into ``build_offline_context(kwargs=…)`` /
 ``OfflineServiceView.kwargs`` — from where drf-services spreads it into the
 dispatch pools. Its headline use is a scoping ``spec.kwargs`` provider that reads
@@ -21,20 +21,20 @@ from rest_framework_services import UrlKwarg as SpecUrlKwarg
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import MCPServer, UrlKwarg
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.constants import UnknownArguments
-from rest_framework_mcp.handlers.handle_tools_call import handle_tools_call
-from rest_framework_mcp.handlers.handle_tools_call_async import handle_tools_call_async
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.registry.prompt_registry import PromptRegistry
-from rest_framework_mcp.registry.resource_registry import ResourceRegistry
-from rest_framework_mcp.registry.tool_registry import ToolRegistry
-from rest_framework_mcp.registry.types.selector_tool_binding import SelectorToolBinding
-from rest_framework_mcp.registry.types.tool_binding import ToolBinding
-from rest_framework_mcp.schema.selector_tool_schema import build_selector_tool_input_schema
-from rest_framework_mcp.schema.service_tool_schema import build_service_tool_input_schema
+from django_spec_mcp import MCPServer, UrlKwarg
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.constants import UnknownArguments
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.registry.prompt_registry import PromptRegistry
+from django_spec_mcp.registry.resource_registry import ResourceRegistry
+from django_spec_mcp.registry.tool_registry import ToolRegistry
+from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
+from django_spec_mcp.registry.types.tool_binding import ToolBinding
+from django_spec_mcp.schema.selector_tool_schema import build_selector_tool_input_schema
+from django_spec_mcp.schema.service_tool_schema import build_service_tool_input_schema
 from tests.utils import tool_error
 
 
@@ -296,7 +296,7 @@ def test_call_spec_tool_seeds_url_kwargs_into_view() -> None:
 def test_reserved_url_kwarg_name_rejected_on_service() -> None:
     with pytest.raises(ImproperlyConfigured, match="reserved transport keys"):
         ToolRegistry()  # touch to keep import used
-        from rest_framework_mcp.adapters.service_to_tool import service_spec_to_tool
+        from django_spec_mcp.adapters.service_to_tool import service_spec_to_tool
 
         service_spec_to_tool(
             name="t",
@@ -306,7 +306,7 @@ def test_reserved_url_kwarg_name_rejected_on_service() -> None:
 
 
 def test_reserved_url_kwarg_name_rejected_on_selector() -> None:
-    from rest_framework_mcp.adapters.selector_to_tool import selector_spec_to_tool
+    from django_spec_mcp.adapters.selector_to_tool import selector_spec_to_tool
 
     with pytest.raises(ImproperlyConfigured, match="reserved transport keys"):
         selector_spec_to_tool(
@@ -317,7 +317,7 @@ def test_reserved_url_kwarg_name_rejected_on_selector() -> None:
 
 
 def test_duplicate_url_kwarg_name_rejected() -> None:
-    from rest_framework_mcp.adapters.service_to_tool import service_spec_to_tool
+    from django_spec_mcp.adapters.service_to_tool import service_spec_to_tool
 
     with pytest.raises(ImproperlyConfigured, match="duplicate url_kwargs"):
         service_spec_to_tool(

@@ -15,7 +15,7 @@ class DispatchShape:
 
     A spec's ``permission_classes`` are judged twice on ``tools/call``: by the
     binding's wrapped
-    [`DRFPermissionAdapter`][rest_framework_mcp.auth.permissions.drf_permission_adapter.DRFPermissionAdapter],
+    [`DRFPermissionAdapter`][django_spec_mcp.auth.permissions.drf_permission_adapter.DRFPermissionAdapter],
     against a stand-in, and by ``enforce_permissions``, against the request and
     view the spec is dispatched with. Both are built by ``build``, from one of
     these, so the stand-in cannot see another request than the dispatch view

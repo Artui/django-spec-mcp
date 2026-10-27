@@ -21,7 +21,7 @@ API:
 
 ```python
 from rest_framework_services import PolymorphicServiceSpec, ServiceSpec
-from rest_framework_mcp import MCPServer
+from django_spec_mcp import MCPServer
 
 # The same spec you'd hand a viewset's `action_specs` on the HTTP side.
 moderate = PolymorphicServiceSpec(

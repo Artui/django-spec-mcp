@@ -7,8 +7,8 @@ from typing import Any
 
 from django.http import StreamingHttpResponse
 
-from rest_framework_mcp.transport.types.sse_broker import SSEBroker
-from rest_framework_mcp.transport.types.sse_replay_buffer import SSEReplayBuffer
+from django_spec_mcp.transport.types.sse_broker import SSEBroker
+from django_spec_mcp.transport.types.sse_replay_buffer import SSEReplayBuffer
 
 # Time between idle keep-alive comments. The MCP spec prescribes no value;
 # 15 s avoids most intermediate proxy timeouts (60 s+ idle is risky behind
@@ -59,7 +59,7 @@ async def stream_events(
     With a ``replay_buffer``, every event recorded after ``last_event_id`` is replayed
     on open as ``id: <id>\\ndata: <payload>\\n\\n`` frames before live mode begins, and
     live frames arrive wrapped as ``{"_mcp_event_id", "_mcp_payload"}`` (see
-    [`MCPServer.notify`][rest_framework_mcp.server.mcp_server.MCPServer.notify]),
+    [`MCPServer.notify`][django_spec_mcp.server.mcp_server.MCPServer.notify]),
     unpacked here so the wire stays SSE-shaped. Without one, no ``id:`` lines are
     emitted and ``last_event_id`` is ignored.
 

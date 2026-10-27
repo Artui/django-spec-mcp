@@ -27,7 +27,7 @@ from rest_framework_services import (
     UrlKwarg,
 )
 
-from rest_framework_mcp import MCPServer, ToolDefinition, register_tools
+from django_spec_mcp import MCPServer, ToolDefinition, register_tools
 from tests.testapp.serializers import AgentInvoiceSerializer
 
 

@@ -8,17 +8,17 @@ import pytest
 from django.template import TemplateDoesNotExist
 from django_service_specs import SelectorKind
 
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.constants import (
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.constants import (
     UI_META_KEY,
     UI_RESOURCE_MIME_TYPE,
     ResourceEncoding,
     UIPermission,
 )
-from rest_framework_mcp.registry.types.ui_csp import UICsp
-from rest_framework_mcp.registry.types.ui_resource_meta import UIResourceMeta
-from rest_framework_mcp.server.mcp_server import MCPServer
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp.registry.types.ui_csp import UICsp
+from django_spec_mcp.registry.types.ui_resource_meta import UIResourceMeta
+from django_spec_mcp.server.mcp_server import MCPServer
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 
 
 def _make() -> MCPServer:

@@ -17,13 +17,13 @@ import pytest
 from django.test import Client
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import MCPServer
-from rest_framework_mcp.handlers.handle_initialize import build_capabilities, handle_initialize
-from rest_framework_mcp.handlers.handle_server_discover import handle_server_discover
-from rest_framework_mcp.subscriptions.in_memory_subscription_broker import (
+from django_spec_mcp import MCPServer
+from django_spec_mcp.handlers.handle_initialize import build_capabilities, handle_initialize
+from django_spec_mcp.handlers.handle_server_discover import handle_server_discover
+from django_spec_mcp.subscriptions.in_memory_subscription_broker import (
     InMemorySubscriptionBroker,
 )
-from rest_framework_mcp.tasks.in_memory_task_store import InMemoryTaskStore
+from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from tests.subscriptions.test_subscription_core import _context, _server
 from tests.tasks.conftest import RecordingExecutor, slow_service
 

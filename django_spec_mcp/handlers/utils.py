@@ -27,13 +27,13 @@ from rest_framework_dataclasses.serializers import DataclassSerializer
 from rest_framework_services.dispatch.utils import DROPPED_EDGE_SEEDS, declared_input_keys
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp._compat.reject_awaitable import reject_awaitable
-from rest_framework_mcp.auth.permissions.drf_permission_adapter import DRFPermissionAdapter
-from rest_framework_mcp.auth.permissions.utils import DispatchShape
-from rest_framework_mcp.auth.rate_limits.types.mcp_rate_limit import MCPRateLimit
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.config.types.mcp_config import MCPConfig
-from rest_framework_mcp.constants import (
+from django_spec_mcp._compat.reject_awaitable import reject_awaitable
+from django_spec_mcp.auth.permissions.drf_permission_adapter import DRFPermissionAdapter
+from django_spec_mcp.auth.permissions.utils import DispatchShape
+from django_spec_mcp.auth.rate_limits.types.mcp_rate_limit import MCPRateLimit
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.config.types.mcp_config import MCPConfig
+from django_spec_mcp.constants import (
     MODERN_PROTOCOL_VERSIONS,
     RESERVED_POOL_SEEDS,
     RESERVED_POST_FETCH_KEYS,
@@ -43,21 +43,21 @@ from rest_framework_mcp.constants import (
     OutputFormat,
     UnknownArguments,
 )
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.observability.get_logger import get_logger
-from rest_framework_mcp.output.enforce_result_bytes import enforce_result_bytes
-from rest_framework_mcp.output.error_tool_result import build_error_tool_result
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.protocol.types.tool_result import ToolResult
-from rest_framework_mcp.registry.types.chain_tool_binding import ChainToolBinding
-from rest_framework_mcp.registry.types.prompt_binding import PromptBinding
-from rest_framework_mcp.registry.types.query_param import QueryParam
-from rest_framework_mcp.registry.types.resource_binding import ResourceBinding
-from rest_framework_mcp.registry.types.selector_tool_binding import SelectorToolBinding
-from rest_framework_mcp.registry.types.tool_binding import ToolBinding
-from rest_framework_mcp.registry.types.url_kwarg import UrlKwarg
-from rest_framework_mcp.schema.types.agent_conventions import AgentConventions
-from rest_framework_mcp.schema.utils import declares_default, end_sentence, required_arguments
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.observability.get_logger import get_logger
+from django_spec_mcp.output.enforce_result_bytes import enforce_result_bytes
+from django_spec_mcp.output.error_tool_result import build_error_tool_result
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.protocol.types.tool_result import ToolResult
+from django_spec_mcp.registry.types.chain_tool_binding import ChainToolBinding
+from django_spec_mcp.registry.types.prompt_binding import PromptBinding
+from django_spec_mcp.registry.types.query_param import QueryParam
+from django_spec_mcp.registry.types.resource_binding import ResourceBinding
+from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
+from django_spec_mcp.registry.types.tool_binding import ToolBinding
+from django_spec_mcp.registry.types.url_kwarg import UrlKwarg
+from django_spec_mcp.schema.types.agent_conventions import AgentConventions
+from django_spec_mcp.schema.utils import declares_default, end_sentence, required_arguments
 
 logger = get_logger(__name__)
 
@@ -424,7 +424,7 @@ def permission_verdict(perm: Any, result: Any, *, method: str, effect: str) -> A
     """A permission hook's answer, refusing one that must be awaited.
 
     Shared by ``check_permissions`` and
-    ``rest_framework_mcp.handlers.is_binding_listable.is_binding_listable``
+    ``django_spec_mcp.handlers.is_binding_listable.is_binding_listable``
     so the two places a consumer-supplied permission is consulted cannot drift on
     whether ``async def`` is allowed. It is not.
 
@@ -460,7 +460,7 @@ def check_permissions(
     the ``WWW-Authenticate`` header.
 
     **``shape`` is the request the check names**, and every
-    [`DRFPermissionAdapter`][rest_framework_mcp.auth.permissions.drf_permission_adapter.DRFPermissionAdapter]
+    [`DRFPermissionAdapter`][django_spec_mcp.auth.permissions.drf_permission_adapter.DRFPermissionAdapter]
     among ``permissions`` is judged against a copy whose stand-in is built from
     it, as the view the request dispatches with is. The ``tools/call`` paths
     pass one through ``judge_tool_permissions``: the arguments in
@@ -1202,7 +1202,7 @@ def enforce_result_ceiling(result: Any, *, max_result_bytes: int | None, label: 
 
     Applied once per handler, to the finished result, so every dispatch path is covered
     by one check that sees what goes on the wire. A
-    [`JsonRpcError`][rest_framework_mcp.protocol.types.json_rpc_error.JsonRpcError]
+    [`JsonRpcError`][django_spec_mcp.protocol.types.json_rpc_error.JsonRpcError]
     passes through — rewriting it would change the envelope the client awaits."""
     if isinstance(result, JsonRpcError):
         return result

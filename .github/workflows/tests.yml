@@ -30,7 +30,7 @@ jobs:
       - name: ruff format check
         run: uv run ruff format --check --diff .
       - name: ty
-        run: uv run ty check rest_framework_mcp
+        run: uv run ty check django_spec_mcp
 
   docs:
     name: docs build
@@ -141,13 +141,13 @@ jobs:
                   "rest_framework",
               ],
               DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}},
-              REST_FRAMEWORK_MCP={"ALLOWED_ORIGINS": ["*"], "SERVER_INFO": {}},
+              SPEC_MCP={"ALLOWED_ORIGINS": ["*"], "SERVER_INFO": {}},
           )
           django.setup()
 
-          import rest_framework_mcp
+          import django_spec_mcp
           from rest_framework.permissions import AllowAny
-          from rest_framework_mcp import MCPServer, ToolRegistry
+          from django_spec_mcp import MCPServer, ToolRegistry
           from rest_framework_services import ServiceSpec
 
           # Touch the public surface rather than only the package root: an
@@ -164,7 +164,7 @@ jobs:
           assert server.tools.get("noop") is not None
           assert isinstance(server.tools, ToolRegistry)
 
-          print("BASE IMPORT OK", rest_framework_mcp.__version__, django.get_version())
+          print("BASE IMPORT OK", django_spec_mcp.__version__, django.get_version())
           PY
 
   test:
@@ -261,19 +261,19 @@ jobs:
               # constructor arguments, so building a bare server exercises the
               # real defaults — including that constructing
               # DjangoOAuthToolkitBackend needs no DOT.
-              REST_FRAMEWORK_MCP={
+              SPEC_MCP={
                   "ALLOWED_ORIGINS": ["*"],
                   "SERVER_INFO": {},
               },
           )
           django.setup()
 
-          from rest_framework_mcp import MCPServer
-          from rest_framework_mcp.auth.backends.django_oauth_toolkit_backend import (
+          from django_spec_mcp import MCPServer
+          from django_spec_mcp.auth.backends.django_oauth_toolkit_backend import (
               DjangoOAuthToolkitBackend,
           )
-          from rest_framework_mcp.output.encode_toon import encode_toon
-          from rest_framework_mcp.transport.django_cache_session_store import (
+          from django_spec_mcp.output.encode_toon import encode_toon
+          from django_spec_mcp.transport.django_cache_session_store import (
               DjangoCacheSessionStore,
           )
           from rest_framework.permissions import AllowAny
@@ -311,7 +311,7 @@ jobs:
 
           # The Redis SSE broker module imports fine without ``redis`` — the
           # ImportError only fires inside ``RedisSSEBroker.__init__``.
-          from rest_framework_mcp.transport.redis_sse_broker import RedisSSEBroker
+          from django_spec_mcp.transport.redis_sse_broker import RedisSSEBroker
           try:
               RedisSSEBroker(client=object())
               raise SystemExit("RedisSSEBroker construction should fail without redis")
@@ -320,14 +320,14 @@ jobs:
 
           # The OTel tracing helper falls back to a no-op span when the API
           # isn't installed — handlers stay branch-free.
-          from rest_framework_mcp._compat.tracing import span
+          from django_spec_mcp._compat.tracing import span
           with span("mcp.smoke") as s:
               s.set_attribute("k", "v")
 
           # The OAuth contrib mount imports fine without ``oauth2_provider``;
           # ``DynamicClientRegistrationViewSet`` only requires DOT when DCR is
           # enabled and a request reaches the handler.
-          from rest_framework_mcp.contrib.oauth import (
+          from django_spec_mcp.contrib.oauth import (
               AuthorizationServerMetadataViewSet,  # noqa: F401
               DynamicClientRegistrationViewSet,  # noqa: F401
               OpenIDDiscoveryViewSet,  # noqa: F401
@@ -339,7 +339,7 @@ jobs:
           # The SimpleJWT cookie adapter module imports fine without
           # ``djangorestframework-simplejwt``; the ImportError only fires
           # when an actual request reaches ``hydrate()`` with a cookie set.
-          from rest_framework_mcp.contrib.oauth.adapters.simplejwt_cookie import (
+          from django_spec_mcp.contrib.oauth.adapters.simplejwt_cookie import (
               SimpleJWTCookieAdapter,
           )
           SimpleJWTCookieAdapter()  # constructor must not raise
@@ -388,12 +388,12 @@ jobs:
               git fetch --depth=1 origin "$before" 2>/dev/null || true
           fi
           old=""
-          if git cat-file -e "$before:rest_framework_mcp/version.py" 2>/dev/null; then
-              old="$(git show "$before:rest_framework_mcp/version.py" \
+          if git cat-file -e "$before:django_spec_mcp/version.py" 2>/dev/null; then
+              old="$(git show "$before:django_spec_mcp/version.py" \
                      | awk -F'"' '/^__version__/ { print $2; exit }')"
           fi
           new="$(awk -F'"' '/^__version__/ { print $2; exit }' \
-                 rest_framework_mcp/version.py)"
+                 django_spec_mcp/version.py)"
           if [[ -n "$old" && "$old" != "$new" ]]; then
               echo "Version bumped $old → $new; release.yml will deploy gh-pages."
               echo "skip=true" >> "$GITHUB_OUTPUT"

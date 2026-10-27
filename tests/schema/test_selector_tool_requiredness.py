@@ -35,8 +35,8 @@ from rest_framework_services import InputRequired
 from rest_framework_services.types.selector_spec import SelectorSpec
 from typing_extensions import NotRequired, TypedDict
 
-from rest_framework_mcp import MCPServer, UrlKwarg
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp import MCPServer, UrlKwarg
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from tests.testapp.models import Invoice
 from tests.testapp.serializers import InvoiceOutputSerializer
 

@@ -19,16 +19,16 @@ from django.db.models import Q
 from django_service_specs import Affordance, SelectorKind, base_pool
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import ChainStep, MCPServer
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.config.build_mcp_config import build_mcp_config
+from django_spec_mcp import ChainStep, MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from tests.testapp.affordances import ARCHIVE_ORDER, order_selector_spec
 from tests.testapp.models import Invoice
 
-_POOL = "rest_framework_mcp.handlers.offered_tools.base_pool"
+_POOL = "django_spec_mcp.handlers.offered_tools.base_pool"
 """Where a pass looks ``base_pool`` up, so a spy there sees every pool it builds."""
 
-_HOP = "rest_framework_mcp.server.mcp_server.sync_to_async"
+_HOP = "django_spec_mcp.server.mcp_server.sync_to_async"
 """Where the server looks ``sync_to_async`` up, so a spy there sees every hop."""
 
 _CLOSED = Affordance(code="books_closed", reason="The books are closed.", when=lambda: False)

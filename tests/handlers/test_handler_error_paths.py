@@ -4,19 +4,19 @@ import pytest
 from django_service_specs import ServiceError
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp.handlers.handle_initialize import handle_initialize
-from rest_framework_mcp.handlers.handle_ping import handle_ping
-from rest_framework_mcp.handlers.handle_resources_list import handle_resources_list
-from rest_framework_mcp.handlers.handle_resources_read import handle_resources_read
-from rest_framework_mcp.handlers.handle_tools_call import handle_tools_call
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.handlers.handle_initialize import handle_initialize
+from django_spec_mcp.handlers.handle_ping import handle_ping
+from django_spec_mcp.handlers.handle_resources_list import handle_resources_list
+from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 
 
 def _ctx_from_test_app() -> MCPCallContext:
     from django.http import HttpRequest
 
-    from rest_framework_mcp.auth.types.token_info import TokenInfo
+    from django_spec_mcp.auth.types.token_info import TokenInfo
     from tests.testapp.urls import server
 
     return MCPCallContext(

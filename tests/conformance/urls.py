@@ -18,8 +18,8 @@ from typing import Any
 
 from django.urls import include, path
 
-from rest_framework_mcp.contrib.oauth import build_oauth_urlpatterns
-from rest_framework_mcp.contrib.oauth.adapters.types.auth_user_adapter import AuthUserAdapter
+from django_spec_mcp.contrib.oauth import build_oauth_urlpatterns
+from django_spec_mcp.contrib.oauth.adapters.types.auth_user_adapter import AuthUserAdapter
 from tests.conformance.mcp import build_conformance_server
 
 

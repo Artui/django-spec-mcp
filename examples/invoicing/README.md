@@ -2,7 +2,7 @@
 
 A representative Django project that exposes an `Invoice` model over
 MCP using every public registration surface of
-`djangorestframework-mcp-server`:
+`django-spec-mcp`:
 
 | Surface                        | Demonstrated by                                              |
 |--------------------------------|--------------------------------------------------------------|

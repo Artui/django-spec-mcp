@@ -32,12 +32,12 @@ from rest_framework import serializers
 from rest_framework.permissions import AllowAny
 from rest_framework_services import QueryParam, SelectorSpec, ServiceSpec, UrlKwarg
 
-from rest_framework_mcp import MCPServer
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.constants import ELICITATION_KEY
-from rest_framework_mcp.registry.types.selector_tool_binding import SelectorToolBinding
-from rest_framework_mcp.registry.types.tool_binding import ToolBinding
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.constants import ELICITATION_KEY
+from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
+from django_spec_mcp.registry.types.tool_binding import ToolBinding
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.testapp.urlconf_for import urlconf_for
 from tests.utils import granting_route, tool_error
 
@@ -193,7 +193,7 @@ def test_the_bound_project_wins_and_the_withheld_sibling_is_dropped(
     routes: list[dict[str, Any]] = []
     server = _scoped_server(seen, routes)
 
-    with caplog.at_level(logging.WARNING, logger="rest_framework_mcp"):
+    with caplog.at_level(logging.WARNING, logger="django_spec_mcp"):
         # The model names another project and sends ``"null"`` for a sibling it
         # was never shown: neither refuses the call, and neither arrives.
         result = _call(
@@ -236,7 +236,7 @@ def test_a_caller_restating_the_bound_value_is_not_logged(
     # caller's value differs from the server's.
     server = _scoped_server([], [])
 
-    with caplog.at_level(logging.WARNING, logger="rest_framework_mcp"):
+    with caplog.at_level(logging.WARNING, logger="django_spec_mcp"):
         server.call_tool("list_document_vendors", {"project_pk": 7}, user=None)
         server.call_tool("list_document_vendors", {"project_pk": True}, user=None)
 
@@ -515,7 +515,7 @@ def test_a_tool_binding_nothing_never_reaches_the_kernels_rule(
     def refuse(*_: Any, **__: Any) -> dict[str, Any]:
         raise AssertionError("apply_server_arguments ran for a tool binding nothing")
 
-    monkeypatch.setattr("rest_framework_mcp.handlers.utils.apply_server_arguments", refuse)
+    monkeypatch.setattr("django_spec_mcp.handlers.utils.apply_server_arguments", refuse)
     server = _server()
     server.register_selector_tool(name="plain", spec=_plain_spec())
 

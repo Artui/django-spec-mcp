@@ -6,11 +6,11 @@ from typing import Any
 from django_service_specs import SelectorKind
 from rest_framework_services import base_serializer_context, renderable_serializer_class
 
-from rest_framework_mcp.constants import JsonRpcErrorCode, ResourceEncoding
-from rest_framework_mcp.output.encode_json import encode_json
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.protocol.types.resource_contents import ResourceContents
-from rest_framework_mcp.registry.types.resource_binding import ResourceBinding
+from django_spec_mcp.constants import JsonRpcErrorCode, ResourceEncoding
+from django_spec_mcp.output.encode_json import encode_json
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.protocol.types.resource_contents import ResourceContents
+from django_spec_mcp.registry.types.resource_binding import ResourceBinding
 
 
 def build_resource_contents(
@@ -45,7 +45,7 @@ def build_resource_contents(
        ``DataclassSerializer``; instantiated as declared, its own ``__init__``
        received ``many=`` and every read raised.
     2. **Encode** per the binding's
-       [`ResourceEncoding`][rest_framework_mcp.constants.ResourceEncoding].
+       [`ResourceEncoding`][django_spec_mcp.constants.ResourceEncoding].
        ``JSON`` pretty-prints; ``TEXT`` passes the value through verbatim, which is what
        an HTML / Markdown / CSV resource needs; ``BLOB`` base64-encodes it into
        the spec's ``blob`` field. ``text`` and ``blob`` are mutually exclusive
@@ -53,7 +53,7 @@ def build_resource_contents(
 
     A ``TEXT`` or ``BLOB`` binding whose selector returned the wrong Python type can
     only surface at read time, so it comes back as a
-    [`JsonRpcError`][rest_framework_mcp.protocol.types.json_rpc_error.JsonRpcError]
+    [`JsonRpcError`][django_spec_mcp.protocol.types.json_rpc_error.JsonRpcError]
     rather than an exception — a well-formed error response instead of a 500."""
     payload: Any = raw
     serializer_class = renderable_serializer_class(binding.output_serializer)

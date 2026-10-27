@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from rest_framework_mcp.constants import JsonRpcErrorCode, ToolContentKind
-from rest_framework_mcp.handlers.listable_tool_bindings import listable_tool_bindings
-from rest_framework_mcp.handlers.offered_tools import offered_tools
-from rest_framework_mcp.handlers.pagination import paginate
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.handlers.utils import (
+from django_spec_mcp.constants import JsonRpcErrorCode, ToolContentKind
+from django_spec_mcp.handlers.listable_tool_bindings import listable_tool_bindings
+from django_spec_mcp.handlers.offered_tools import offered_tools
+from django_spec_mcp.handlers.pagination import paginate
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.handlers.utils import (
     advertises_closed_items,
     advertises_closed_schema,
     catalog_cache_hints,
@@ -15,16 +15,16 @@ from rest_framework_mcp.handlers.utils import (
     resolve_bound,
     takes_list_payload,
 )
-from rest_framework_mcp.output.resolve_structured_output import resolve_structured_output
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.protocol.types.tool import Tool
-from rest_framework_mcp.registry.types.chain_tool_binding import ChainToolBinding
-from rest_framework_mcp.registry.types.selector_tool_binding import SelectorToolBinding
-from rest_framework_mcp.schema.agent_conventions import append_agent_conventions
-from rest_framework_mcp.schema.chain_tool_schema import build_chain_tool_input_schema
-from rest_framework_mcp.schema.output_schema import build_output_schema
-from rest_framework_mcp.schema.selector_tool_schema import build_selector_tool_input_schema
-from rest_framework_mcp.schema.service_tool_schema import build_service_tool_input_schema
+from django_spec_mcp.output.resolve_structured_output import resolve_structured_output
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.protocol.types.tool import Tool
+from django_spec_mcp.registry.types.chain_tool_binding import ChainToolBinding
+from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
+from django_spec_mcp.schema.agent_conventions import append_agent_conventions
+from django_spec_mcp.schema.chain_tool_schema import build_chain_tool_input_schema
+from django_spec_mcp.schema.output_schema import build_output_schema
+from django_spec_mcp.schema.selector_tool_schema import build_selector_tool_input_schema
+from django_spec_mcp.schema.service_tool_schema import build_service_tool_input_schema
 
 
 def handle_tools_list(

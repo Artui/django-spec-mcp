@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 from fakeredis import FakeAsyncRedis, FakeServer
 
-from rest_framework_mcp.subscriptions.redis_subscription_broker import RedisSubscriptionBroker
+from django_spec_mcp.subscriptions.redis_subscription_broker import RedisSubscriptionBroker
 
 pytestmark = pytest.mark.asyncio
 
@@ -51,7 +51,7 @@ async def test_a_publish_from_another_worker_reaches_the_subscriber() -> None:
     listener, publisher_client = FakeAsyncRedis(server=shared), FakeAsyncRedis(server=shared)
     broker = RedisSubscriptionBroker(listener)
     queue = await broker.subscribe(frozenset({"resource:a"}))
-    await _await_subscriber(listener, "drf-mcp:sub:resource:a")
+    await _await_subscriber(listener, "spec-mcp:sub:resource:a")
 
     publisher = RedisSubscriptionBroker(publisher_client)
     assert await publisher.publish("resource:a", {"method": "m"}) >= 1
@@ -68,8 +68,8 @@ async def test_one_subscription_listens_to_all_of_its_topics_at_once() -> None:
     client = _client()
     broker = RedisSubscriptionBroker(client)
     queue = await broker.subscribe(frozenset({"a", "b"}))
-    await _await_subscriber(client, "drf-mcp:sub:a")
-    await _await_subscriber(client, "drf-mcp:sub:b")
+    await _await_subscriber(client, "spec-mcp:sub:a")
+    await _await_subscriber(client, "spec-mcp:sub:b")
     assert len(broker._tasks) == 1
 
     await broker.publish("a", 1)
@@ -93,7 +93,7 @@ async def test_unsubscribing_cancels_the_listener() -> None:
     client = _client()
     broker = RedisSubscriptionBroker(client)
     queue = await broker.subscribe(frozenset({"a"}))
-    await _await_subscriber(client, "drf-mcp:sub:a")
+    await _await_subscriber(client, "spec-mcp:sub:a")
     broker.unsubscribe(queue)
     await asyncio.sleep(0.05)
     assert broker._tasks == {}
@@ -137,7 +137,7 @@ async def test_subscribe_acknowledgement_frames_are_not_delivered_as_payloads() 
     client = _client()
     broker = RedisSubscriptionBroker(client)
     queue = await broker.subscribe(frozenset({"a"}))
-    await _await_subscriber(client, "drf-mcp:sub:a")
+    await _await_subscriber(client, "spec-mcp:sub:a")
     await broker.publish("a", {"real": True})
     assert await _drain(queue) == {"real": True}
     broker.unsubscribe(queue)
@@ -147,7 +147,7 @@ async def test_subscribe_acknowledgement_frames_are_not_delivered_as_payloads() 
 async def test_constructing_without_the_extra_is_a_clear_error(monkeypatch: Any) -> None:
     """``redis`` is optional, so importing the module must work without it and
     only construction may fail."""
-    import rest_framework_mcp.subscriptions.redis_subscription_broker as module
+    import django_spec_mcp.subscriptions.redis_subscription_broker as module
 
     monkeypatch.setattr(module, "AsyncRedis", None)
     with pytest.raises(ImportError, match=r"\[redis\]"):
@@ -180,14 +180,14 @@ async def test_the_channels_are_given_back_when_a_subscription_unwinds() -> None
     client = _client()
     broker = RedisSubscriptionBroker(client)
     queue = await broker.subscribe(frozenset({"a"}))
-    assert (await client.pubsub_numsub("drf-mcp:sub:a"))[0][1] == 1
+    assert (await client.pubsub_numsub("spec-mcp:sub:a"))[0][1] == 1
 
     broker.unsubscribe(queue)
     for _ in range(50):
         await asyncio.sleep(0.01)
-        if (await client.pubsub_numsub("drf-mcp:sub:a"))[0][1] == 0:
+        if (await client.pubsub_numsub("spec-mcp:sub:a"))[0][1] == 0:
             break
-    assert (await client.pubsub_numsub("drf-mcp:sub:a"))[0][1] == 0
+    assert (await client.pubsub_numsub("spec-mcp:sub:a"))[0][1] == 0
     await client.aclose()
 
 

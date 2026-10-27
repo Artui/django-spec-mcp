@@ -7,11 +7,11 @@ from typing import Any
 from django.core.cache import cache
 from django.http import HttpRequest
 
-from rest_framework_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.auth.types.token_info import TokenInfo
 
 # Distinct from the other limiters' prefixes so an operator can tell which
 # scheme produced a counter from the cache key alone.
-_DEFAULT_KEY_PREFIX: str = "drf-mcp:rl-sw"
+_DEFAULT_KEY_PREFIX: str = "spec-mcp:rl-sw"
 
 
 def _default_key(request: HttpRequest, token: TokenInfo) -> str:
@@ -31,7 +31,7 @@ class SlidingWindowRateLimit:
     the live count against ``max_calls``.
 
     Trade-offs against
-    [`FixedWindowRateLimit`][rest_framework_mcp.auth.rate_limits.fixed_window_rate_limit.FixedWindowRateLimit]:
+    [`FixedWindowRateLimit`][django_spec_mcp.auth.rate_limits.fixed_window_rate_limit.FixedWindowRateLimit]:
 
     - **Smoother**: limits the actual rate over the trailing ``per_seconds``,
       not bucketed counts.

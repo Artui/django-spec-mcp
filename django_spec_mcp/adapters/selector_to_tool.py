@@ -14,7 +14,7 @@ from django_service_specs import (
 )
 from rest_framework_services.types.selector_spec import SelectorSpec
 
-from rest_framework_mcp.adapters.utils import (
+from django_spec_mcp.adapters.utils import (
     merge_meta,
     merge_tool_annotations,
     validate_input_serializer_against_callable,
@@ -25,19 +25,19 @@ from rest_framework_mcp.adapters.utils import (
     validate_serializer_shapes,
     validate_url_kwargs,
 )
-from rest_framework_mcp.auth.permissions.wrap_spec_permissions import wrap_spec_permissions
-from rest_framework_mcp.constants import (
+from django_spec_mcp.auth.permissions.wrap_spec_permissions import wrap_spec_permissions
+from django_spec_mcp.constants import (
     ArgumentBinding,
     OutputFormat,
     TaskPolicy,
     ToolContentKind,
     UnknownArguments,
 )
-from rest_framework_mcp.protocol.types.icon import Icon
-from rest_framework_mcp.registry.types.query_param import QueryParam
-from rest_framework_mcp.registry.types.selector_tool_binding import SelectorToolBinding
-from rest_framework_mcp.registry.types.url_kwarg import UrlKwarg
-from rest_framework_mcp.schema.utils import selector_tool_inputs
+from django_spec_mcp.protocol.types.icon import Icon
+from django_spec_mcp.registry.types.query_param import QueryParam
+from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
+from django_spec_mcp.registry.types.url_kwarg import UrlKwarg
+from django_spec_mcp.schema.utils import selector_tool_inputs
 
 
 def selector_spec_to_tool(
@@ -76,7 +76,7 @@ def selector_spec_to_tool(
     read_query_params: tuple[QueryParam, ...] = (),
 ) -> SelectorToolBinding:
     """Lift a ``SelectorSpec`` into a
-    [`SelectorToolBinding`][rest_framework_mcp.registry.types.selector_tool_binding.SelectorToolBinding].
+    [`SelectorToolBinding`][django_spec_mcp.registry.types.selector_tool_binding.SelectorToolBinding].
 
     Sister of ``service_spec_to_tool`` for the read-shaped pipeline. The
     spec must carry a concrete ``selector`` callable, checked here so

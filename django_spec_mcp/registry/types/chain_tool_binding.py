@@ -12,16 +12,16 @@ from rest_framework_services.types.affordance_declarer import AffordanceDeclarer
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp.auth.permissions.drf_permission_adapter import DRFPermissionAdapter
-from rest_framework_mcp.constants import (
+from django_spec_mcp.auth.permissions.drf_permission_adapter import DRFPermissionAdapter
+from django_spec_mcp.constants import (
     OutputFormat,
     TaskPolicy,
     ToolContentKind,
     UnknownArguments,
 )
-from rest_framework_mcp.protocol.types.icon import Icon
-from rest_framework_mcp.registry.types.chain_step import ChainStep
-from rest_framework_mcp.registry.types.utils import (
+from django_spec_mcp.protocol.types.icon import Icon
+from django_spec_mcp.registry.types.chain_step import ChainStep
+from django_spec_mcp.registry.types.utils import (
     can_present_nothing,
     rendered_kind,
     validate_content_kind,
@@ -33,7 +33,7 @@ class ChainToolBinding:
     """All wiring for a single MCP tool that runs a **sequence of specs**.
 
     A chain tool threads a
-    [`ChainContext`][rest_framework_mcp.registry.types.chain_context.ChainContext]
+    [`ChainContext`][django_spec_mcp.registry.types.chain_context.ChainContext]
     through its ordered ``steps`` — each step's result is stored under its alias and
     readable by later steps — so one tool call can express ``retrieve x → write y →
     write z`` with ``z`` derived from both ``x`` and ``y``. Sequencing is a transport
@@ -41,7 +41,7 @@ class ChainToolBinding:
     ``SelectorSpec`` units of API behaviour.
 
     Fields not listed below mirror
-    [`ToolBinding`][rest_framework_mcp.registry.types.tool_binding.ToolBinding].
+    [`ToolBinding`][django_spec_mcp.registry.types.tool_binding.ToolBinding].
 
     Attributes:
         steps: The ordered steps, run front to back. Non-empty, and aliases
@@ -105,13 +105,13 @@ class ChainToolBinding:
     """Keep this chain in ``tools/list`` even when ``FILTER_LISTINGS_BY_PERMISSIONS``
     would drop it, or a service step's operation-scope ``affordances`` condition is
     unmet right now — same semantics as
-    [`ToolBinding.always_listed`][rest_framework_mcp.registry.types.tool_binding.ToolBinding.always_listed]."""
+    [`ToolBinding.always_listed`][django_spec_mcp.registry.types.tool_binding.ToolBinding.always_listed]."""
 
     content_kind: ToolContentKind = ToolContentKind.TEXT
     """What this tool's payload becomes in the result's ``content`` array. ``TEXT``
     renders JSON per ``output_format``; the other kinds project it into an image / audio
     / resource-link block. See
-    [`ToolContentKind`][rest_framework_mcp.constants.ToolContentKind]."""
+    [`ToolContentKind`][django_spec_mcp.constants.ToolContentKind]."""
 
     content_mime_type: str | None = None
     """The media type for an ``IMAGE`` / ``AUDIO`` ``content_kind``.
@@ -122,12 +122,12 @@ class ChainToolBinding:
     """Whether calling this tool hands back a task handle instead of a result.
     The choice lives on the binding because the extension makes the *server*
     the sole decider and gives the client no way to ask. See
-    [`TaskPolicy`][rest_framework_mcp.constants.TaskPolicy]."""
+    [`TaskPolicy`][django_spec_mcp.constants.TaskPolicy]."""
 
     invalidates: tuple[str, ...] = ()
     """URI templates naming the resources a successful call changed.
 
-    Same contract as [`invalidates`][rest_framework_mcp.registry.types.tool_binding.ToolBinding.invalidates]:
+    Same contract as [`invalidates`][django_spec_mcp.registry.types.tool_binding.ToolBinding.invalidates]:
     published as ``notifications/resources/updated`` once the transaction
     commits, rendered against the result merged with the call's arguments, and
     matched exactly — so name the collection too if you want it watched:

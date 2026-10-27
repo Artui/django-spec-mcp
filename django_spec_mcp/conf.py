@@ -39,7 +39,7 @@ DEFAULTS: dict[str, Any] = {
     # ``websiteUrl``, ``icons``. All but ``description`` are also ``MCPServer``
     # constructor kwargs; the constructor's ``description=`` means the
     # ``initialize`` ``instructions`` string instead.
-    "SERVER_INFO": {"name": "djangorestframework-mcp-server"},
+    "SERVER_INFO": {"name": "django-spec-mcp"},
     "MAX_PROGRESS_NOTIFICATIONS": 1_000,
     "MAX_REQUEST_BYTES": 1_048_576,
     # Measured on the encoded wire payload: a tool result carries the payload
@@ -77,13 +77,13 @@ DEFAULTS: dict[str, Any] = {
 
 
 def get_setting(name: str) -> Any:
-    """Return a single setting from ``REST_FRAMEWORK_MCP``, falling back to ``DEFAULTS``.
+    """Return a single setting from ``SPEC_MCP``, falling back to ``DEFAULTS``.
 
     Raises ``KeyError`` for unknown setting names so typos surface immediately.
     """
     if name not in DEFAULTS:
-        raise KeyError(f"Unknown REST_FRAMEWORK_MCP setting: {name!r}")
-    user_settings: dict[str, Any] = getattr(django_settings, "REST_FRAMEWORK_MCP", {}) or {}
+        raise KeyError(f"Unknown SPEC_MCP setting: {name!r}")
+    user_settings: dict[str, Any] = getattr(django_settings, "SPEC_MCP", {}) or {}
     if name in user_settings:
         return user_settings[name]
     return DEFAULTS[name]

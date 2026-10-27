@@ -18,14 +18,14 @@ from django_service_specs import SelectorKind, SpecRegistry, UnknownArguments
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_services import SelectorSpec, ServiceSpec
 
-from rest_framework_mcp import (
+from django_spec_mcp import (
     ChainStep,
     SelectorDefaults,
     ServiceDefaults,
     ToolDefinition,
     register_tools,
 )
-from rest_framework_mcp.server.mcp_server import MCPServer
+from django_spec_mcp.server.mcp_server import MCPServer
 
 RETIRED = UnknownArguments.PASSTHROUGH
 # The refusal names both supported policies and says why the member cannot come back.

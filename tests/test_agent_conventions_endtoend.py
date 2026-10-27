@@ -16,10 +16,10 @@ from typing import Any
 import pytest
 from asgiref.sync import sync_to_async
 
-from rest_framework_mcp import AgentConventions, MCPServer
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.tasks.create_task import create_task
-from rest_framework_mcp.tasks.in_memory_task_store import InMemoryTaskStore
+from django_spec_mcp import AgentConventions, MCPServer
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.tasks.create_task import create_task
+from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from tests.tasks.conftest import RecordingExecutor
 from tests.testapp.conventions import REFUSED_SELECTION, conventions_server
 from tests.testapp.models import Invoice

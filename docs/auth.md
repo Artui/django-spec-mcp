@@ -1,6 +1,6 @@
 # Authentication
 
-`djangorestframework-mcp-server` is a **resource server**: it validates bearer tokens
+`django-spec-mcp` is a **resource server**: it validates bearer tokens
 that someone else issued. The library does not implement a token issuer (that's
 the job of an Authorization Server / IDP). It does ship two backends and the
 RFC 9728 metadata endpoint clients use to discover them.
@@ -8,7 +8,7 @@ RFC 9728 metadata endpoint clients use to discover them.
 !!! tip "OAuth contrib mount"
     The core `MCPServer.urls` exposes only the spec-mandated PRM endpoint.
     For deployments that want the full discovery + DCR matrix without
-    fronting their own AS, `rest_framework_mcp.contrib.oauth.build_oauth_urlpatterns`
+    fronting their own AS, `django_spec_mcp.contrib.oauth.build_oauth_urlpatterns`
     bundles RFC 8414 AS metadata, OIDC discovery, RFC 7591 Dynamic Client
     Registration, and the alias paths different LLM hosts probe. See
     [OAuth contrib mount](#oauth-contrib-mount) below.
@@ -38,8 +38,8 @@ minimal and includes a `_warning`. Don't ship this to production.
 Pass it when you build the server:
 
 ```python
-from rest_framework_mcp import MCPServer
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 
 server = MCPServer(name="dev", auth_backend=AllowAnyBackend())
 ```
@@ -60,7 +60,7 @@ request. Backends opt into that by implementing `check_configuration()`; one
 that needs no setup implements nothing and is left alone.
 
 ```bash
-pip install "djangorestframework-mcp-server[oauth]"
+pip install "django-spec-mcp[oauth]"
 ```
 
 ```python
@@ -71,7 +71,7 @@ INSTALLED_APPS = [
 
 # DjangoOAuthToolkitBackend is the default — a server with no auth_backend=
 # gets one. Pass it explicitly only to configure it.
-REST_FRAMEWORK_MCP = {
+SPEC_MCP = {
     "SERVER_INFO": {
         "resource": "https://example.com/mcp/",
         "authorization_servers": ["https://example.com/oauth/"],
@@ -106,7 +106,7 @@ The `SERVER_INFO` keys flow into both:
     `spec.permission_classes` (wrapped via `DRFPermissionAdapter`) and the
     per-binding `permissions=[...]` below gate a tool. Registering a tool
     with neither is **refused** — `ImproperlyConfigured` at registration.
-    Set `REST_FRAMEWORK_MCP["REQUIRE_TOOL_PERMISSIONS"] = False` to downgrade
+    Set `SPEC_MCP["REQUIRE_TOOL_PERMISSIONS"] = False` to downgrade
     that to an `UnguardedToolWarning` while migrating a large surface.
 
     The same check runs on `register_resource` and `register_prompt`: the
@@ -137,7 +137,7 @@ registration site — and would satisfy the unguarded-tool check that would
 otherwise have warned.
 
 ```python
-from rest_framework_mcp import MCPServer, ScopeRequired, DjangoPermRequired
+from django_spec_mcp import MCPServer, ScopeRequired, DjangoPermRequired
 from rest_framework_services.types.service_spec import ServiceSpec
 
 server.register_service_tool(
@@ -154,7 +154,7 @@ Custom permissions implement the [`MCPPermission`](reference/auth.md) Protocol:
 
 ```python
 from django.http import HttpRequest
-from rest_framework_mcp import TokenInfo
+from django_spec_mcp import TokenInfo
 
 
 class TenantMatches:
@@ -189,7 +189,7 @@ rather than rewriting it for MCP:
 
 ```python
 from rest_framework.permissions import DjangoModelPermissions
-from rest_framework_mcp import DRFPermissionAdapter
+from django_spec_mcp import DRFPermissionAdapter
 
 server.register_service_tool(
     name="invoices.create",
@@ -287,7 +287,7 @@ operation-scope affordance refuses right now is the exception: `tools/list`
 leaves it out either way, because that condition cannot depend on the
 call's arguments — see
 [Concepts](concepts.md#a-tool-that-cannot-run-now-is-not-listed).) Set
-`REST_FRAMEWORK_MCP["FILTER_LISTINGS_BY_PERMISSIONS"] = True` to drop
+`SPEC_MCP["FILTER_LISTINGS_BY_PERMISSIONS"] = True` to drop
 bindings whose permissions deny the caller before paginating.
 
 This is **binding-level** gating — permissions are evaluated against a
@@ -371,7 +371,7 @@ Because enforcement needs a getter, it means bringing your own backend:
 `MCPServer(resource_url=...)` configures the default backend for *metadata*.
 
 ```python
-REST_FRAMEWORK_MCP = {
+SPEC_MCP = {
     "RESOURCE_URL": "https://example.com/mcp/",
     "SERVER_INFO": {
         "authorization_servers": ["https://example.com/oauth/"],
@@ -448,7 +448,7 @@ RFC 9728 marks REQUIRED, so the metadata carries a `_warning` saying why.
 
 ## OAuth contrib mount
 
-`rest_framework_mcp.contrib.oauth.build_oauth_urlpatterns(*, server,
+`django_spec_mcp.contrib.oauth.build_oauth_urlpatterns(*, server,
 include_dcr=False, include_aliases=True, include_openid_discovery=True)`
 returns URL patterns ready to mount alongside your server. It exposes the
 full set of discovery endpoints LLM hosts probe so MCP clients (Claude
@@ -488,7 +488,7 @@ Aliases render the canonical payload — they are not HTTP redirects.
 from django.urls import path
 
 from invoices.mcp import server
-from rest_framework_mcp.contrib.oauth import build_oauth_urlpatterns
+from django_spec_mcp.contrib.oauth import build_oauth_urlpatterns
 
 urlpatterns = [
     *build_oauth_urlpatterns(server=server, include_dcr=True),
@@ -515,7 +515,7 @@ When `dcr_enabled` is `False` the DCR endpoint refuses every request. When
 per RFC 7591 §3.
 
 Both are resolved when the patterns are built. Omit either to take
-`REST_FRAMEWORK_MCP["DCR_ENABLED"]` / `["DCR_INITIAL_ACCESS_TOKEN"]` as the
+`SPEC_MCP["DCR_ENABLED"]` / `["DCR_INITIAL_ACCESS_TOKEN"]` as the
 default; pass them to let two mounts in one project gate DCR differently.
 
 ### What a registration accepts and returns
@@ -735,7 +735,7 @@ OAUTH2_PROVIDER = {
     "CIMD_REGISTRATION_PERMISSION_CLASSES": ("oauth2_provider.cimd.AllowAllCIMDPermission",),
 }
 
-REST_FRAMEWORK_MCP = {
+SPEC_MCP = {
     "RESOURCE_URL": "https://example.com/mcp/",
     "ALLOWED_ORIGINS": ["https://app.example.com"],
     # The specification requires a resource server to validate that a token was
@@ -754,7 +754,7 @@ REST_FRAMEWORK_MCP = {
 
 !!! warning "Install the extra"
     `DjangoOAuthToolkitBackend` is the default backend, and mounting refuses
-    without DOT: `pip install "djangorestframework-mcp-server[oauth]"`. The
+    without DOT: `pip install "django-spec-mcp[oauth]"`. The
     refusal happens while the URLConf is imported, so `manage.py check` catches
     it before a request ever arrives. The extra pulls
     `django-oauth-toolkit>=3.4`, so the two settings above are always available;

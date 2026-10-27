@@ -17,7 +17,7 @@ from django.contrib.auth.models import AbstractBaseUser, AnonymousUser
 from django.http import HttpRequest, HttpResponse
 from django.test import RequestFactory
 
-from rest_framework_mcp.contrib.oauth.build_authorize_passthrough_view import (
+from django_spec_mcp.contrib.oauth.build_authorize_passthrough_view import (
     build_authorize_passthrough_view,
 )
 

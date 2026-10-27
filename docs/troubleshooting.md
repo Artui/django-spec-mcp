@@ -24,7 +24,7 @@ this package.
 
 !!! warning "Application logs may be silent either way"
 
-    If your logging does not include `rest_framework_mcp` (see
+    If your logging does not include `django_spec_mcp` (see
     [Observability](observability.md)), the absence of log lines tells you
     *nothing* about whether the request arrived. Configure the logger before
     concluding anything from silence.
@@ -67,7 +67,7 @@ condition into an outage that needs a human. If yours does that, see below.
 Turn them off:
 
 ```python title="settings.py"
-REST_FRAMEWORK_MCP = {"SESSIONS_ENABLED": False}
+SPEC_MCP = {"SESSIONS_ENABLED": False}
 ```
 
 This is a **conformant mode, not a relaxation.** Both legacy revisions say a
@@ -104,12 +104,12 @@ ServiceSpec(service=create_invoice, permission_classes=[IsAuthenticated])
 To migrate a large surface gradually, downgrade it to a warning:
 
 ```python
-REST_FRAMEWORK_MCP = {"REQUIRE_TOOL_PERMISSIONS": False}
+SPEC_MCP = {"REQUIRE_TOOL_PERMISSIONS": False}
 ```
 
 !!! tip "If your tests assign the settings dict"
 
-    `settings.REST_FRAMEWORK_MCP = {...}` **replaces** the dict rather than
+    `settings.SPEC_MCP = {...}` **replaces** the dict rather than
     merging, so a project-level opt-out disappears inside any test that does
     that. Add the key to those literals too.
 
@@ -259,7 +259,7 @@ those paths — silently, with different content.
 
 ```python
 def test_our_oauth_routes_are_not_shadowed():
-    from rest_framework_mcp.contrib.oauth import check_oauth_url_shadowing
+    from django_spec_mcp.contrib.oauth import check_oauth_url_shadowing
 
     assert check_oauth_url_shadowing() == []
 ```
@@ -302,7 +302,7 @@ Fixed in 0.49.0, which answers every such exception as JSON-RPC:
   other validation failure.
 - Anything else is a `-32603` whose message is `Internal error`, carrying the
   request's `id`, under HTTP `500`. The exception is logged at `ERROR` with its
-  traceback under `rest_framework_mcp.transport`; the text is not in the
+  traceback under `django_spec_mcp.transport`; the text is not in the
   response, so read the log.
 - A `PermissionDenied` (DRF's or Django's) is the exception: a permission
   class that refuses by raising, rather than returning `False`, is answered

@@ -32,7 +32,7 @@ class InMemorySSEReplayBuffer:
 
     **Single-process** ASGI deployments only: a resume can land on a different worker
     than the one that recorded the events, so multi-worker deployments need
-    [`RedisSSEReplayBuffer`][rest_framework_mcp.transport.redis_sse_replay_buffer.RedisSSEReplayBuffer].
+    [`RedisSSEReplayBuffer`][django_spec_mcp.transport.redis_sse_replay_buffer.RedisSSEReplayBuffer].
     State is instance-scoped, so multiple servers in one process share no replay
     history."""
 

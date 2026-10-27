@@ -6,21 +6,21 @@ from typing import Any
 from django_service_specs import UNSET, FieldMarking, UnsetType
 from rest_framework_services.types.selector_spec import SelectorSpec
 
-from rest_framework_mcp.adapters.utils import (
+from django_spec_mcp.adapters.utils import (
     merge_meta,
     merge_tool_annotations,
     validate_serializer_shapes,
 )
-from rest_framework_mcp.auth.permissions.wrap_spec_permissions import wrap_spec_permissions
-from rest_framework_mcp.constants import (
+from django_spec_mcp.auth.permissions.wrap_spec_permissions import wrap_spec_permissions
+from django_spec_mcp.constants import (
     OutputFormat,
     TaskPolicy,
     ToolContentKind,
     UnknownArguments,
 )
-from rest_framework_mcp.protocol.types.icon import Icon
-from rest_framework_mcp.registry.types.chain_step import ChainStep
-from rest_framework_mcp.registry.types.chain_tool_binding import ChainToolBinding
+from django_spec_mcp.protocol.types.icon import Icon
+from django_spec_mcp.registry.types.chain_step import ChainStep
+from django_spec_mcp.registry.types.chain_tool_binding import ChainToolBinding
 
 
 def chain_steps_to_tool(
@@ -54,8 +54,8 @@ def chain_steps_to_tool(
     dispatch_timeout: float | None | UnsetType = UNSET,
 ) -> ChainToolBinding:
     """Lift an ordered list of
-    [`ChainStep`][rest_framework_mcp.registry.types.chain_step.ChainStep] into a
-    [`ChainToolBinding`][rest_framework_mcp.registry.types.chain_tool_binding.ChainToolBinding].
+    [`ChainStep`][django_spec_mcp.registry.types.chain_step.ChainStep] into a
+    [`ChainToolBinding`][django_spec_mcp.registry.types.chain_tool_binding.ChainToolBinding].
 
     Pure projection — no side effects on the specs or their callables. The
     handler layer (``handlers/chain_tool_dispatch.py``) runs the steps.

@@ -33,14 +33,14 @@ from rest_framework.permissions import AllowAny
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import ChainStep, MCPServer
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.handlers.handle_tools_call import handle_tools_call
-from rest_framework_mcp.handlers.handle_tools_list import handle_tools_list
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.testing import assert_tool_result_conforms
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp import ChainStep, MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.testing import assert_tool_result_conforms
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.testapp.models import Invoice
 from tests.testapp.serializers import InvoiceOutputSerializer
 from tests.testapp.urlconf_for import urlconf_for

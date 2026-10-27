@@ -17,11 +17,11 @@ from django_service_specs import SelectorKind
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.registry.types.chain_step import ChainStep
-from rest_framework_mcp.server.mcp_server import MCPServer
-from rest_framework_mcp.server.utils import UndescribedToolWarning
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.registry.types.chain_step import ChainStep
+from django_spec_mcp.server.mcp_server import MCPServer
+from django_spec_mcp.server.utils import UndescribedToolWarning
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 
 
 def _server() -> MCPServer:
@@ -98,7 +98,7 @@ def test_a_docstring_on_the_service_does_not_count() -> None:
 
 
 def test_require_tool_descriptions_refuses_registration(settings: Any) -> None:
-    settings.REST_FRAMEWORK_MCP = {
+    settings.SPEC_MCP = {
         "REQUIRE_TOOL_PERMISSIONS": False,
         "REQUIRE_TOOL_DESCRIPTIONS": True,
     }

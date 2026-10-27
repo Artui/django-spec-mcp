@@ -118,7 +118,7 @@ def _bridge_source() -> str:
     cannot change under a running process the way a Django template can -- it
     ships in the wheel.
     """
-    return files("rest_framework_mcp.ui").joinpath("bridge.js").read_text(encoding="utf-8")
+    return files("django_spec_mcp.ui").joinpath("bridge.js").read_text(encoding="utf-8")
 
 
 __all__ = ["build_app_document"]

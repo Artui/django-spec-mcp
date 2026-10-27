@@ -1,6 +1,6 @@
 """Registration-time checks that a declared serializer is a shape MCP can use.
 
-``rest_framework_mcp.adapters.utils.validate_serializer_shapes`` runs from all
+``django_spec_mcp.adapters.utils.validate_serializer_shapes`` runs from all
 three tool adapters, before anything else reads the serializer, and from the
 resource adapter for its output alone (tested with the read path, in
 ``tests/handlers/test_resources_read_dataclass_output.py``). Without it a
@@ -26,15 +26,15 @@ from rest_framework import serializers as drf_serializers
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import ChainStep, MCPServer
-from rest_framework_mcp.adapters.chain_to_tool import chain_steps_to_tool
-from rest_framework_mcp.adapters.selector_to_tool import selector_spec_to_tool
-from rest_framework_mcp.adapters.service_to_tool import service_spec_to_tool
-from rest_framework_mcp.adapters.utils import validate_serializer_shapes
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.constants import ArgumentBinding
-from rest_framework_mcp.schema.input_schema import build_input_schema
-from rest_framework_mcp.schema.output_schema import build_output_schema
+from django_spec_mcp import ChainStep, MCPServer
+from django_spec_mcp.adapters.chain_to_tool import chain_steps_to_tool
+from django_spec_mcp.adapters.selector_to_tool import selector_spec_to_tool
+from django_spec_mcp.adapters.service_to_tool import service_spec_to_tool
+from django_spec_mcp.adapters.utils import validate_serializer_shapes
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.constants import ArgumentBinding
+from django_spec_mcp.schema.input_schema import build_input_schema
+from django_spec_mcp.schema.output_schema import build_output_schema
 
 
 class _Input(drf_serializers.Serializer):

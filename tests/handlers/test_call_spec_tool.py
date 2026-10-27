@@ -19,9 +19,9 @@ from rest_framework.permissions import BasePermission
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import ChainStep, MCPServer
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.protocol.types.tool_result import ToolResult
+from django_spec_mcp import ChainStep, MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.protocol.types.tool_result import ToolResult
 
 
 def _server() -> MCPServer:

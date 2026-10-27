@@ -2,7 +2,7 @@
 
 MCP hosts probe several well-known URLs to find an authorization server: RFC 8414
 mandates one path, RFC 9728 another, OIDC a third, and vendors mount their own aliases.
-[`build_oauth_urlpatterns`][rest_framework_mcp.contrib.oauth.build_oauth_urlpatterns.build_oauth_urlpatterns]
+[`build_oauth_urlpatterns`][django_spec_mcp.contrib.oauth.build_oauth_urlpatterns.build_oauth_urlpatterns]
 serves every one of them. The aliases are *not* HTTP redirects — they render the same
 payload from the same view, because redirects break clients that follow one and then
 keep issuing requests against the redirected origin.
@@ -31,20 +31,20 @@ from __future__ import annotations
 
 from django.urls import URLPattern, path
 
-from rest_framework_mcp.auth.protected_resource_metadata import ProtectedResourceMetadataViewSet
-from rest_framework_mcp.conf import get_setting
-from rest_framework_mcp.contrib.oauth.adapters.types.auth_user_adapter import AuthUserAdapter
-from rest_framework_mcp.contrib.oauth.authorization_server_metadata_viewset import (
+from django_spec_mcp.auth.protected_resource_metadata import ProtectedResourceMetadataViewSet
+from django_spec_mcp.conf import get_setting
+from django_spec_mcp.contrib.oauth.adapters.types.auth_user_adapter import AuthUserAdapter
+from django_spec_mcp.contrib.oauth.authorization_server_metadata_viewset import (
     AuthorizationServerMetadataViewSet,
 )
-from rest_framework_mcp.contrib.oauth.build_authorize_passthrough_view import (
+from django_spec_mcp.contrib.oauth.build_authorize_passthrough_view import (
     build_authorize_passthrough_view,
 )
-from rest_framework_mcp.contrib.oauth.dynamic_client_registration_viewset import (
+from django_spec_mcp.contrib.oauth.dynamic_client_registration_viewset import (
     DynamicClientRegistrationViewSet,
 )
-from rest_framework_mcp.contrib.oauth.openid_discovery_viewset import OpenIDDiscoveryViewSet
-from rest_framework_mcp.server.mcp_server import MCPServer
+from django_spec_mcp.contrib.oauth.openid_discovery_viewset import OpenIDDiscoveryViewSet
+from django_spec_mcp.server.mcp_server import MCPServer
 
 
 def build_oauth_urlpatterns(
@@ -79,7 +79,7 @@ def build_oauth_urlpatterns(
     mounts in one project can differ.
 
     Args:
-      server: The [`MCPServer`][rest_framework_mcp.server.mcp_server.MCPServer]
+      server: The [`MCPServer`][django_spec_mcp.server.mcp_server.MCPServer]
         whose ``auth_backend`` drives every discovery payload. A parameter rather than a settings lookup so
         multi-server deployments work.
       include_dcr: Mount ``/oauth/register/``. Off by default, so a consumer
@@ -87,7 +87,7 @@ def build_oauth_urlpatterns(
         Client Registration is **deprecated** by MCP revision ``2026-07-28`` in
         favour of Client ID Metadata Documents, with an earliest removal of the
         first revision released on or after 2027-07-28; see
-        [`DynamicClientRegistrationViewSet`][rest_framework_mcp.contrib.oauth.dynamic_client_registration_viewset.DynamicClientRegistrationViewSet]
+        [`DynamicClientRegistrationViewSet`][django_spec_mcp.contrib.oauth.dynamic_client_registration_viewset.DynamicClientRegistrationViewSet]
         for the timetable and for why this endpoint is kept meanwhile.
       include_aliases: Mount the alias URLs alongside the canonical ones.
       include_openid_discovery: Mount the OIDC discovery alias.
@@ -102,9 +102,9 @@ def build_oauth_urlpatterns(
         dispatch, typically a session-based login redirect. Only read when
         ``include_authorize`` is on.
       dcr_enabled: Whether ``/oauth/register/`` accepts registrations. ``None``
-        takes ``REST_FRAMEWORK_MCP['DCR_ENABLED']``.
+        takes ``SPEC_MCP['DCR_ENABLED']``.
       dcr_initial_access_token: RFC 7591 §3 token a DCR client must present.
-        ``None`` takes ``REST_FRAMEWORK_MCP['DCR_INITIAL_ACCESS_TOKEN']``,
+        ``None`` takes ``SPEC_MCP['DCR_INITIAL_ACCESS_TOKEN']``,
         itself ``None``, which means no token check.
     """
     backend = server.auth_backend

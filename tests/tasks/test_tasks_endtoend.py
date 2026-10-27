@@ -14,10 +14,10 @@ import pytest
 from django.test import Client
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import MCPServer, TaskPolicy
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.constants import TASKS_EXTENSION_ID
-from rest_framework_mcp.tasks.in_memory_task_store import InMemoryTaskStore
+from django_spec_mcp import MCPServer, TaskPolicy
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.constants import TASKS_EXTENSION_ID
+from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from tests.tasks.conftest import RecordingExecutor, slow_service
 from tests.tasks.urls import EXECUTOR, SERVER
 
@@ -193,7 +193,7 @@ def test_discover_advertises_the_extension(client: Client) -> None:
 def test_a_server_that_runs_no_tasks_advertises_nothing() -> None:
     """A capability is a promise. Advertising one this server cannot keep would
     have a client wait for a result that never comes."""
-    from rest_framework_mcp.handlers.handle_initialize import build_capabilities
+    from django_spec_mcp.handlers.handle_initialize import build_capabilities
     from tests.tasks.conftest import context
 
     bare = MCPServer(name="bare", auth_backend=AllowAnyBackend())
@@ -205,7 +205,7 @@ def test_a_server_that_runs_no_tasks_advertises_nothing() -> None:
 
 def test_a_store_without_an_executor_does_not_advertise() -> None:
     """Half the machinery creates tasks nothing will ever run."""
-    from rest_framework_mcp.handlers.handle_initialize import build_capabilities
+    from django_spec_mcp.handlers.handle_initialize import build_capabilities
     from tests.tasks.conftest import context
 
     half = MCPServer(name="half", auth_backend=AllowAnyBackend(), task_store=InMemoryTaskStore())
@@ -218,7 +218,7 @@ def test_a_store_without_an_executor_does_not_advertise() -> None:
 def test_supplying_an_executor_is_enough_to_get_a_store() -> None:
     """The executor is the switch: a store appears, namespaced like the session
     store, so the common case is one argument rather than two."""
-    from rest_framework_mcp.tasks.django_cache_task_store import DjangoCacheTaskStore
+    from django_spec_mcp.tasks.django_cache_task_store import DjangoCacheTaskStore
 
     server = MCPServer(
         name="auto", auth_backend=AllowAnyBackend(), task_executor=RecordingExecutor()
@@ -243,7 +243,7 @@ def test_a_required_tool_on_a_server_that_cannot_run_tasks_blames_the_server() -
     the tool was declared un-runnable inline with nothing configured to run it
     elsewhere. Blaming the client would send a competent one round a loop it
     cannot win."""
-    from rest_framework_mcp.handlers.handle_tools_call import handle_tools_call
+    from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
     from tests.tasks.conftest import context
 
     server = MCPServer(name="misconfigured", auth_backend=AllowAnyBackend())

@@ -36,18 +36,18 @@ from rest_framework.permissions import BasePermission
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import DRFPermissionAdapter, MCPServer, UrlKwarg
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.constants import ELICITATION_KEY, JsonRpcErrorCode, UnknownArguments
-from rest_framework_mcp.handlers.handle_tools_call import handle_tools_call
-from rest_framework_mcp.handlers.handle_tools_call_async import handle_tools_call_async
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.subscriptions.in_memory_subscription_broker import (
+from django_spec_mcp import DRFPermissionAdapter, MCPServer, UrlKwarg
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.constants import ELICITATION_KEY, JsonRpcErrorCode, UnknownArguments
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.subscriptions.in_memory_subscription_broker import (
     InMemorySubscriptionBroker,
 )
-from rest_framework_mcp.subscriptions.utils import topic_for_resource
+from django_spec_mcp.subscriptions.utils import topic_for_resource
 from tests.testapp.models import Invoice
 from tests.testapp.urlconf_for import urlconf_for
 from tests.utils import RefusingRateLimit, granting_route, tool_error

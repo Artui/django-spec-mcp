@@ -20,8 +20,8 @@ from rest_framework import serializers
 from rest_framework.permissions import AllowAny
 from rest_framework_services import SelectorSpec, ServiceSpec
 
-from rest_framework_mcp import MCPServer, ToolDefinition, register_tools
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp import MCPServer, ToolDefinition, register_tools
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 
 _ROUTES = ["direct", "decorator", "register_specs", "register_tools"]
 _KINDS = ["selector", "service"]

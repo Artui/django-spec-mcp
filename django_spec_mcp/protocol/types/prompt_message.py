@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from rest_framework_mcp.protocol.types.tool_content_block import ToolContentBlock
+from django_spec_mcp.protocol.types.tool_content_block import ToolContentBlock
 
 
 @dataclass(frozen=True)
@@ -33,7 +33,7 @@ class PromptMessage:
 
         The spec uses one content vocabulary across tool results and prompt messages, so
         this reuses
-        [`ToolContentBlock`][rest_framework_mcp.protocol.types.tool_content_block.ToolContentBlock]
+        [`ToolContentBlock`][django_spec_mcp.protocol.types.tool_content_block.ToolContentBlock]
         rather than growing a parallel set. ``resource_link`` is the one member prompts
         do not accept — a prompt message embeds content, it does not point at it."""
         return cls(role=role, content=block.to_dict())

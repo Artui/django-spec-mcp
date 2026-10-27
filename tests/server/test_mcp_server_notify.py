@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from rest_framework_mcp import MCPServer
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 
 
 def _make_server() -> MCPServer:
@@ -35,7 +35,7 @@ async def test_sse_broker_property_exposes_owned_instance() -> None:
 
 async def test_notify_records_to_buffer_and_wraps_payload() -> None:
     """When a replay buffer is wired in, ``notify`` records first then publishes wrapped."""
-    from rest_framework_mcp.transport.in_memory_sse_replay_buffer import (
+    from django_spec_mcp.transport.in_memory_sse_replay_buffer import (
         InMemorySSEReplayBuffer,
     )
 
@@ -63,7 +63,7 @@ async def test_notify_records_to_buffer_and_wraps_payload() -> None:
 
 
 def test_sse_replay_buffer_property_returns_configured_buffer() -> None:
-    from rest_framework_mcp.transport.in_memory_sse_replay_buffer import (
+    from django_spec_mcp.transport.in_memory_sse_replay_buffer import (
         InMemorySSEReplayBuffer,
     )
 

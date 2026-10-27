@@ -17,12 +17,12 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import MCPServer, PromptArgument
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.handlers.handle_prompts_get import handle_prompts_get
-from rest_framework_mcp.handlers.handle_resources_read import handle_resources_read
-from rest_framework_mcp.handlers.handle_tools_call import handle_tools_call
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp import MCPServer, PromptArgument
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.handlers.handle_prompts_get import handle_prompts_get
+from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 
 
 @pytest.fixture
@@ -51,8 +51,8 @@ def _server() -> MCPServer:
 def _ctx(server: MCPServer) -> Any:
     from django.http import HttpRequest
 
-    from rest_framework_mcp.auth.types.token_info import TokenInfo
-    from rest_framework_mcp.handlers.types.context import MCPCallContext
+    from django_spec_mcp.auth.types.token_info import TokenInfo
+    from django_spec_mcp.handlers.types.context import MCPCallContext
 
     return MCPCallContext(
         http_request=HttpRequest(),
@@ -131,7 +131,7 @@ def test_validation_rejects_do_not_emit_span(exporter: InMemorySpanExporter) -> 
 
 def test_span_helper_is_noop_without_otel(monkeypatch) -> None:
     """When ``opentelemetry`` isn't importable, ``span()`` yields a no-op."""
-    import rest_framework_mcp._compat.tracing as tracing
+    import django_spec_mcp._compat.tracing as tracing
 
     monkeypatch.setattr(tracing, "_otel_trace", None)
     with tracing.span("mcp.x", attributes={"a": 1}) as s:
@@ -148,8 +148,8 @@ def _tools_raising_service_error() -> Any:
     """A registry holding a tool whose service raises ``ServiceError``."""
     from django_service_specs import ServiceError
 
-    from rest_framework_mcp.registry.tool_registry import ToolRegistry
-    from rest_framework_mcp.registry.types.tool_binding import ToolBinding
+    from django_spec_mcp.registry.tool_registry import ToolRegistry
+    from django_spec_mcp.registry.types.tool_binding import ToolBinding
 
     def boom() -> None:
         raise ServiceError("nope")
@@ -164,10 +164,10 @@ def _tools_raising_service_error() -> Any:
 def _ctx_with_tools(tools: Any) -> Any:
     from django.http import HttpRequest
 
-    from rest_framework_mcp.auth.types.token_info import TokenInfo
-    from rest_framework_mcp.handlers.types.context import MCPCallContext
-    from rest_framework_mcp.registry.prompt_registry import PromptRegistry
-    from rest_framework_mcp.registry.resource_registry import ResourceRegistry
+    from django_spec_mcp.auth.types.token_info import TokenInfo
+    from django_spec_mcp.handlers.types.context import MCPCallContext
+    from django_spec_mcp.registry.prompt_registry import PromptRegistry
+    from django_spec_mcp.registry.resource_registry import ResourceRegistry
 
     return MCPCallContext(
         http_request=HttpRequest(),
@@ -183,7 +183,7 @@ def test_service_error_recorded_when_setting_enabled(
     exporter: InMemorySpanExporter, settings
 ) -> None:
     """``RECORD_SERVICE_EXCEPTIONS=True`` attaches an exception event to the span."""
-    settings.REST_FRAMEWORK_MCP = {"RECORD_SERVICE_EXCEPTIONS": True}
+    settings.SPEC_MCP = {"RECORD_SERVICE_EXCEPTIONS": True}
     handle_tools_call(
         {"name": "t.boom", "arguments": {}}, _ctx_with_tools(_tools_raising_service_error())
     )
@@ -197,7 +197,7 @@ def test_service_error_recorded_when_setting_enabled(
 
 def test_service_error_not_recorded_by_default(exporter: InMemorySpanExporter, settings) -> None:
     """Default state: ``ServiceError`` is mapped to JSON-RPC but not recorded."""
-    settings.REST_FRAMEWORK_MCP = {}
+    settings.SPEC_MCP = {}
     handle_tools_call(
         {"name": "t.boom", "arguments": {}}, _ctx_with_tools(_tools_raising_service_error())
     )
@@ -209,9 +209,9 @@ def test_service_error_not_recorded_by_default(exporter: InMemorySpanExporter, s
 async def test_async_service_error_recorded_when_setting_enabled(
     exporter: InMemorySpanExporter, settings
 ) -> None:
-    from rest_framework_mcp.handlers.handle_tools_call_async import handle_tools_call_async
+    from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 
-    settings.REST_FRAMEWORK_MCP = {"RECORD_SERVICE_EXCEPTIONS": True}
+    settings.SPEC_MCP = {"RECORD_SERVICE_EXCEPTIONS": True}
     await handle_tools_call_async(
         {"name": "t.boom", "arguments": {}}, _ctx_with_tools(_tools_raising_service_error())
     )
@@ -223,9 +223,9 @@ async def test_async_service_error_recorded_when_setting_enabled(
 async def test_async_service_error_not_recorded_by_default(
     exporter: InMemorySpanExporter, settings
 ) -> None:
-    from rest_framework_mcp.handlers.handle_tools_call_async import handle_tools_call_async
+    from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 
-    settings.REST_FRAMEWORK_MCP = {}
+    settings.SPEC_MCP = {}
     await handle_tools_call_async(
         {"name": "t.boom", "arguments": {}}, _ctx_with_tools(_tools_raising_service_error())
     )

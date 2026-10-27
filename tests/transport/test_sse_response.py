@@ -5,9 +5,9 @@ import json
 
 import pytest
 
-from rest_framework_mcp.transport.in_memory_sse_broker import InMemorySSEBroker
-from rest_framework_mcp.transport.in_memory_sse_replay_buffer import InMemorySSEReplayBuffer
-from rest_framework_mcp.transport.sse_response import (
+from django_spec_mcp.transport.in_memory_sse_broker import InMemorySSEBroker
+from django_spec_mcp.transport.in_memory_sse_replay_buffer import InMemorySSEReplayBuffer
+from django_spec_mcp.transport.sse_response import (
     build_sse_response,
     format_event,
     stream_events,

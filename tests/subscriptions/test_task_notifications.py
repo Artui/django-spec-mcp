@@ -14,19 +14,19 @@ from asgiref.sync import async_to_sync
 from django.db import transaction
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import MCPServer, SubscriptionFilter
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.constants import TaskStatus
-from rest_framework_mcp.handlers.handle_tasks_cancel import handle_tasks_cancel
-from rest_framework_mcp.handlers.handle_tasks_update import handle_tasks_update
-from rest_framework_mcp.subscriptions.in_memory_subscription_broker import (
+from django_spec_mcp import MCPServer, SubscriptionFilter
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.constants import TaskStatus
+from django_spec_mcp.handlers.handle_tasks_cancel import handle_tasks_cancel
+from django_spec_mcp.handlers.handle_tasks_update import handle_tasks_update
+from django_spec_mcp.subscriptions.in_memory_subscription_broker import (
     InMemorySubscriptionBroker,
 )
-from rest_framework_mcp.subscriptions.utils import topic_for_task
-from rest_framework_mcp.tasks.create_task import create_task
-from rest_framework_mcp.tasks.in_memory_task_store import InMemoryTaskStore
-from rest_framework_mcp.tasks.transition_task import transition_task
+from django_spec_mcp.subscriptions.utils import topic_for_task
+from django_spec_mcp.tasks.create_task import create_task
+from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
+from django_spec_mcp.tasks.transition_task import transition_task
 from tests.subscriptions.test_subscription_core import _context
 from tests.tasks.conftest import RecordingExecutor, slow_service
 
@@ -172,7 +172,7 @@ MODERN = "2026-07-28"
 
 
 def _listen(client: Any, task_ids: list[str], *, declares: bool) -> Any:
-    from rest_framework_mcp.constants import TASKS_EXTENSION_ID
+    from django_spec_mcp.constants import TASKS_EXTENSION_ID
 
     return client.post(
         "/mcp/",
@@ -227,7 +227,7 @@ async def test_declaring_the_capability_gets_a_stream_even_with_no_such_task() -
 
 
 def test_the_acknowledgement_lists_the_task_ids_it_agreed_to() -> None:
-    from rest_framework_mcp.subscriptions.grant_subscription import grant_subscription
+    from django_spec_mcp.subscriptions.grant_subscription import grant_subscription
 
     broker, store = InMemorySubscriptionBroker(), InMemoryTaskStore()
     server = _server(broker, store)

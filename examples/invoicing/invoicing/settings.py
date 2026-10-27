@@ -49,7 +49,7 @@ DEFAULT_AUTO_FIELD: str = "django.db.models.BigAutoField"
 # Only scalars live here. The server's collaborators (auth backend, session
 # store) and its identity (name / version / description) are constructor
 # arguments — see invoices/mcp.py.
-REST_FRAMEWORK_MCP: dict[str, object] = {
+SPEC_MCP: dict[str, object] = {
     # Allow any origin in dev. Production deployments must lock this down.
     "ALLOWED_ORIGINS": ["*"],
 }

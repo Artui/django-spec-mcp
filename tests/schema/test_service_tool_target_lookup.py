@@ -39,10 +39,10 @@ from rest_framework_services.dispatch.utils import declared_input_keys
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import MCPServer, UrlKwarg
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.registry.types.tool_binding import ToolBinding
-from rest_framework_mcp.schema.service_tool_schema import build_service_tool_input_schema
+from django_spec_mcp import MCPServer, UrlKwarg
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.registry.types.tool_binding import ToolBinding
+from django_spec_mcp.schema.service_tool_schema import build_service_tool_input_schema
 from tests.testapp.models import Invoice
 from tests.testapp.serializers import InvoiceOutputSerializer
 

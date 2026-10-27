@@ -6,7 +6,7 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.http import HttpRequest
 
-from rest_framework_mcp.contrib.oauth.adapters.simplejwt_cookie import SimpleJWTCookieAdapter
+from django_spec_mcp.contrib.oauth.adapters.simplejwt_cookie import SimpleJWTCookieAdapter
 
 
 def _request_with_cookie(value: str, *, cookie_name: str = "access") -> HttpRequest:
@@ -54,7 +54,7 @@ def test_token_for_unknown_user_returns_none() -> None:
 def test_custom_cookie_name_via_setting(settings) -> None:
     from rest_framework_simplejwt.tokens import AccessToken
 
-    settings.REST_FRAMEWORK_MCP = {"SIMPLEJWT_ACCESS_COOKIE": "jwt"}
+    settings.SPEC_MCP = {"SIMPLEJWT_ACCESS_COOKIE": "jwt"}
     user = get_user_model().objects.create_user(username="carol", password="x")
     token = AccessToken.for_user(user)
     resolved = SimpleJWTCookieAdapter().hydrate(_request_with_cookie(str(token), cookie_name="jwt"))
@@ -89,7 +89,7 @@ def test_custom_cookie_name_via_constructor() -> None:
 def test_constructor_wins_over_the_setting(settings) -> None:
     from rest_framework_simplejwt.tokens import AccessToken
 
-    settings.REST_FRAMEWORK_MCP = {"SIMPLEJWT_ACCESS_COOKIE": "from-settings"}
+    settings.SPEC_MCP = {"SIMPLEJWT_ACCESS_COOKIE": "from-settings"}
     user = get_user_model().objects.create_user(username="erin", password="x")
     token = AccessToken.for_user(user)
     adapter = SimpleJWTCookieAdapter(cookie_name="from-arg")

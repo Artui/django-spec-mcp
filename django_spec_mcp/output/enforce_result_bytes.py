@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from rest_framework_mcp.observability import get_logger
-from rest_framework_mcp.output.encode_json import encode_json
+from django_spec_mcp.observability import get_logger
+from django_spec_mcp.output.encode_json import encode_json
 
 logger = get_logger(__name__)
 

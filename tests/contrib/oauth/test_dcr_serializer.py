@@ -7,17 +7,17 @@ from typing import Any
 import pytest
 from oauth2_provider.models import Application
 
-from rest_framework_mcp.auth.types.authorization_server_metadata import (
+from django_spec_mcp.auth.types.authorization_server_metadata import (
     AuthorizationServerMetadata,
 )
-from rest_framework_mcp.contrib.oauth.dcr_serializer import (
+from django_spec_mcp.contrib.oauth.dcr_serializer import (
     _AUTH_METHOD_CLIENT_TYPES,
     _CLIENT_TYPE_AUTH_METHODS,
     _GRANT_TYPE_ALIASES,
     _REGISTERABLE_GRANT_TYPES,
     DynamicClientRegistrationSerializer,
 )
-from rest_framework_mcp.contrib.oauth.types.dynamic_client_registration_request import (
+from django_spec_mcp.contrib.oauth.types.dynamic_client_registration_request import (
     DynamicClientRegistrationRequest,
 )
 

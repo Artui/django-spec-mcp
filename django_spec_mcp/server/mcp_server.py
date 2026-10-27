@@ -29,23 +29,23 @@ from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 from rest_framework_services.types.validate_channel_names import validate_channel_names
 
-from rest_framework_mcp.adapters.chain_to_tool import chain_steps_to_tool
-from rest_framework_mcp.adapters.selector_to_resource import selector_to_resource
-from rest_framework_mcp.adapters.selector_to_tool import selector_spec_to_tool
-from rest_framework_mcp.adapters.service_to_tool import service_spec_to_tool
-from rest_framework_mcp.adapters.ui_to_resource import ui_view_to_resource
-from rest_framework_mcp.adapters.utils import merge_meta, validate_selector_parameter_names
-from rest_framework_mcp.auth.backends.django_oauth_toolkit_backend import (
+from django_spec_mcp.adapters.chain_to_tool import chain_steps_to_tool
+from django_spec_mcp.adapters.selector_to_resource import selector_to_resource
+from django_spec_mcp.adapters.selector_to_tool import selector_spec_to_tool
+from django_spec_mcp.adapters.service_to_tool import service_spec_to_tool
+from django_spec_mcp.adapters.ui_to_resource import ui_view_to_resource
+from django_spec_mcp.adapters.utils import merge_meta, validate_selector_parameter_names
+from django_spec_mcp.auth.backends.django_oauth_toolkit_backend import (
     DjangoOAuthToolkitBackend,
 )
-from rest_framework_mcp.auth.protected_resource_metadata import ProtectedResourceMetadataViewSet
-from rest_framework_mcp.auth.types.auth_backend import MCPAuthBackend
-from rest_framework_mcp.auth.types.self_checking import SelfChecking
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.check_removed_settings import check_removed_settings
-from rest_framework_mcp.config.build_mcp_config import build_mcp_config
-from rest_framework_mcp.config.types.mcp_config import MCPConfig
-from rest_framework_mcp.constants import (
+from django_spec_mcp.auth.protected_resource_metadata import ProtectedResourceMetadataViewSet
+from django_spec_mcp.auth.types.auth_backend import MCPAuthBackend
+from django_spec_mcp.auth.types.self_checking import SelfChecking
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.check_removed_settings import check_removed_settings
+from django_spec_mcp.config.build_mcp_config import build_mcp_config
+from django_spec_mcp.config.types.mcp_config import MCPConfig
+from django_spec_mcp.constants import (
     JSONRPC_VERSION,
     RESOURCE_EDGE_SEEDS,
     RESOURCE_UPDATED_METHOD,
@@ -58,37 +58,37 @@ from rest_framework_mcp.constants import (
     ToolContentKind,
     UnknownArguments,
 )
-from rest_framework_mcp.handlers.call_spec_tool import call_spec_tool
-from rest_framework_mcp.handlers.handle_tools_call_async import handle_tools_call_async
-from rest_framework_mcp.handlers.handle_tools_list import handle_tools_list
-from rest_framework_mcp.handlers.listable_tool_bindings import listable_tool_bindings
-from rest_framework_mcp.handlers.offered_tools import (
+from django_spec_mcp.handlers.call_spec_tool import call_spec_tool
+from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
+from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
+from django_spec_mcp.handlers.listable_tool_bindings import listable_tool_bindings
+from django_spec_mcp.handlers.offered_tools import (
     declares_operation_conditions,
     unavailable_tools,
 )
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.output.resolve_structured_output import resolve_structured_output
-from rest_framework_mcp.protocol.build_server_info import build_server_info
-from rest_framework_mcp.protocol.types.icon import Icon
-from rest_framework_mcp.protocol.types.implementation import Implementation
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.protocol.types.prompt_argument import PromptArgument
-from rest_framework_mcp.protocol.types.tool_result import ToolResult
-from rest_framework_mcp.registry.prompt_registry import PromptRegistry
-from rest_framework_mcp.registry.resource_registry import ResourceRegistry
-from rest_framework_mcp.registry.tool_registry import ToolRegistry
-from rest_framework_mcp.registry.types.chain_step import ChainStep
-from rest_framework_mcp.registry.types.chain_tool_binding import ChainToolBinding
-from rest_framework_mcp.registry.types.prompt_binding import PromptBinding
-from rest_framework_mcp.registry.types.query_param import QueryParam
-from rest_framework_mcp.registry.types.resource_binding import ResourceBinding
-from rest_framework_mcp.registry.types.selector_tool_binding import SelectorToolBinding
-from rest_framework_mcp.registry.types.tool_binding import ToolBinding
-from rest_framework_mcp.registry.types.ui_resource_meta import UIResourceMeta
-from rest_framework_mcp.registry.types.ui_tool_meta import UIToolMeta
-from rest_framework_mcp.registry.types.url_kwarg import UrlKwarg
-from rest_framework_mcp.schema.types.agent_conventions import AgentConventions
-from rest_framework_mcp.server.utils import (
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.output.resolve_structured_output import resolve_structured_output
+from django_spec_mcp.protocol.build_server_info import build_server_info
+from django_spec_mcp.protocol.types.icon import Icon
+from django_spec_mcp.protocol.types.implementation import Implementation
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.protocol.types.prompt_argument import PromptArgument
+from django_spec_mcp.protocol.types.tool_result import ToolResult
+from django_spec_mcp.registry.prompt_registry import PromptRegistry
+from django_spec_mcp.registry.resource_registry import ResourceRegistry
+from django_spec_mcp.registry.tool_registry import ToolRegistry
+from django_spec_mcp.registry.types.chain_step import ChainStep
+from django_spec_mcp.registry.types.chain_tool_binding import ChainToolBinding
+from django_spec_mcp.registry.types.prompt_binding import PromptBinding
+from django_spec_mcp.registry.types.query_param import QueryParam
+from django_spec_mcp.registry.types.resource_binding import ResourceBinding
+from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
+from django_spec_mcp.registry.types.tool_binding import ToolBinding
+from django_spec_mcp.registry.types.ui_resource_meta import UIResourceMeta
+from django_spec_mcp.registry.types.ui_tool_meta import UIToolMeta
+from django_spec_mcp.registry.types.url_kwarg import UrlKwarg
+from django_spec_mcp.schema.types.agent_conventions import AgentConventions
+from django_spec_mcp.server.utils import (
     build_ui_tool_meta,
     check_completions_declared,
     check_list_pagination_declared,
@@ -96,30 +96,30 @@ from rest_framework_mcp.server.utils import (
     check_tool_description_present,
     check_tool_permissions_declared,
 )
-from rest_framework_mcp.subscriptions.types.subscription_broker import SubscriptionBroker
-from rest_framework_mcp.subscriptions.utils import (
+from django_spec_mcp.subscriptions.types.subscription_broker import SubscriptionBroker
+from django_spec_mcp.subscriptions.utils import (
     topic_for_kind,
     topic_for_resource,
 )
-from rest_framework_mcp.tasks.build_worker_token import build_worker_token
-from rest_framework_mcp.tasks.django_cache_task_store import DjangoCacheTaskStore
-from rest_framework_mcp.tasks.run_task import run_task as _run_task
-from rest_framework_mcp.tasks.types.task_executor import TaskExecutor
-from rest_framework_mcp.tasks.types.task_record import TaskRecord
-from rest_framework_mcp.tasks.types.task_store import TaskStore
-from rest_framework_mcp.transport.async_streamable_http_viewset import (
+from django_spec_mcp.tasks.build_worker_token import build_worker_token
+from django_spec_mcp.tasks.django_cache_task_store import DjangoCacheTaskStore
+from django_spec_mcp.tasks.run_task import run_task as _run_task
+from django_spec_mcp.tasks.types.task_executor import TaskExecutor
+from django_spec_mcp.tasks.types.task_record import TaskRecord
+from django_spec_mcp.tasks.types.task_store import TaskStore
+from django_spec_mcp.transport.async_streamable_http_viewset import (
     ASYNC_STREAMABLE_HTTP_ACTION_MAP,
     AsyncStreamableHttpViewSet,
 )
-from rest_framework_mcp.transport.django_cache_session_store import DjangoCacheSessionStore
-from rest_framework_mcp.transport.in_memory_sse_broker import InMemorySSEBroker
-from rest_framework_mcp.transport.streamable_http_viewset import (
+from django_spec_mcp.transport.django_cache_session_store import DjangoCacheSessionStore
+from django_spec_mcp.transport.in_memory_sse_broker import InMemorySSEBroker
+from django_spec_mcp.transport.streamable_http_viewset import (
     STREAMABLE_HTTP_ACTION_MAP,
     StreamableHttpViewSet,
 )
-from rest_framework_mcp.transport.types.session_store import SessionStore
-from rest_framework_mcp.transport.types.sse_broker import SSEBroker
-from rest_framework_mcp.transport.types.sse_replay_buffer import SSEReplayBuffer
+from django_spec_mcp.transport.types.session_store import SessionStore
+from django_spec_mcp.transport.types.sse_broker import SSEBroker
+from django_spec_mcp.transport.types.sse_replay_buffer import SSEReplayBuffer
 
 
 class MCPServer:
@@ -175,7 +175,7 @@ class MCPServer:
     What the server tells a model in its own words -- the handle description and
     line, a paged tool's scope sentence, the missing-argument message -- is
     ``conventions=``, an
-    [`AgentConventions`][rest_framework_mcp.schema.types.agent_conventions.AgentConventions].
+    [`AgentConventions`][django_spec_mcp.schema.types.agent_conventions.AgentConventions].
     Change one sentence and keep the rest:
 
         server = MCPServer(
@@ -778,7 +778,7 @@ class MCPServer:
     ) -> ChainToolBinding:
         """Register an ordered sequence of specs as a single MCP tool.
 
-        Each [`ChainStep`][rest_framework_mcp.registry.types.chain_step.ChainStep]
+        Each [`ChainStep`][django_spec_mcp.registry.types.chain_step.ChainStep]
         wraps a ``ServiceSpec`` (write) or ``SelectorSpec`` (read) and binds
         its result to an alias. A step's ``inputs`` callable reads the
         validated tool arguments (``ctx.args``) and any prior step's output
@@ -891,7 +891,7 @@ class MCPServer:
         The transport-neutral entry point: hand a tool ``name``, a flat ``arguments``
         dict (the role ``request.data`` / query params play on HTTP) and the acting
         ``user``, and get back the same
-        [`ToolResult`][rest_framework_mcp.protocol.types.tool_result.ToolResult] the
+        [`ToolResult`][django_spec_mcp.protocol.types.tool_result.ToolResult] the
         wire handlers build. An in-process consumer calls this instead of
         re-implementing dispatch.
 
@@ -943,7 +943,7 @@ class MCPServer:
         ``additionalProperties`` policy), the same per-caller listing-permission filter
         (``FILTER_LISTINGS_BY_PERMISSIONS``) and the same opaque-cursor pagination —
         pass the returned ``nextCursor`` back for the next page. A
-        [`JsonRpcError`][rest_framework_mcp.protocol.types.json_rpc_error.JsonRpcError]
+        [`JsonRpcError`][django_spec_mcp.protocol.types.json_rpc_error.JsonRpcError]
         signals a bad cursor.
 
         ``scopes`` are the caller's granted scopes; pass them so a
@@ -1061,7 +1061,7 @@ class MCPServer:
         binding's MCP-only ``input_serializer``, chain tools and the output format all
         apply — everything ``call_tool`` omits. Returns the wire's result payload (a
         ``dict`` carrying ``content`` / ``structuredContent`` / ``isError``), or a
-        [`JsonRpcError`][rest_framework_mcp.protocol.types.json_rpc_error.JsonRpcError]
+        [`JsonRpcError`][django_spec_mcp.protocol.types.json_rpc_error.JsonRpcError]
         for a protocol fault (unknown tool, malformed ``arguments`` shape, denied
         permission).
 
@@ -1196,7 +1196,7 @@ class MCPServer:
         **A URI, not a template.** Publish the concrete URI that changed, and
         the collection URI too if watchers of the collection should hear about
         it — matching is exact, deliberately (see
-        [`topic_for_resource`][rest_framework_mcp.subscriptions.utils.topic_for_resource]).
+        [`topic_for_resource`][django_spec_mcp.subscriptions.utils.topic_for_resource]).
 
         **Publish after the transaction commits.** Inside
         ``transaction.atomic()`` this announces a change that may still roll
@@ -1414,14 +1414,14 @@ class MCPServer:
         no context.
 
         ``ui=`` is the typed
-        [`UIResourceMeta`][rest_framework_mcp.registry.types.ui_resource_meta.UIResourceMeta]
+        [`UIResourceMeta`][django_spec_mcp.registry.types.ui_resource_meta.UIResourceMeta]
         — CSP origins, browser permissions, publisher ``domain``, border preference —
         which serialises into ``_meta`` under the extension's key. ``meta=`` remains
         available for *other* extensions; passing both ``ui=`` and that same key inside
         ``meta=`` raises, rather than letting one silently win.
 
         The result is an ordinary
-        [`ResourceBinding`][rest_framework_mcp.registry.types.resource_binding.ResourceBinding],
+        [`ResourceBinding`][django_spec_mcp.registry.types.resource_binding.ResourceBinding],
         so it shares one URI namespace with data resources (a collision raises as
         always), appears in ``resources/list``, and honours ``permissions`` /
         ``always_listed``. Views default to **unguarded** — the MCP session is already
@@ -1487,7 +1487,7 @@ class MCPServer:
         ``render`` receives the prompt arguments as kwargs (plus ``request`` and
         ``user`` if it declares them) and returns either a string, a list of strings, a
         list of
-        [`PromptMessage`][rest_framework_mcp.protocol.types.prompt_message.PromptMessage],
+        [`PromptMessage`][django_spec_mcp.protocol.types.prompt_message.PromptMessage],
         or a coroutine yielding any of those — the dispatch layer normalises the result.
 
         ``request`` and ``user`` are seeded **over** the client's arguments at
@@ -1877,7 +1877,7 @@ class MCPServer:
         subscriber per session: re-subscribing replaces the old queue silently.
 
         With a
-        [`SSEReplayBuffer`][rest_framework_mcp.transport.types.sse_replay_buffer.SSEReplayBuffer]
+        [`SSEReplayBuffer`][django_spec_mcp.transport.types.sse_replay_buffer.SSEReplayBuffer]
         configured the payload is recorded *before* publishing, so the frame carries an
         event ID the SSE generator emits on the wire (``id: <id>\\ndata:
         <payload>\\n\\n``) and a later reconnect with ``Last-Event-ID`` drains what it

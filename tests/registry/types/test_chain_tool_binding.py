@@ -11,13 +11,13 @@ from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import DRFPermissionAdapter, MCPServer
-from rest_framework_mcp.adapters.chain_to_tool import chain_steps_to_tool
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.constants import JsonRpcErrorCode
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.registry.types.chain_step import ChainStep
-from rest_framework_mcp.registry.types.chain_tool_binding import ChainToolBinding
+from django_spec_mcp import DRFPermissionAdapter, MCPServer
+from django_spec_mcp.adapters.chain_to_tool import chain_steps_to_tool
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.constants import JsonRpcErrorCode
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.registry.types.chain_step import ChainStep
+from django_spec_mcp.registry.types.chain_tool_binding import ChainToolBinding
 from tests.testapp.serializers import InvoiceInputSerializer, InvoiceOutputSerializer
 
 

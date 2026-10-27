@@ -22,12 +22,12 @@ from rest_framework.permissions import BasePermission
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import ChainStep, JsonRpcError, JsonRpcErrorCode, MCPServer
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.permissions.django_perm_required import DjangoPermRequired
-from rest_framework_mcp.auth.permissions.scope_required import ScopeRequired
-from rest_framework_mcp.conf import get_setting
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp import ChainStep, JsonRpcError, JsonRpcErrorCode, MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.permissions.django_perm_required import DjangoPermRequired
+from django_spec_mcp.auth.permissions.scope_required import ScopeRequired
+from django_spec_mcp.conf import get_setting
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.testapp.models import Invoice
 from tests.testapp.serializers import InvoiceInputSerializer, InvoiceOutputSerializer
 
@@ -93,7 +93,7 @@ def test_list_tools_returns_the_merged_input_schema() -> None:
 
 
 def test_list_tools_paginates_with_an_opaque_cursor(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {"REQUIRE_TOOL_PERMISSIONS": False, "PAGE_SIZE": 1}
+    settings.SPEC_MCP = {"REQUIRE_TOOL_PERMISSIONS": False, "PAGE_SIZE": 1}
     server = _server()
     for name in ("a", "b"):
         server.register_service_tool(name=name, spec=ServiceSpec(service=lambda: None))
@@ -118,7 +118,7 @@ def test_list_tools_bad_cursor_is_a_jsonrpc_error() -> None:
 
 
 def test_list_tools_filters_by_listing_permissions(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {
+    settings.SPEC_MCP = {
         "REQUIRE_TOOL_PERMISSIONS": False,
         "FILTER_LISTINGS_BY_PERMISSIONS": True,
     }
@@ -291,7 +291,7 @@ def test_call_context_carries_scopes() -> None:
 
 
 def test_list_tools_scopes_reveal_a_scope_gated_tool(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {
+    settings.SPEC_MCP = {
         "REQUIRE_TOOL_PERMISSIONS": False,
         "FILTER_LISTINGS_BY_PERMISSIONS": True,
     }
@@ -334,7 +334,7 @@ async def test_alist_tools_mirrors_list_tools() -> None:
 
 
 async def test_alist_tools_honors_scopes(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {
+    settings.SPEC_MCP = {
         "REQUIRE_TOOL_PERMISSIONS": False,
         "FILTER_LISTINGS_BY_PERMISSIONS": True,
     }
@@ -359,7 +359,7 @@ async def test_alist_tools_runs_db_backed_listing_filter_off_the_loop(settings) 
     from django.contrib.auth import get_user_model
     from django.core.exceptions import SynchronousOnlyOperation
 
-    settings.REST_FRAMEWORK_MCP = {
+    settings.SPEC_MCP = {
         "REQUIRE_TOOL_PERMISSIONS": False,
         "FILTER_LISTINGS_BY_PERMISSIONS": True,
     }

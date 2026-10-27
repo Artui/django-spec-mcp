@@ -3,7 +3,7 @@ from __future__ import annotations
 from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest
 
-from rest_framework_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.auth.types.token_info import TokenInfo
 
 
 class DjangoPermRequired:
@@ -12,9 +12,9 @@ class DjangoPermRequired:
     Wraps ``user.has_perm`` from the standard Django auth backend. A token backed by
     ``AnonymousUser`` is always rejected — that is the point of using this class instead
     of
-    [`ScopeRequired`][rest_framework_mcp.auth.permissions.scope_required.ScopeRequired].
+    [`ScopeRequired`][django_spec_mcp.auth.permissions.scope_required.ScopeRequired].
     Takes a list or a bare string, like
-    [`ScopeRequired`][rest_framework_mcp.auth.permissions.scope_required.ScopeRequired].
+    [`ScopeRequired`][django_spec_mcp.auth.permissions.scope_required.ScopeRequired].
     """
 
     def __init__(self, perm: str | list[str]) -> None:

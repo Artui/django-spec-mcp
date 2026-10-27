@@ -37,9 +37,9 @@ from django.urls import include, path
 from rest_framework import serializers as drf_serializers
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import JsonRpcErrorCode, MCPServer, ScopeRequired
-from rest_framework_mcp.contrib.oauth import build_oauth_urlpatterns
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp import JsonRpcErrorCode, MCPServer, ScopeRequired
+from django_spec_mcp.contrib.oauth import build_oauth_urlpatterns
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.testapp.models import Invoice
 
 RESOURCE_URL = "https://testserver/mcp/"
@@ -135,7 +135,7 @@ def flow_settings(settings: Any) -> None:
     # database was never migrated for.
     settings.SESSION_ENGINE = "django.contrib.sessions.backends.signed_cookies"
     settings.OAUTH2_PROVIDER = {"SCOPES": SCOPES, "PKCE_REQUIRED": True}
-    settings.REST_FRAMEWORK_MCP = {
+    settings.SPEC_MCP = {
         "ALLOWED_ORIGINS": ["*"],
         "RESOURCE_URL": RESOURCE_URL,
         "DCR_ENABLED": True,

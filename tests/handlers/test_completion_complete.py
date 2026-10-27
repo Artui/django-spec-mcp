@@ -11,15 +11,15 @@ from django_service_specs import SelectorKind
 from rest_framework.permissions import BasePermission
 from rest_framework_services.types.selector_spec import SelectorSpec
 
-from rest_framework_mcp import DRFPermissionAdapter, MCPServer, PromptArgument
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.permissions.types.mcp_permission import MCPPermission
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.handlers.handle_completion_complete import handle_completion_complete
-from rest_framework_mcp.handlers.handle_initialize import handle_initialize
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp import DRFPermissionAdapter, MCPServer, PromptArgument
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.permissions.types.mcp_permission import MCPPermission
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.handlers.handle_completion_complete import handle_completion_complete
+from django_spec_mcp.handlers.handle_initialize import handle_initialize
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.utils import granting_route
 
 LANGUAGES = ["python", "pytorch", "pyside", "ruby"]
@@ -454,7 +454,7 @@ def test_a_resource_completer_alone_advertises_the_capability() -> None:
 @pytest.mark.django_db(transaction=True)
 async def test_async_dispatch_routes_completion_through_the_executor() -> None:
     """A completer reading the ORM must not run on the event loop."""
-    from rest_framework_mcp.handlers.async_dispatch import adispatch
+    from django_spec_mcp.handlers.async_dispatch import adispatch
 
     result = await adispatch(
         "completion/complete",

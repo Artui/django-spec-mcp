@@ -188,7 +188,7 @@ def _register_raw(**extra: Any) -> Any:
     """`_register` asserts 201; these cases are about the refusal."""
     from django.test import RequestFactory
 
-    from rest_framework_mcp.contrib.oauth.dynamic_client_registration_viewset import (
+    from django_spec_mcp.contrib.oauth.dynamic_client_registration_viewset import (
         DynamicClientRegistrationViewSet,
     )
 

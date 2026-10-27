@@ -15,18 +15,18 @@ from django_service_specs import SelectorKind
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import Icon, IconTheme, MCPServer
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.handlers.handle_initialize import handle_initialize
-from rest_framework_mcp.handlers.handle_prompts_list import handle_prompts_list
-from rest_framework_mcp.handlers.handle_resources_list import handle_resources_list
-from rest_framework_mcp.handlers.handle_resources_templates_list import (
+from django_spec_mcp import Icon, IconTheme, MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.handlers.handle_initialize import handle_initialize
+from django_spec_mcp.handlers.handle_prompts_list import handle_prompts_list
+from django_spec_mcp.handlers.handle_resources_list import handle_resources_list
+from django_spec_mcp.handlers.handle_resources_templates_list import (
     handle_resources_templates_list,
 )
-from rest_framework_mcp.handlers.handle_tools_list import handle_tools_list
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 
 ICON = Icon(src="https://example.test/i.png", mime_type="image/png", sizes=("48x48",))
 ICON_DICT: dict[str, Any] = {
@@ -131,7 +131,7 @@ def test_server_icons_and_website_url_reach_initialize() -> None:
 def test_server_identity_falls_back_to_settings() -> None:
     """``SERVER_INFO`` carries icons as plain data — dicts, not ``Icon``s."""
     with override_settings(
-        REST_FRAMEWORK_MCP={
+        SPEC_MCP={
             "SERVER_INFO": {
                 "name": "configured",
                 "description": "A server, described.",
@@ -149,9 +149,7 @@ def test_server_identity_falls_back_to_settings() -> None:
 
 def test_settings_icons_may_also_be_icon_instances() -> None:
     with override_settings(
-        REST_FRAMEWORK_MCP={
-            "SERVER_INFO": {"name": "c", "icons": [Icon(src="https://c.test/i.png")]}
-        }
+        SPEC_MCP={"SERVER_INFO": {"name": "c", "icons": [Icon(src="https://c.test/i.png")]}}
     ):
         server = _server(name=None)
     assert server._server_info.icons == (Icon(src="https://c.test/i.png"),)
@@ -159,7 +157,7 @@ def test_settings_icons_may_also_be_icon_instances() -> None:
 
 def test_settings_theme_round_trips() -> None:
     with override_settings(
-        REST_FRAMEWORK_MCP={
+        SPEC_MCP={
             "SERVER_INFO": {
                 "name": "c",
                 "icons": [{"src": "https://c.test/i.png", "theme": IconTheme.LIGHT}],

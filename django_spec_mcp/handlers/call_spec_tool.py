@@ -3,7 +3,7 @@
 Drives a ``ServiceSpec`` / ``SelectorSpec`` tool through the sister repo's
 transport-neutral ``dispatch_spec`` + ``render_for_audience`` + ``enforce_permissions``,
 off the HTTP / JSON-RPC path, returning the same
-[`ToolResult`][rest_framework_mcp.protocol.types.tool_result.ToolResult] the wire
+[`ToolResult`][django_spec_mcp.protocol.types.tool_result.ToolResult] the wire
 handlers build. A programmatic caller — the django-ag-ui bridge, a Pydantic-AI toolset,
 a management command — gets a tool result without reaching into handler internals or
 re-implementing dispatch.
@@ -38,11 +38,11 @@ from rest_framework_services import (
     render_for_audience,
 )
 
-from rest_framework_mcp.adapters.utils import _overlaid_field_names
-from rest_framework_mcp.config.types.mcp_config import MCPConfig
-from rest_framework_mcp.constants import RESERVED_POST_FETCH_KEYS
-from rest_framework_mcp.handlers.selector_tool_dispatch import enforce_object_permissions
-from rest_framework_mcp.handlers.utils import (
+from django_spec_mcp.adapters.utils import _overlaid_field_names
+from django_spec_mcp.config.types.mcp_config import MCPConfig
+from django_spec_mcp.constants import RESERVED_POST_FETCH_KEYS
+from django_spec_mcp.handlers.selector_tool_dispatch import enforce_object_permissions
+from django_spec_mcp.handlers.utils import (
     apply_tool_server_arguments,
     dispatch_shape,
     read_shaping_error_result,
@@ -52,14 +52,14 @@ from rest_framework_mcp.handlers.utils import (
     split_url_kwargs,
     validation_error_result,
 )
-from rest_framework_mcp.output.error_tool_result import build_error_tool_result
-from rest_framework_mcp.output.resolve_structured_output import resolve_structured_output
-from rest_framework_mcp.output.tool_result import build_tool_result
-from rest_framework_mcp.protocol.types.tool_result import ToolResult
-from rest_framework_mcp.registry.types.chain_tool_binding import ChainToolBinding
-from rest_framework_mcp.registry.types.selector_tool_binding import SelectorToolBinding
-from rest_framework_mcp.registry.types.tool_binding import ToolBinding
-from rest_framework_mcp.schema.types.agent_conventions import AgentConventions
+from django_spec_mcp.output.error_tool_result import build_error_tool_result
+from django_spec_mcp.output.resolve_structured_output import resolve_structured_output
+from django_spec_mcp.output.tool_result import build_tool_result
+from django_spec_mcp.protocol.types.tool_result import ToolResult
+from django_spec_mcp.registry.types.chain_tool_binding import ChainToolBinding
+from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
+from django_spec_mcp.registry.types.tool_binding import ToolBinding
+from django_spec_mcp.schema.types.agent_conventions import AgentConventions
 
 
 def call_spec_tool(

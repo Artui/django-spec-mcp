@@ -3,33 +3,33 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from rest_framework_mcp.constants import JsonRpcErrorCode
-from rest_framework_mcp.handlers.handle_completion_complete import handle_completion_complete
-from rest_framework_mcp.handlers.handle_initialize import handle_initialize
-from rest_framework_mcp.handlers.handle_ping import handle_ping
-from rest_framework_mcp.handlers.handle_prompts_get import handle_prompts_get
-from rest_framework_mcp.handlers.handle_prompts_list import handle_prompts_list
-from rest_framework_mcp.handlers.handle_resources_list import handle_resources_list
-from rest_framework_mcp.handlers.handle_resources_read import handle_resources_read
-from rest_framework_mcp.handlers.handle_resources_templates_list import (
+from django_spec_mcp.constants import JsonRpcErrorCode
+from django_spec_mcp.handlers.handle_completion_complete import handle_completion_complete
+from django_spec_mcp.handlers.handle_initialize import handle_initialize
+from django_spec_mcp.handlers.handle_ping import handle_ping
+from django_spec_mcp.handlers.handle_prompts_get import handle_prompts_get
+from django_spec_mcp.handlers.handle_prompts_list import handle_prompts_list
+from django_spec_mcp.handlers.handle_resources_list import handle_resources_list
+from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
+from django_spec_mcp.handlers.handle_resources_templates_list import (
     handle_resources_templates_list,
 )
-from rest_framework_mcp.handlers.handle_server_discover import handle_server_discover
-from rest_framework_mcp.handlers.handle_tasks_cancel import handle_tasks_cancel
-from rest_framework_mcp.handlers.handle_tasks_get import handle_tasks_get
-from rest_framework_mcp.handlers.handle_tasks_update import handle_tasks_update
-from rest_framework_mcp.handlers.handle_tools_call import handle_tools_call
-from rest_framework_mcp.handlers.handle_tools_list import handle_tools_list
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.protocol.types.initialize_result import InitializeResult
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.handlers.handle_server_discover import handle_server_discover
+from django_spec_mcp.handlers.handle_tasks_cancel import handle_tasks_cancel
+from django_spec_mcp.handlers.handle_tasks_get import handle_tasks_get
+from django_spec_mcp.handlers.handle_tasks_update import handle_tasks_update
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.protocol.types.initialize_result import InitializeResult
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 
 # Method dispatch table. The values return either:
 #   - a result payload (anything JSON-encodable),
 #   - an
-#     [`InitializeResult`][rest_framework_mcp.protocol.types.initialize_result.InitializeResult]
+#     [`InitializeResult`][django_spec_mcp.protocol.types.initialize_result.InitializeResult]
 #     (which the dispatcher serialises), or
-#   - a [`JsonRpcError`][rest_framework_mcp.protocol.types.json_rpc_error.JsonRpcError].
+#   - a [`JsonRpcError`][django_spec_mcp.protocol.types.json_rpc_error.JsonRpcError].
 _HandlerFn = Callable[[dict[str, Any] | None, MCPCallContext], Any]
 
 _HANDLERS: dict[str, _HandlerFn] = {
@@ -63,7 +63,7 @@ def dispatch(
     """Route a JSON-RPC method to its handler.
 
     Returns the handler's raw return value, except that
-    [`InitializeResult`][rest_framework_mcp.protocol.types.initialize_result.InitializeResult]
+    [`InitializeResult`][django_spec_mcp.protocol.types.initialize_result.InitializeResult]
     is converted to its dict form so the transport can serialise uniformly."""
     handler: _HandlerFn | None = _HANDLERS.get(method)
     if handler is None:

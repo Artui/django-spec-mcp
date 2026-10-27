@@ -4,7 +4,7 @@ from typing import Protocol, runtime_checkable
 
 from django.http import HttpRequest
 
-from rest_framework_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.auth.types.token_info import TokenInfo
 
 
 @runtime_checkable

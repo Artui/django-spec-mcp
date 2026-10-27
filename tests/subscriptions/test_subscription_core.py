@@ -10,22 +10,22 @@ from django_service_specs import SelectorKind
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import MCPServer, NotificationKind, SubscriptionFilter
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.constants import TASKS_EXTENSION_ID
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.subscriptions.grant_subscription import grant_subscription
-from rest_framework_mcp.subscriptions.in_memory_subscription_broker import (
+from django_spec_mcp import MCPServer, NotificationKind, SubscriptionFilter
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.constants import TASKS_EXTENSION_ID
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.subscriptions.grant_subscription import grant_subscription
+from django_spec_mcp.subscriptions.in_memory_subscription_broker import (
     InMemorySubscriptionBroker,
 )
-from rest_framework_mcp.subscriptions.utils import (
+from django_spec_mcp.subscriptions.utils import (
     topic_for_kind,
     topic_for_resource,
     topic_for_task,
 )
-from rest_framework_mcp.tasks.create_task import create_task
-from rest_framework_mcp.tasks.in_memory_task_store import InMemoryTaskStore
+from django_spec_mcp.tasks.create_task import create_task
+from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from tests.tasks.conftest import RecordingExecutor, slow_service
 
 # ----- SubscriptionFilter -----

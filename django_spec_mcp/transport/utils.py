@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from rest_framework_mcp.auth.types.auth_backend import MCPAuthBackend
-from rest_framework_mcp.constants import (
+from django_spec_mcp.auth.types.auth_backend import MCPAuthBackend
+from django_spec_mcp.constants import (
     SESSION_MISSING_HINT,
     SESSION_UNKNOWN_HINT,
     JsonRpcErrorCode,
 )
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 
 
 def is_permission_denial(result: Any) -> bool:

@@ -14,8 +14,8 @@ import sys
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.server.mcp_server import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.server.mcp_server import MCPServer
 
 _DOT_MODULES = ("oauth2_provider", "oauth2_provider.oauth2_validators")
 

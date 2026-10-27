@@ -6,16 +6,16 @@ from django_service_specs import SelectorKind
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import MCPServer
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.handlers.handle_resources_list import handle_resources_list
-from rest_framework_mcp.handlers.handle_resources_templates_list import (
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.handlers.handle_resources_list import handle_resources_list
+from django_spec_mcp.handlers.handle_resources_templates_list import (
     handle_resources_templates_list,
 )
-from rest_framework_mcp.handlers.handle_tools_list import handle_tools_list
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 
 
 def _build_server() -> MCPServer:
@@ -44,7 +44,7 @@ def _build_server() -> MCPServer:
 def _ctx(server: MCPServer) -> MCPCallContext:
     from django.http import HttpRequest
 
-    from rest_framework_mcp.auth.types.token_info import TokenInfo
+    from django_spec_mcp.auth.types.token_info import TokenInfo
 
     return MCPCallContext(
         http_request=HttpRequest(),
@@ -57,7 +57,7 @@ def _ctx(server: MCPServer) -> MCPCallContext:
 
 
 def test_tools_list_paginates(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {"REQUIRE_TOOL_PERMISSIONS": False, "PAGE_SIZE": 2}
+    settings.SPEC_MCP = {"REQUIRE_TOOL_PERMISSIONS": False, "PAGE_SIZE": 2}
     server = _build_server()
     out1 = handle_tools_list(None, _ctx(server))
     assert isinstance(out1, dict)
@@ -74,7 +74,7 @@ def test_tools_list_paginates(settings) -> None:
 
 
 def test_resources_list_paginates(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {"REQUIRE_TOOL_PERMISSIONS": False, "PAGE_SIZE": 2}
+    settings.SPEC_MCP = {"REQUIRE_TOOL_PERMISSIONS": False, "PAGE_SIZE": 2}
     server = _build_server()
     out = handle_resources_list(None, _ctx(server))
     assert isinstance(out, dict)
@@ -83,7 +83,7 @@ def test_resources_list_paginates(settings) -> None:
 
 
 def test_resources_templates_list_paginates(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {"REQUIRE_TOOL_PERMISSIONS": False, "PAGE_SIZE": 2}
+    settings.SPEC_MCP = {"REQUIRE_TOOL_PERMISSIONS": False, "PAGE_SIZE": 2}
     server = _build_server()
     out = handle_resources_templates_list(None, _ctx(server))
     assert isinstance(out, dict)

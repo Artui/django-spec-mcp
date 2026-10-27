@@ -21,16 +21,16 @@ from rest_framework.permissions import BasePermission
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import MCPServer
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.permissions.drf_permission_adapter import DRFPermissionAdapter
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.constants import JsonRpcErrorCode
-from rest_framework_mcp.handlers.handle_tools_call import handle_tools_call
-from rest_framework_mcp.handlers.handle_tools_call_async import handle_tools_call_async
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.registry.types.chain_step import ChainStep
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.permissions.drf_permission_adapter import DRFPermissionAdapter
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.constants import JsonRpcErrorCode
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.registry.types.chain_step import ChainStep
 from tests.testapp.models import Invoice
 
 _ROUTES = ["handler", "async_handler", "acall_tool"]

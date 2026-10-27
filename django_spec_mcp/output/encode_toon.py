@@ -4,8 +4,8 @@ import warnings
 from collections.abc import Callable
 from typing import Any
 
-from rest_framework_mcp.output.encode_json import encode_json
-from rest_framework_mcp.output.utils import toon_encoder
+from django_spec_mcp.output.encode_json import encode_json
+from django_spec_mcp.output.utils import toon_encoder
 
 
 def encode_toon(payload: Any) -> str:
@@ -24,7 +24,7 @@ def encode_toon(payload: Any) -> str:
     if encode is None:
         warnings.warn(
             "python-toon is not installed; falling back to JSON. "
-            "Install with `pip install djangorestframework-mcp-server[toon]`.",
+            "Install with `pip install django-spec-mcp[toon]`.",
             stacklevel=2,
         )
         return encode_json(payload)

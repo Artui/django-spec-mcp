@@ -15,11 +15,11 @@ from rest_framework.renderers import JSONRenderer
 from rest_framework.request import Request
 from rest_framework.viewsets import ViewSet
 
-from rest_framework_mcp._compat.acall import acall
-from rest_framework_mcp.auth.principal_for_token import principal_for_token
-from rest_framework_mcp.auth.types.auth_backend import MCPAuthBackend
-from rest_framework_mcp.config.types.mcp_config import MCPConfig
-from rest_framework_mcp.constants import (
+from django_spec_mcp._compat.acall import acall
+from django_spec_mcp.auth.principal_for_token import principal_for_token
+from django_spec_mcp.auth.types.auth_backend import MCPAuthBackend
+from django_spec_mcp.config.types.mcp_config import MCPConfig
+from django_spec_mcp.constants import (
     INTERNAL_ERROR_MESSAGE,
     MCP_ERROR_HEADER,
     MODERN_PROTOCOL_VERSIONS,
@@ -27,53 +27,53 @@ from rest_framework_mcp.constants import (
     SUBSCRIPTIONS_LISTEN_METHOD,
     JsonRpcErrorCode,
 )
-from rest_framework_mcp.handlers.async_dispatch import adispatch
-from rest_framework_mcp.handlers.tasks_utils import (
+from django_spec_mcp.handlers.async_dispatch import adispatch
+from django_spec_mcp.handlers.tasks_utils import (
     declares_tasks_extension,
     missing_capability_error,
 )
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.observability import get_logger, session_fingerprint
-from rest_framework_mcp.protocol.parse_message import parse_message
-from rest_framework_mcp.protocol.types.implementation import Implementation
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.protocol.types.json_rpc_notification import JsonRpcNotification
-from rest_framework_mcp.protocol.types.json_rpc_request import JsonRpcRequest
-from rest_framework_mcp.protocol.types.json_rpc_response import JsonRpcResponse
-from rest_framework_mcp.registry.prompt_registry import PromptRegistry
-from rest_framework_mcp.registry.resource_registry import ResourceRegistry
-from rest_framework_mcp.registry.tool_registry import ToolRegistry
-from rest_framework_mcp.schema.types.agent_conventions import AgentConventions
-from rest_framework_mcp.subscriptions.grant_subscription import grant_subscription
-from rest_framework_mcp.subscriptions.in_memory_subscription_broker import (
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.observability import get_logger, session_fingerprint
+from django_spec_mcp.protocol.parse_message import parse_message
+from django_spec_mcp.protocol.types.implementation import Implementation
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.protocol.types.json_rpc_notification import JsonRpcNotification
+from django_spec_mcp.protocol.types.json_rpc_request import JsonRpcRequest
+from django_spec_mcp.protocol.types.json_rpc_response import JsonRpcResponse
+from django_spec_mcp.registry.prompt_registry import PromptRegistry
+from django_spec_mcp.registry.resource_registry import ResourceRegistry
+from django_spec_mcp.registry.tool_registry import ToolRegistry
+from django_spec_mcp.schema.types.agent_conventions import AgentConventions
+from django_spec_mcp.subscriptions.grant_subscription import grant_subscription
+from django_spec_mcp.subscriptions.in_memory_subscription_broker import (
     InMemorySubscriptionBroker,
 )
-from rest_framework_mcp.subscriptions.types.subscription_broker import SubscriptionBroker
-from rest_framework_mcp.subscriptions.types.subscription_filter import SubscriptionFilter
-from rest_framework_mcp.tasks.types.task_executor import TaskExecutor
-from rest_framework_mcp.tasks.types.task_store import TaskStore
-from rest_framework_mcp.transport.negotiate_protocol_version import negotiate_protocol_version
-from rest_framework_mcp.transport.origin_validation import is_origin_allowed
-from rest_framework_mcp.transport.progress_dispatch import (
+from django_spec_mcp.subscriptions.types.subscription_broker import SubscriptionBroker
+from django_spec_mcp.subscriptions.types.subscription_filter import SubscriptionFilter
+from django_spec_mcp.tasks.types.task_executor import TaskExecutor
+from django_spec_mcp.tasks.types.task_store import TaskStore
+from django_spec_mcp.transport.negotiate_protocol_version import negotiate_protocol_version
+from django_spec_mcp.transport.origin_validation import is_origin_allowed
+from django_spec_mcp.transport.progress_dispatch import (
     can_report_progress,
     preflight_permissions,
     progress_token,
     stream_with_progress,
 )
-from rest_framework_mcp.transport.sse_response import build_sse_response
-from rest_framework_mcp.transport.subscription_stream import build_subscription_stream
-from rest_framework_mcp.transport.types.request_metadata import RequestMetadata
-from rest_framework_mcp.transport.types.session_store import SessionStore
-from rest_framework_mcp.transport.types.sse_broker import SSEBroker
-from rest_framework_mcp.transport.types.sse_replay_buffer import SSEReplayBuffer
-from rest_framework_mcp.transport.utils import (
+from django_spec_mcp.transport.sse_response import build_sse_response
+from django_spec_mcp.transport.subscription_stream import build_subscription_stream
+from django_spec_mcp.transport.types.request_metadata import RequestMetadata
+from django_spec_mcp.transport.types.session_store import SessionStore
+from django_spec_mcp.transport.types.sse_broker import SSEBroker
+from django_spec_mcp.transport.types.sse_replay_buffer import SSEReplayBuffer
+from django_spec_mcp.transport.utils import (
     insufficient_scope_challenge,
     is_permission_denial,
     modern_error_status,
     raised_denial_error,
     session_gate_failure,
 )
-from rest_framework_mcp.transport.validate_modern_request import validate_modern_request
+from django_spec_mcp.transport.validate_modern_request import validate_modern_request
 
 _SESSION_HEADER: str = "Mcp-Session-Id"
 _VERSION_HEADER: str = "Mcp-Protocol-Version"
@@ -126,7 +126,7 @@ class AsyncStreamableHttpViewSet(ViewSet):
     Wire behaviour matches the sync ViewSet for POST and DELETE — same headers, same
     status codes, same JSON-RPC shapes — and the reasoning behind the shared checks
     lives there. The async path additionally serves server-initiated SSE on GET when an
-    [`SSEBroker`][rest_framework_mcp.transport.types.sse_broker.SSEBroker] is wired in;
+    [`SSEBroker`][django_spec_mcp.transport.types.sse_broker.SSEBroker] is wired in;
     without one, GET returns 405, which the spec allows when there is nothing to push.
 
     Sync collaborators (auth backend, session store, permissions) are bridged
@@ -579,7 +579,7 @@ class AsyncStreamableHttpViewSet(ViewSet):
                 message=(
                     f"This server is already serving its maximum of {cap} concurrent "
                     "SSE streams. Retry shortly, or raise "
-                    "REST_FRAMEWORK_MCP['MAX_CONCURRENT_SSE_STREAMS']."
+                    "SPEC_MCP['MAX_CONCURRENT_SSE_STREAMS']."
                 ),
                 status=503,
             )
@@ -670,7 +670,7 @@ class AsyncStreamableHttpViewSet(ViewSet):
                 message=(
                     f"This server is already serving its maximum of {cap} concurrent "
                     "subscriptions. Retry shortly, or raise "
-                    "REST_FRAMEWORK_MCP['MAX_CONCURRENT_SUBSCRIPTIONS']."
+                    "SPEC_MCP['MAX_CONCURRENT_SUBSCRIPTIONS']."
                 ),
                 status=503,
                 request_id=message.id,

@@ -27,12 +27,12 @@ from rest_framework import serializers
 from rest_framework_dataclasses.serializers import DataclassSerializer
 from rest_framework_services.types.selector_spec import SelectorSpec
 
-from rest_framework_mcp import MCPServer
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.handlers.handle_tools_call import handle_tools_call
-from rest_framework_mcp.handlers.handle_tools_call_async import handle_tools_call_async
-from rest_framework_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
+from django_spec_mcp.handlers.types.context import MCPCallContext
 from tests.utils import tool_error
 
 # Every route that runs a selector tool's ``input_serializer``: ``call_tool``

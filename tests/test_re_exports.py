@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import pytest
 
-import rest_framework_mcp
+import django_spec_mcp
 
 GONE = [
     "CreateService",
@@ -32,8 +32,8 @@ GONE = [
 
 @pytest.mark.parametrize("name", GONE)
 def test_a_drf_services_symbol_is_not_re_exported(name: str) -> None:
-    assert not hasattr(rest_framework_mcp, name)
-    assert name not in rest_framework_mcp.__all__
+    assert not hasattr(django_spec_mcp, name)
+    assert name not in django_spec_mcp.__all__
 
 
 @pytest.mark.parametrize("name", GONE)

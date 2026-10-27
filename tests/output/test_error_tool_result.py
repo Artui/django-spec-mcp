@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from rest_framework_mcp.output.error_tool_result import build_error_tool_result
+from django_spec_mcp.output.error_tool_result import build_error_tool_result
 
 
 def test_error_payload_shape() -> None:

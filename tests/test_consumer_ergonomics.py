@@ -15,17 +15,17 @@ from django.core.exceptions import ImproperlyConfigured
 from django.test import override_settings
 from rest_framework_services import ServiceSpec
 
-from rest_framework_mcp.auth.backends.django_oauth_toolkit_backend import (
+from django_spec_mcp.auth.backends.django_oauth_toolkit_backend import (
     DjangoOAuthToolkitBackend,
     MountedAuthorizationServerWarning,
 )
-from rest_framework_mcp.config.build_mcp_config import build_mcp_config
-from rest_framework_mcp.contrib.oauth.check_oauth_url_shadowing import (
+from django_spec_mcp.config.build_mcp_config import build_mcp_config
+from django_spec_mcp.contrib.oauth.check_oauth_url_shadowing import (
     check_oauth_url_shadowing,
 )
-from rest_framework_mcp.observability import get_logger, session_fingerprint
-from rest_framework_mcp.server.mcp_server import MCPServer
-from rest_framework_mcp.server.utils import UnguardedToolWarning
+from django_spec_mcp.observability import get_logger, session_fingerprint
+from django_spec_mcp.server.mcp_server import MCPServer
+from django_spec_mcp.server.utils import UnguardedToolWarning
 
 
 class _AlwaysAllow:
@@ -185,7 +185,7 @@ class TestOAuthUrlShadowing:
     @override_settings(ROOT_URLCONF="tests.testapp.shadowed_oauth_urls")
     def test_the_default_is_to_warn_with_the_remedy(self, caplog) -> None:
         """The remedy is mount *order*, so the message has to say so."""
-        with caplog.at_level(logging.WARNING, logger="rest_framework_mcp"):
+        with caplog.at_level(logging.WARNING, logger="django_spec_mcp"):
             check_oauth_url_shadowing()
         assert any("first-match" in record.getMessage() for record in caplog.records)
 
@@ -200,7 +200,7 @@ class TestUnguardedToolsAreRefusedByDefault:
         subject is not permissions keep working. That override could otherwise
         mask a regression back to permissive, so assert the shipped value here.
         """
-        from rest_framework_mcp.conf import DEFAULTS
+        from django_spec_mcp.conf import DEFAULTS
 
         assert DEFAULTS["REQUIRE_TOOL_PERMISSIONS"] is True
 
@@ -253,7 +253,7 @@ class TestObservability:
 
     def test_the_namespace_is_configurable_as_one_tree(self) -> None:
         """A project silences or raises the whole package with one entry."""
-        assert get_logger("rest_framework_mcp.transport.x").name.startswith("rest_framework_mcp")
+        assert get_logger("django_spec_mcp.transport.x").name.startswith("django_spec_mcp")
 
     def test_a_rejected_session_names_its_exact_cause_server_side(self, caplog) -> None:
         """The no-oracle rule constrains the response, not the log.
@@ -265,13 +265,13 @@ class TestObservability:
         """
         from tests.transport.test_sessionless_legacy import _post_request, _view
 
-        with caplog.at_level(logging.WARNING, logger="rest_framework_mcp"):
+        with caplog.at_level(logging.WARNING, logger="django_spec_mcp"):
             _view(sessions=True)(_post_request("ping", session_id="made-up"))
         assert any("session-unknown" in record.getMessage() for record in caplog.records)
 
     def test_a_missing_session_logs_the_other_cause(self, caplog) -> None:
         from tests.transport.test_sessionless_legacy import _post_request, _view
 
-        with caplog.at_level(logging.WARNING, logger="rest_framework_mcp"):
+        with caplog.at_level(logging.WARNING, logger="django_spec_mcp"):
             _view(sessions=True)(_post_request("ping"))
         assert any("session-missing" in record.getMessage() for record in caplog.records)

@@ -8,7 +8,7 @@ class InMemorySessionStore:
 
     State lives on the instance, so each store is isolated. Multi-process deployments
     should use
-    [`DjangoCacheSessionStore`][rest_framework_mcp.transport.django_cache_session_store.DjangoCacheSessionStore]
+    [`DjangoCacheSessionStore`][django_spec_mcp.transport.django_cache_session_store.DjangoCacheSessionStore]
     instead — this class will not see sessions created in another process."""
 
     def __init__(self) -> None:

@@ -2,7 +2,7 @@
 
 ``__all__`` is a claim, and nothing else checks it. A name listed but never
 imported passes lint, passes types, passes the whole suite — and fails for the
-first person who writes ``from rest_framework_mcp.contrib.oauth import <name>``,
+first person who writes ``from django_spec_mcp.contrib.oauth import <name>``,
 which is exactly the spelling the docs teach. It also breaks ``import *``
 outright, with an ``AttributeError`` naming a symbol that plainly exists one
 file away.
@@ -27,9 +27,9 @@ import pathlib
 
 import pytest
 
-import rest_framework_mcp
+import django_spec_mcp
 
-PACKAGE_ROOT = pathlib.Path(rest_framework_mcp.__file__).parent
+PACKAGE_ROOT = pathlib.Path(django_spec_mcp.__file__).parent
 
 
 def _bound_names(tree: ast.Module) -> set[str]:

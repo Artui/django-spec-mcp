@@ -27,22 +27,22 @@ from rest_framework_dataclasses.serializers import DataclassSerializer
 from rest_framework_services.dispatch.utils import DROPPED_EDGE_SEEDS
 from rest_framework_services.types.validate_channel_names import validate_channel_names
 
-from rest_framework_mcp.constants import (
+from django_spec_mcp.constants import (
     RESERVED_POOL_SEEDS,
     RESERVED_POST_FETCH_KEYS,
     TOOL_EDGE_SEEDS,
     ArgumentBinding,
 )
-from rest_framework_mcp.registry.types.query_param import QueryParam
-from rest_framework_mcp.registry.types.selector_tool_binding import SelectorToolBinding
-from rest_framework_mcp.registry.types.tool_binding import ToolBinding
-from rest_framework_mcp.registry.types.url_kwarg import UrlKwarg
-from rest_framework_mcp.schema.input_schema import build_input_schema
-from rest_framework_mcp.schema.service_tool_schema import (
+from django_spec_mcp.registry.types.query_param import QueryParam
+from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
+from django_spec_mcp.registry.types.tool_binding import ToolBinding
+from django_spec_mcp.registry.types.url_kwarg import UrlKwarg
+from django_spec_mcp.schema.input_schema import build_input_schema
+from django_spec_mcp.schema.service_tool_schema import (
     build_service_tool_input_schema,
     declared_service_input,
 )
-from rest_framework_mcp.schema.utils import (
+from django_spec_mcp.schema.utils import (
     caller_fields,
     declares_default,
     laid_back_inputs,

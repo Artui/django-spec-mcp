@@ -5,7 +5,7 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
-from rest_framework_mcp.output.encode_json import encode_json
+from django_spec_mcp.output.encode_json import encode_json
 
 
 def test_encode_json_handles_decimal_uuid_datetime() -> None:

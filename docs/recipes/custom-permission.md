@@ -13,7 +13,7 @@ tenant matching a configured value:
 ```python
 from django.http import HttpRequest
 
-from rest_framework_mcp import TokenInfo
+from django_spec_mcp import TokenInfo
 
 
 class TenantMatches:

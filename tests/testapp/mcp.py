@@ -4,10 +4,10 @@ from django_service_specs import SelectorKind
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import MCPServer
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.config.types.mcp_config import MCPConfig
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.config.types.mcp_config import MCPConfig
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.testapp.serializers import InvoiceInputSerializer, InvoiceOutputSerializer
 from tests.testapp.services import create_invoice, get_invoice, list_invoices
 
@@ -21,7 +21,7 @@ def build_server(*, config: MCPConfig | None = None) -> MCPServer:
     ``config`` overrides the scalars. Since they are resolved once in
     ``MCPServer.__init__``, a test that needs non-default scalars must build its
     own server (and mount it via ``urlconf_for``) rather than mutating
-    ``settings.REST_FRAMEWORK_MCP`` around an already-mounted one.
+    ``settings.SPEC_MCP`` around an already-mounted one.
     """
     server = MCPServer(
         name="testapp",

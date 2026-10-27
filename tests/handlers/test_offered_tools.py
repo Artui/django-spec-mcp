@@ -25,18 +25,18 @@ from django_service_specs import Affordance, SelectorKind, base_pool
 from rest_framework.request import Request
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import ChainStep, MCPServer
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.config.build_mcp_config import build_mcp_config
-from rest_framework_mcp.handlers.handle_tools_call import handle_tools_call
-from rest_framework_mcp.handlers.handle_tools_call_async import handle_tools_call_async
-from rest_framework_mcp.handlers.handle_tools_list import handle_tools_list
-from rest_framework_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp import ChainStep, MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.config.build_mcp_config import build_mcp_config
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
+from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
+from django_spec_mcp.handlers.types.context import MCPCallContext
 from tests.testapp.affordances import ARCHIVE_ORDER, order_selector_spec
 from tests.utils import tool_error
 
-_POOL = "rest_framework_mcp.handlers.offered_tools.base_pool"
+_POOL = "django_spec_mcp.handlers.offered_tools.base_pool"
 """Where the filter looks ``base_pool`` up, so a spy there sees every pool it builds."""
 
 _CLOSED = Affordance(code="books_closed", reason="The books are closed.", when=lambda: False)

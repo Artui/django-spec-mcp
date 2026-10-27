@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 
-from rest_framework_mcp.registry.types.resource_binding import ResourceBinding
+from django_spec_mcp.registry.types.resource_binding import ResourceBinding
 
 _TEMPLATE_VAR = re.compile(r"\{([^}]+)\}")
 
@@ -25,7 +25,7 @@ def _template_to_pattern(uri_template: str) -> re.Pattern[str]:
 
 class ResourceRegistry:
     """URI or URI-template to
-    [`ResourceBinding`][rest_framework_mcp.registry.types.resource_binding.ResourceBinding]
+    [`ResourceBinding`][django_spec_mcp.registry.types.resource_binding.ResourceBinding]
     lookup.
 
     Concrete resources are matched by exact URI, templates by a regex derived

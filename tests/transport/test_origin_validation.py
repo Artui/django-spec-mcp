@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from rest_framework_mcp.transport.origin_validation import is_origin_allowed
+from django_spec_mcp.transport.origin_validation import is_origin_allowed
 
 
 def test_missing_origin_is_allowed() -> None:

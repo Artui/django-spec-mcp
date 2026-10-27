@@ -125,7 +125,7 @@ def assert_tool_result_conforms(tool: Mapping[str, Any], result: Mapping[str, An
         ImportError: If ``jsonschema`` is not installed.
 
     ```python
-    from rest_framework_mcp.testing import assert_tool_result_conforms
+    from django_spec_mcp.testing import assert_tool_result_conforms
 
     page = server.list_tools(user=user)
     tool = next(entry for entry in page["tools"] if entry["name"] == "invoices.list")
@@ -155,7 +155,7 @@ def assert_tool_result_conforms(tool: Mapping[str, Any], result: Mapping[str, An
             "assert_tool_result_conforms needs `jsonschema` to check a result "
             "against the schema the server advertised. It is a test-only "
             "dependency and deliberately not a runtime one -- install it with "
-            "`pip install djangorestframework-mcp-server[test]`."
+            "`pip install django-spec-mcp[test]`."
         ) from exc
 
     name: Any = tool.get("name", "<unnamed>")
@@ -165,7 +165,7 @@ def assert_tool_result_conforms(tool: Mapping[str, Any], result: Mapping[str, An
             f"Tool {name!r} advertises no 'outputSchema', so there is nothing to "
             "conform to and this assertion would pass for any result at all. "
             "Either the binding sets include_output_schema=False (or "
-            "REST_FRAMEWORK_MCP['INCLUDE_OUTPUT_SCHEMA'] is False), or it has no "
+            "SPEC_MCP['INCLUDE_OUTPUT_SCHEMA'] is False), or it has no "
             "output serializer for a schema to be derived from."
         )
     if "structuredContent" not in result:

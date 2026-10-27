@@ -1,5 +1,5 @@
 """Internal helpers shared by
-[`MCPServer`][rest_framework_mcp.server.mcp_server.MCPServer]'s registration methods."""
+[`MCPServer`][django_spec_mcp.server.mcp_server.MCPServer]'s registration methods."""
 
 from __future__ import annotations
 
@@ -9,9 +9,9 @@ from typing import Any
 
 from django.core.exceptions import ImproperlyConfigured
 
-from rest_framework_mcp.constants import UI_META_KEY, UI_RESOURCE_MIME_TYPE
-from rest_framework_mcp.registry.resource_registry import ResourceRegistry
-from rest_framework_mcp.registry.types.ui_tool_meta import UIToolMeta
+from django_spec_mcp.constants import UI_META_KEY, UI_RESOURCE_MIME_TYPE
+from django_spec_mcp.registry.resource_registry import ResourceRegistry
+from django_spec_mcp.registry.types.ui_tool_meta import UIToolMeta
 
 
 class UnguardedToolWarning(UserWarning):
@@ -62,11 +62,11 @@ def check_tool_permissions_declared(
         # raised.
         raise ImproperlyConfigured(
             f"{problem} To downgrade this to a warning while you migrate, set "
-            "REST_FRAMEWORK_MCP['REQUIRE_TOOL_PERMISSIONS'] = False."
+            "SPEC_MCP['REQUIRE_TOOL_PERMISSIONS'] = False."
         )
     warnings.warn(
         f"{problem} This is a warning because "
-        "REST_FRAMEWORK_MCP['REQUIRE_TOOL_PERMISSIONS'] is False; it is an "
+        "SPEC_MCP['REQUIRE_TOOL_PERMISSIONS'] is False; it is an "
         "error by default since 0.25.0.",
         UnguardedToolWarning,
         stacklevel=3,
@@ -96,7 +96,7 @@ def check_tool_description_present(name: str, description: str | None, *, requir
         f"MCP tool {name!r} is registered with no description. `tools/list` will "
         "advertise it with an empty description, which is the only thing a model "
         "reads to decide whether and how to call it. Pass description='...' at "
-        "registration, or set REST_FRAMEWORK_MCP['REQUIRE_TOOL_DESCRIPTIONS'] = True "
+        "registration, or set SPEC_MCP['REQUIRE_TOOL_DESCRIPTIONS'] = True "
         "to make this an error."
     )
     if require:
@@ -129,10 +129,10 @@ def check_list_pagination_declared(name: str, *, paginate: bool, require: bool) 
         "call returns every row the selector resolves to. Unlike a paginated tool "
         "there is no honest way to clamp that at dispatch — the result carries no "
         "metadata that would tell the model rows were dropped — so an oversized "
-        "result can only fail the call (see REST_FRAMEWORK_MCP['MAX_PAGE_SIZE'], "
+        "result can only fail the call (see SPEC_MCP['MAX_PAGE_SIZE'], "
         "which bounds the row count, and ['MAX_RESULT_BYTES'], which bounds the "
         "encoded payload). "
-        "Pass paginate=True, or set REST_FRAMEWORK_MCP['REQUIRE_LIST_PAGINATION'] = "
+        "Pass paginate=True, or set SPEC_MCP['REQUIRE_LIST_PAGINATION'] = "
         "True to make this an error."
     )
     if require:
@@ -196,7 +196,7 @@ def build_ui_tool_meta(
                 ""
                 if include_structured_content is not None
                 else " (it is off by default for this server — see "
-                "REST_FRAMEWORK_MCP['INCLUDE_STRUCTURED_CONTENT'])"
+                "SPEC_MCP['INCLUDE_STRUCTURED_CONTENT'])"
             )
             + ", or drop the ui= link."
         )
@@ -211,7 +211,7 @@ def check_permissions_shape(label: str, permissions: Any) -> tuple[Any, ...]:
     five one-character entries. The tuple is non-empty, so
     ``check_tool_permissions_declared`` sees a guarded tool and stays quiet; at
     dispatch, ``check_permissions`` skips every entry that is not an
-    [`MCPPermission`][rest_framework_mcp.auth.permissions.types.mcp_permission.MCPPermission],
+    [`MCPPermission`][django_spec_mcp.auth.permissions.types.mcp_permission.MCPPermission],
     and the call is **allowed**. A bare string is the likely way in, being what the
     permission classes themselves accept, so it gets its own message.
 

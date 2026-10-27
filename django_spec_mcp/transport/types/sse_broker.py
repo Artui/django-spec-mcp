@@ -13,9 +13,9 @@ class SSEBroker(Protocol):
     ``unsubscribe`` when the streaming generator unwinds.
 
     Two implementations ship:
-    [`InMemorySSEBroker`][rest_framework_mcp.transport.in_memory_sse_broker.InMemorySSEBroker]
+    [`InMemorySSEBroker`][django_spec_mcp.transport.in_memory_sse_broker.InMemorySSEBroker]
     (single-process, no infra) and
-    [`RedisSSEBroker`][rest_framework_mcp.transport.redis_sse_broker.RedisSSEBroker]
+    [`RedisSSEBroker`][django_spec_mcp.transport.redis_sse_broker.RedisSSEBroker]
     (the ``[redis]`` extra), required for multi-worker deployments where any worker can
     serve the streaming GET.
 

@@ -20,12 +20,12 @@ from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 from typing_extensions import NotRequired, TypedDict, Unpack
 
-from rest_framework_mcp import QueryParam, UrlKwarg
-from rest_framework_mcp.registry.types.selector_tool_binding import SelectorToolBinding
-from rest_framework_mcp.registry.types.tool_binding import ToolBinding
-from rest_framework_mcp.schema.agent_conventions import PAGED_QUERY_PARAM_SCOPE
-from rest_framework_mcp.schema.selector_tool_schema import build_selector_tool_input_schema
-from rest_framework_mcp.schema.service_tool_schema import build_service_tool_input_schema
+from django_spec_mcp import QueryParam, UrlKwarg
+from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
+from django_spec_mcp.registry.types.tool_binding import ToolBinding
+from django_spec_mcp.schema.agent_conventions import PAGED_QUERY_PARAM_SCOPE
+from django_spec_mcp.schema.selector_tool_schema import build_selector_tool_input_schema
+from django_spec_mcp.schema.service_tool_schema import build_service_tool_input_schema
 
 
 def _binding(selector: Any, **kwargs: Any) -> SelectorToolBinding:

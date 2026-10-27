@@ -16,7 +16,7 @@ from typing import Any
 
 from django.http import HttpRequest, HttpResponse
 
-from rest_framework_mcp.contrib.oauth.adapters.types.auth_user_adapter import AuthUserAdapter
+from django_spec_mcp.contrib.oauth.adapters.types.auth_user_adapter import AuthUserAdapter
 
 
 def build_authorize_passthrough_view(adapter: AuthUserAdapter | None) -> Any:
@@ -32,7 +32,7 @@ def build_authorize_passthrough_view(adapter: AuthUserAdapter | None) -> Any:
     except ImportError as exc:  # pragma: no cover - exercised by smoke job w/o DOT
         raise ImportError(
             "build_authorize_passthrough_view requires `django-oauth-toolkit`. "
-            'Install it via `pip install "djangorestframework-mcp-server[oauth]"`.'
+            'Install it via `pip install "django-spec-mcp[oauth]"`.'
         ) from exc
 
     class _AuthorizePassthroughView(AuthorizationView):

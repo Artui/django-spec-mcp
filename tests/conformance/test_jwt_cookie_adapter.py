@@ -22,7 +22,7 @@ from django.contrib.auth import get_user_model
 from django.http import HttpRequest, HttpResponse
 from django.test import override_settings
 
-from rest_framework_mcp.contrib.oauth.adapters.simplejwt_cookie import SimpleJWTCookieAdapter
+from django_spec_mcp.contrib.oauth.adapters.simplejwt_cookie import SimpleJWTCookieAdapter
 from tests.conformance.urls import conformance_urlconf
 
 

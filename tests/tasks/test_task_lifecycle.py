@@ -13,15 +13,15 @@ from typing import Any
 import pytest
 from django.contrib.auth.models import AnonymousUser
 
-from rest_framework_mcp import MCPServer
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.constants import TaskStatus
-from rest_framework_mcp.protocol.types.task import Task
-from rest_framework_mcp.tasks.build_worker_token import build_worker_token
-from rest_framework_mcp.tasks.create_task import create_task
-from rest_framework_mcp.tasks.in_memory_task_store import InMemoryTaskStore
-from rest_framework_mcp.tasks.transition_task import transition_task
-from rest_framework_mcp.tasks.types.task_record import TaskRecord
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.constants import TaskStatus
+from django_spec_mcp.protocol.types.task import Task
+from django_spec_mcp.tasks.build_worker_token import build_worker_token
+from django_spec_mcp.tasks.create_task import create_task
+from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
+from django_spec_mcp.tasks.transition_task import transition_task
+from django_spec_mcp.tasks.types.task_record import TaskRecord
 from tests.tasks.conftest import BrokenExecutor, RecordingExecutor, slow_service
 
 
@@ -260,7 +260,7 @@ def test_run_task_on_a_server_with_no_store_refuses_loudly() -> None:
     client would poll a handle forever."""
     from django.core.exceptions import ImproperlyConfigured
 
-    from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+    from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 
     bare = MCPServer(name="bare", auth_backend=AllowAnyBackend())
     with pytest.raises(ImproperlyConfigured, match="no task store"):

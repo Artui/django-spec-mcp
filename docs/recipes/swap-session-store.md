@@ -12,8 +12,8 @@ infra. Two situations call for swapping it:
 ## In tests: per-instance in-memory store
 
 ```python
-from rest_framework_mcp import MCPServer
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp import MCPServer
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 
 server = MCPServer(name="test", session_store=InMemorySessionStore())
 ```
@@ -31,7 +31,7 @@ the transport compares it on every POST / GET / DELETE and treats a
 wrong-principal presentation exactly like an unknown session (404):
 
 ```python
-from rest_framework_mcp.transport.types.session_store import SessionStore
+from django_spec_mcp.transport.types.session_store import SessionStore
 
 
 class RedisSessionStore:

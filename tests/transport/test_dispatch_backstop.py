@@ -35,15 +35,15 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.throttling import BaseThrottle
 from rest_framework_services.types.selector_spec import SelectorSpec
 
-from rest_framework_mcp import MCPServer, ScopeRequired
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.subscriptions.in_memory_subscription_broker import (
+from django_spec_mcp import MCPServer, ScopeRequired
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.subscriptions.in_memory_subscription_broker import (
     InMemorySubscriptionBroker,
 )
-from rest_framework_mcp.transport.async_streamable_http_viewset import AsyncStreamableHttpViewSet
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
-from rest_framework_mcp.transport.streamable_http_viewset import StreamableHttpViewSet
+from django_spec_mcp.transport.async_streamable_http_viewset import AsyncStreamableHttpViewSet
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp.transport.streamable_http_viewset import StreamableHttpViewSet
 from tests.testapp.models import Invoice
 from tests.testapp.urlconf_for import urlconf_for
 from tests.utils import tool_error
@@ -59,10 +59,10 @@ RESTQL_TEXT = "`items` field is not found"
 SECRET = "could not connect to db-primary.internal:5432"
 
 _VIEWSET_LOGGERS: dict[bool, str] = {
-    False: "rest_framework_mcp.transport.streamable_http_viewset",
-    True: "rest_framework_mcp.transport.async_streamable_http_viewset",
+    False: "django_spec_mcp.transport.streamable_http_viewset",
+    True: "django_spec_mcp.transport.async_streamable_http_viewset",
 }
-_STREAM_LOGGER = "rest_framework_mcp.transport.response_stream"
+_STREAM_LOGGER = "django_spec_mcp.transport.response_stream"
 
 
 # ----- a server whose tools fail in the ways a dispatch can -----
@@ -339,7 +339,7 @@ async def test_a_selectors_http404_is_a_not_found_result_not_a_server_fault(
     now a ``200`` whose tool result is the kernel's ``not_found``, and nothing is
     logged, because nothing went wrong.
     """
-    caplog.set_level(logging.ERROR, logger="rest_framework_mcp")
+    caplog.set_level(logging.ERROR, logger="django_spec_mcp")
     response = await _post(
         is_async, _server(), "tools/call", {"name": tool, "arguments": {}}, modern=modern
     )
@@ -365,7 +365,7 @@ async def test_an_escaping_api_exception_is_a_json_rpc_internal_error(
     Before the backstop DRF rendered it as a ``400`` with a bare list for a
     body, which a client cannot parse as JSON-RPC or match to its request.
     """
-    caplog.set_level(logging.ERROR, logger="rest_framework_mcp")
+    caplog.set_level(logging.ERROR, logger="django_spec_mcp")
     response = await _post(
         is_async, _server(), "tools/call", {"name": "boom.render", "arguments": {}}, modern=modern
     )
@@ -380,7 +380,7 @@ async def test_a_list_selectors_does_not_exist_stays_a_server_fault(
 ) -> None:
     """Only ``Http404`` is a LIST's "not found"; ``DoesNotExist`` escaping a LIST
     selector is a bug in the selector, so it is still a ``-32603`` and logged."""
-    caplog.set_level(logging.ERROR, logger="rest_framework_mcp")
+    caplog.set_level(logging.ERROR, logger="django_spec_mcp")
     response = await _post(
         is_async,
         _server(),
@@ -397,7 +397,7 @@ async def test_any_other_escaping_exception_is_a_json_rpc_internal_error(
     is_async: bool, modern: bool, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Before the backstop this was Django's ``500`` page, HTML and all."""
-    caplog.set_level(logging.ERROR, logger="rest_framework_mcp")
+    caplog.set_level(logging.ERROR, logger="django_spec_mcp")
     response = await _post(
         is_async, _server(), "tools/call", {"name": "boom.runtime", "arguments": {}}, modern=modern
     )
@@ -411,7 +411,7 @@ async def test_a_permission_class_that_raises_is_a_json_rpc_internal_error(
     is_async: bool, modern: bool, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Consumer code raising inside the dispatch's own permission check."""
-    caplog.set_level(logging.ERROR, logger="rest_framework_mcp")
+    caplog.set_level(logging.ERROR, logger="django_spec_mcp")
     response = await _post(
         is_async,
         _server(),
@@ -432,7 +432,7 @@ async def test_a_permission_preflight_that_raises_before_a_stream_is_a_json_rpc_
     It runs before any status is committed, so the backstop can still answer
     with a ``500`` and a JSON body rather than opening a stream.
     """
-    caplog.set_level(logging.ERROR, logger="rest_framework_mcp")
+    caplog.set_level(logging.ERROR, logger="django_spec_mcp")
     response = await _post_async(
         _server(),
         "tools/call",
@@ -449,7 +449,7 @@ async def test_a_subscription_grant_that_raises_is_a_json_rpc_internal_error(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """``subscriptions/listen`` runs resource permission classes to build its grant."""
-    caplog.set_level(logging.ERROR, logger="rest_framework_mcp")
+    caplog.set_level(logging.ERROR, logger="django_spec_mcp")
     response = await _post_async(
         _server(),
         "subscriptions/listen",
@@ -475,7 +475,7 @@ async def test_a_streamed_dispatch_that_raises_ends_with_a_generic_error_frame(
     It used to read ``ValidationError: [ErrorDetail(...)]``: the exception's
     own text, which is written for an operator rather than a client.
     """
-    caplog.set_level(logging.ERROR, logger="rest_framework_mcp")
+    caplog.set_level(logging.ERROR, logger="django_spec_mcp")
     response = await _post_async(
         _server(), "tools/call", {"name": tool, "arguments": {}}, modern=modern, progress=True
     )
@@ -505,7 +505,7 @@ async def test_a_notification_is_never_dispatched_so_nothing_can_raise(
     comes back with no body and nothing is logged, even when the method
     named would raise if it were dispatched.
     """
-    caplog.set_level(logging.ERROR, logger="rest_framework_mcp")
+    caplog.set_level(logging.ERROR, logger="django_spec_mcp")
     response = await _post(
         is_async,
         _server(),
@@ -575,7 +575,7 @@ async def test_a_raised_permission_denial_is_a_denial_not_a_fault(
     DRF answered that with a ``403`` before the backstop existed; a catch-all
     ``-32603`` would report a refusal as a ``500``.
     """
-    caplog.set_level(logging.ERROR, logger="rest_framework_mcp")
+    caplog.set_level(logging.ERROR, logger="django_spec_mcp")
     response = await _post(
         is_async, _server(), "tools/call", {"name": tool, "arguments": {}}, modern=modern
     )
@@ -588,7 +588,7 @@ async def test_a_raised_denial_in_the_stream_preflight_is_a_403(
     modern: bool, tool: str, caplog: pytest.LogCaptureFixture
 ) -> None:
     """The pre-flight runs the permission class before any stream opens."""
-    caplog.set_level(logging.ERROR, logger="rest_framework_mcp")
+    caplog.set_level(logging.ERROR, logger="django_spec_mcp")
     response = await _post_async(
         _server(),
         "tools/call",

@@ -5,7 +5,7 @@ import asyncio
 import pytest
 from fakeredis import FakeAsyncRedis, FakeServer
 
-from rest_framework_mcp.transport.redis_sse_broker import RedisSSEBroker
+from django_spec_mcp.transport.redis_sse_broker import RedisSSEBroker
 
 
 def _client() -> FakeAsyncRedis:
@@ -50,7 +50,7 @@ async def test_publish_reaches_subscribed_queue() -> None:
     broker = RedisSSEBroker(client)
     queue = broker.subscribe("s1")
     try:
-        await _wait_for_subscriber(client, "drf-mcp:sse:s1")
+        await _wait_for_subscriber(client, "spec-mcp:sse:s1")
         delivered = await broker.publish("s1", {"hi": True})
         assert delivered is True
         payload = await asyncio.wait_for(queue.get(), timeout=1.0)
@@ -118,7 +118,7 @@ async def test_custom_channel_prefix_isolates_brokers() -> None:
 
 async def test_redis_broker_satisfies_protocol() -> None:
     """``RedisSSEBroker`` is structurally a :class:`SSEBroker`."""
-    from rest_framework_mcp.transport.types.sse_broker import SSEBroker
+    from django_spec_mcp.transport.types.sse_broker import SSEBroker
 
     client = _client()
     broker = RedisSSEBroker(client)
@@ -128,10 +128,10 @@ async def test_redis_broker_satisfies_protocol() -> None:
 
 async def test_import_error_when_redis_absent(monkeypatch) -> None:
     """The constructor surfaces a clear error when ``redis`` isn't installed."""
-    import rest_framework_mcp.transport.redis_sse_broker as mod
+    import django_spec_mcp.transport.redis_sse_broker as mod
 
     monkeypatch.setattr(mod, "AsyncRedis", None)
-    with pytest.raises(ImportError, match="djangorestframework-mcp-server\\[redis\\]"):
+    with pytest.raises(ImportError, match="django-spec-mcp\\[redis\\]"):
         RedisSSEBroker(client=object())
 
 
@@ -143,7 +143,7 @@ async def test_a_stalled_reader_cannot_grow_the_listener_queue_without_limit() -
     client = _client()
     broker = RedisSSEBroker(client, max_queued_events=1)
     queue = broker.subscribe("s1")
-    await _wait_for_subscriber(client, "drf-mcp:sse:s1")
+    await _wait_for_subscriber(client, "spec-mcp:sse:s1")
 
     for n in (1, 2, 3):
         await broker.publish("s1", {"n": n})

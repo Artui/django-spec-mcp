@@ -22,8 +22,8 @@ from django_service_specs import FieldMarking, SelectorKind
 from rest_framework.permissions import AllowAny
 from rest_framework_services import QueryParam, SelectorSpec, ServiceSpec
 
-from rest_framework_mcp import ChainStep, MCPServer
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp import ChainStep, MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 
 _NESTED_PRECONDITIONS = "output_selector_spec declares preconditions"
 

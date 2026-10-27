@@ -19,8 +19,8 @@ from django_service_specs import SelectorKind
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import ChainStep, MCPServer
-from rest_framework_mcp.testing import assert_tool_result_conforms
+from django_spec_mcp import ChainStep, MCPServer
+from django_spec_mcp.testing import assert_tool_result_conforms
 from tests.testapp.affordances import (
     ARCHIVE_ORDER,
     CANCEL_ORDER,

@@ -24,26 +24,26 @@ to each item in `items`, never to the envelope — and its description in the
 `inputSchema` says so. See
 [Query params on a paged tool](../concepts.md#query-param-per-item).
 
-::: rest_framework_mcp.registry.types.tool_binding.ToolBinding
-::: rest_framework_mcp.registry.types.selector_tool_binding.SelectorToolBinding
+::: django_spec_mcp.registry.types.tool_binding.ToolBinding
+::: django_spec_mcp.registry.types.selector_tool_binding.SelectorToolBinding
 ::: rest_framework_services.types.url_kwarg.UrlKwarg
 ::: rest_framework_services.types.query_param.QueryParam
 
 A `UrlKwarg` or `QueryParam` may not take a name the DRF edge fills on every
 call; registration refuses one that does.
 
-::: rest_framework_mcp.constants.TOOL_EDGE_SEEDS
-::: rest_framework_mcp.registry.tool_registry.ToolRegistry
-::: rest_framework_mcp.registry.types.resource_binding.ResourceBinding
-::: rest_framework_mcp.registry.resource_registry.ResourceRegistry
+::: django_spec_mcp.constants.TOOL_EDGE_SEEDS
+::: django_spec_mcp.registry.tool_registry.ToolRegistry
+::: django_spec_mcp.registry.types.resource_binding.ResourceBinding
+::: django_spec_mcp.registry.resource_registry.ResourceRegistry
 
 A URI-template variable may not take a name `resources/read` seeds itself;
 registration refuses one that does.
 
-::: rest_framework_mcp.constants.RESOURCE_EDGE_SEEDS
-::: rest_framework_mcp.constants.ResourceEncoding
-::: rest_framework_mcp.registry.types.prompt_binding.PromptBinding
-::: rest_framework_mcp.registry.prompt_registry.PromptRegistry
+::: django_spec_mcp.constants.RESOURCE_EDGE_SEEDS
+::: django_spec_mcp.constants.ResourceEncoding
+::: django_spec_mcp.registry.types.prompt_binding.PromptBinding
+::: django_spec_mcp.registry.prompt_registry.PromptRegistry
 
 ## Interactive views (MCP Apps)
 
@@ -56,11 +56,11 @@ tool's result inside the view. See
 host/server split, the three refused-link cases, and the keep-tenant-data-out
 rule.
 
-::: rest_framework_mcp.registry.types.ui_resource_meta.UIResourceMeta
-::: rest_framework_mcp.registry.types.ui_csp.UICsp
-::: rest_framework_mcp.constants.UIPermission
-::: rest_framework_mcp.registry.types.ui_tool_meta.UIToolMeta
-::: rest_framework_mcp.constants.UIVisibility
+::: django_spec_mcp.registry.types.ui_resource_meta.UIResourceMeta
+::: django_spec_mcp.registry.types.ui_csp.UICsp
+::: django_spec_mcp.constants.UIPermission
+::: django_spec_mcp.registry.types.ui_tool_meta.UIToolMeta
+::: django_spec_mcp.constants.UIVisibility
 
 ### The view document
 
@@ -71,7 +71,7 @@ assembles the markup some other way and still wants the packaged shell and the
 [Writing the bridge yourself](../concepts.md#writing-the-bridge-yourself)
 describes for anyone declining it.
 
-::: rest_framework_mcp.ui.build_app_document.build_app_document
+::: django_spec_mcp.ui.build_app_document.build_app_document
 
 ## Bulk registration
 
@@ -82,16 +82,16 @@ instances plus per-kind `ServiceDefaults` / `SelectorDefaults` that fill
 in fields each definition leaves as `None`. Returns the resulting
 bindings in input order.
 
-::: rest_framework_mcp.registry.register_tools.register_tools
-::: rest_framework_mcp.registry.types.tool_definition.ToolDefinition
-::: rest_framework_mcp.registry.types.service_defaults.ServiceDefaults
-::: rest_framework_mcp.registry.types.selector_defaults.SelectorDefaults
-::: rest_framework_mcp.constants.ToolKind
+::: django_spec_mcp.registry.register_tools.register_tools
+::: django_spec_mcp.registry.types.tool_definition.ToolDefinition
+::: django_spec_mcp.registry.types.service_defaults.ServiceDefaults
+::: django_spec_mcp.registry.types.selector_defaults.SelectorDefaults
+::: django_spec_mcp.constants.ToolKind
 
 `ArgumentBinding` is re-exported from `djangorestframework-services`, whose
 `dispatch_spec` owns it, and `UnknownArguments` from `django-service-specs`,
 the kernel that drf-services dispatches through and that owns it; import both
-from `rest_framework_mcp.constants`. `ArgumentBinding.SPREAD_CALLER_WINS` and
+from `django_spec_mcp.constants`. `ArgumentBinding.SPREAD_CALLER_WINS` and
 `UnknownArguments.PASSTHROUGH` are retired: registering a tool with either,
 directly, through a `ToolDefinition` or through `ServiceDefaults` /
 `SelectorDefaults`, raises `ImproperlyConfigured` naming the tool.
@@ -107,9 +107,9 @@ a `ChainContext`, which exposes the validated tool arguments as `ctx.args` and
 any prior step's output as `ctx[alias]`. See
 [Chain specs into one tool](../recipes/chain-tools.md).
 
-::: rest_framework_mcp.registry.types.chain_step.ChainStep
-::: rest_framework_mcp.registry.types.chain_context.ChainContext
-::: rest_framework_mcp.registry.types.chain_tool_binding.ChainToolBinding
+::: django_spec_mcp.registry.types.chain_step.ChainStep
+::: django_spec_mcp.registry.types.chain_context.ChainContext
+::: django_spec_mcp.registry.types.chain_tool_binding.ChainToolBinding
 
 ## Selector-tool schema
 
@@ -123,7 +123,7 @@ Unpack[TypedDict]`, plus the FilterSet fields) is reflected via
 pagination knobs and any explicit `input_serializer` / `UrlKwarg` layered on
 top, so the shape is described the same way across transports.
 
-::: rest_framework_mcp.schema.selector_tool_schema.build_selector_tool_input_schema
+::: django_spec_mcp.schema.selector_tool_schema.build_selector_tool_input_schema
 
 ## Output schema
 
@@ -133,22 +133,22 @@ present nothing (each binding answers it as `can_present_nothing`): the root
 stays an object schema and admits the `{}` such a call is served as
 ([Concepts](../concepts.md#dispatch-flow)).
 
-::: rest_framework_mcp.schema.output_schema.build_output_schema
+::: django_spec_mcp.schema.output_schema.build_output_schema
 
 ## Session stores
 
-::: rest_framework_mcp.transport.types.session_store.SessionStore
-::: rest_framework_mcp.transport.in_memory_session_store.InMemorySessionStore
-::: rest_framework_mcp.transport.django_cache_session_store.DjangoCacheSessionStore
+::: django_spec_mcp.transport.types.session_store.SessionStore
+::: django_spec_mcp.transport.in_memory_session_store.InMemorySessionStore
+::: django_spec_mcp.transport.django_cache_session_store.DjangoCacheSessionStore
 
 ## Server-initiated push
 
-::: rest_framework_mcp.transport.types.sse_broker.SSEBroker
-::: rest_framework_mcp.transport.in_memory_sse_broker.InMemorySSEBroker
-::: rest_framework_mcp.transport.redis_sse_broker.RedisSSEBroker
+::: django_spec_mcp.transport.types.sse_broker.SSEBroker
+::: django_spec_mcp.transport.in_memory_sse_broker.InMemorySSEBroker
+::: django_spec_mcp.transport.redis_sse_broker.RedisSSEBroker
 
 ## SSE replay (resume)
 
-::: rest_framework_mcp.transport.types.sse_replay_buffer.SSEReplayBuffer
-::: rest_framework_mcp.transport.in_memory_sse_replay_buffer.InMemorySSEReplayBuffer
-::: rest_framework_mcp.transport.redis_sse_replay_buffer.RedisSSEReplayBuffer
+::: django_spec_mcp.transport.types.sse_replay_buffer.SSEReplayBuffer
+::: django_spec_mcp.transport.in_memory_sse_replay_buffer.InMemorySSEReplayBuffer
+::: django_spec_mcp.transport.redis_sse_replay_buffer.RedisSSEReplayBuffer

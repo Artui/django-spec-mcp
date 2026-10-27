@@ -17,12 +17,12 @@ import pytest
 from django.core.cache import cache
 from django.core.cache.backends.base import CacheKeyWarning
 
-from rest_framework_mcp.constants import TaskStatus
-from rest_framework_mcp.protocol.types.task import Task
-from rest_framework_mcp.tasks.django_cache_task_store import DjangoCacheTaskStore
-from rest_framework_mcp.tasks.in_memory_task_store import InMemoryTaskStore
-from rest_framework_mcp.tasks.types.task_record import TaskRecord
-from rest_framework_mcp.tasks.utils import new_task_id
+from django_spec_mcp.constants import TaskStatus
+from django_spec_mcp.protocol.types.task import Task
+from django_spec_mcp.tasks.django_cache_task_store import DjangoCacheTaskStore
+from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
+from django_spec_mcp.tasks.types.task_record import TaskRecord
+from django_spec_mcp.tasks.utils import new_task_id
 
 
 def _record(task_id: str = "t1", **task_kwargs: Any) -> TaskRecord:
@@ -224,7 +224,7 @@ def test_a_store_built_without_a_namespace_works() -> None:
 # The un-namespaced key format, which the store documents: a namespace is
 # hashed into the prefix, and without one the key is the id straight after it.
 def _key(task_id: str) -> str:
-    return f"drf-mcp:task:{task_id}"
+    return f"spec-mcp:task:{task_id}"
 
 
 def _envelope(task_id: str) -> Any:

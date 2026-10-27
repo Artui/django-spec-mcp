@@ -5,7 +5,7 @@ from typing import Any
 
 from django_service_specs import UNSET
 
-from rest_framework_mcp.protocol.types.tool_content_block import ToolContentBlock
+from django_spec_mcp.protocol.types.tool_content_block import ToolContentBlock
 
 
 @dataclass(frozen=True)

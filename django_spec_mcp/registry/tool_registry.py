@@ -3,9 +3,9 @@ from __future__ import annotations
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import DEFAULT_POOL_SEEDS, PoolSeeds, check_server_arguments
 
-from rest_framework_mcp.registry.types.chain_tool_binding import ChainToolBinding
-from rest_framework_mcp.registry.types.selector_tool_binding import SelectorToolBinding
-from rest_framework_mcp.registry.types.tool_binding import ToolBinding
+from django_spec_mcp.registry.types.chain_tool_binding import ChainToolBinding
+from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
+from django_spec_mcp.registry.types.tool_binding import ToolBinding
 
 # Deliberately a union rather than a shared base class, so each binding stays a
 # frozen dataclass with its own structure. ``tools/list`` and ``tools/call``

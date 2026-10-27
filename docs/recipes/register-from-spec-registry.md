@@ -47,7 +47,7 @@ canonical name, its tags.
 
 ```python
 # orders/mcp.py
-from rest_framework_mcp import MCPServer
+from django_spec_mcp import MCPServer
 
 from orders.registry import registry
 
@@ -258,7 +258,7 @@ registers, as a spec with no guards, and `register_specs` calls the same
 per-tool methods you would have called, so the permission-declaration guard
 applies to it. A spec with empty `permission_classes` and no `permissions`
 override is **refused** with `ImproperlyConfigured` — or, under
-`REST_FRAMEWORK_MCP["REQUIRE_TOOL_PERMISSIONS"] = False`, downgraded to an
+`SPEC_MCP["REQUIRE_TOOL_PERMISSIONS"] = False`, downgraded to an
 `UnguardedToolWarning`.
 
 Bulk registration is a convenience, not a way to register a surface you

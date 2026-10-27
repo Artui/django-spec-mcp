@@ -9,8 +9,8 @@ from rest_framework_services import enforce_permissions
 from rest_framework_services.types.offline_context import OfflineContext
 from rest_framework_services.types.selector_spec import SelectorSpec
 
-from rest_framework_mcp.auth.permissions.drf_permission_adapter import DRFPermissionAdapter
-from rest_framework_mcp.registry.types.resource_binding import ResourceBinding
+from django_spec_mcp.auth.permissions.drf_permission_adapter import DRFPermissionAdapter
+from django_spec_mcp.registry.types.resource_binding import ResourceBinding
 
 
 def guard_resource_object(binding: ResourceBinding, value: Any, context: OfflineContext) -> None:
@@ -34,7 +34,7 @@ def guard_resource_object(binding: ResourceBinding, value: Any, context: Offline
 
     The classes come back off the binding's wrapped permission tuple. A
     ``ResourceBinding`` keeps the wrapped
-    [`DRFPermissionAdapter`][rest_framework_mcp.auth.permissions.drf_permission_adapter.DRFPermissionAdapter]s
+    [`DRFPermissionAdapter`][django_spec_mcp.auth.permissions.drf_permission_adapter.DRFPermissionAdapter]s
     rather than the spec, so unwrapping them is how the author's contract is
     recovered; a per-registration ``MCPPermission`` is left alone, having no
     object-level half to run. Raises ``PermissionDenied``; the caller maps it.

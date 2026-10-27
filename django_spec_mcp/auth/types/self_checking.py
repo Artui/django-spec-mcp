@@ -8,7 +8,7 @@ class SelfChecking(Protocol):
     """An auth backend that can say whether it is able to serve requests.
 
     Deliberately a **second** protocol rather than a method on
-    :class:`~rest_framework_mcp.auth.types.auth_backend.MCPAuthBackend`. Adding
+    :class:`~django_spec_mcp.auth.types.auth_backend.MCPAuthBackend`. Adding
     it there would make it required, and a backend already written against the
     four-method protocol would stop satisfying it -- so the one thing this
     exists to prevent, a transport mounted with a backend that cannot run,

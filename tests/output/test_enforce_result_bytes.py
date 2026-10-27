@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from rest_framework_mcp.output.enforce_result_bytes import enforce_result_bytes
+from django_spec_mcp.output.enforce_result_bytes import enforce_result_bytes
 
 
 def test_none_ceiling_disables_the_check() -> None:

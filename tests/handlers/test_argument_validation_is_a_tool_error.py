@@ -33,15 +33,15 @@ from rest_framework import serializers as drf_serializers
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import ChainStep, MCPServer
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.constants import JsonRpcErrorCode, UnknownArguments
-from rest_framework_mcp.handlers.handle_tools_call import handle_tools_call
-from rest_framework_mcp.handlers.handle_tools_call_async import handle_tools_call_async
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp import ChainStep, MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.constants import JsonRpcErrorCode, UnknownArguments
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.conftest import post_jsonrpc
 from tests.testapp.models import Invoice
 from tests.testapp.serializers import InvoiceInputSerializer, InvoiceOutputSerializer
@@ -226,8 +226,8 @@ def test_call_tool_echoes_the_arguments_only_when_configured(settings) -> None:
     arguments = {"amount_cents": 1}
     error = tool_error(_server().call_tool("service", arguments, user=None).to_dict())
     assert "value" not in error
-    settings.REST_FRAMEWORK_MCP = {
-        **getattr(settings, "REST_FRAMEWORK_MCP", {}),
+    settings.SPEC_MCP = {
+        **getattr(settings, "SPEC_MCP", {}),
         "INCLUDE_VALIDATION_VALUE": True,
     }
     error = tool_error(_server().call_tool("service", arguments, user=None).to_dict())

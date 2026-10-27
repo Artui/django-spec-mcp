@@ -5,8 +5,8 @@ from typing import Any
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.tasks.types.task_record import TaskRecord
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.tasks.types.task_record import TaskRecord
 
 
 def build_worker_token(record: TaskRecord) -> TokenInfo:
@@ -35,7 +35,7 @@ def build_worker_token(record: TaskRecord) -> TokenInfo:
     **What is *not* re-derived: ``scopes`` and ``audience``.** They are replayed
     verbatim from the record, because ``raw`` — the backend handle that could be
     re-validated — is deliberately not persisted (see
-    [`TaskRecord`][rest_framework_mcp.tasks.types.task_record.TaskRecord]), so
+    [`TaskRecord`][django_spec_mcp.tasks.types.task_record.TaskRecord]), so
     there is nothing here to re-check them against. A token revoked or narrowed
     after the task was created therefore still buys the task the scopes it was
     created with, for as long as the record survives. ``TASK_TTL_MS`` is what

@@ -6,7 +6,7 @@ producing input serializer is all the MCP server needs.
 ```python
 from rest_framework import serializers
 from rest_framework_services.types.service_spec import ServiceSpec
-from rest_framework_mcp import MCPServer
+from django_spec_mcp import MCPServer
 
 
 def calculate_total(*, data: dict) -> dict:

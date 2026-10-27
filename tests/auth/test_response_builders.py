@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import json
 
-from rest_framework_mcp.auth.insufficient_scope_response import (
+from django_spec_mcp.auth.insufficient_scope_response import (
     build_insufficient_scope_response,
 )
-from rest_framework_mcp.auth.unauthenticated_response import build_unauthenticated_response
+from django_spec_mcp.auth.unauthenticated_response import build_unauthenticated_response
 
 
 def test_build_unauthenticated_response_carries_challenge() -> None:

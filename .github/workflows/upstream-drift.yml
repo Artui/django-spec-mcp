@@ -124,12 +124,12 @@ jobs:
                   "rest_framework",
               ],
               DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}},
-              REST_FRAMEWORK_MCP={"ALLOWED_ORIGINS": ["*"], "SERVER_INFO": {}},
+              SPEC_MCP={"ALLOWED_ORIGINS": ["*"], "SERVER_INFO": {}},
           )
           django.setup()
 
           from rest_framework.permissions import AllowAny
-          from rest_framework_mcp import MCPServer
+          from django_spec_mcp import MCPServer
           from rest_framework_services.types.service_spec import ServiceSpec
 
           # Constructing a bare server builds its own auth backend and session

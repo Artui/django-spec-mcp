@@ -21,8 +21,8 @@ from rest_framework_services import MARKING
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import AgentConventions, MCPServer, QueryParam
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp import AgentConventions, MCPServer, QueryParam
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from tests.testapp.models import Invoice
 
 REFUSED_SELECTION = "{items{id}}"

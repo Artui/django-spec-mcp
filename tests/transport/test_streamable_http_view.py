@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 from django.test import Client, override_settings
 
-from rest_framework_mcp.config.build_mcp_config import build_mcp_config
+from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from tests.testapp.mcp import build_server
 from tests.testapp.urlconf_for import urlconf_for
 from tests.utils import nested_past_the_decoders_limit_here, on_a_bounded_stack

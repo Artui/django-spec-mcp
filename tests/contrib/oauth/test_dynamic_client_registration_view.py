@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 from django.test import RequestFactory, override_settings
 
-from rest_framework_mcp.contrib.oauth.dynamic_client_registration_viewset import (
+from django_spec_mcp.contrib.oauth.dynamic_client_registration_viewset import (
     DynamicClientRegistrationViewSet,
 )
 from tests.utils import nested_past_the_decoders_limit_here, on_a_bounded_stack
@@ -270,8 +270,7 @@ def test_the_initial_access_token_is_compared_in_constant_time(monkeypatch) -> N
         return real(a, b)
 
     monkeypatch.setattr(
-        "rest_framework_mcp.contrib.oauth.dynamic_client_registration_viewset.secrets"
-        ".compare_digest",
+        "django_spec_mcp.contrib.oauth.dynamic_client_registration_viewset.secrets.compare_digest",
         spy,
     )
     response = _post(

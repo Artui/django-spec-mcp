@@ -61,7 +61,7 @@ def configure() -> None:
         # Deliberately not widened. A non-browser client sends no Origin, so the
         # shipped default has to be enough -- if it ever stops being, the docs
         # are wrong and this is where we should find out.
-        REST_FRAMEWORK_MCP={},
+        SPEC_MCP={},
     )
     django.setup()
 
@@ -75,9 +75,9 @@ from rest_framework_services.exceptions.additional_input_required import (  # no
 )
 from rest_framework_services.types.service_spec import ServiceSpec  # noqa: E402
 
-from rest_framework_mcp import MCPServer  # noqa: E402
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend  # noqa: E402
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore  # noqa: E402
+from django_spec_mcp import MCPServer  # noqa: E402
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend  # noqa: E402
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore  # noqa: E402
 
 
 class DeleteInput(drf_serializers.Serializer):

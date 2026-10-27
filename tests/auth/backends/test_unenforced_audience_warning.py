@@ -22,7 +22,7 @@ import warnings
 
 import pytest
 
-from rest_framework_mcp.auth.backends.django_oauth_toolkit_backend import (
+from django_spec_mcp.auth.backends.django_oauth_toolkit_backend import (
     DjangoOAuthToolkitBackend,
     UnenforcedAudienceWarning,
 )

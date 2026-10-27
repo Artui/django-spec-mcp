@@ -7,13 +7,13 @@ from django.http import HttpRequest
 from rest_framework.permissions import BasePermission
 from rest_framework_services.types.offline_context import OfflineContext
 
-from rest_framework_mcp.auth.permissions.utils import DispatchShape
-from rest_framework_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.auth.permissions.utils import DispatchShape
+from django_spec_mcp.auth.types.token_info import TokenInfo
 
 
 class DRFPermissionAdapter:
     """Bridge a DRF ``BasePermission`` class into the
-    [`MCPPermission`][rest_framework_mcp.auth.permissions.types.mcp_permission.MCPPermission]
+    [`MCPPermission`][django_spec_mcp.auth.permissions.types.mcp_permission.MCPPermission]
     Protocol.
 
     ``ServiceSpec`` / ``SelectorSpec`` carry ``permission_classes`` as DRF

@@ -6,15 +6,15 @@ from typing import Any
 
 from asgiref.sync import sync_to_async
 
-from rest_framework_mcp.constants import JsonRpcErrorCode
-from rest_framework_mcp.handlers.dispatch import dispatch
-from rest_framework_mcp.handlers.handle_completion_complete import handle_completion_complete
-from rest_framework_mcp.handlers.handle_prompts_get_async import handle_prompts_get_async
-from rest_framework_mcp.handlers.handle_resources_read_async import handle_resources_read_async
-from rest_framework_mcp.handlers.handle_tools_call_async import handle_tools_call_async
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.handlers.utils import run_with_deadline
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.constants import JsonRpcErrorCode
+from django_spec_mcp.handlers.dispatch import dispatch
+from django_spec_mcp.handlers.handle_completion_complete import handle_completion_complete
+from django_spec_mcp.handlers.handle_prompts_get_async import handle_prompts_get_async
+from django_spec_mcp.handlers.handle_resources_read_async import handle_resources_read_async
+from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.handlers.utils import run_with_deadline
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 
 
 async def adispatch(

@@ -33,9 +33,9 @@ from django_service_specs import Affordance, base_pool, operation_affordances
 from rest_framework_services import build_offline_context, unmet_operation_affordance
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.registry.tool_registry import ToolBindingLike
-from rest_framework_mcp.registry.types.chain_tool_binding import ChainToolBinding
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.registry.tool_registry import ToolBindingLike
+from django_spec_mcp.registry.types.chain_tool_binding import ChainToolBinding
 
 
 def offered_tools(

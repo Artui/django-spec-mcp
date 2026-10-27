@@ -6,7 +6,7 @@ with another, since the values are caller-supplied.
 
 from __future__ import annotations
 
-from rest_framework_mcp.constants import NotificationKind
+from django_spec_mcp.constants import NotificationKind
 
 
 def topic_for_kind(kind: NotificationKind) -> str:

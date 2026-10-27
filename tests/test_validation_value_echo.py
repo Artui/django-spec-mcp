@@ -1,4 +1,4 @@
-"""Coverage for ``REST_FRAMEWORK_MCP['INCLUDE_VALIDATION_VALUE']``.
+"""Coverage for ``SPEC_MCP['INCLUDE_VALIDATION_VALUE']``.
 
 The setting is opt-in: when True, ``value`` echoes the offending ``arguments``
 dict back to the client -- beside ``detail`` in a ``validation_error`` result's
@@ -17,21 +17,21 @@ from django.http import HttpRequest
 from django_service_specs import ServiceValidationError
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import MCPServer, PromptArgument
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.constants import JsonRpcErrorCode
-from rest_framework_mcp.handlers.handle_prompts_get import handle_prompts_get
-from rest_framework_mcp.handlers.handle_prompts_get_async import handle_prompts_get_async
-from rest_framework_mcp.handlers.handle_tools_call import handle_tools_call
-from rest_framework_mcp.handlers.handle_tools_call_async import handle_tools_call_async
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.registry.prompt_registry import PromptRegistry
-from rest_framework_mcp.registry.resource_registry import ResourceRegistry
-from rest_framework_mcp.registry.tool_registry import ToolRegistry
-from rest_framework_mcp.registry.types.tool_binding import ToolBinding
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp import MCPServer, PromptArgument
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.constants import JsonRpcErrorCode
+from django_spec_mcp.handlers.handle_prompts_get import handle_prompts_get
+from django_spec_mcp.handlers.handle_prompts_get_async import handle_prompts_get_async
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.registry.prompt_registry import PromptRegistry
+from django_spec_mcp.registry.resource_registry import ResourceRegistry
+from django_spec_mcp.registry.tool_registry import ToolRegistry
+from django_spec_mcp.registry.types.tool_binding import ToolBinding
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.utils import tool_error
 
 
@@ -81,7 +81,7 @@ def _tools_raising_validation() -> ToolRegistry:
 
 
 def test_sync_tools_call_drf_validation_default_omits_value(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {}
+    settings.SPEC_MCP = {}
     out = handle_tools_call(
         {"name": "t", "arguments": {"junk": True}}, _ctx(_tools_with_dataclass_input())
     )
@@ -91,7 +91,7 @@ def test_sync_tools_call_drf_validation_default_omits_value(settings) -> None:
 
 
 def test_sync_tools_call_drf_validation_echo(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {"INCLUDE_VALIDATION_VALUE": True}
+    settings.SPEC_MCP = {"INCLUDE_VALIDATION_VALUE": True}
     out = handle_tools_call(
         {"name": "t", "arguments": {"junk": True}}, _ctx(_tools_with_dataclass_input())
     )
@@ -101,7 +101,7 @@ def test_sync_tools_call_drf_validation_echo(settings) -> None:
 
 
 async def test_async_tools_call_drf_validation_default_omits_value(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {}
+    settings.SPEC_MCP = {}
     out = await handle_tools_call_async(
         {"name": "t", "arguments": {"junk": True}}, _ctx(_tools_with_dataclass_input())
     )
@@ -111,7 +111,7 @@ async def test_async_tools_call_drf_validation_default_omits_value(settings) -> 
 
 
 async def test_async_tools_call_drf_validation_echo(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {"INCLUDE_VALIDATION_VALUE": True}
+    settings.SPEC_MCP = {"INCLUDE_VALIDATION_VALUE": True}
     out = await handle_tools_call_async(
         {"name": "t", "arguments": {"junk": True}}, _ctx(_tools_with_dataclass_input())
     )
@@ -124,19 +124,19 @@ async def test_async_tools_call_drf_validation_echo(settings) -> None:
 
 
 def test_sync_tools_call_service_validation_default_omits_value(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {}
+    settings.SPEC_MCP = {}
     out = handle_tools_call({"name": "t", "arguments": {}}, _ctx(_tools_raising_validation()))
     assert "value" not in tool_error(out)
 
 
 def test_sync_tools_call_service_validation_echo(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {"INCLUDE_VALIDATION_VALUE": True}
+    settings.SPEC_MCP = {"INCLUDE_VALIDATION_VALUE": True}
     out = handle_tools_call({"name": "t", "arguments": {"x": 1}}, _ctx(_tools_raising_validation()))
     assert tool_error(out)["value"] == {"x": 1}
 
 
 async def test_async_tools_call_service_validation_default_omits_value(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {}
+    settings.SPEC_MCP = {}
     out = await handle_tools_call_async(
         {"name": "t", "arguments": {}}, _ctx(_tools_raising_validation())
     )
@@ -144,7 +144,7 @@ async def test_async_tools_call_service_validation_default_omits_value(settings)
 
 
 async def test_async_tools_call_service_validation_echo(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {"INCLUDE_VALIDATION_VALUE": True}
+    settings.SPEC_MCP = {"INCLUDE_VALIDATION_VALUE": True}
     out = await handle_tools_call_async(
         {"name": "t", "arguments": {"x": 1}}, _ctx(_tools_raising_validation())
     )
@@ -186,7 +186,7 @@ def _ctx_for(server: MCPServer) -> MCPCallContext:
 
 
 def test_sync_prompts_get_missing_default_omits_value(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {}
+    settings.SPEC_MCP = {}
     server = _server_with_required_prompt()
     out = handle_prompts_get({"name": "echo", "arguments": {}}, _ctx_for(server))
     assert isinstance(out, JsonRpcError)
@@ -194,7 +194,7 @@ def test_sync_prompts_get_missing_default_omits_value(settings) -> None:
 
 
 def test_sync_prompts_get_missing_echo(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {"INCLUDE_VALIDATION_VALUE": True}
+    settings.SPEC_MCP = {"INCLUDE_VALIDATION_VALUE": True}
     server = _server_with_required_prompt()
     out = handle_prompts_get({"name": "echo", "arguments": {"unrelated": "x"}}, _ctx_for(server))
     assert isinstance(out, JsonRpcError)
@@ -202,7 +202,7 @@ def test_sync_prompts_get_missing_echo(settings) -> None:
 
 
 async def test_async_prompts_get_missing_default_omits_value(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {}
+    settings.SPEC_MCP = {}
     server = _server_with_required_prompt()
     out = await handle_prompts_get_async({"name": "echo", "arguments": {}}, _ctx_for(server))
     assert isinstance(out, JsonRpcError)
@@ -210,7 +210,7 @@ async def test_async_prompts_get_missing_default_omits_value(settings) -> None:
 
 
 async def test_async_prompts_get_missing_echo(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {"INCLUDE_VALIDATION_VALUE": True}
+    settings.SPEC_MCP = {"INCLUDE_VALIDATION_VALUE": True}
     server = _server_with_required_prompt()
     out = await handle_prompts_get_async({"name": "echo", "arguments": {"u": 2}}, _ctx_for(server))
     assert isinstance(out, JsonRpcError)
@@ -229,7 +229,7 @@ def test_a_falsy_non_object_prompt_arguments_field_is_named_as_the_fault(
     object. A prompt whose arguments are all optional then rendered a call the
     client never made in that shape.
     """
-    settings.REST_FRAMEWORK_MCP = {}
+    settings.SPEC_MCP = {}
     server = _server_with_required_prompt()
     out = handle_prompts_get({"name": "echo", "arguments": malformed}, _ctx_for(server))
     assert isinstance(out, JsonRpcError)
@@ -241,7 +241,7 @@ def test_a_falsy_non_object_prompt_arguments_field_is_named_as_the_fault(
 async def test_a_falsy_non_object_prompt_arguments_field_is_named_as_the_fault_async(
     settings, malformed: Any
 ) -> None:
-    settings.REST_FRAMEWORK_MCP = {}
+    settings.SPEC_MCP = {}
     server = _server_with_required_prompt()
     out = await handle_prompts_get_async({"name": "echo", "arguments": malformed}, _ctx_for(server))
     assert isinstance(out, JsonRpcError)
@@ -252,7 +252,7 @@ async def test_a_falsy_non_object_prompt_arguments_field_is_named_as_the_fault_a
 def test_a_missing_or_null_prompt_arguments_field_still_means_no_arguments(
     settings, params: dict[str, Any]
 ) -> None:
-    settings.REST_FRAMEWORK_MCP = {}
+    settings.SPEC_MCP = {}
     server = _server_with_required_prompt()
     out = handle_prompts_get(params, _ctx_for(server))
     # Reaches the required-argument check rather than the malformed-shape one.

@@ -162,12 +162,12 @@ otel = ["opentelemetry-api>=1.27"]
 spectacular = ["drf-spectacular>=0.27"]
 filter = ["django-filter>=23"]
 # Pulls in djangorestframework-simplejwt for the SimpleJWTCookieAdapter
-# (rest_framework_mcp.contrib.oauth.adapters.simplejwt_cookie). The
+# (django_spec_mcp.contrib.oauth.adapters.simplejwt_cookie). The
 # adapter is opt-in: configure ``AUTH_USER_ADAPTER`` to enable it.
 # 5.3.1, not 5.3: 5.3.0 imports ``pkg_resources`` at module level, so it does
 # not import at all on an environment without setuptools.
 jwt = ["djangorestframework-simplejwt>=5.3.1"]
-# Powers ``rest_framework_mcp.testing.assert_tool_result_conforms``, which
+# Powers ``django_spec_mcp.testing.assert_tool_result_conforms``, which
 # validates a real tool result against the ``outputSchema`` the server
 # advertised for it. Test-time code, so ``jsonschema`` stays out of the runtime
 # dependencies entirely: the helper imports it inside the function body and
@@ -257,7 +257,7 @@ docs = [
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "tests.conftest_settings"
 asyncio_mode = "auto"
-addopts = "--cov=rest_framework_mcp --cov-report=term-missing --cov-fail-under=100"
+addopts = "--cov=django_spec_mcp --cov-report=term-missing --cov-fail-under=100"
 testpaths = ["tests"]
 # Most fixtures register throwaway tools with no description, which is fine for a
 # fixture and would otherwise bury every other warning in the run.
@@ -279,7 +279,7 @@ filterwarnings = [
 
 [tool.coverage.run]
 branch = true
-source = ["rest_framework_mcp"]
+source = ["django_spec_mcp"]
 
 [tool.coverage.report]
 show_missing = true
@@ -319,7 +319,7 @@ ignore = [
 "tests/schema/test_selector_tool_requiredness.py" = ["TID251"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["rest_framework_mcp"]
+known-first-party = ["django_spec_mcp"]
 # CLAUDE.md rule 7 requires this at the top of every annotated file;
 # required-imports is what enforces it rather than leaving it to memory.
 required-imports = ["from __future__ import annotations"]
@@ -340,7 +340,7 @@ skip-magic-trailing-comma = false
 line-ending = "auto"
 
 [tool.ty.environment]
-root = ["./rest_framework_mcp"]
+root = ["./django_spec_mcp"]
 
 # bump-my-version drives `make release-bump` — it rewrites the version in
 # django_spec_mcp/version.py and promotes the CHANGELOG [Unreleased]

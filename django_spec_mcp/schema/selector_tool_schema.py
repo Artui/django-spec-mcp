@@ -4,11 +4,11 @@ from typing import Any
 
 from django_service_specs import DEFAULT_POOL_SEEDS, PoolSeeds
 
-from rest_framework_mcp.registry.types.query_param import QueryParam
-from rest_framework_mcp.registry.types.selector_tool_binding import SelectorToolBinding
-from rest_framework_mcp.schema.agent_conventions import PAGED_QUERY_PARAM_SCOPE
-from rest_framework_mcp.schema.input_schema import build_input_schema
-from rest_framework_mcp.schema.utils import (
+from django_spec_mcp.registry.types.query_param import QueryParam
+from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
+from django_spec_mcp.schema.agent_conventions import PAGED_QUERY_PARAM_SCOPE
+from django_spec_mcp.schema.input_schema import build_input_schema
+from django_spec_mcp.schema.utils import (
     end_sentence,
     selector_tool_inputs,
     without_server_arguments,

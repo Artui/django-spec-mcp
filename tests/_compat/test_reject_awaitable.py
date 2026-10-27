@@ -22,10 +22,10 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest
 
-from rest_framework_mcp._compat.reject_awaitable import reject_awaitable
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.handlers.is_binding_listable import is_binding_listable
-from rest_framework_mcp.handlers.utils import check_permissions, consume_rate_limits
+from django_spec_mcp._compat.reject_awaitable import reject_awaitable
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.handlers.is_binding_listable import is_binding_listable
+from django_spec_mcp.handlers.utils import check_permissions, consume_rate_limits
 
 _TOKEN = TokenInfo(user=None, scopes=())
 

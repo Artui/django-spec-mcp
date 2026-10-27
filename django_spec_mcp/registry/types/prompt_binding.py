@@ -4,8 +4,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from rest_framework_mcp.protocol.types.icon import Icon
-from rest_framework_mcp.protocol.types.prompt_argument import PromptArgument
+from django_spec_mcp.protocol.types.icon import Icon
+from django_spec_mcp.protocol.types.prompt_argument import PromptArgument
 
 
 @dataclass(frozen=True)
@@ -15,7 +15,7 @@ class PromptBinding:
     A prompt is a server-defined message template the client invokes by name. The
     ``render`` callable receives the client-supplied arguments as kwargs and returns a
     list of
-    [`PromptMessage`][rest_framework_mcp.protocol.types.prompt_message.PromptMessage]
+    [`PromptMessage`][django_spec_mcp.protocol.types.prompt_message.PromptMessage]
     instances, a list of strings (each becoming a user text message), a single string,
     or a coroutine yielding any of those. The handler normalises whichever shape arrives
     into the spec's ``messages`` list at dispatch time.
@@ -51,7 +51,7 @@ class PromptBinding:
     always_listed: bool = False
     """Keep this prompt in ``prompts/list`` even when ``FILTER_LISTINGS_BY_PERMISSIONS``
     would hide it — same semantics as
-    [`ToolBinding.always_listed`][rest_framework_mcp.registry.types.tool_binding.ToolBinding.always_listed]."""
+    [`ToolBinding.always_listed`][django_spec_mcp.registry.types.tool_binding.ToolBinding.always_listed]."""
 
 
 __all__ = ["PromptBinding"]

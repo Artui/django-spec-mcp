@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from oauth2_provider.models import Application
 
-from rest_framework_mcp.contrib.oauth.utils import (
+from django_spec_mcp.contrib.oauth.utils import (
     HS256,
     NO_ALGORITHM,
     RS256,

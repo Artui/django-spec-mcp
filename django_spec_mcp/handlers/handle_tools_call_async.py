@@ -9,25 +9,25 @@ from rest_framework import serializers as drf_serializers
 from rest_framework.exceptions import PermissionDenied
 from rest_framework_services import adispatch_spec, enforce_permissions
 
-from rest_framework_mcp._compat.acall import acall
-from rest_framework_mcp._compat.tracing import span
-from rest_framework_mcp.constants import JsonRpcErrorCode, OutputFormat
-from rest_framework_mcp.elicitation.types.resolved_input import ResolvedInput
-from rest_framework_mcp.handlers.chain_tool_dispatch import dispatch_chain_tool_async
-from rest_framework_mcp.handlers.handle_tools_call import _forbidden, _render, _span_attrs
-from rest_framework_mcp.handlers.input_dispatch import (
+from django_spec_mcp._compat.acall import acall
+from django_spec_mcp._compat.tracing import span
+from django_spec_mcp.constants import JsonRpcErrorCode, OutputFormat
+from django_spec_mcp.elicitation.types.resolved_input import ResolvedInput
+from django_spec_mcp.handlers.chain_tool_dispatch import dispatch_chain_tool_async
+from django_spec_mcp.handlers.handle_tools_call import _forbidden, _render, _span_attrs
+from django_spec_mcp.handlers.input_dispatch import (
     ask_for_input,
     refusal_result,
     resolve_prior_input,
 )
-from rest_framework_mcp.handlers.invalidation_dispatch import announce_invalidations_async
-from rest_framework_mcp.handlers.selector_tool_dispatch import (
+from django_spec_mcp.handlers.invalidation_dispatch import announce_invalidations_async
+from django_spec_mcp.handlers.selector_tool_dispatch import (
     dispatch_selector_tool_async,
     enforce_object_permissions,
 )
-from rest_framework_mcp.handlers.task_dispatch import maybe_create_task
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.handlers.utils import (
+from django_spec_mcp.handlers.task_dispatch import maybe_create_task
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.handlers.utils import (
     apply_tool_server_arguments,
     consume_rate_limits,
     dispatch_shape,
@@ -45,12 +45,12 @@ from rest_framework_mcp.handlers.utils import (
     validate_output_format,
     validation_error_result,
 )
-from rest_framework_mcp.output.error_tool_result import build_error_tool_result
-from rest_framework_mcp.output.resolve_structured_output import resolve_structured_output
-from rest_framework_mcp.output.tool_result import build_tool_result
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.registry.types.chain_tool_binding import ChainToolBinding
-from rest_framework_mcp.registry.types.selector_tool_binding import SelectorToolBinding
+from django_spec_mcp.output.error_tool_result import build_error_tool_result
+from django_spec_mcp.output.resolve_structured_output import resolve_structured_output
+from django_spec_mcp.output.tool_result import build_tool_result
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.registry.types.chain_tool_binding import ChainToolBinding
+from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
 
 
 async def handle_tools_call_async(

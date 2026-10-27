@@ -8,8 +8,8 @@ from django_service_specs import FieldMarking, SelectorKind
 from rest_framework import serializers
 from rest_framework_services import MARKING, build_audience_projection
 
-from rest_framework_mcp.schema.agent_conventions import HANDLE_DESCRIPTION
-from rest_framework_mcp.schema.output_schema import build_output_schema
+from django_spec_mcp.schema.agent_conventions import HANDLE_DESCRIPTION
+from django_spec_mcp.schema.output_schema import build_output_schema
 from tests.testapp.serializers import AgentInvoiceSerializer, InvoiceOutputSerializer
 
 PROJECTION = build_audience_projection(AgentInvoiceSerializer)

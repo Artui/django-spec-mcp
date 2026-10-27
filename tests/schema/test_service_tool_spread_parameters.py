@@ -22,15 +22,15 @@ from django.http import HttpRequest
 from django_service_specs import DEFAULT_POOL_SEEDS, UnsetType
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import MCPServer
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.constants import ArgumentBinding, UnknownArguments
-from rest_framework_mcp.handlers.handle_tools_call import handle_tools_call
-from rest_framework_mcp.handlers.handle_tools_call_async import handle_tools_call_async
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.registry.types.tool_binding import ToolBinding
-from rest_framework_mcp.schema.service_tool_schema import build_service_tool_input_schema
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.constants import ArgumentBinding, UnknownArguments
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.registry.types.tool_binding import ToolBinding
+from django_spec_mcp.schema.service_tool_schema import build_service_tool_input_schema
 
 # The one binding that spreads a serializer-less service's parameters: drf-services
 # retired ``SPREAD_CALLER_WINS``, which raises ``ValueError`` at dispatch.

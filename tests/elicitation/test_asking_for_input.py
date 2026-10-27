@@ -15,11 +15,11 @@ from typing import Any
 import pytest
 from django.core import signing
 
-from rest_framework_mcp import MCPServer
-from rest_framework_mcp.constants import ELICITATION_KEY, REQUEST_STATE_SALT
-from rest_framework_mcp.handlers.handle_tools_call import handle_tools_call
-from rest_framework_mcp.handlers.handle_tools_call_async import handle_tools_call_async
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp import MCPServer
+from django_spec_mcp.constants import ELICITATION_KEY, REQUEST_STATE_SALT
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from tests.elicitation.conftest import TOOL, context
 from tests.utils import tool_error
 
@@ -328,7 +328,7 @@ def test_a_chain_tool_degrades_instead_of_asking(server: MCPServer) -> None:
     arm reports it as an ordinary failure."""
     from rest_framework_services.types.service_spec import ServiceSpec
 
-    from rest_framework_mcp.registry.types.chain_step import ChainStep
+    from django_spec_mcp.registry.types.chain_step import ChainStep
     from tests.elicitation.conftest import DeleteInput, delete_rows
 
     server.register_chain_tool(

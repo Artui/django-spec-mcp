@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 
-from rest_framework_mcp.output.resolve_structured_output import resolve_structured_output
+from django_spec_mcp.output.resolve_structured_output import resolve_structured_output
 
 
 def _resolve(

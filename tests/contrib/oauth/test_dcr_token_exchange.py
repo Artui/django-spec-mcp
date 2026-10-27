@@ -27,7 +27,7 @@ from django.test import Client, override_settings
 from django.urls import include, path
 from django.utils import timezone
 
-from rest_framework_mcp.contrib.oauth.dynamic_client_registration_viewset import (
+from django_spec_mcp.contrib.oauth.dynamic_client_registration_viewset import (
     DynamicClientRegistrationViewSet,
 )
 

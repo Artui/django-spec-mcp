@@ -5,11 +5,11 @@ from typing import Any
 from django.contrib.auth.models import AnonymousUser
 from django.http import HttpRequest
 
-from rest_framework_mcp.auth.types.authorization_server_metadata import (
+from django_spec_mcp.auth.types.authorization_server_metadata import (
     AuthorizationServerMetadata,
 )
-from rest_framework_mcp.auth.types.protected_resource_metadata import ProtectedResourceMetadata
-from rest_framework_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.auth.types.protected_resource_metadata import ProtectedResourceMetadata
+from django_spec_mcp.auth.types.token_info import TokenInfo
 
 
 class AllowAnyBackend:

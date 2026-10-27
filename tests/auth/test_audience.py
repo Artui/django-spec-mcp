@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from rest_framework_mcp.auth.audience import audience_matches
+from django_spec_mcp.auth.audience import audience_matches
 
 
 def test_unset_expected_disables_enforcement() -> None:

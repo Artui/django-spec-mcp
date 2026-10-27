@@ -13,10 +13,10 @@ from typing import Any
 
 import pytest
 
-from rest_framework_mcp.auth.backends.django_oauth_toolkit_backend import (
+from django_spec_mcp.auth.backends.django_oauth_toolkit_backend import (
     DjangoOAuthToolkitBackend,
 )
-from rest_framework_mcp.contrib.oauth.dcr_serializer import DynamicClientRegistrationSerializer
+from django_spec_mcp.contrib.oauth.dcr_serializer import DynamicClientRegistrationSerializer
 
 # ----- CIMD advertisement -----
 

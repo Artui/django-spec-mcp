@@ -18,17 +18,17 @@ from rest_framework_services import build_audience_projection
 from rest_framework_services.types.affordance_declarer import AffordanceDeclarer
 from rest_framework_services.types.selector_spec import SelectorSpec
 
-from rest_framework_mcp.constants import (
+from django_spec_mcp.constants import (
     ArgumentBinding,
     OutputFormat,
     TaskPolicy,
     ToolContentKind,
     UnknownArguments,
 )
-from rest_framework_mcp.protocol.types.icon import Icon
-from rest_framework_mcp.registry.types.query_param import QueryParam
-from rest_framework_mcp.registry.types.url_kwarg import UrlKwarg
-from rest_framework_mcp.registry.types.utils import can_present_nothing, validate_content_kind
+from django_spec_mcp.protocol.types.icon import Icon
+from django_spec_mcp.registry.types.query_param import QueryParam
+from django_spec_mcp.registry.types.url_kwarg import UrlKwarg
+from django_spec_mcp.registry.types.utils import can_present_nothing, validate_content_kind
 
 ResultT = TypeVar("ResultT")
 ExtraT = TypeVar("ExtraT", bound=dict[str, Any])
@@ -39,7 +39,7 @@ class SelectorToolBinding(Generic[ResultT, ExtraT]):
     """All wiring for a single MCP **read-shaped** tool, from a ``SelectorSpec``.
 
     The read-shaped mirror of
-    [`ToolBinding`][rest_framework_mcp.registry.types.tool_binding.ToolBinding].
+    [`ToolBinding`][django_spec_mcp.registry.types.tool_binding.ToolBinding].
     Selectors return raw, unscoped data and the tool layer owns every shape decision,
     chosen by ``kind``.
 
@@ -176,7 +176,7 @@ class SelectorToolBinding(Generic[ResultT, ExtraT]):
     always_listed: bool = False
     """Keep this binding in ``tools/list`` even when ``FILTER_LISTINGS_BY_PERMISSIONS``
     would drop it — same semantics as
-    [`ToolBinding.always_listed`][rest_framework_mcp.registry.types.tool_binding.ToolBinding.always_listed]."""
+    [`ToolBinding.always_listed`][django_spec_mcp.registry.types.tool_binding.ToolBinding.always_listed]."""
 
     query_params: tuple[QueryParam, ...] = ()
     """Read-shaping params routed to ``request.query_params`` at dispatch.
@@ -212,7 +212,7 @@ class SelectorToolBinding(Generic[ResultT, ExtraT]):
     """What this tool's payload becomes in the result's ``content`` array. ``TEXT``
     renders JSON per ``output_format``; the other kinds project it into an image / audio
     / resource-link block. See
-    [`ToolContentKind`][rest_framework_mcp.constants.ToolContentKind]."""
+    [`ToolContentKind`][django_spec_mcp.constants.ToolContentKind]."""
 
     content_mime_type: str | None = None
     """The media type for an ``IMAGE`` / ``AUDIO`` ``content_kind``.
@@ -223,7 +223,7 @@ class SelectorToolBinding(Generic[ResultT, ExtraT]):
     """Whether calling this tool hands back a task handle instead of a result.
     The choice lives on the binding because the extension makes the *server*
     the sole decider and gives the client no way to ask. See
-    [`TaskPolicy`][rest_framework_mcp.constants.TaskPolicy]."""
+    [`TaskPolicy`][django_spec_mcp.constants.TaskPolicy]."""
 
     field_audiences: Mapping[str, FieldMarking] | None = None
     """Per-tool overrides layered over the ``FieldMarking`` declarations the

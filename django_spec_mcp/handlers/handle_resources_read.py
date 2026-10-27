@@ -6,13 +6,13 @@ from django_service_specs import UNSET, base_pool, run_selector
 from rest_framework.exceptions import PermissionDenied
 from rest_framework_services import resolve_callable_kwargs
 
-from rest_framework_mcp._compat.tracing import span
-from rest_framework_mcp.auth.permissions.utils import DispatchShape
-from rest_framework_mcp.constants import JsonRpcErrorCode
-from rest_framework_mcp.handlers.guard_resource_object import guard_resource_object
-from rest_framework_mcp.handlers.handle_tools_call import _span_attrs
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.handlers.utils import (
+from django_spec_mcp._compat.tracing import span
+from django_spec_mcp.auth.permissions.utils import DispatchShape
+from django_spec_mcp.constants import JsonRpcErrorCode
+from django_spec_mcp.handlers.guard_resource_object import guard_resource_object
+from django_spec_mcp.handlers.handle_tools_call import _span_attrs
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.handlers.utils import (
     check_permissions,
     consume_rate_limits,
     resolve_bound,
@@ -20,9 +20,9 @@ from rest_framework_mcp.handlers.utils import (
     resource_not_found_code,
     resource_shape,
 )
-from rest_framework_mcp.output.build_resource_contents import build_resource_contents
-from rest_framework_mcp.output.enforce_result_bytes import enforce_result_bytes
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.output.build_resource_contents import build_resource_contents
+from django_spec_mcp.output.enforce_result_bytes import enforce_result_bytes
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 
 
 def handle_resources_read(
@@ -38,13 +38,13 @@ def handle_resources_read(
     block rendered and encoded by ``build_resource_contents``.
 
     **This method does not route through ``dispatch_spec``.** A
-    [`ResourceBinding`][rest_framework_mcp.registry.types.resource_binding.ResourceBinding]
+    [`ResourceBinding`][django_spec_mcp.registry.types.resource_binding.ResourceBinding]
     holds a bare selector callable, not the spec it was lifted from, so there
     is no spec to dispatch. What ``dispatch_spec`` would have contributed is
     named explicitly here instead: the reserved seeds outrank the client's
     URI-template variables, the ``kwargs`` provider honours its ``UNSET``
     decline contract, and
-    [`guard_resource_object`][rest_framework_mcp.handlers.guard_resource_object.guard_resource_object]
+    [`guard_resource_object`][django_spec_mcp.handlers.guard_resource_object.guard_resource_object]
     stands in for ``on_target_resolved``. Queryset shaping and the spec's
     ``preconditions`` are **not** reproduced — they never survive registration.
     """

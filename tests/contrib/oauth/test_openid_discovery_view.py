@@ -2,15 +2,15 @@ from __future__ import annotations
 
 from django.test import RequestFactory
 
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.backends.django_oauth_toolkit_backend import (
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.backends.django_oauth_toolkit_backend import (
     DjangoOAuthToolkitBackend,
 )
-from rest_framework_mcp.contrib.oauth.openid_discovery_viewset import OpenIDDiscoveryViewSet
+from django_spec_mcp.contrib.oauth.openid_discovery_viewset import OpenIDDiscoveryViewSet
 
 
 def test_get_returns_as_metadata_plus_oidc_defaults(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {
+    settings.SPEC_MCP = {
         "SERVER_INFO": {"authorization_servers": ["https://issuer.example/oauth"]},
     }
     view = OpenIDDiscoveryViewSet.as_view({"get": "list"}, auth_backend=DjangoOAuthToolkitBackend())
@@ -29,7 +29,7 @@ def test_get_returns_as_metadata_plus_oidc_defaults(settings) -> None:
 
 def test_signing_algorithms_are_advertised_when_a_key_is_configured(settings) -> None:
     """The discovery document tracks what the server can sign, not a fixed list."""
-    settings.REST_FRAMEWORK_MCP = {
+    settings.SPEC_MCP = {
         "SERVER_INFO": {"authorization_servers": ["https://issuer.example/oauth"]},
     }
     settings.OAUTH2_PROVIDER = {"OIDC_RSA_PRIVATE_KEY": "-----BEGIN RSA PRIVATE KEY-----"}

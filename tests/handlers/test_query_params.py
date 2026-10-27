@@ -24,17 +24,17 @@ from django_service_specs import SelectorKind
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import MCPServer, QueryParam, UrlKwarg
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.handlers.handle_prompts_get import handle_prompts_get
-from rest_framework_mcp.handlers.handle_resources_read import handle_resources_read
-from rest_framework_mcp.handlers.handle_tools_call import handle_tools_call
-from rest_framework_mcp.handlers.handle_tools_call_async import handle_tools_call_async
-from rest_framework_mcp.handlers.handle_tools_list import handle_tools_list
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.handlers.utils import split_query_params
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp import MCPServer, QueryParam, UrlKwarg
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.handlers.handle_prompts_get import handle_prompts_get
+from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
+from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.handlers.utils import split_query_params
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 
 # ---------- helpers ----------
 
@@ -271,7 +271,7 @@ def test_the_endpoint_query_string_no_longer_reaches_a_prompt() -> None:
 @pytest.mark.django_db
 def test_the_endpoint_query_string_no_longer_reaches_a_chain_step() -> None:
     # A chain wraps its steps in ``transaction.atomic()`` by default.
-    from rest_framework_mcp.registry.types.chain_step import ChainStep
+    from django_spec_mcp.registry.types.chain_step import ChainStep
 
     server = _server()
     with warnings.catch_warnings():

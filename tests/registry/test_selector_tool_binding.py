@@ -5,7 +5,7 @@ from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import SelectorKind
 from rest_framework_services.types.selector_spec import SelectorSpec
 
-from rest_framework_mcp.registry.types.selector_tool_binding import SelectorToolBinding
+from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
 
 
 def _sel() -> list[dict[str, str]]:

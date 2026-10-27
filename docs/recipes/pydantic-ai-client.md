@@ -209,7 +209,7 @@ when the agent should receive push notifications or when dispatch is I/O-bound
 
 ## Trying it locally
 
-The [`invoicing` example](https://github.com/Artui/djangorestframework-mcp-server/tree/main/examples/invoicing)
+The [`invoicing` example](https://github.com/Artui/django-spec-mcp/tree/main/examples/invoicing)
 is a complete server to point this at:
 
 ```bash

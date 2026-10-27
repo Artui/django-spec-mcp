@@ -14,7 +14,7 @@ from django_service_specs import (
 )
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp.adapters.utils import (
+from django_spec_mcp.adapters.utils import (
     merge_meta,
     merge_tool_annotations,
     validate_input_serializer_against_callable,
@@ -26,19 +26,19 @@ from rest_framework_mcp.adapters.utils import (
     validate_url_kwarg_inputs,
     validate_url_kwargs,
 )
-from rest_framework_mcp.auth.permissions.wrap_spec_permissions import wrap_spec_permissions
-from rest_framework_mcp.constants import (
+from django_spec_mcp.auth.permissions.wrap_spec_permissions import wrap_spec_permissions
+from django_spec_mcp.constants import (
     ArgumentBinding,
     OutputFormat,
     TaskPolicy,
     ToolContentKind,
     UnknownArguments,
 )
-from rest_framework_mcp.protocol.types.icon import Icon
-from rest_framework_mcp.registry.types.query_param import QueryParam
-from rest_framework_mcp.registry.types.tool_binding import ToolBinding
-from rest_framework_mcp.registry.types.url_kwarg import UrlKwarg
-from rest_framework_mcp.schema.utils import target_lookup
+from django_spec_mcp.protocol.types.icon import Icon
+from django_spec_mcp.registry.types.query_param import QueryParam
+from django_spec_mcp.registry.types.tool_binding import ToolBinding
+from django_spec_mcp.registry.types.url_kwarg import UrlKwarg
+from django_spec_mcp.schema.utils import target_lookup
 
 
 def service_spec_to_tool(
@@ -74,14 +74,14 @@ def service_spec_to_tool(
     server_arguments: ServerArguments | None = None,
 ) -> ToolBinding:
     """Lift a ``ServiceSpec`` into a
-    [`ToolBinding`][rest_framework_mcp.registry.types.tool_binding.ToolBinding].
+    [`ToolBinding`][django_spec_mcp.registry.types.tool_binding.ToolBinding].
 
     Pure projection — no side effects on the spec or its callable. The handler
     layer (``handlers/handle_tools_call.py``) is what invokes ``spec.service``.
 
     ``spec.permission_classes`` is honoured: each DRF ``BasePermission`` class is
     wrapped in
-    [`DRFPermissionAdapter`][rest_framework_mcp.auth.permissions.drf_permission_adapter.DRFPermissionAdapter]
+    [`DRFPermissionAdapter`][django_spec_mcp.auth.permissions.drf_permission_adapter.DRFPermissionAdapter]
     and prepended to the per-binding ``permissions`` tuple, so author-declared contracts
     on the spec run before transport-level ``MCPPermission`` instances, AND-combined.
 

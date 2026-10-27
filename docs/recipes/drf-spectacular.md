@@ -11,7 +11,7 @@ zero overhead.
 ## Install
 
 ```bash
-pip install "djangorestframework-mcp-server[spectacular]"
+pip install "django-spec-mcp[spectacular]"
 ```
 
 This pulls in `drf-spectacular>=0.27`. No app config change required —
@@ -109,5 +109,5 @@ assert "internal_id" not in schemas["create-invoice"]["properties"]
 ```
 
 Or invoke `build_input_schema` directly in a unit test — it's a thin
-public helper (`from rest_framework_mcp.schema.input_schema import
+public helper (`from django_spec_mcp.schema.input_schema import
 build_input_schema`).

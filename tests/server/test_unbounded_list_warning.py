@@ -21,11 +21,11 @@ from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import SelectorKind
 from rest_framework_services.types.selector_spec import SelectorSpec
 
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.config.build_mcp_config import build_mcp_config
-from rest_framework_mcp.server.mcp_server import MCPServer
-from rest_framework_mcp.server.utils import UnboundedListWarning
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.config.build_mcp_config import build_mcp_config
+from django_spec_mcp.server.mcp_server import MCPServer
+from django_spec_mcp.server.utils import UnboundedListWarning
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 
 
 def _server(**config: Any) -> MCPServer:

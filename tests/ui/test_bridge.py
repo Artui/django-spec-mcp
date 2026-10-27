@@ -23,9 +23,9 @@ from typing import Any
 
 import pytest
 
-import rest_framework_mcp
+import django_spec_mcp
 
-BRIDGE = pathlib.Path(rest_framework_mcp.__file__).parent / "ui" / "bridge.js"
+BRIDGE = pathlib.Path(django_spec_mcp.__file__).parent / "ui" / "bridge.js"
 HARNESS = pathlib.Path(__file__).parent / "bridge_harness.mjs"
 
 INITIALIZED = "ui/notifications/initialized"

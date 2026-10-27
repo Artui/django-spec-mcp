@@ -11,13 +11,13 @@ from typing import Any
 
 from django.urls import URLPattern
 
-from rest_framework_mcp import MCPServer
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.backends.django_oauth_toolkit_backend import (
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.backends.django_oauth_toolkit_backend import (
     DjangoOAuthToolkitBackend,
 )
-from rest_framework_mcp.contrib.oauth.build_oauth_urlpatterns import build_oauth_urlpatterns
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp.contrib.oauth.build_oauth_urlpatterns import build_oauth_urlpatterns
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 
 
 def _server(*, backend: Any = None) -> MCPServer:
@@ -106,7 +106,7 @@ def test_pattern_names_are_namespaced() -> None:
 
 def test_backend_threads_through_to_metadata_views(settings) -> None:
     """The PRM / AS / OIDC views receive the same backend instance."""
-    settings.REST_FRAMEWORK_MCP = {
+    settings.SPEC_MCP = {
         "SERVER_INFO": {"authorization_servers": ["https://issuer.example/oauth"]},
     }
     backend = DjangoOAuthToolkitBackend()
@@ -125,7 +125,7 @@ def test_alias_renders_not_redirects(settings) -> None:
     """Aliases serve the canonical payload byte-for-byte rather than HTTP-redirecting."""
     from django.test import RequestFactory
 
-    settings.REST_FRAMEWORK_MCP = {
+    settings.SPEC_MCP = {
         "SERVER_INFO": {"authorization_servers": ["https://issuer.example/oauth"]},
     }
     server = _server(backend=DjangoOAuthToolkitBackend())

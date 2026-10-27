@@ -1,20 +1,20 @@
 # Multi-worker SSE with Redis
 
 The default
-[`InMemorySSEBroker`][rest_framework_mcp.transport.in_memory_sse_broker.InMemorySSEBroker]
+[`InMemorySSEBroker`][django_spec_mcp.transport.in_memory_sse_broker.InMemorySSEBroker]
 works for single-process deployments —
 one ASGI worker, one event loop, no fan-out concerns. Multi-worker setups
 need an out-of-process broker so any worker can deliver a `notify(...)` to
 whichever worker is holding the streaming GET.
 
 The shipped
-[`RedisSSEBroker`][rest_framework_mcp.transport.redis_sse_broker.RedisSSEBroker]
+[`RedisSSEBroker`][django_spec_mcp.transport.redis_sse_broker.RedisSSEBroker]
 is the production answer.
 
 ## Install
 
 ```bash
-pip install "djangorestframework-mcp-server[redis]"
+pip install "django-spec-mcp[redis]"
 ```
 
 Pulls in `redis>=5.0` (which provides `redis.asyncio`).
@@ -24,8 +24,8 @@ Pulls in `redis>=5.0` (which provides `redis.asyncio`).
 ```python title="myproject/mcp.py"
 from redis.asyncio import Redis
 
-from rest_framework_mcp import MCPServer
-from rest_framework_mcp.transport.redis_sse_broker import RedisSSEBroker
+from django_spec_mcp import MCPServer
+from django_spec_mcp.transport.redis_sse_broker import RedisSSEBroker
 
 
 redis_client = Redis.from_url("redis://localhost:6379/0", decode_responses=False)
@@ -45,7 +45,7 @@ returns whether a subscriber was attached.
 
 For each session that opens a streaming GET, the broker spawns a background
 `asyncio.Task` that subscribes to the per-session Redis channel
-(`drf-mcp:sse:<session_id>` by default). The task pumps incoming pub/sub
+(`spec-mcp:sse:<session_id>` by default). The task pumps incoming pub/sub
 messages onto a per-session `asyncio.Queue`, which the streaming generator
 consumes — same interface as the in-memory broker.
 
@@ -62,7 +62,7 @@ every worker subscribes to the same channel.
   `unsubscribe` or by Redis client shutdown).
 - **Replay is opt-in.** Messages published while no subscriber was attached
   are dropped *unless* you configure an
-  [`SSEReplayBuffer`][rest_framework_mcp.transport.types.sse_replay_buffer.SSEReplayBuffer]
+  [`SSEReplayBuffer`][django_spec_mcp.transport.types.sse_replay_buffer.SSEReplayBuffer]
   — see
   the [Last-Event-ID resume recipe](sse-replay-buffer.md).
 - **Channel-prefix isolation.** Pass `channel_prefix="env-staging"` (or
@@ -74,7 +74,7 @@ every worker subscribes to the same channel.
 ## Custom brokers
 
 `RedisSSEBroker` is just a class that implements the
-[`SSEBroker`][rest_framework_mcp.transport.types.sse_broker.SSEBroker]
+[`SSEBroker`][django_spec_mcp.transport.types.sse_broker.SSEBroker]
 Protocol (four methods: `subscribe`, `unsubscribe`, `publish`,
 `has_subscriber`). NATS-, Kafka-, RabbitMQ-backed brokers fit the same
 interface — just keep the single-subscriber-per-session contract.

@@ -7,10 +7,10 @@ from typing import Any
 from django.http import HttpRequest
 from rest_framework.permissions import BasePermission
 
-from rest_framework_mcp.auth.permissions.drf_permission_adapter import DRFPermissionAdapter
-from rest_framework_mcp.auth.permissions.utils import DispatchShape
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.handlers.utils import check_permissions
+from django_spec_mcp.auth.permissions.drf_permission_adapter import DRFPermissionAdapter
+from django_spec_mcp.auth.permissions.utils import DispatchShape
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.handlers.utils import check_permissions
 
 
 def _recording(seen: list[dict[str, Any]]) -> type[BasePermission]:

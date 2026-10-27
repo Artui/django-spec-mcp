@@ -17,13 +17,13 @@ from django.http import HttpRequest
 from django_service_specs import SelectorKind
 from rest_framework_services import SelectorSpec
 
-from rest_framework_mcp import MCPServer
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.handlers.handle_tools_call import handle_tools_call
-from rest_framework_mcp.handlers.handle_tools_list import handle_tools_list
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.testing import assert_tool_result_conforms
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.testing import assert_tool_result_conforms
 from tests.testapp.models import Invoice
 from tests.testapp.serializers import InvoiceOutputSerializer, LedgerSerializer
 
@@ -242,5 +242,5 @@ def test_the_missing_extra_is_named_rather_than_raised_as_a_bare_import_error(
     monkeypatch.setitem(sys.modules, "jsonschema", None)
     monkeypatch.setitem(sys.modules, "jsonschema.validators", None)
 
-    with pytest.raises(ImportError, match=r"djangorestframework-mcp-server\[test\]"):
+    with pytest.raises(ImportError, match=r"django-spec-mcp\[test\]"):
         assert_tool_result_conforms({"name": "t", "outputSchema": {}}, {"structuredContent": {}})

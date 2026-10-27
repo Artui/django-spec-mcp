@@ -2,17 +2,17 @@ from __future__ import annotations
 
 from django.test import RequestFactory
 
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.backends.django_oauth_toolkit_backend import (
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.backends.django_oauth_toolkit_backend import (
     DjangoOAuthToolkitBackend,
 )
-from rest_framework_mcp.contrib.oauth.authorization_server_metadata_viewset import (
+from django_spec_mcp.contrib.oauth.authorization_server_metadata_viewset import (
     AuthorizationServerMetadataViewSet,
 )
 
 
 def test_get_returns_backend_metadata(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {
+    settings.SPEC_MCP = {
         "SERVER_INFO": {
             "authorization_servers": ["https://issuer.example/oauth"],
             "scopes_supported": ["mcp:read"],

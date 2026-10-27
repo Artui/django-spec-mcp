@@ -7,7 +7,7 @@ the actual ask — and returns them so the client can replay the conversation
 through whichever model it's wired up to.
 
 ```python
-from rest_framework_mcp import MCPServer, PromptArgument
+from django_spec_mcp import MCPServer, PromptArgument
 
 server = MCPServer(name="my-app")
 
@@ -45,7 +45,7 @@ The handler normalises whatever the callable returns:
 For multi-turn prompts, return `PromptMessage` objects directly:
 
 ```python
-from rest_framework_mcp import PromptMessage
+from django_spec_mcp import PromptMessage
 
 
 @server.prompt()
@@ -78,8 +78,8 @@ Prompts use the same `MCPPermission` and `MCPRateLimit` machinery as tools and
 resources:
 
 ```python
-from rest_framework_mcp import ScopeRequired
-from rest_framework_mcp.auth.rate_limits.fixed_window_rate_limit import (
+from django_spec_mcp import ScopeRequired
+from django_spec_mcp.auth.rate_limits.fixed_window_rate_limit import (
     FixedWindowRateLimit,
 )
 

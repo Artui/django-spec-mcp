@@ -1,7 +1,7 @@
 # Worked examples
 
 Each subdirectory is a complete, runnable Django project that exercises
-a specific corner of `djangorestframework-mcp-server`. They are
+a specific corner of `django-spec-mcp`. They are
 intentionally small — minimal `settings.py`, SQLite, a single
 Django app — so you can read the whole thing in one sitting and copy
 the bits you need into your own project.

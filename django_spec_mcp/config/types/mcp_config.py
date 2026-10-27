@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from rest_framework_mcp.constants import MODERN_PROTOCOL_VERSIONS, OutputFormat
+from django_spec_mcp.constants import MODERN_PROTOCOL_VERSIONS, OutputFormat
 
 
 @dataclass(frozen=True)
@@ -10,19 +10,19 @@ class MCPConfig:
     """A server's resolved scalar configuration.
 
     Every field is **already resolved** — there is no "unset" state and no settings
-    lookup left to do. [`MCPServer`][rest_framework_mcp.server.mcp_server.MCPServer]
+    lookup left to do. [`MCPServer`][django_spec_mcp.server.mcp_server.MCPServer]
     builds one in ``__init__`` (via ``build_mcp_config``, which reads
-    ``REST_FRAMEWORK_MCP``) and threads it to the transport and, on ``MCPCallContext``,
+    ``SPEC_MCP``) and threads it to the transport and, on ``MCPCallContext``,
     to every handler. Read at request time these values could only ever be global; read
     once at construction, each server carries its own.
 
     Do **not** construct this directly to override a field — there are no
     defaults, and a partially-specified config would silently discard the
-    project's own ``REST_FRAMEWORK_MCP`` values. Use ``build_mcp_config(
+    project's own ``SPEC_MCP`` values. Use ``build_mcp_config(
     page_size=50)``, which layers overrides over the settings.
 
     Each field's user-facing documentation is the matching
-    ``REST_FRAMEWORK_MCP`` key in the settings reference; the notes here are
+    ``SPEC_MCP`` key in the settings reference; the notes here are
     the invariants a caller of this dataclass has to hold.
     """
 

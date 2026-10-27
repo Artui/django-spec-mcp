@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from rest_framework_mcp.registry.types.prompt_binding import PromptBinding
+from django_spec_mcp.registry.types.prompt_binding import PromptBinding
 
 
 class PromptRegistry:
     """Name to
-    [`PromptBinding`][rest_framework_mcp.registry.types.prompt_binding.PromptBinding]
+    [`PromptBinding`][django_spec_mcp.registry.types.prompt_binding.PromptBinding]
     lookup.
 
-    Mirrors [`ToolRegistry`][rest_framework_mcp.registry.tool_registry.ToolRegistry]:
+    Mirrors [`ToolRegistry`][django_spec_mcp.registry.tool_registry.ToolRegistry]:
     names are unique and a duplicate raises at registration."""
 
     def __init__(self) -> None:

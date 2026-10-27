@@ -66,7 +66,7 @@ register a spec once and both surfaces get the same shape:
   accepts (a `RETRIEVE` spec rejects the collection-only
   `paginate`, but `filter_set` is allowed — it is
   shaped + applied before the single-instance `.first()`).
-  `SelectorKind` is re-exported from `rest_framework_mcp` for
+  `SelectorKind` is re-exported from `django_spec_mcp` for
   convenience.
 - **`ServiceSpec.output_selector_spec`** — a nested
   `SelectorSpec | None` describing the post-call render pipeline
@@ -348,7 +348,7 @@ into the dispatch pools (authoritative over the spec params, below the
 declaration is made once for every transport.
 
 ```python
-from rest_framework_mcp import UrlKwarg
+from django_spec_mcp import UrlKwarg
 from rest_framework_services import ServiceSpec
 
 
@@ -482,7 +482,7 @@ to come through the channel that carries that precedence.
 [drf-services' type](https://github.com/Artui/djangorestframework-services/blob/main/rest_framework_services/types/url_kwarg.py),
 re-exported here — the declaration is the same whichever transport carries it, and
 the two adapters that each had a copy had already drifted apart on which names
-they reserved. `from rest_framework_mcp import UrlKwarg` keeps working.
+they reserved. `from django_spec_mcp import UrlKwarg` keeps working.
 Requires `djangorestframework-services>=0.28.1`.
 
 ### Query params: read-shaping values the serializer reads
@@ -493,7 +493,7 @@ when it branches on the query string (django-restql field selection, a custom
 serializer keyed on `?expand=`):
 
 ```python
-from rest_framework_mcp import QueryParam
+from django_spec_mcp import QueryParam
 
 server.register_selector_tool(
     name="invoices.list",
@@ -1047,7 +1047,7 @@ forms) accept three behavior knobs:
   so the policy doesn't fight the post-fetch pipeline.
 
 - **`always_listed=`** — when
-  `REST_FRAMEWORK_MCP["FILTER_LISTINGS_BY_PERMISSIONS"]` is enabled,
+  `SPEC_MCP["FILTER_LISTINGS_BY_PERMISSIONS"]` is enabled,
   bindings are dropped from `tools/list` / `resources/list` /
   `prompts/list` when their permissions deny the current caller, and a
   tool is left out of `tools/list` whenever an operation-scope affordance
@@ -1120,7 +1120,7 @@ asks again — so the question is when a client asks:
     ```python
     from asgiref.sync import async_to_sync
     from django.db import transaction
-    from rest_framework_mcp import NotificationKind
+    from django_spec_mcp import NotificationKind
 
     transaction.on_commit(
         lambda: async_to_sync(server.notify_list_changed)(NotificationKind.TOOLS_LIST_CHANGED)
@@ -1231,7 +1231,7 @@ registration methods, so every guarantee and bug fix applies
 automatically.
 
 ```python
-from rest_framework_mcp import (
+from django_spec_mcp import (
     ServiceDefaults,
     SelectorDefaults,
     ToolDefinition,
@@ -1390,7 +1390,7 @@ model choosing between tools, so promoting one silently would ship prose nobody
 reviewed for that audience.
 
 Registering without one emits `UndescribedToolWarning`, and
-`REST_FRAMEWORK_MCP["REQUIRE_TOOL_DESCRIPTIONS"] = True` turns that into an
+`SPEC_MCP["REQUIRE_TOOL_DESCRIPTIONS"] = True` turns that into an
 `ImproperlyConfigured`. This mirrors `REQUIRE_TOOL_PERMISSIONS`: two properties
 are equally required for a tool to be usable — something must gate the call, and
 something must say what the call does.
@@ -1442,11 +1442,11 @@ whose name doesn't match the entity it identifies belongs in `help_text` or
 A few sentences a model reads are not in any registration, because they explain
 how this server behaves rather than what one tool does. The server writes them,
 and `MCPServer(conventions=...)` changes the words. It takes an
-[`AgentConventions`][rest_framework_mcp.schema.types.agent_conventions.AgentConventions],
+[`AgentConventions`][django_spec_mcp.schema.types.agent_conventions.AgentConventions],
 per server, so two servers in one project can speak to different readers:
 
 ```python
-from rest_framework_mcp import AgentConventions, MCPServer
+from django_spec_mcp import AgentConventions, MCPServer
 
 server = MCPServer(
     name="invoicing",
@@ -1788,7 +1788,7 @@ run several subscriptions and tell them apart.
 
 ```python
 from redis.asyncio import Redis
-from rest_framework_mcp.subscriptions.redis_subscription_broker import (
+from django_spec_mcp.subscriptions.redis_subscription_broker import (
     RedisSubscriptionBroker,
 )
 
@@ -2280,7 +2280,7 @@ server.register_ui_resource(
 
 `body_template_name=` takes a template holding the view's markup, styles and
 scripts, and wraps it in a document carrying
-[`build_app_document`][rest_framework_mcp.ui.build_app_document.build_app_document]'s
+[`build_app_document`][django_spec_mcp.ui.build_app_document.build_app_document]'s
 shell and bridge. The other three sources — `template_name=`, `html=`,
 `selector=` — hand you a whole document to fill, bridge included.
 
@@ -2498,7 +2498,7 @@ The MCP package owns its own dispatch flow. It does **not** import
    the model reads the sentence. `type` is still `"service_error"`, and any
    other `ServiceError` (a `ServiceConflict` raised by hand, say) carries no
    `code` key at all. Setting
-   `REST_FRAMEWORK_MCP["INCLUDE_VALIDATION_VALUE"] = True` additionally
+   `SPEC_MCP["INCLUDE_VALIDATION_VALUE"] = True` additionally
    echoes the offending `arguments` dict back under `value` — handy for
    debugging schema mismatches against opaque client SDKs, off by default
    because the dict can carry sensitive payloads.
@@ -2622,10 +2622,10 @@ content, and the TypeScript SDK does.
 The MCP 2025-11-25 transport requires:
 
 - **`MCP-Protocol-Version`** — the version the client speaks. Validated against
-  `REST_FRAMEWORK_MCP["PROTOCOL_VERSIONS"]`. Missing → 400 except on
+  `SPEC_MCP["PROTOCOL_VERSIONS"]`. Missing → 400 except on
   `initialize`, which is allowed to omit it for the initial handshake. Some
   clients omit the header on every request; set
-  `REST_FRAMEWORK_MCP["REQUIRE_PROTOCOL_VERSION_HEADER"] = False` to accept
+  `SPEC_MCP["REQUIRE_PROTOCOL_VERSION_HEADER"] = False` to accept
   those by falling back to the first supported version. A present-but-
   unsupported version is still rejected either way.
 - **`MCP-Session-Id`** — issued by the server in the response to `initialize`.
@@ -2638,7 +2638,7 @@ The MCP 2025-11-25 transport requires:
   Django cache.
 - **`Origin`** — strict allowlist. Empty allowlist means "no cross-origin
   requests"; an empty `Origin` header is treated as same-origin and allowed.
-  Configure via `REST_FRAMEWORK_MCP["ALLOWED_ORIGINS"]`. Use `["*"]` only for
+  Configure via `SPEC_MCP["ALLOWED_ORIGINS"]`. Use `["*"]` only for
   dev.
 
 All three verbs authenticate through the configured `MCPAuthBackend`
@@ -2661,7 +2661,7 @@ optional `structuredContent`:
 - `content[0]` is a text block whose payload is encoded per `OutputFormat`.
 
 ```python
-from rest_framework_mcp import OutputFormat
+from django_spec_mcp import OutputFormat
 
 server.register_service_tool(
     name="invoices.list",
@@ -2694,9 +2694,9 @@ allowed.
 
 Two server-wide settings, both default `True`:
 
-- `REST_FRAMEWORK_MCP["INCLUDE_STRUCTURED_CONTENT"]` — gates the
+- `SPEC_MCP["INCLUDE_STRUCTURED_CONTENT"]` — gates the
   `structuredContent` field on `tools/call` results.
-- `REST_FRAMEWORK_MCP["INCLUDE_OUTPUT_SCHEMA"]` — gates the `outputSchema`
+- `SPEC_MCP["INCLUDE_OUTPUT_SCHEMA"]` — gates the `outputSchema`
   field on `tools/list` entries.
 
 Per-tool overrides mirror them: `include_structured_content` and

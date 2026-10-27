@@ -15,7 +15,7 @@ from django_service_specs import SelectorKind
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp.registry.types.utils import rendered_kind
+from django_spec_mcp.registry.types.utils import rendered_kind
 
 
 def _rows() -> Any:

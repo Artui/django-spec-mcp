@@ -8,7 +8,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
 
-from rest_framework_mcp.auth.types.auth_backend import MCPAuthBackend
+from django_spec_mcp.auth.types.auth_backend import MCPAuthBackend
 
 
 @method_decorator(never_cache, name="dispatch")
@@ -16,7 +16,7 @@ class AuthorizationServerMetadataViewSet(ViewSet):
     """RFC 8414 OAuth 2.0 Authorization Server Metadata endpoint.
 
     Mounted by
-    [`build_oauth_urlpatterns`][rest_framework_mcp.contrib.oauth.build_oauth_urlpatterns.build_oauth_urlpatterns]
+    [`build_oauth_urlpatterns`][django_spec_mcp.contrib.oauth.build_oauth_urlpatterns.build_oauth_urlpatterns]
     at ``/.well-known/oauth-authorization-server`` plus aliases, wired as the ``list``
     action: ``as_view({"get": "list"}, auth_backend=...)``.
 

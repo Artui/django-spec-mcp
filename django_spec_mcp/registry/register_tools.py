@@ -1,11 +1,11 @@
 """Bulk-registration entry point for
-[`ToolDefinition`][rest_framework_mcp.registry.types.tool_definition.ToolDefinition]
+[`ToolDefinition`][django_spec_mcp.registry.types.tool_definition.ToolDefinition]
 lists.
 
 A thin loop over
-[`MCPServer.register_service_tool`][rest_framework_mcp.server.mcp_server.MCPServer.register_service_tool]
+[`MCPServer.register_service_tool`][django_spec_mcp.server.mcp_server.MCPServer.register_service_tool]
 /
-[`MCPServer.register_selector_tool`][rest_framework_mcp.server.mcp_server.MCPServer.register_selector_tool]
+[`MCPServer.register_selector_tool`][django_spec_mcp.server.mcp_server.MCPServer.register_selector_tool]
 rather than a parallel registration engine, so every guarantee of the imperative API
 applies unchanged. Useful when a project has many tools in one family and wants the
 repetitive defaults in one place:
@@ -32,13 +32,13 @@ import dataclasses
 from collections.abc import Iterable
 from typing import Any
 
-from rest_framework_mcp.constants import ToolKind
-from rest_framework_mcp.registry.types.selector_defaults import SelectorDefaults
-from rest_framework_mcp.registry.types.selector_tool_binding import SelectorToolBinding
-from rest_framework_mcp.registry.types.service_defaults import ServiceDefaults
-from rest_framework_mcp.registry.types.tool_binding import ToolBinding
-from rest_framework_mcp.registry.types.tool_definition import ToolDefinition
-from rest_framework_mcp.server.mcp_server import MCPServer
+from django_spec_mcp.constants import ToolKind
+from django_spec_mcp.registry.types.selector_defaults import SelectorDefaults
+from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
+from django_spec_mcp.registry.types.service_defaults import ServiceDefaults
+from django_spec_mcp.registry.types.tool_binding import ToolBinding
+from django_spec_mcp.registry.types.tool_definition import ToolDefinition
+from django_spec_mcp.server.mcp_server import MCPServer
 
 # Stripped before forwarding: these are the registration method's own
 # positional kwargs, or the discriminator, not values merged with defaults.
@@ -53,7 +53,7 @@ def register_tools(
     service_defaults: ServiceDefaults | None = None,
 ) -> list[ToolBinding | SelectorToolBinding]:
     """Register every
-    [`ToolDefinition`][rest_framework_mcp.registry.types.tool_definition.ToolDefinition]
+    [`ToolDefinition`][django_spec_mcp.registry.types.tool_definition.ToolDefinition]
     against ``server``.
 
     Args:
@@ -71,7 +71,7 @@ def register_tools(
     Raises:
         TypeError: The definition's ``kind`` is unrecognised. The discriminator
             is internal, so this needs direct
-            [`ToolDefinition`][rest_framework_mcp.registry.types.tool_definition.ToolDefinition]
+            [`ToolDefinition`][django_spec_mcp.registry.types.tool_definition.ToolDefinition]
             construction with an unsupported value.
     """
     selector_defaults_kwargs: dict[str, Any] = _non_none_field_dict(selector_defaults)
@@ -103,11 +103,11 @@ def _non_none_field_dict(obj: Any) -> dict[str, Any]:
     """Return the dataclass's non-``None`` fields as a dict, or ``{}`` for ``None``.
 
     ``None`` is the "no override" sentinel across the
-    [`ToolDefinition`][rest_framework_mcp.registry.types.tool_definition.ToolDefinition]
+    [`ToolDefinition`][django_spec_mcp.registry.types.tool_definition.ToolDefinition]
     /
-    [`SelectorDefaults`][rest_framework_mcp.registry.types.selector_defaults.SelectorDefaults]
+    [`SelectorDefaults`][django_spec_mcp.registry.types.selector_defaults.SelectorDefaults]
     /
-    [`ServiceDefaults`][rest_framework_mcp.registry.types.service_defaults.ServiceDefaults]
+    [`ServiceDefaults`][django_spec_mcp.registry.types.service_defaults.ServiceDefaults]
     family, and stripping it lets the downstream ``register_*_tool`` default apply —
     passing the ``None`` through would mean something else, since several of those
     kwargs are tri-state on the method."""

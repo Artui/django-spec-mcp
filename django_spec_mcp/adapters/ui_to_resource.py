@@ -7,16 +7,16 @@ from typing import Any
 from django.template.loader import render_to_string
 from django_service_specs import UNSET, SelectorKind, UnsetType
 
-from rest_framework_mcp.adapters.utils import merge_meta
-from rest_framework_mcp.constants import (
+from django_spec_mcp.adapters.utils import merge_meta
+from django_spec_mcp.constants import (
     UI_META_KEY,
     UI_RESOURCE_MIME_TYPE,
     ResourceEncoding,
 )
-from rest_framework_mcp.protocol.types.icon import Icon
-from rest_framework_mcp.registry.types.resource_binding import ResourceBinding
-from rest_framework_mcp.registry.types.ui_resource_meta import UIResourceMeta
-from rest_framework_mcp.ui.build_app_document import build_app_document
+from django_spec_mcp.protocol.types.icon import Icon
+from django_spec_mcp.registry.types.resource_binding import ResourceBinding
+from django_spec_mcp.registry.types.ui_resource_meta import UIResourceMeta
+from django_spec_mcp.ui.build_app_document import build_app_document
 
 
 def ui_view_to_resource(
@@ -41,7 +41,7 @@ def ui_view_to_resource(
     always_listed: bool = False,
 ) -> ResourceBinding:
     """Lift an interactive HTML view into a
-    [`ResourceBinding`][rest_framework_mcp.registry.types.resource_binding.ResourceBinding].
+    [`ResourceBinding`][django_spec_mcp.registry.types.resource_binding.ResourceBinding].
 
     The sibling of ``selector_to_resource`` for the MCP Apps extension.
     A view is an ordinary resource with three things fixed: the Apps mime
@@ -58,7 +58,7 @@ def ui_view_to_resource(
       only*, wrapped here in a document that carries the ``ui/*`` bridge. The
       recommended source, and the only one that does not ask a project to
       implement the extension's postMessage protocol itself — see
-      [`build_app_document`][rest_framework_mcp.ui.build_app_document.build_app_document].
+      [`build_app_document`][django_spec_mcp.ui.build_app_document.build_app_document].
       ``diagnostics=`` rides with it: whether a protocol failure is written
       into the document as well as logged, ``None`` following
       ``settings.DEBUG``.

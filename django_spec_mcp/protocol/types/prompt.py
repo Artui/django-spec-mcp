@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from rest_framework_mcp.protocol.types.icon import Icon
-from rest_framework_mcp.protocol.types.prompt_argument import PromptArgument
+from django_spec_mcp.protocol.types.icon import Icon
+from django_spec_mcp.protocol.types.prompt_argument import PromptArgument
 
 
 @dataclass(frozen=True)

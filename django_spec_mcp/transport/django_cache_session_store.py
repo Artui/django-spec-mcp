@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 from django.core.cache import cache
 
-from rest_framework_mcp.conf import get_setting
+from django_spec_mcp.conf import get_setting
 
 
 @dataclass(frozen=True)
@@ -23,7 +23,7 @@ class _Entry:
     created_at: float
 
 
-_KEY_PREFIX: str = "drf-mcp:session:"
+_KEY_PREFIX: str = "spec-mcp:session:"
 # Long enough to make a collision between two servers in one process
 # implausible while keeping the key readable. Not a security boundary — the
 # namespace is a partition, not a secret.
@@ -56,12 +56,12 @@ class DjangoCacheSessionStore:
     an upgrade does not log every current holder out.
 
     **Namespacing.** An instance built by
-    [`MCPServer`][rest_framework_mcp.server.mcp_server.MCPServer] keys its entries under
+    [`MCPServer`][django_spec_mcp.server.mcp_server.MCPServer] keys its entries under
     the server's ``name``, so two servers in one project cannot see each other's
     sessions. Without it they share one flat key space over the same Django cache: a
     session minted at one satisfies the other's ownership check, and a ``DELETE``
     against either destroys the other's session. The namespace is **hashed** into the
-    key (``drf-mcp:session:<digest>:<token>``) because ``name`` is free-form while cache
+    key (``spec-mcp:session:<digest>:<token>``) because ``name`` is free-form while cache
     keys must survive backends like memcached, which reject spaces and control
     characters and cap length at 250.
 

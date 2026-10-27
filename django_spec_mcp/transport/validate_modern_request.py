@@ -4,9 +4,9 @@ import base64
 import binascii
 from typing import Any
 
-from rest_framework_mcp.constants import JsonRpcErrorCode
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.transport.types.request_metadata import RequestMetadata
+from django_spec_mcp.constants import JsonRpcErrorCode
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.transport.types.request_metadata import RequestMetadata
 
 METHOD_HEADER: str = "Mcp-Method"
 NAME_HEADER: str = "Mcp-Name"

@@ -14,21 +14,21 @@ from django.http import HttpRequest
 from django_service_specs import SelectorKind
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import DRFPermissionAdapter, UrlKwarg
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.handlers.handle_prompts_list import handle_prompts_list
-from rest_framework_mcp.handlers.handle_resources_list import handle_resources_list
-from rest_framework_mcp.handlers.handle_resources_templates_list import (
+from django_spec_mcp import DRFPermissionAdapter, UrlKwarg
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.handlers.handle_prompts_list import handle_prompts_list
+from django_spec_mcp.handlers.handle_resources_list import handle_resources_list
+from django_spec_mcp.handlers.handle_resources_templates_list import (
     handle_resources_templates_list,
 )
-from rest_framework_mcp.handlers.handle_tools_list import handle_tools_list
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.registry.prompt_registry import PromptRegistry
-from rest_framework_mcp.registry.resource_registry import ResourceRegistry
-from rest_framework_mcp.registry.tool_registry import ToolRegistry
-from rest_framework_mcp.registry.types.prompt_binding import PromptBinding
-from rest_framework_mcp.registry.types.resource_binding import ResourceBinding
-from rest_framework_mcp.registry.types.tool_binding import ToolBinding
+from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.registry.prompt_registry import PromptRegistry
+from django_spec_mcp.registry.resource_registry import ResourceRegistry
+from django_spec_mcp.registry.tool_registry import ToolRegistry
+from django_spec_mcp.registry.types.prompt_binding import PromptBinding
+from django_spec_mcp.registry.types.resource_binding import ResourceBinding
+from django_spec_mcp.registry.types.tool_binding import ToolBinding
 from tests.utils import granting_route
 
 
@@ -91,7 +91,7 @@ def _tool(
 
 
 def test_tools_list_setting_off_returns_all_bindings_even_when_denied(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {"FILTER_LISTINGS_BY_PERMISSIONS": False}
+    settings.SPEC_MCP = {"FILTER_LISTINGS_BY_PERMISSIONS": False}
     tools = _registry_with(_tool("a"), _tool("b", permissions=(_DenyAll(),)))
     out = handle_tools_list(None, _ctx(tools=tools))
     assert isinstance(out, dict)
@@ -99,7 +99,7 @@ def test_tools_list_setting_off_returns_all_bindings_even_when_denied(settings) 
 
 
 def test_tools_list_setting_on_hides_denied_bindings(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {"FILTER_LISTINGS_BY_PERMISSIONS": True}
+    settings.SPEC_MCP = {"FILTER_LISTINGS_BY_PERMISSIONS": True}
     tools = _registry_with(_tool("a"), _tool("b", permissions=(_DenyAll(),)))
     out = handle_tools_list(None, _ctx(tools=tools))
     assert isinstance(out, dict)
@@ -107,7 +107,7 @@ def test_tools_list_setting_on_hides_denied_bindings(settings) -> None:
 
 
 def test_tools_list_always_listed_overrides_denial(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {"FILTER_LISTINGS_BY_PERMISSIONS": True}
+    settings.SPEC_MCP = {"FILTER_LISTINGS_BY_PERMISSIONS": True}
     tools = _registry_with(
         _tool("a"),
         _tool("b", permissions=(_DenyAll(),), always_listed=True),
@@ -121,7 +121,7 @@ def test_tools_list_judges_a_route_scoped_permission_on_no_route(settings) -> No
     # A listing names no route, so a permission scoping by a URL kwarg is shown
     # ``{}`` and hides the tool even from a caller it admits on a call naming
     # project 7, as ``docs/auth.md`` states; ``always_listed`` is the way back.
-    settings.REST_FRAMEWORK_MCP = {"FILTER_LISTINGS_BY_PERMISSIONS": True}
+    settings.SPEC_MCP = {"FILTER_LISTINGS_BY_PERMISSIONS": True}
     seen: list[dict[str, Any]] = []
     tools = _registry_with(
         _tool("a"),
@@ -141,7 +141,7 @@ def test_tools_list_judges_a_route_scoped_permission_on_no_route(settings) -> No
 
 def test_tools_list_filter_runs_before_pagination(settings) -> None:
     """``nextCursor`` reflects the visible slice, not the global registry."""
-    settings.REST_FRAMEWORK_MCP = {
+    settings.SPEC_MCP = {
         "FILTER_LISTINGS_BY_PERMISSIONS": True,
         "PAGE_SIZE": 2,
     }
@@ -177,7 +177,7 @@ def _resource(name: str, *, permissions: tuple[Any, ...] = ()) -> ResourceBindin
 
 
 def test_resources_list_setting_on_hides_denied(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {"FILTER_LISTINGS_BY_PERMISSIONS": True}
+    settings.SPEC_MCP = {"FILTER_LISTINGS_BY_PERMISSIONS": True}
     resources = ResourceRegistry()
     resources.register(_resource("a"))
     resources.register(_resource("b", permissions=(_DenyAll(),)))
@@ -187,7 +187,7 @@ def test_resources_list_setting_on_hides_denied(settings) -> None:
 
 
 def test_resources_list_setting_off_returns_all(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {"FILTER_LISTINGS_BY_PERMISSIONS": False}
+    settings.SPEC_MCP = {"FILTER_LISTINGS_BY_PERMISSIONS": False}
     resources = ResourceRegistry()
     resources.register(_resource("a", permissions=(_DenyAll(),)))
     out = handle_resources_list(None, _ctx(resources=resources))
@@ -210,7 +210,7 @@ def _template_resource(name: str, *, permissions: tuple[Any, ...] = ()) -> Resou
 
 
 def test_resources_templates_list_setting_on_hides_denied(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {"FILTER_LISTINGS_BY_PERMISSIONS": True}
+    settings.SPEC_MCP = {"FILTER_LISTINGS_BY_PERMISSIONS": True}
     resources = ResourceRegistry()
     resources.register(_template_resource("a"))
     resources.register(_template_resource("b", permissions=(_DenyAll(),)))
@@ -220,7 +220,7 @@ def test_resources_templates_list_setting_on_hides_denied(settings) -> None:
 
 
 def test_resources_templates_list_setting_off_returns_all(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {"FILTER_LISTINGS_BY_PERMISSIONS": False}
+    settings.SPEC_MCP = {"FILTER_LISTINGS_BY_PERMISSIONS": False}
     resources = ResourceRegistry()
     resources.register(_template_resource("a", permissions=(_DenyAll(),)))
     out = handle_resources_templates_list(None, _ctx(resources=resources))
@@ -241,7 +241,7 @@ def _prompt(name: str, *, permissions: tuple[Any, ...] = ()) -> PromptBinding:
 
 
 def test_prompts_list_setting_on_hides_denied(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {"FILTER_LISTINGS_BY_PERMISSIONS": True}
+    settings.SPEC_MCP = {"FILTER_LISTINGS_BY_PERMISSIONS": True}
     prompts = PromptRegistry()
     prompts.register(_prompt("a"))
     prompts.register(_prompt("b", permissions=(_DenyAll(),)))
@@ -251,7 +251,7 @@ def test_prompts_list_setting_on_hides_denied(settings) -> None:
 
 
 def test_prompts_list_setting_off_returns_all(settings) -> None:
-    settings.REST_FRAMEWORK_MCP = {"FILTER_LISTINGS_BY_PERMISSIONS": False}
+    settings.SPEC_MCP = {"FILTER_LISTINGS_BY_PERMISSIONS": False}
     prompts = PromptRegistry()
     prompts.register(_prompt("a", permissions=(_DenyAll(),)))
     out = handle_prompts_list(None, _ctx(prompts=prompts))

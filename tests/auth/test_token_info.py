@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from rest_framework_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.auth.types.token_info import TokenInfo
 
 
 def test_has_scope_present() -> None:

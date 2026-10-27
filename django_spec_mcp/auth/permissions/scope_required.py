@@ -3,7 +3,7 @@ from __future__ import annotations
 from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest
 
-from rest_framework_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.auth.types.token_info import TokenInfo
 
 
 class ScopeRequired:
@@ -19,7 +19,7 @@ class ScopeRequired:
     one-character scopes: nothing fails at registration, and the misconfiguration
     surfaces much later as a permission that can never be satisfied and a nonsense
     challenge.
-    [`DjangoPermRequired`][rest_framework_mcp.auth.permissions.django_perm_required.DjangoPermRequired]
+    [`DjangoPermRequired`][django_spec_mcp.auth.permissions.django_perm_required.DjangoPermRequired]
     takes a bare string too, so the siblings agree."""
 
     def __init__(self, scopes: str | list[str]) -> None:

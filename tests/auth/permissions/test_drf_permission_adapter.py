@@ -8,8 +8,8 @@ from django.http import HttpRequest
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.request import Request
 
-from rest_framework_mcp.auth.permissions.drf_permission_adapter import DRFPermissionAdapter
-from rest_framework_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.auth.permissions.drf_permission_adapter import DRFPermissionAdapter
+from django_spec_mcp.auth.types.token_info import TokenInfo
 
 
 class _DummyUser:

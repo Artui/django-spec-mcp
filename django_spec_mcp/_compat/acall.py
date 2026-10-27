@@ -22,7 +22,7 @@ async def acall(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
     a consumer's ``async def has_permission`` inside it is still never awaited,
     which fails open. Those hooks are **synchronous by contract on both
     transports** and are guarded by
-    ``rest_framework_mcp._compat.reject_awaitable.reject_awaitable`` rather
+    ``django_spec_mcp._compat.reject_awaitable.reject_awaitable`` rather
     than bridged here.
     """
     if inspect.iscoroutinefunction(fn):

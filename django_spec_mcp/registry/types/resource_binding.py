@@ -6,8 +6,8 @@ from typing import Any, Generic, TypeVar
 
 from django_service_specs import UNSET, SelectorKind, UnsetType
 
-from rest_framework_mcp.constants import ResourceEncoding
-from rest_framework_mcp.protocol.types.icon import Icon
+from django_spec_mcp.constants import ResourceEncoding
+from django_spec_mcp.protocol.types.icon import Icon
 
 ResultT = TypeVar("ResultT")
 
@@ -51,7 +51,7 @@ class ResourceBinding(Generic[ResultT]):
     """How the selector's value becomes the ``resources/read`` body. Declared rather
     than inferred from ``mime_type``, so advertising a new mime type never silently
     changes the encoding. See
-    [`ResourceEncoding`][rest_framework_mcp.constants.ResourceEncoding]."""
+    [`ResourceEncoding`][django_spec_mcp.constants.ResourceEncoding]."""
 
     permissions: tuple[Any, ...] = ()
     rate_limits: tuple[Any, ...] = ()
@@ -87,7 +87,7 @@ class ResourceBinding(Generic[ResultT]):
     always_listed: bool = False
     """Keep this resource in ``resources/list`` (or ``resources/templates/list``) even
     when ``FILTER_LISTINGS_BY_PERMISSIONS`` would drop it — same semantics as
-    [`ToolBinding.always_listed`][rest_framework_mcp.registry.types.tool_binding.ToolBinding.always_listed]."""
+    [`ToolBinding.always_listed`][django_spec_mcp.registry.types.tool_binding.ToolBinding.always_listed]."""
 
     @property
     def is_template(self) -> bool:

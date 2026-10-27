@@ -1,13 +1,13 @@
-# djangorestframework-mcp-server
+# django-spec-mcp
 
-[![CI](https://github.com/Artui/djangorestframework-mcp-server/workflows/tests/badge.svg)](https://github.com/Artui/djangorestframework-mcp-server/actions/workflows/tests.yml)
-[![PyPI](https://img.shields.io/pypi/v/djangorestframework-mcp-server.svg)](https://pypi.org/project/djangorestframework-mcp-server/)
-[![Python versions](https://img.shields.io/pypi/pyversions/djangorestframework-mcp-server.svg)](https://pypi.org/project/djangorestframework-mcp-server/)
-[![Django versions](https://img.shields.io/pypi/djversions/djangorestframework-mcp-server.svg)](https://pypi.org/project/djangorestframework-mcp-server/)
-[![Docs](https://img.shields.io/badge/docs-artui.github.io-blue.svg)](https://artui.github.io/djangorestframework-mcp-server/)
-[![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Artui/djangorestframework-mcp-server/gh-pages/coverage.json)](https://github.com/Artui/djangorestframework-mcp-server/actions/workflows/tests.yml)
+[![CI](https://github.com/Artui/django-spec-mcp/workflows/tests/badge.svg)](https://github.com/Artui/django-spec-mcp/actions/workflows/tests.yml)
+[![PyPI](https://img.shields.io/pypi/v/django-spec-mcp.svg)](https://pypi.org/project/django-spec-mcp/)
+[![Python versions](https://img.shields.io/pypi/pyversions/django-spec-mcp.svg)](https://pypi.org/project/django-spec-mcp/)
+[![Django versions](https://img.shields.io/pypi/djversions/django-spec-mcp.svg)](https://pypi.org/project/django-spec-mcp/)
+[![Docs](https://img.shields.io/badge/docs-artui.github.io-blue.svg)](https://artui.github.io/django-spec-mcp/)
+[![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/Artui/django-spec-mcp/gh-pages/coverage.json)](https://github.com/Artui/django-spec-mcp/actions/workflows/tests.yml)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-[![License](https://img.shields.io/pypi/l/djangorestframework-mcp-server.svg)](LICENSE)
+[![License](https://img.shields.io/pypi/l/django-spec-mcp.svg)](LICENSE)
 
 Expose [`djangorestframework-services`](https://github.com/Artui/djangorestframework-services)
 services and selectors as a [Model Context Protocol](https://modelcontextprotocol.io)
@@ -24,7 +24,7 @@ from django_service_specs import SelectorKind
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import MCPServer
+from django_spec_mcp import MCPServer
 
 server = MCPServer(name="my-app")
 
@@ -125,29 +125,29 @@ See the [quickstart](docs/quickstart.md) for the full end-to-end recipe.
 ## Install
 
 ```bash
-pip install djangorestframework-mcp-server                              # JSON only
-pip install "djangorestframework-mcp-server[toon]"                      # +TOON encoder
-pip install "djangorestframework-mcp-server[oauth]"                     # +django-oauth-toolkit backend
-pip install "djangorestframework-mcp-server[redis]"                     # +Redis SSE broker for multi-worker ASGI
-pip install "djangorestframework-mcp-server[otel]"                      # +OpenTelemetry instrumentation
-pip install "djangorestframework-mcp-server[filter]"                    # +django-filter for selector-tool FilterSets
-pip install "djangorestframework-mcp-server[spectacular]"               # +drf-spectacular schema overrides
-pip install "djangorestframework-mcp-server[jwt]"                       # +SimpleJWTCookieAdapter (djangorestframework-simplejwt)
-pip install "djangorestframework-mcp-server[toon,oauth,redis,otel,filter,spectacular,jwt]"  # everything
+pip install django-spec-mcp                              # JSON only
+pip install "django-spec-mcp[toon]"                      # +TOON encoder
+pip install "django-spec-mcp[oauth]"                     # +django-oauth-toolkit backend
+pip install "django-spec-mcp[redis]"                     # +Redis SSE broker for multi-worker ASGI
+pip install "django-spec-mcp[otel]"                      # +OpenTelemetry instrumentation
+pip install "django-spec-mcp[filter]"                    # +django-filter for selector-tool FilterSets
+pip install "django-spec-mcp[spectacular]"               # +drf-spectacular schema overrides
+pip install "django-spec-mcp[jwt]"                       # +SimpleJWTCookieAdapter (djangorestframework-simplejwt)
+pip install "django-spec-mcp[toon,oauth,redis,otel,filter,spectacular,jwt]"  # everything
 ```
 
 …or with `uv`:
 
 ```bash
-uv add djangorestframework-mcp-server                                   # JSON only
-uv add "djangorestframework-mcp-server[toon]"                           # +TOON encoder
-uv add "djangorestframework-mcp-server[oauth]"                          # +django-oauth-toolkit backend
-uv add "djangorestframework-mcp-server[redis]"                          # +Redis SSE broker for multi-worker ASGI
-uv add "djangorestframework-mcp-server[otel]"                           # +OpenTelemetry instrumentation
-uv add "djangorestframework-mcp-server[filter]"                         # +django-filter for selector-tool FilterSets
-uv add "djangorestframework-mcp-server[spectacular]"                    # +drf-spectacular schema overrides
-uv add "djangorestframework-mcp-server[jwt]"                            # +SimpleJWTCookieAdapter (djangorestframework-simplejwt)
-uv add "djangorestframework-mcp-server[toon,oauth,redis,otel,filter,spectacular,jwt]"  # everything
+uv add django-spec-mcp                                   # JSON only
+uv add "django-spec-mcp[toon]"                           # +TOON encoder
+uv add "django-spec-mcp[oauth]"                          # +django-oauth-toolkit backend
+uv add "django-spec-mcp[redis]"                          # +Redis SSE broker for multi-worker ASGI
+uv add "django-spec-mcp[otel]"                           # +OpenTelemetry instrumentation
+uv add "django-spec-mcp[filter]"                         # +django-filter for selector-tool FilterSets
+uv add "django-spec-mcp[spectacular]"                    # +drf-spectacular schema overrides
+uv add "django-spec-mcp[jwt]"                            # +SimpleJWTCookieAdapter (djangorestframework-simplejwt)
+uv add "django-spec-mcp[toon,oauth,redis,otel,filter,spectacular,jwt]"  # everything
 ```
 
 Optional extras degrade gracefully: TOON falls back to JSON with a runtime

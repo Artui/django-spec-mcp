@@ -15,7 +15,7 @@ from rest_framework_services import can_present_nothing as spec_can_present_noth
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp.constants import ToolContentKind
+from django_spec_mcp.constants import ToolContentKind
 
 _MEDIA_KINDS: frozenset[ToolContentKind] = frozenset({ToolContentKind.IMAGE, ToolContentKind.AUDIO})
 

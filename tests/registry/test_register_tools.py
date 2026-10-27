@@ -13,21 +13,21 @@ from django_service_specs import SelectorKind
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import MCPServer
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.constants import (
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.constants import (
     ArgumentBinding,
     OutputFormat,
     ToolKind,
     UnknownArguments,
 )
-from rest_framework_mcp.registry.register_tools import register_tools
-from rest_framework_mcp.registry.types.selector_defaults import SelectorDefaults
-from rest_framework_mcp.registry.types.selector_tool_binding import SelectorToolBinding
-from rest_framework_mcp.registry.types.service_defaults import ServiceDefaults
-from rest_framework_mcp.registry.types.tool_binding import ToolBinding
-from rest_framework_mcp.registry.types.tool_definition import ToolDefinition
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp.registry.register_tools import register_tools
+from django_spec_mcp.registry.types.selector_defaults import SelectorDefaults
+from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
+from django_spec_mcp.registry.types.service_defaults import ServiceDefaults
+from django_spec_mcp.registry.types.tool_binding import ToolBinding
+from django_spec_mcp.registry.types.tool_definition import ToolDefinition
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 
 
 def _server() -> MCPServer:

@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from rest_framework_mcp.constants import UIVisibility
+from django_spec_mcp.constants import UIVisibility
 
 
 @dataclass(frozen=True)
@@ -15,7 +15,7 @@ class UIToolMeta:
     reading ``tools/list`` knows which ``ui://`` resource to fetch and which surfaces
     may call the tool. The view renders from the tool's ``structuredContent``, so a
     linked tool must emit it:
-    [`register_service_tool`][rest_framework_mcp.server.mcp_server.MCPServer.register_service_tool]
+    [`register_service_tool`][django_spec_mcp.server.mcp_server.MCPServer.register_service_tool]
     and friends refuse a link when it is switched off.
 
     Attributes:

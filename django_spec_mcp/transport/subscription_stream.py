@@ -6,15 +6,15 @@ from typing import Any
 
 from django.http import StreamingHttpResponse
 
-from rest_framework_mcp.constants import (
+from django_spec_mcp.constants import (
     JSONRPC_VERSION,
     SUBSCRIPTION_ID_META_KEY,
     SUBSCRIPTIONS_ACKNOWLEDGED_METHOD,
 )
-from rest_framework_mcp.protocol.types.json_rpc_response import JsonRpcResponse
-from rest_framework_mcp.subscriptions.types.subscription_broker import SubscriptionBroker
-from rest_framework_mcp.subscriptions.types.subscription_filter import SubscriptionFilter
-from rest_framework_mcp.transport.sse_response import format_event, keepalive_interval_seconds
+from django_spec_mcp.protocol.types.json_rpc_response import JsonRpcResponse
+from django_spec_mcp.subscriptions.types.subscription_broker import SubscriptionBroker
+from django_spec_mcp.subscriptions.types.subscription_filter import SubscriptionFilter
+from django_spec_mcp.transport.sse_response import format_event, keepalive_interval_seconds
 
 
 def build_subscription_stream(

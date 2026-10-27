@@ -17,15 +17,15 @@ from rest_framework import permissions as drf_permissions
 from rest_framework import serializers as drf_serializers
 from rest_framework_services.types.selector_spec import SelectorSpec
 
-from rest_framework_mcp import MCPServer
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.constants import JsonRpcErrorCode
-from rest_framework_mcp.handlers.handle_tools_call import handle_tools_call
-from rest_framework_mcp.handlers.handle_tools_list import handle_tools_list
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.constants import JsonRpcErrorCode
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.testapp.models import Invoice
 from tests.testapp.serializers import InvoiceOutputSerializer
 from tests.utils import tool_error
@@ -374,7 +374,7 @@ def test_pagination_is_shaped_upstream_from_already_parsed_ints(monkeypatch) -> 
     stays on this side because answering a malformed argument is a transport's
     policy, so what crosses the boundary is ``3`` and ``2``, never ``"3"``.
     """
-    from rest_framework_mcp.handlers import selector_tool_dispatch
+    from django_spec_mcp.handlers import selector_tool_dispatch
 
     for number in ("A", "B", "C", "D", "E"):
         Invoice.objects.create(number=number, amount_cents=10)
@@ -636,7 +636,7 @@ def test_selector_tool_translates_service_error() -> None:
 
 def test_selector_tool_records_service_error_when_setting_enabled(settings) -> None:
     """``RECORD_SERVICE_EXCEPTIONS=True`` exercises the otel ``record_exception`` branch."""
-    settings.REST_FRAMEWORK_MCP = {
+    settings.SPEC_MCP = {
         "REQUIRE_TOOL_PERMISSIONS": False,
         "RECORD_SERVICE_EXCEPTIONS": True,
     }

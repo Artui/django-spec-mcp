@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from rest_framework_mcp.config.types.mcp_config import MCPConfig
-from rest_framework_mcp.transport.protocol_version import resolve_protocol_version
+from django_spec_mcp.config.types.mcp_config import MCPConfig
+from django_spec_mcp.transport.protocol_version import resolve_protocol_version
 
 
 def negotiate_protocol_version(

@@ -48,15 +48,15 @@ from rest_framework_services import (
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp._compat.acall import acall
-from rest_framework_mcp.config.types.mcp_config import MCPConfig
-from rest_framework_mcp.constants import (
+from django_spec_mcp._compat.acall import acall
+from django_spec_mcp.config.types.mcp_config import MCPConfig
+from django_spec_mcp.constants import (
     RESERVED_POST_FETCH_KEYS,
     JsonRpcErrorCode,
     OutputFormat,
 )
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.handlers.utils import (
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.handlers.utils import (
     build_validated_input_serializer,
     consume_rate_limits,
     dispatch_shape,
@@ -71,13 +71,13 @@ from rest_framework_mcp.handlers.utils import (
     split_url_kwargs,
     validation_error_result,
 )
-from rest_framework_mcp.observability import get_logger
-from rest_framework_mcp.output.error_tool_result import build_error_tool_result
-from rest_framework_mcp.output.resolve_structured_output import resolve_structured_output
-from rest_framework_mcp.output.tool_result import build_tool_result
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
-from rest_framework_mcp.registry.types.selector_tool_binding import SelectorToolBinding
-from rest_framework_mcp.schema.utils import laid_back_inputs
+from django_spec_mcp.observability import get_logger
+from django_spec_mcp.output.error_tool_result import build_error_tool_result
+from django_spec_mcp.output.resolve_structured_output import resolve_structured_output
+from django_spec_mcp.output.tool_result import build_tool_result
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
+from django_spec_mcp.schema.utils import laid_back_inputs
 
 logger = get_logger(__name__)
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from rest_framework_mcp.schema.utils import end_sentence
+from django_spec_mcp.schema.utils import end_sentence
 
 
 @pytest.mark.parametrize(

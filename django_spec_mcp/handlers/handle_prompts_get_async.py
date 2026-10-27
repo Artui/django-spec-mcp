@@ -4,20 +4,20 @@ from typing import Any
 
 from rest_framework_services import build_offline_context, resolve_callable_kwargs
 
-from rest_framework_mcp._compat.acall import acall
-from rest_framework_mcp._compat.tracing import span
-from rest_framework_mcp.constants import JsonRpcErrorCode
-from rest_framework_mcp.handlers.handle_tools_call import _span_attrs
-from rest_framework_mcp.handlers.render_prompt_messages import normalize_render_result
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.handlers.utils import (
+from django_spec_mcp._compat.acall import acall
+from django_spec_mcp._compat.tracing import span
+from django_spec_mcp.constants import JsonRpcErrorCode
+from django_spec_mcp.handlers.handle_tools_call import _span_attrs
+from django_spec_mcp.handlers.render_prompt_messages import normalize_render_result
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.handlers.utils import (
     check_permissions,
     consume_rate_limits,
     prompt_shape,
 )
-from rest_framework_mcp.output.enforce_result_bytes import enforce_result_bytes
-from rest_framework_mcp.protocol.types.get_prompt_result import GetPromptResult
-from rest_framework_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.output.enforce_result_bytes import enforce_result_bytes
+from django_spec_mcp.protocol.types.get_prompt_result import GetPromptResult
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 
 
 async def handle_prompts_get_async(

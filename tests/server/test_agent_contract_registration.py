@@ -29,7 +29,7 @@ from rest_framework_services import (
     UrlKwarg,
 )
 
-from rest_framework_mcp.server.mcp_server import MCPServer
+from django_spec_mcp.server.mcp_server import MCPServer
 from tests.testapp.serializers import AgentInvoiceSerializer
 
 
@@ -76,7 +76,7 @@ class TestTheRegistrarsReadIt:
     def test_register_chain_tool_accepts_it(self) -> None:
         # A chain has no registry entry to inherit from, so the contract is the
         # only way in -- and it carries the one field a chain can use.
-        from rest_framework_mcp.registry.types.chain_step import ChainStep
+        from django_spec_mcp.registry.types.chain_step import ChainStep
 
         server = MCPServer(name="probe")
 

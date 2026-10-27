@@ -18,10 +18,10 @@ from django_service_specs import SelectorKind
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import MCPServer, ScopeRequired
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.config.build_mcp_config import build_mcp_config
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp import MCPServer, ScopeRequired
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.config.build_mcp_config import build_mcp_config
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.testapp.urlconf_for import urlconf_for
 
 MODERN = "2026-07-28"
@@ -295,7 +295,7 @@ async def test_a_quiet_dispatch_still_emits_keepalives() -> None:
     """Something has to hold the connection open past an idle proxy timeout."""
     import asyncio
 
-    from rest_framework_mcp.transport.response_stream import build_response_stream
+    from django_spec_mcp.transport.response_stream import build_response_stream
 
     async def slow(reporter: Any) -> dict[str, Any]:
         await asyncio.sleep(0.05)
@@ -312,7 +312,7 @@ async def test_a_quiet_dispatch_still_emits_keepalives() -> None:
 
 async def test_a_report_with_no_total_omits_the_field() -> None:
     """`total` is omitted rather than guessed — a wrong one renders a wrong bar."""
-    from rest_framework_mcp.transport.response_stream import build_response_stream
+    from django_spec_mcp.transport.response_stream import build_response_stream
 
     async def one(reporter: Any) -> dict[str, Any]:
         reporter(1)
@@ -334,7 +334,7 @@ async def test_closing_the_stream_cancels_the_dispatch() -> None:
     """
     import asyncio
 
-    from rest_framework_mcp.transport.response_stream import _stream
+    from django_spec_mcp.transport.response_stream import _stream
 
     seen: list[str] = []
 
@@ -365,7 +365,7 @@ async def test_a_report_after_the_client_left_is_dropped_not_raised() -> None:
     """A reporter must not raise into domain code that cannot defend itself."""
     import asyncio
 
-    from rest_framework_mcp.transport.response_stream import _StreamReporter
+    from django_spec_mcp.transport.response_stream import _StreamReporter
 
     closed = asyncio.new_event_loop()
     closed.close()
@@ -381,9 +381,9 @@ def test_preflight_stands_aside_for_everything_it_cannot_speak_for() -> None:
     a better message than a pre-flight could give."""
     from django.http import HttpRequest
 
-    from rest_framework_mcp.auth.types.token_info import TokenInfo
-    from rest_framework_mcp.handlers.types.context import MCPCallContext
-    from rest_framework_mcp.transport.progress_dispatch import preflight_permissions
+    from django_spec_mcp.auth.types.token_info import TokenInfo
+    from django_spec_mcp.handlers.types.context import MCPCallContext
+    from django_spec_mcp.transport.progress_dispatch import preflight_permissions
 
     server = _server()
     context = MCPCallContext(

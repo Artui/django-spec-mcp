@@ -28,7 +28,7 @@ optional `inputs(ctx)` callable that builds that step's kwargs from the
 validated arguments (`ctx.args`) and any prior output (`ctx[alias]`):
 
 ```python
-from rest_framework_mcp import ChainStep, MCPServer
+from django_spec_mcp import ChainStep, MCPServer
 from django_service_specs import SelectorKind
 from rest_framework_services import SelectorSpec, ServiceSpec
 

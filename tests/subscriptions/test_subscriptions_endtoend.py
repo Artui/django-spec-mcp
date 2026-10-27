@@ -12,10 +12,10 @@ from django.urls import path
 from django_service_specs import SelectorKind
 from rest_framework_services.types.selector_spec import SelectorSpec
 
-from rest_framework_mcp import MCPServer, SubscriptionFilter
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.constants import SUBSCRIPTION_ID_META_KEY
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp import MCPServer, SubscriptionFilter
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.constants import SUBSCRIPTION_ID_META_KEY
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.subscriptions.urls import SERVER
 
 MODERN = "2026-07-28"
@@ -223,11 +223,11 @@ async def test_a_capped_server_refuses_a_further_subscription() -> None:
     # drops the suite-wide opt-out, and the resource registered below is a
     # throwaway; the subject here is the subscription cap.
     with override_settings(
-        REST_FRAMEWORK_MCP={"MAX_CONCURRENT_SUBSCRIPTIONS": 0, "REQUIRE_TOOL_PERMISSIONS": False}
+        SPEC_MCP={"MAX_CONCURRENT_SUBSCRIPTIONS": 0, "REQUIRE_TOOL_PERMISSIONS": False}
     ):
         import types as _t
 
-        from rest_framework_mcp.subscriptions.in_memory_subscription_broker import (
+        from django_spec_mcp.subscriptions.in_memory_subscription_broker import (
             InMemorySubscriptionBroker,
         )
 
@@ -255,10 +255,10 @@ async def test_a_capped_server_refuses_a_further_subscription() -> None:
 async def test_a_capped_stream_closes_itself_and_forces_resubscription() -> None:
     """Permissions are checked once, at open. The cap is what stops a revoked
     principal receiving change signals indefinitely."""
-    from rest_framework_mcp.subscriptions.in_memory_subscription_broker import (
+    from django_spec_mcp.subscriptions.in_memory_subscription_broker import (
         InMemorySubscriptionBroker,
     )
-    from rest_framework_mcp.transport.subscription_stream import _stream
+    from django_spec_mcp.transport.subscription_stream import _stream
 
     frames = [
         f
@@ -301,7 +301,7 @@ async def test_the_capability_advertises_what_the_broker_makes_real() -> None:
 
 
 async def test_a_server_without_a_broker_advertises_no_subscription_support() -> None:
-    from rest_framework_mcp.handlers.handle_initialize import build_capabilities
+    from django_spec_mcp.handlers.handle_initialize import build_capabilities
     from tests.subscriptions.test_subscription_core import _context, _server
 
     caps = build_capabilities(_context(_server()), modern=True)

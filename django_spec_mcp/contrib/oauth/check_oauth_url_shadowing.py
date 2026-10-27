@@ -4,7 +4,7 @@ from typing import Any
 
 from django.urls import Resolver404, resolve
 
-from rest_framework_mcp.observability import get_logger
+from django_spec_mcp.observability import get_logger
 
 logger = get_logger(__name__)
 
@@ -52,11 +52,11 @@ def check_oauth_url_shadowing(*, warn: bool = True) -> list[str]:
     ``.well-known/openid-configuration``, plus the path-component forms of the
     two metadata documents. Django resolves first-match, so mounting
     ``include("oauth2_provider.urls")`` *before*
-    [`build_oauth_urlpatterns`][rest_framework_mcp.contrib.oauth.build_oauth_urlpatterns.build_oauth_urlpatterns]'s
+    [`build_oauth_urlpatterns`][django_spec_mcp.contrib.oauth.build_oauth_urlpatterns.build_oauth_urlpatterns]'s
     output makes DOT answer those paths, with an issuer of ``<host>/oauth``. Nothing
     errors; clients just read the wrong document.
 
-    A function rather than a Django system check because ``rest_framework_mcp``
+    A function rather than a Django system check because ``django_spec_mcp``
     is a library with no ``AppConfig`` to register one on. Call it from your own
     check, a startup hook, or a test:
 
@@ -74,7 +74,7 @@ def check_oauth_url_shadowing(*, warn: bool = True) -> list[str]:
         except Resolver404:
             continue
         module: str = getattr(match.func, "__module__", "") or ""
-        if not module.startswith("rest_framework_mcp"):
+        if not module.startswith("django_spec_mcp"):
             shadowed.append(path)
     if shadowed and warn:
         logger.warning(

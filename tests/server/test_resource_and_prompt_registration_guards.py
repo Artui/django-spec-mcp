@@ -20,16 +20,16 @@ from django_service_specs import SelectorKind
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_services.types.selector_spec import SelectorSpec
 
-from rest_framework_mcp import PromptArgument
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.auth.permissions.scope_required import ScopeRequired
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.handlers.handle_resources_read import handle_resources_read
-from rest_framework_mcp.handlers.types.context import MCPCallContext
-from rest_framework_mcp.registry.types.ui_resource_meta import UIResourceMeta
-from rest_framework_mcp.server.mcp_server import MCPServer
-from rest_framework_mcp.server.utils import UnguardedToolWarning
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp import PromptArgument
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.permissions.scope_required import ScopeRequired
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.registry.types.ui_resource_meta import UIResourceMeta
+from django_spec_mcp.server.mcp_server import MCPServer
+from django_spec_mcp.server.utils import UnguardedToolWarning
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 
 
 def _server() -> MCPServer:
@@ -84,7 +84,7 @@ def test_prompt_binding_permissions_silence_the_warning(recwarn: pytest.Warnings
 def test_require_tool_permissions_refuses_an_unguarded_resource(settings: Any) -> None:
     """The asymmetry the guard closes: the same spec, registered as a tool,
     already raised here."""
-    settings.REST_FRAMEWORK_MCP = {"REQUIRE_TOOL_PERMISSIONS": True}
+    settings.SPEC_MCP = {"REQUIRE_TOOL_PERMISSIONS": True}
     server = _server()
     with pytest.raises(ImproperlyConfigured, match="MCP resource 'r'"):
         server.register_resource(
@@ -96,7 +96,7 @@ def test_require_tool_permissions_refuses_an_unguarded_resource(settings: Any) -
 
 
 def test_require_tool_permissions_refuses_an_unguarded_prompt(settings: Any) -> None:
-    settings.REST_FRAMEWORK_MCP = {"REQUIRE_TOOL_PERMISSIONS": True}
+    settings.SPEC_MCP = {"REQUIRE_TOOL_PERMISSIONS": True}
     server = _server()
     with pytest.raises(ImproperlyConfigured, match="MCP prompt 'p'"):
         server.register_prompt(name="p", render=lambda **_: "x")
@@ -109,7 +109,7 @@ def test_an_unguarded_view_is_deliberately_allowed(
     """A view's content sources cannot read the caller's data — a template with
     no context, a literal document, or a zero-argument callable — so views stay
     exempt on purpose rather than by oversight."""
-    settings.REST_FRAMEWORK_MCP = {"REQUIRE_TOOL_PERMISSIONS": True}
+    settings.SPEC_MCP = {"REQUIRE_TOOL_PERMISSIONS": True}
     server = _server()
     server.register_ui_resource(
         name="view",

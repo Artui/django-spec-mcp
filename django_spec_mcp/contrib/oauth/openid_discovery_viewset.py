@@ -8,9 +8,9 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
 
-from rest_framework_mcp.auth.types.auth_backend import MCPAuthBackend
-from rest_framework_mcp.contrib.oauth.types.openid_discovery_payload import OpenIDDiscoveryPayload
-from rest_framework_mcp.contrib.oauth.utils import supported_id_token_algorithms
+from django_spec_mcp.auth.types.auth_backend import MCPAuthBackend
+from django_spec_mcp.contrib.oauth.types.openid_discovery_payload import OpenIDDiscoveryPayload
+from django_spec_mcp.contrib.oauth.utils import supported_id_token_algorithms
 
 
 @method_decorator(never_cache, name="dispatch")
@@ -35,7 +35,7 @@ class OpenIDDiscoveryViewSet(ViewSet):
 
     A backend that hosts no authorization server raises ``NotImplementedError``,
     surfaced as ``501`` for parity with
-    [`AuthorizationServerMetadataViewSet`][rest_framework_mcp.contrib.oauth.authorization_server_metadata_viewset.AuthorizationServerMetadataViewSet].
+    [`AuthorizationServerMetadataViewSet`][django_spec_mcp.contrib.oauth.authorization_server_metadata_viewset.AuthorizationServerMetadataViewSet].
     """
 
     authentication_classes = ()

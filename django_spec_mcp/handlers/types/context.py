@@ -6,17 +6,17 @@ from typing import Any
 from django.http import HttpRequest
 from django_service_specs import DEFAULT_POOL_SEEDS, PoolSeeds, ProgressReporter
 
-from rest_framework_mcp.auth.types.token_info import TokenInfo
-from rest_framework_mcp.config.build_mcp_config import build_mcp_config
-from rest_framework_mcp.config.types.mcp_config import MCPConfig
-from rest_framework_mcp.protocol.types.implementation import Implementation
-from rest_framework_mcp.registry.prompt_registry import PromptRegistry
-from rest_framework_mcp.registry.resource_registry import ResourceRegistry
-from rest_framework_mcp.registry.tool_registry import ToolRegistry
-from rest_framework_mcp.schema.types.agent_conventions import AgentConventions
-from rest_framework_mcp.subscriptions.types.subscription_broker import SubscriptionBroker
-from rest_framework_mcp.tasks.types.task_executor import TaskExecutor
-from rest_framework_mcp.tasks.types.task_store import TaskStore
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.config.build_mcp_config import build_mcp_config
+from django_spec_mcp.config.types.mcp_config import MCPConfig
+from django_spec_mcp.protocol.types.implementation import Implementation
+from django_spec_mcp.registry.prompt_registry import PromptRegistry
+from django_spec_mcp.registry.resource_registry import ResourceRegistry
+from django_spec_mcp.registry.tool_registry import ToolRegistry
+from django_spec_mcp.schema.types.agent_conventions import AgentConventions
+from django_spec_mcp.subscriptions.types.subscription_broker import SubscriptionBroker
+from django_spec_mcp.tasks.types.task_executor import TaskExecutor
+from django_spec_mcp.tasks.types.task_store import TaskStore
 
 
 @dataclass(frozen=True)
@@ -40,7 +40,7 @@ class MCPCallContext:
     """The owning server's identity, echoed by ``initialize``. Instance state,
     resolved once in ``MCPServer.__init__``, so two servers mounted in one
     project introduce themselves differently. ``None`` only for a context built
-    without an [`MCPServer`][rest_framework_mcp.server.mcp_server.MCPServer], in which
+    without an [`MCPServer`][django_spec_mcp.server.mcp_server.MCPServer], in which
     case ``initialize`` falls back to the ``SERVER_INFO`` setting."""
 
     instructions: str | None = None
@@ -103,7 +103,7 @@ class MCPCallContext:
     The default builds a config from settings for a context constructed without a server
     (a hand-wired viewset, or a test driving a handler directly), which does make the
     *default* a settings read at construction time; a context built by
-    [`MCPServer`][rest_framework_mcp.server.mcp_server.MCPServer] never takes that
+    [`MCPServer`][django_spec_mcp.server.mcp_server.MCPServer] never takes that
     path."""
 
     pool_seeds: PoolSeeds = DEFAULT_POOL_SEEDS

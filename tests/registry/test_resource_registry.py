@@ -3,8 +3,8 @@ from __future__ import annotations
 import pytest
 from django_service_specs import SelectorKind
 
-from rest_framework_mcp.registry.resource_registry import ResourceRegistry
-from rest_framework_mcp.registry.types.resource_binding import ResourceBinding
+from django_spec_mcp.registry.resource_registry import ResourceRegistry
+from django_spec_mcp.registry.types.resource_binding import ResourceBinding
 
 
 def _binding(uri_template: str, name: str = "r") -> ResourceBinding:

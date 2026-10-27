@@ -24,12 +24,12 @@ from rest_framework_dataclasses.serializers import DataclassSerializer
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp import MCPServer, UrlKwarg
-from rest_framework_mcp.adapters.selector_to_tool import selector_spec_to_tool
-from rest_framework_mcp.adapters.service_to_tool import service_spec_to_tool
-from rest_framework_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from rest_framework_mcp.constants import ArgumentBinding
-from rest_framework_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp import MCPServer, UrlKwarg
+from django_spec_mcp.adapters.selector_to_tool import selector_spec_to_tool
+from django_spec_mcp.adapters.service_to_tool import service_spec_to_tool
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.constants import ArgumentBinding
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 
 # The one spreading binding drf-services accepts: ``SPREAD_CALLER_WINS`` is retired
 # and raises ``ValueError`` at dispatch.

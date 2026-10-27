@@ -5,7 +5,7 @@ from typing import Any
 
 from django_service_specs import arun_selector, is_async, run_selector
 
-from rest_framework_mcp._compat.acall import acall
+from django_spec_mcp._compat.acall import acall
 
 # The sister repo's `arun_selector` runs sync callables inline, so any ORM call
 # inside them raises `SynchronousOnlyOperation` under an event loop. This routes

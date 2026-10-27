@@ -7,13 +7,13 @@ from typing import Any
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from rest_framework_mcp.registry.types.chain_context import ChainContext
+from django_spec_mcp.registry.types.chain_context import ChainContext
 
 
 @dataclass(frozen=True)
 class ChainStep:
     """One step in a
-    [`ChainToolBinding`][rest_framework_mcp.registry.types.chain_tool_binding.ChainToolBinding].
+    [`ChainToolBinding`][django_spec_mcp.registry.types.chain_tool_binding.ChainToolBinding].
 
     A step wraps a single ``ServiceSpec`` (a write) or ``SelectorSpec`` (a
     read) and binds its output to ``alias`` so later steps can read it via
@@ -25,7 +25,7 @@ class ChainStep:
 
     Attributes:
         alias: The name this step's result is stored under in the
-            [`ChainContext`][rest_framework_mcp.registry.types.chain_context.ChainContext].
+            [`ChainContext`][django_spec_mcp.registry.types.chain_context.ChainContext].
             Must be unique within the chain.
         spec: The ``ServiceSpec`` or ``SelectorSpec`` this step runs.
         inputs: ``(ctx) -> Mapping`` returning the kwargs merged into the

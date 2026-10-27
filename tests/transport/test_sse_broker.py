@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from rest_framework_mcp.transport.in_memory_sse_broker import InMemorySSEBroker
+from django_spec_mcp.transport.in_memory_sse_broker import InMemorySSEBroker
 
 
 async def test_publish_to_subscribed_session_returns_true() -> None:

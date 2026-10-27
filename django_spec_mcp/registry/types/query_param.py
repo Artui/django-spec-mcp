@@ -2,7 +2,7 @@
 
 The declaration is identical whichever transport carries it, so
 ``djangorestframework-services`` holds the single definition and every consumer
-imports it. ``from rest_framework_mcp import QueryParam`` and
+imports it. ``from django_spec_mcp import QueryParam`` and
 ``from rest_framework_services import QueryParam`` are the same class.
 """
 

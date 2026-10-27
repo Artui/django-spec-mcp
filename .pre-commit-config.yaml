@@ -58,7 +58,7 @@ repos:
         name: "forbid mypy-style '# type: ignore' (the package type-checks with ty)"
         entry: '(?<!`)# type:\s*ignore'
         language: pygrep
-        files: '^rest_framework_mcp/.*\.py$'
+        files: '^django_spec_mcp/.*\.py$'
 
       # The two excluded tests hold an emoji as data, not decoration: they feed
       # a free-form server name through key hashing and namespacing to prove
