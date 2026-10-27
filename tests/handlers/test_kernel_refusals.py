@@ -77,7 +77,7 @@ class _Deny(PermissionCheck):
 
 
 def _raising(exc: BaseException) -> Any:
-    def service() -> None:
+    def service(**_: Any) -> None:
         raise exc
 
     return service
@@ -98,8 +98,19 @@ class _CappedLines(DataclassValidator):
         raise InvalidArguments({NON_FIELD_ERRORS: ["Too many lines."]})
 
 
+@dataclass
+class _Account:
+    """What a service asking for an ``account`` declares, so the answer is an argument it takes."""
+
+    account: str = ""
+
+
 def _service(exc: BaseException) -> ServiceSpec:
-    return ServiceSpec(service=_raising(exc), permissions=[Unrestricted()])
+    return ServiceSpec(
+        service=_raising(exc),
+        validator=DataclassValidator(_Account),
+        permissions=[Unrestricted()],
+    )
 
 
 def _build() -> MCPServer:

@@ -8,6 +8,7 @@ from django_spec_mcp.elicitation.types.resolved_input import ResolvedInput
 from django_spec_mcp.handlers.answer_kernel_refusal import answer_kernel_refusal
 from django_spec_mcp.handlers.kernel_utils import (
     KernelAdmission,
+    admitted_arguments,
     bound_unpaginated_rows,
     not_found_result,
     on_the_wire,
@@ -53,7 +54,9 @@ def run_kernel_tool(
         # A selector asks for nothing, as a drf-services selector does not: a
         # request for input from one is a service error, not a round trip
         # (``test_a_kernel_selector_ignores_a_round_trip``).
-        input_round=None if binding.is_selector else KernelInputRound(prior, context),
+        input_round=None
+        if binding.is_selector
+        else KernelInputRound(prior, context, admitted_arguments(binding, context.pool_seeds)),
         span=otel_span,
     )
     try:

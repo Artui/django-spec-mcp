@@ -10,7 +10,14 @@ listing pages over bindings, not over what they read.
 
 from __future__ import annotations
 
-from django_service_specs import SelectorKind, SelectorSpec, ServiceSpec, Unrestricted
+from django_service_specs import (
+    Parameter,
+    Parameters,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+)
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
@@ -44,7 +51,12 @@ def _build_server() -> MCPServer:
         )
     for i in range(3):
         server.register_resource(
-            SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_row, permissions=[Unrestricted()]),
+            SelectorSpec(
+                kind=SelectorKind.RETRIEVE,
+                selector=_row,
+                reads=Parameters([Parameter("pk", "integer", required=True)]),
+                permissions=[Unrestricted()],
+            ),
             name=f"rt.{i}",
             uri_template=f"rt{i}://" + "{pk}",
         )

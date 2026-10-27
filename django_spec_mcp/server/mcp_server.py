@@ -23,6 +23,7 @@ from django_service_specs import (
     UnknownArguments,
     UnsetType,
     kernel_spec,
+    server_owned_keys,
 )
 from django_service_specs import SelectorSpec as KernelSelectorSpec
 from django_service_specs import ServiceSpec as KernelServiceSpec
@@ -1605,6 +1606,39 @@ class MCPServer:
             reserved=self._pool_seeds.names | RESOURCE_EDGE_SEEDS,
         )
         check_completions_declared(f"Resource {name!r}", binding.completions, template_variables)
+        # Two ways a variable can never carry the URI's value into a read, each
+        # refused here rather than at every read. A variable no read declares
+        # reaches ``dispatch`` as an argument the spec does not take
+        # (``test_a_template_variable_no_read_declares_is_refused_at_registration``;
+        # ``parameters()`` is the reads then the shapes, so a shape is declared:
+        # ``test_a_template_variable_naming_a_shape_registers_and_is_read``). A
+        # variable the server fills is declared and still never the URI's: a
+        # reflected ``request`` or ``view`` read is refused as an unknown argument
+        # (``test_a_variable_a_reflected_read_the_server_fills_is_refused``) and a
+        # key a provider always fills is replaced
+        # (``test_a_variable_a_provider_always_fills_is_refused``). A name a pool
+        # seed fills was refused above. ``server_owned_keys`` is the kernel's list of
+        # the server's names, the one ``admitted_arguments`` subtracts for a tool.
+        owned = server_owned_keys(spec, pool_seeds=self._pool_seeds)
+        undeclared = sorted(set(template_variables) - spec.parameters().names())
+        filled = sorted(set(template_variables) & owned)
+        refusals: list[str] = []
+        if undeclared:
+            refusals.append(
+                f"variables {undeclared} are not among the spec's reads, so every read "
+                "would be refused as an argument the spec does not take; declare each "
+                "as a read of the spec"
+            )
+        if filled:
+            refusals.append(
+                f"variables {filled} are names the server fills for the call (a reflected "
+                "read, or a key a typed provider fills), so a value in the URI would be "
+                "refused or replaced; name them differently"
+            )
+        if refusals:
+            raise ImproperlyConfigured(
+                f"Resource {name!r}: uri_template " + "; and uri_template ".join(refusals) + "."
+            )
         # The spec's own permissions are the guard, as for ``register_tool``.
         if check_kernel_spec_guarded(
             binding.name, spec, require=self._config.require_tool_permissions, kind="resource"
