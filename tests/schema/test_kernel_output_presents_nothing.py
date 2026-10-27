@@ -9,6 +9,7 @@ import jsonschema
 import pytest
 from django_service_specs import (
     DataclassPresenter,
+    DataclassValidator,
     SelectorKind,
     SelectorSpec,
     ServiceSpec,
@@ -106,3 +107,78 @@ def test_a_schema_requiring_nothing_takes_no_any_of() -> None:
     schema = _schemas(_server())["rows.loose"]
     assert schema["type"] == "object"
     assert "anyOf" not in schema and not schema.get("required")
+
+
+# ---------- a list that presents nothing ----------
+
+
+def _list_server() -> MCPServer:
+    server = MCPServer(name="lists", auth_backend=AllowAnyBackend())
+    server.register_tool(
+        ServiceSpec(
+            service=lambda: None,
+            returns_many=True,
+            allow_none=True,
+            presenter=DataclassPresenter(_Row),
+            permissions=OPEN,
+        ),
+        name="rows.returned",
+        description="Return the rows written, or nothing.",
+    )
+    server.register_tool(
+        ServiceSpec(
+            service=lambda **_: None,
+            many=True,
+            allow_none=True,
+            validator=DataclassValidator(_Row),
+            presenter=DataclassPresenter(_Row),
+            permissions=OPEN,
+        ),
+        name="rows.written",
+        description="Write rows, returning them or nothing.",
+    )
+    return server
+
+
+_LISTS = ["rows.returned", "rows.written"]
+_ROW = {"pk": 1, "name": "a"}
+
+
+def _arguments(name: str) -> dict[str, Any]:
+    return {"items": [_ROW]} if name == "rows.written" else {}
+
+
+@pytest.mark.parametrize("name", _LISTS)
+def test_a_list_that_may_present_nothing_is_advertised_as_a_list(name: str) -> None:
+    # The kernel writes ``["array", "null"]``, since its dispatch presents the
+    # ``None`` the service returned. No MCP result can carry a ``null``: a
+    # value that presents nothing is served as structured content of its own,
+    # and for a list that is the empty list, which an array schema admits.
+    # So the root is ``"array"``, and each row stays as strict as declared.
+    schema = _schemas(_list_server())[name]
+
+    assert schema["type"] == "array"
+    assert schema["items"]["required"] == ["pk", "name"]
+    jsonschema.validate([], schema)
+    jsonschema.validate([_ROW], schema)
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate([{"pk": 1}], schema)
+
+
+@pytest.mark.django_db
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "A list-shaped result presenting nothing is still served as {}; serving [] "
+        "is the result builder's, outside the schema."
+    ),
+)
+@pytest.mark.parametrize("name", _LISTS)
+def test_a_list_that_presents_nothing_conforms_to_its_schema(name: str) -> None:
+    server = _list_server()
+    schema = _schemas(server)[name]
+
+    served = server.call_tool(name, _arguments(name), user=None).to_dict()["structuredContent"]
+
+    jsonschema.validate(served, schema)
+    assert served == []

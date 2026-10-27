@@ -16,7 +16,9 @@ def kernel_tool_output_schema(
 
     The kernel's ``spec_output_schema``, enveloped when the tool paginates and
     projected through the binding's audience markings, so it names the fields
-    the presented payload carries. ``None`` for an image or audio tool, whose
+    the presented payload carries, and with the ``"null"`` the kernel admits for
+    a spec that can present nothing restated as what this transport serves in
+    its place (``_admitting_nothing``, ``_a_list``). ``None`` for an image or audio tool, whose
     result is a media block with no structured content to describe, and for a
     spec the kernel has no schema for.
     """
@@ -28,14 +30,35 @@ def kernel_tool_output_schema(
         projection=binding.audience_projection,
         handle_description=handle_description,
     )
-    if schema is None or schema.get("type") != _OBJECT_OR_NULL:
-        return schema
-    return _admitting_nothing(schema)
+    if schema is None:
+        return None
+    if schema.get("type") == _OBJECT_OR_NULL:
+        return _admitting_nothing(schema)
+    if schema.get("type") == _ARRAY_OR_NULL:
+        return _a_list(schema)
+    return schema
 
 
-# The root type the kernel gives a spec that can present nothing
-# (``can_present_nothing``): its item, or ``None``.
+# The root types the kernel gives a spec that can present nothing
+# (``can_present_nothing``): its item or ``None``, and a ``many`` or
+# ``returns_many`` service's rows or ``None``.
 _OBJECT_OR_NULL: list[str] = ["object", "null"]
+_ARRAY_OR_NULL: list[str] = ["array", "null"]
+
+
+def _a_list(schema: dict[str, Any]) -> dict[str, Any]:
+    """A list-shaped spec's schema when the list may present nothing.
+
+    No MCP result carries a ``null`` as its structured content, so the
+    ``"null"`` the kernel adds describes nothing a client is served. A list
+    that presents nothing is the empty list, which ``"array"`` already admits,
+    and each row stays as strict as declared
+    (``test_a_list_that_may_present_nothing_is_advertised_as_a_list``). The
+    result builder serving that empty list rather than ``{}`` is outside this
+    schema, and ``test_a_list_that_presents_nothing_conforms_to_its_schema``
+    fails as expected until it does.
+    """
+    return {**schema, "type": "array"}
 
 
 def _admitting_nothing(schema: dict[str, Any]) -> dict[str, Any]:
