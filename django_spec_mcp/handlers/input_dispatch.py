@@ -5,14 +5,11 @@ runs, ``ask_for_input`` if it raises. Everything protocol-shaped is in
 ``django_spec_mcp.elicitation``; the composition lives here because
 ``isError`` is the failure channel and only a tool result has one.
 
-**Service tools only.** Chain and selector tools deliberately do not reach this
-module, and ``AdditionalInputRequired`` from either degrades through the
-existing ``ServiceError`` arm to an ordinary ``isError`` result. A chain is the
-dangerous one: the exchange completes a call by *re-running it from the top*, so
-a chain that asked at step three would run steps one and two twice on the retry
-— unsafe without checkpointing, which is the tasks extension's problem. A
-selector is a read, and a read that needs the user to decide something is a tool
-wearing the wrong registration.
+**Service tools only.** Selector tools deliberately do not reach this module,
+and ``AdditionalInputRequired`` from one degrades through the existing
+``ServiceError`` arm to an ordinary ``isError`` result. A selector is a read,
+and a read that needs the user to decide something is a tool wearing the wrong
+registration.
 """
 
 from __future__ import annotations

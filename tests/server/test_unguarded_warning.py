@@ -13,7 +13,6 @@ from rest_framework_services.types.service_spec import ServiceSpec
 
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.permissions.scope_required import ScopeRequired
-from django_spec_mcp.registry.types.chain_step import ChainStep
 from django_spec_mcp.server.mcp_server import MCPServer
 from django_spec_mcp.server.utils import UnguardedToolWarning
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
@@ -42,14 +41,6 @@ def test_unguarded_selector_tool_warns() -> None:
     with pytest.warns(UnguardedToolWarning):
         server.register_selector_tool(
             name="x", spec=SelectorSpec(kind=SelectorKind.LIST, selector=_selector)
-        )
-
-
-def test_unguarded_chain_tool_warns() -> None:
-    server = _server()
-    with pytest.warns(UnguardedToolWarning):
-        server.register_chain_tool(
-            name="x", steps=[ChainStep("s", ServiceSpec(service=_service, atomic=False))]
         )
 
 

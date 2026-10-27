@@ -36,7 +36,6 @@ from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
-from django_spec_mcp.registry.types.chain_step import ChainStep
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.tasks.conftest import RecordingExecutor
@@ -482,26 +481,8 @@ def _reading_auth_then_user(saw: list[Any]) -> type[BasePermission]:
     return _ReadsAuthThenUser
 
 
-def _auth_server(kind: str, permission: type[BasePermission]) -> MCPServer:
-    """``tool`` of ``kind`` behind ``permission``; a chain's one step carries it."""
-    if kind != "chain":
-        return _server(kind, permission)
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
-    server.register_chain_tool(
-        name="tool",
-        description="Touch a project.",
-        steps=[
-            ChainStep(
-                "touch",
-                ServiceSpec(service=_touch, atomic=False, permission_classes=[permission]),
-            )
-        ],
-    )
-    return server
-
-
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("kind", [*_KINDS, "chain"])
+@pytest.mark.parametrize("kind", _KINDS)
 @pytest.mark.parametrize("route", ["sync_handler", "async_handler"])
 async def test_a_dispatch_view_reading_auth_keeps_the_caller(route: str, kind: str) -> None:
     # Reading ``request.auth`` on a request that never authenticated runs
@@ -511,7 +492,7 @@ async def test_a_dispatch_view_reading_auth_keeps_the_caller(route: str, kind: s
     # the backend's own payload, not merely something that is not a trigger:
     # each site passing ``auth=None`` keeps the caller too, and is caught here.
     saw: list[Any] = []
-    server = _auth_server(kind, _reading_auth_then_user(saw))
+    server = _server(kind, _reading_auth_then_user(saw))
     context = MCPCallContext(
         http_request=HttpRequest(),
         token=TokenInfo(user=_User(), raw=_AUTH),
@@ -528,7 +509,7 @@ async def test_a_dispatch_view_reading_auth_keeps_the_caller(route: str, kind: s
         out = await sync_to_async(handle_tools_call)(params, context)
 
     _assert_served(out)
-    # The binding's stand-in, then the dispatch view (a chain step's own view).
+    # The binding's stand-in, then the dispatch view.
     assert len(saw) == 2
     assert all(auth is _AUTH for auth in saw), saw
 

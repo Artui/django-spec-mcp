@@ -197,28 +197,18 @@ the same spec that backs your HTTP view governs the MCP binding
 without you restating the contract at the MCP call site.
 
 On every path that judges a tool call's adapters (`tools/call` on either
-handler, `acall_tool`, the pre-flight of a streamed call, a task's creation and
-a chain's up-front check), the adapter's stand-in is built from the same
+handler, `acall_tool`, the pre-flight of a streamed call, and a task's creation), the adapter's stand-in is built from the same
 values as the view the spec is dispatched with, so a class reads the same
 request in both checks: `request.data` is the call's arguments less its route
 and query values, `request.query_params` holds the declared `QueryParam`
 values, `view.kwargs` the URL kwargs, `view.action` the tool's name, and the
 method is `POST`. That is DRF's own layout, and the same on a service tool, a
 selector tool and the view `call_tool` dispatches with, though `call_tool`
-judges no adapter: it judges the spec's classes against that view alone. A
-chain judges each step's wrapped classes under the step's alias, and its own
-`permissions` under the tool's name, with the chain's arguments as
-`request.data`. Each check gets a `request.data` of its own, so a class
+judges no adapter: it judges the spec's classes against that view alone. Each check gets a `request.data` of its own, so a class
 writing into it reaches neither the next check nor the caller's `arguments`.
 `request.auth` is the token backend's payload (`None` from `call_tool` and
 `acall_tool`), set beside `request.user`, so a class such as `TokenHasScope`
 that reads `request.auth` first still sees the caller.
-
-A chain's `permissions` must begin with each step's `permission_classes`, each
-wrapped in a `DRFPermissionAdapter`, in step order, because that position is
-what tells a step's class from the chain's own. `register_chain_tool` lays them
-out so; a `ChainToolBinding` built by hand any other way is refused with
-`ImproperlyConfigured` when it is constructed.
 
 A `tools/call` retry whose `inputResponses` change any argument, the route, a
 query value or `request.data`, is judged again on the arguments the answers
@@ -262,9 +252,7 @@ binding's wrapped copy of each class has already asked it once, against a
 stand-in that sees the same request, so a call asks `has_permission` twice per
 class, a streamed call once more in its pre-flight, and a retry whose answers
 change the arguments once more again, on the arguments they produce.
-`call_tool`, which judges no stand-in, asks it once. A chain step does the
-same against its own view, before its `inputs` run and its target is looked
-up, and then runs only the object-level half on the target it resolved.
+`call_tool`, which judges no stand-in, asks it once.
 `resources/read` runs drf-services' `enforce_permissions`, both halves, on the
 selector's return. A `LIST` / collection
 result gets the class-level check only — object permissions are a per-row

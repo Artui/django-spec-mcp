@@ -487,12 +487,13 @@ def test_no_input_serializer_short_circuits_policy(policy: UnknownArguments) -> 
 
 
 @pytest.mark.parametrize("serializer", [_OneFieldInput, None], ids=["serializer", "none"])
-def test_a_chain_under_passthrough_raises_as_drf_services_dispatch_does(
+def test_the_read_path_under_passthrough_raises_as_drf_services_dispatch_does(
     serializer: type | None,
 ) -> None:
-    """A chain validates its arguments here and never calls ``dispatch_spec``, so
-    this validator is the one place a retired ``PASSTHROUGH`` can be refused on
-    that path. Without the refusal it would run as ``IGNORE`` without a word."""
+    """A selector binding validates its arguments here rather than through
+    ``dispatch_spec``, so a binding built by hand with a retired ``PASSTHROUGH``
+    is refused here. Without the refusal it would run as ``IGNORE`` without a
+    word."""
     with pytest.raises(ValueError) as caught:
         validate_input_against_serializer(
             {"known": "ok", "extra": 1},

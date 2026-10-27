@@ -14,7 +14,6 @@ green while no entry point accepted it at all.
 
 from __future__ import annotations
 
-import warnings
 from dataclasses import replace
 from typing import Any
 
@@ -70,25 +69,6 @@ class TestTheRegistrarsReadIt:
             spec=_service_spec(),
             agent_contract=OfflineContract(field_audiences={"sent": FieldMarking()}),
         )
-
-        assert binding.audience_projection.audience("sent") is not FieldAudience.HIDDEN
-
-    def test_register_chain_tool_accepts_it(self) -> None:
-        # A chain has no registry entry to inherit from, so the contract is the
-        # only way in -- and it carries the one field a chain can use.
-        from django_spec_mcp.registry.types.chain_step import ChainStep
-
-        server = MCPServer(name="probe")
-
-        # Not deprecated, unlike the spec registrars' argument: a chain has no
-        # spec of its own to declare its audiences on.
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", DeprecationWarning)
-            binding = server.register_chain_tool(
-                name="issue_then_send",
-                steps=[ChainStep(alias="issued", spec=_service_spec())],
-                agent_contract=OfflineContract(field_audiences={"sent": FieldMarking()}),
-            )
 
         assert binding.audience_projection.audience("sent") is not FieldAudience.HIDDEN
 

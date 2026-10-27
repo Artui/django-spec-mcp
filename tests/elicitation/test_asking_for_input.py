@@ -320,33 +320,6 @@ def test_the_budget_counts_rounds_not_calls(server: MCPServer) -> None:
 # ---------- other registration shapes ----------
 
 
-@pytest.mark.django_db
-def test_a_chain_tool_degrades_instead_of_asking(server: MCPServer) -> None:
-    """Deliberate. MRTR finishes a call by re-running it from the top, and a
-    chain that asked at step three would re-run steps one and two on the retry.
-    The subclassing does the right thing for free: the existing ``ServiceError``
-    arm reports it as an ordinary failure."""
-    from rest_framework_services.types.service_spec import ServiceSpec
-
-    from django_spec_mcp.registry.types.chain_step import ChainStep
-    from tests.elicitation.conftest import DeleteInput, delete_rows
-
-    server.register_chain_tool(
-        name="rows.delete_chain",
-        description="x",
-        steps=[
-            ChainStep(
-                alias="wipe",
-                spec=ServiceSpec(service=delete_rows, input_serializer=DeleteInput, atomic=False),
-            )
-        ],
-    )
-    out = handle_tools_call(
-        {"name": "rows.delete_chain", "arguments": {"count": 400}}, context(server)
-    )
-    assert tool_error(out)["type"] == "service_error"
-
-
 # ---------- async parity ----------
 
 

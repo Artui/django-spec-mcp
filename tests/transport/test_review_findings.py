@@ -16,9 +16,8 @@ from django.core.exceptions import ImproperlyConfigured
 from django.test import Client, override_settings
 from django_service_specs import SelectorKind
 from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
 
-from django_spec_mcp import ChainStep, MCPServer
+from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.handlers.handle_initialize import handle_initialize
@@ -97,10 +96,6 @@ def _selector() -> list[dict[str, str]]:
     return [{"ok": "1"}]
 
 
-def _service(**_: Any) -> dict[str, str]:
-    return {"ok": "1"}
-
-
 class _Denies:
     def has_permission(self, request: Any, token: Any) -> bool:
         return False
@@ -120,11 +115,6 @@ def _stream_server() -> MCPServer:
         description="x",
         spec=SelectorSpec(kind=SelectorKind.LIST, selector=_selector),
         paginate=True,
-    )
-    server.register_chain_tool(
-        name="s.chain",
-        description="x",
-        steps=[ChainStep(alias="one", spec=ServiceSpec(service=_service, atomic=False))],
     )
     server.register_resource(
         name="gated",
@@ -201,16 +191,6 @@ def test_a_denied_resource_read_keeps_its_403_even_with_a_progress_token(
     assert response.status_code == 403
     assert "WWW-Authenticate" in response.headers
     assert response.headers["Content-Type"] != "text/event-stream"
-
-
-@pytest.mark.django_db(transaction=True)
-def test_a_chain_tool_is_not_given_a_stream_it_cannot_use(stream_urls: Any) -> None:
-    """A stream whose only event is the final response costs a connection and
-    buys nothing — the design's own argument, applied to itself."""
-    with override_settings(ROOT_URLCONF=stream_urls):
-        response = _post(Client(), "tools/call", {"name": "s.chain", "arguments": {}})
-    assert response.status_code == 200
-    assert response.headers["Content-Type"].startswith("application/json")
 
 
 @pytest.mark.django_db(transaction=True)

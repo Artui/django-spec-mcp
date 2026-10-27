@@ -86,8 +86,6 @@ def maybe_create_task(
     # that, and the worker's replay of an admitted call still names a missing
     # one
     # (``test_a_denied_caller_missing_a_url_kwarg_is_refused_before_any_task_exists``).
-    # A chain declares no URL kwargs and is judged step by step
-    # (``test_a_chain_tool_has_no_route_and_is_still_judged``).
     allowed, required_scopes = judge_tool_permissions(binding, arguments, context)
     if not allowed:
         return JsonRpcError(

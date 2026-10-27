@@ -17,7 +17,7 @@ from rest_framework.permissions import BasePermission
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from django_spec_mcp import ChainStep, MCPServer, TaskPolicy, UrlKwarg
+from django_spec_mcp import MCPServer, TaskPolicy, UrlKwarg
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.constants import JsonRpcErrorCode
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
@@ -134,28 +134,6 @@ def test_a_denied_caller_missing_a_url_kwarg_is_refused_before_any_task_exists(k
     assert limiter.consumed == 1
     assert executor.enqueued == []
     assert seen == [{"tenant": "beta"}, {"tenant": "acme"}]
-
-
-def test_a_chain_tool_has_no_route_and_is_still_judged() -> None:
-    # A chain declares no URL kwargs, so its permissions are judged on an
-    # empty route, and the check must not trip over the absent declaration.
-    seen: list[dict[str, Any]] = []
-    store = InMemoryTaskStore()
-    executor = RecordingExecutor(store)
-    server = MCPServer(
-        name="t", auth_backend=AllowAnyBackend(), task_store=store, task_executor=executor
-    )
-    server.register_chain_tool(
-        name="tool",
-        steps=[ChainStep("archive", ServiceSpec(service=slow_service, atomic=False))],
-        task_policy=TaskPolicy.REQUIRED,
-        permissions=[_Recording(seen)],
-    )
-
-    out = _create(server, {"project_pk": 7})
-
-    assert out["resultType"] == "task"
-    assert seen == [True]
 
 
 class _Recording:

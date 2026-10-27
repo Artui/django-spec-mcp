@@ -191,26 +191,12 @@ covered.
 | --- | --- |
 | Service tools (`call_spec_tool.py`, `handle_tools_call*.py`) | `dispatch_spec` |
 | Selector tools (`selector_tool_dispatch.py`) | `dispatch_spec` |
-| Chain steps (`chain_tool_dispatch.py`) | **direct** `run_service` / `run_selector` |
 | `resources/read` (`handle_resources_read*.py`) | **direct** `run_selector` |
 | `prompts/get` (`handle_prompts_get*.py`) | **direct** call of `render` |
 | `completion/complete` (`handle_completion_complete.py`) | **direct** call of the completer |
 
-The three direct paths are direct for structural reasons, not by neglect:
+The direct paths are direct for structural reasons, not by neglect:
 
-- **Chain steps.** A chain owns the transaction (`binding.atomic`), the argument
-  binding, and the pool each step receives — `inputs(ctx)` returns the callable's
-  kwargs, which is not the flat client `params` mapping `dispatch_spec` takes. What
-  `dispatch_spec` would have contributed is therefore run explicitly per step:
-  the class-level half of `permission_classes` through `enforce_permissions`
-  before `inputs(ctx)` and the lookup, the object-level half through
-  `enforce_object_permissions` on the resolved target, a service's `affordances`
-  through `enforce_affordances`, and the spec's `preconditions`, in that order. The
-  affordances were once the missing one: a service refused as a tool of its own ran
-  and succeeded as a chain step. What a chain does **not** reproduce is computing the
-  answers a rendered selector spec's `affordances` need, because that step is not
-  part of drf-services' public surface; `ChainToolBinding` refuses at registration a
-  rendered step whose declaration would need them, rather than failing every call.
 - **`resources/read`.** A `ResourceBinding` holds a bare selector callable, not the
   spec it was lifted from, so there is no spec to dispatch. It composes
   `base_serializer_context` for rendering and resolves the output declaration
@@ -231,11 +217,11 @@ The three direct paths are direct for structural reasons, not by neglect:
 upstream helper it stands in for. A direct path that quietly grows a private copy of
 something `dispatch_spec` does is the drift this section exists to prevent.
 
-Delegating is load-bearing, not tidiness. The selector and chain paths once had their
-own renderer + context resolver "for transport-shaped equivalence", and the two copies
-drifted: they bound serializer-context providers positionally where the sister repo
+Delegating is load-bearing, not tidiness. The selector path once had its own
+renderer + context resolver "for transport-shaped equivalence", and the copy
+drifted: it bound serializer-context providers positionally where the sister repo
 binds by name (a `TypeError` for any provider not leading with `view, request`), and
-they never applied DRF's baseline context (a `KeyError: 'request'` for any serializer
+it never applied DRF's baseline context (a `KeyError: 'request'` for any serializer
 reading it). Both were consumer-reported. If a path needs something rendering doesn't
 give it, extend `render_spec_output` upstream rather than growing a second copy here.
 

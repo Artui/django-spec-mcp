@@ -1,7 +1,6 @@
 """Whether a spec's result renders as one object or a list, asked of the function.
 
-``rendered_kind`` picks both the advertised ``outputSchema`` shape and the chain
-renderer's ``many``, so it has to give the cardinality drf-services' dispatch
+``rendered_kind`` picks the advertised ``outputSchema`` shape, so it has to give the cardinality drf-services' dispatch
 gives the same spec. Each row is one branch or one conjunct of the rule; the
 end-to-end shapes are ``tests/handlers/test_list_output_conforms.py``.
 """

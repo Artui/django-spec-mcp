@@ -160,7 +160,7 @@ raises for a caller fails that caller's whole listing, not only its calls.
 
 - **Every spec the server runs receives them.** A service or selector tool over
   either transport and either era, `call_tool` / `acall_tool`, a task the worker
-  runs, each step of a chain, and a resource's selector on `resources/read`.
+  runs, and a resource's selector on `resources/read`.
 - **The availability check asks with them too.** `tools/list`, `list_tools` and
   `unavailable_tools` resolve the seeds into the pool they ask an operation
   condition against, so `when=lambda *, tenant: tenant.can_close_books` is asked
@@ -169,8 +169,7 @@ raises for a caller fails that caller's whole listing, not only its calls.
 - **A registered name is reserved.** A client argument of the same name is
   stripped rather than spread, so a caller cannot outrank the project's value —
   on a selector, where no validator stands in front of the spread, that is the
-  difference between a seed and a client-controlled input. A chain step's seeds
-  are laid over whatever its `inputs` returned, for the same reason.
+  difference between a seed and a client-controlled input.
 - **A registered name is not asked for.** A selector parameter named after a
   seed, on a selector tool or a service tool's target lookup, is left out of the
   tool's `inputSchema` and never required
@@ -782,8 +781,7 @@ What a caller should know:
 Registration refuses two declarations that would make every call fail: a
 `UrlKwarg` or `QueryParam` named as the list's argument, and a `SPREAD_*`
 `argument_binding`. drf-services refuses a third, a target lookup beside
-`many=True`, when the spec is built. A chain refuses to inherit a `many=True`
-first step's `input_serializer` as its own.
+`many=True`, when the spec is built.
 [Troubleshooting](troubleshooting.md#takes-the-name-the-specs-list-travels-under)
 has each message.
 
@@ -1029,13 +1027,13 @@ forms) accept three behavior knobs:
     gone. To keep a call that sends undeclared keys working, register
     `IGNORE`, which drops them.
 
-    **Selector and chain** bindings enforce the closed set in this package,
+    **Selector** bindings enforce the closed set in this package,
     against their own input serializer, so they are closed under `REJECT` with
     one and open without one, where nothing checks the keys.
   - `UnknownArguments.PASSTHROUGH` — retired in drf-services 0.58.0, where an
     argument the spec does not declare never reaches a callable. Every tool
     registrar (`register_service_tool`, `register_selector_tool`,
-    `register_chain_tool`, and the decorators, `register_specs` and
+    and the decorators, `register_specs` and
     `register_tools` through them) refuses it with `ImproperlyConfigured`
     naming the tool, so a server carrying it does not start. Declare the
     argument (a `reads` entry, a serializer field or a parameter) and pass
@@ -1101,9 +1099,6 @@ server.register_service_tool(
   once per listing, so keep it cheap. One that raises fails the listing, as it would fail the call.
 - **Selector tools are never left out.** A `SelectorSpec`'s `affordances` names
   *other* operations to project onto its rows; it is not a condition on the read.
-- **A chain is left out when any service step's condition is unmet.** Every step
-  runs, in order, and nothing can skip one, so such a step refuses every call
-  that reaches it, and a call that does not reach it has already failed earlier.
 - **Resources and prompts are unaffected.** They are reads, and neither holds a
   spec for an affordance to sit on.
 - **The listing is advisory; the call is the authority.** `tools/call` looks the
@@ -1158,8 +1153,6 @@ without a hand-set flag:
 - **Selector tools** are reads → `{"readOnlyHint": true}`.
 - **Service tools** are mutations → `{"readOnlyHint": false,
   "destructiveHint": true}`.
-- **Chain tools** are read-only only when *every* step is a selector;
-  any service step makes the whole chain a mutation.
 
 `destructiveHint` / `idempotentHint` are spec-meaningful only when
 `readOnlyHint` is false, so a read-only tool emits neither.
@@ -1167,9 +1160,7 @@ without a hand-set flag:
 A service tool also reads its spec's declared `ServiceSpec.idempotent`:
 `idempotent=True` advertises `"idempotentHint": true`, a declared `False`
 advertises `false`, and the default `None` (nothing declared) leaves the hint
-off, which a client reads as the MCP default of `false`. A chain derives no
-`idempotentHint`, because two idempotent steps in sequence need not make an
-idempotent operation.
+off, which a client reads as the MCP default of `false`.
 
 Pass `annotations=` at registration to override or extend the derived hints —
 the explicit values win:
@@ -1195,7 +1186,7 @@ client hints — the base protocol gives most wire objects a free-form
 owns a top-level key inside it, and a server may add its own.
 
 Pass `meta=` at any registration surface (`register_service_tool`,
-`register_selector_tool`, `register_chain_tool`, `register_resource`,
+`register_selector_tool`, `register_resource`,
 `register_prompt`, the matching decorators, or a `ToolDefinition` /
 `SelectorDefaults` / `ServiceDefaults`):
 
@@ -1296,8 +1287,7 @@ from the same values, so there a call asks `has_permission` twice per class.
 It does **not** layer on the read-shaped transport extras (pagination,
 ordering, a selector binding's MCP-only `input_serializer`); those stay with
 the wire handlers, as do the transport-level MCP permissions / rate limits.
-Chain tools are unsupported — they orchestrate several specs and raise
-`TypeError`. Refused input (an unexpected argument, an `input_serializer`
+Refused input (an unexpected argument, an `input_serializer`
 rejection, a filter value the spec's `FilterSet` refuses), a service raising
 `ServiceValidationError` / `ServiceError`, and a missing required instance come
 back as `isError` results, the ones the wire serves; a denied permission raises,
@@ -1331,7 +1321,7 @@ result["structuredContent"]  # the wire's result payload (dict, not ToolResult)
 - `acall_tool(name, arguments=None, *, user, request=None)` invokes a tool with
   the **full** transport applied: the transport-level MCP permissions and rate
   limits, the selector post-fetch pipeline (filter / order / paginate), a selector
-  binding's MCP-only `input_serializer`, chain tools, and the output format —
+  binding's MCP-only `input_serializer`, and the output format —
   everything `call_tool` deliberately omits. It returns the wire's `dict` payload
   (`content` / `structuredContent` / `isError`) or a `JsonRpcError` for a protocol
   fault (unknown tool, malformed `arguments` shape, denied permission).
@@ -1366,8 +1356,7 @@ for name, affordance in missing.items():
   and its `reason`, the sentence written for people and models alike. It is the
   same pass over the same tools, so a name is reported exactly when the listing
   omits it: never an `always_listed` tool, never one
-  `FILTER_LISTINGS_BY_PERMISSIONS` hides from this caller, and for a chain the
-  first unmet step in order. It asks again on every call; nothing is remembered.
+  `FILTER_LISTINGS_BY_PERMISSIONS` hides from this caller. It asks again on every call; nothing is remembered.
 - `aunavailable_tools` is its twin for an event loop. A server none of whose tools
   declares a condition on the operation answers `{}` without leaving the loop,
   since that is decided from the declarations alone and a consumer asks every
@@ -2164,7 +2153,7 @@ names the versions where the question is asked and where it degrades.
 
 | | |
 |---|---|
-| Service tools only | A **chain** tool degrades instead of asking. MRTR completes a call by re-running it, and a chain that asked at step three would run steps one and two twice on the retry. A **selector** is a read — one that needs the user to decide something is a tool wearing the wrong registration. |
+| Service tools only | A **selector** is a read — one that needs the user to decide something is a tool wearing the wrong registration. |
 | Form mode only | The spec's other mode hands the user a URL to complete out of band. Nothing here knows how to mint one; a service that needs it has a redirect to build, not a schema to declare. |
 | Top-level fields only | `requestedSchema` is a restricted subset: strings, numbers, booleans and enums, no nesting. A schema outside it raises `ImproperlyConfigured` at the moment it would have been sent, rather than shipping something the client must reject. |
 | `tools/call` only | The spec also permits `input_required` on `prompts/get` and `resources/read`. Neither is implemented: both dispatch a bare callable with no failure channel, and a prompt render or resource read that needs to stop and ask is not a shape this package has a caller for. |
@@ -2434,11 +2423,7 @@ The MCP package owns its own dispatch flow. It does **not** import
    `input_serializer` runs. A denied caller is answered `-32006` alike for a
    row that exists and one that does not, and is not told which argument it
    left out. Only the object-level half, each class's `has_object_permission`,
-   runs later, on the row step 3 resolves. A chain tool judges every step's
-   wrapped classes up front, each under its step's alias with the chain's
-   arguments as `request.data`, and each step judges its classes again against
-   its own view before its `inputs` run and its target is looked up, then only
-   the object-level half on the target it resolves.
+   runs later, on the row step 3 resolves.
 3. If `spec.instance_selector_spec` is set (sister-repo 0.16), resolve
    the mutation target first: the nested RETRIEVE selector runs against
    `{request, user}` + the raw arguments (the MCP analogue of URL kwargs)
@@ -2490,7 +2475,7 @@ The MCP package owns its own dispatch flow. It does **not** import
    The MCP spec files input validation under tool execution errors in every
    protocol version this server serves, and keeps JSON-RPC `-32602` for an
    unknown tool and a request that fails the `CallToolRequest` schema (a
-   non-object `arguments`, say), which is all `tools/call` answers with it. Chain steps add `failedStep`. A call refused by one
+   non-object `arguments`, say), which is all `tools/call` answers with it. A call refused by one
    of the spec's declared `affordances` raises drf-services'
    `ActionUnavailable`, and its error object also carries that affordance's
    `code` — `{"type": "service_error", "message": "The books are closed.",
@@ -2549,7 +2534,7 @@ envelope with `paginate=True` (enable pagination for a fully
 spec-compliant *object*-shaped `structuredContent`). The array schema is not
 special to selector tools: wherever a result renders as an unpaginated list —
 a service tool whose `output_selector_spec` declares a `LIST`, re-fetched or
-not, or a chain whose output step is either kind of `LIST` — the tool
+not — the tool
 advertises the same bare array, because that is what it serves.
 
 **A result with nothing to present is `{}`, and the schema admits it.** Three
@@ -2571,11 +2556,10 @@ conforms to it, the schema of a tool that can present nothing keeps its object
 root and its `properties` while its `required` list moves beside the empty
 object. Which tools can is drf-services' `can_present_nothing`, the question its
 own output schema asks before admitting `null`, so this server admits `{}`
-exactly where drf-services admits `null`. Four kinds of tool advertise this
+exactly where drf-services admits `null`. Three kinds of tool advertise this
 shape: an `allow_none` RETRIEVE selector tool, a single-row service tool whose
-`output_selector_spec` has a `selector`, a single-row service tool declaring
-`allow_none=True` with no `selector` to re-read, and a chain whose output step
-is one of those three:
+`output_selector_spec` has a `selector`, and a single-row service tool declaring
+`allow_none=True` with no `selector` to re-read:
 
 ```json
 {

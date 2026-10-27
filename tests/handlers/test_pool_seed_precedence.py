@@ -1,8 +1,7 @@
 """Client-supplied names never outrank the transport's own pool seeds.
 
 Every method that lets a caller route a value into a kwarg pool — a prompt
-argument, a URI-template variable, a completion sibling, a chain step's
-``inputs`` — has to apply ``RESERVED_POOL_SEEDS`` precedence, or an argument
+argument, a URI-template variable, a completion sibling — has to apply ``RESERVED_POOL_SEEDS`` precedence, or an argument
 called ``user`` binds to the parameter the dispatcher owns and the callable runs
 under a principal the caller named.
 """
@@ -14,10 +13,8 @@ from typing import Any
 import pytest
 from django.http import HttpRequest
 from django_service_specs import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
 
-from django_spec_mcp import ChainStep, MCPServer, PromptArgument
+from django_spec_mcp import MCPServer, PromptArgument
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_completion_complete import handle_completion_complete
@@ -25,7 +22,6 @@ from django_spec_mcp.handlers.handle_prompts_get import handle_prompts_get
 from django_spec_mcp.handlers.handle_prompts_get_async import handle_prompts_get_async
 from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
 from django_spec_mcp.handlers.handle_resources_read_async import handle_resources_read_async
-from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.registry.resource_registry import ResourceRegistry
 from django_spec_mcp.registry.types.resource_binding import ResourceBinding
@@ -294,60 +290,3 @@ def test_the_arguments_seed_still_carries_the_clients_whole_mapping() -> None:
     _complete(_server_with_completer(completer), {"instance": "raw", "other": "kept"})
 
     assert seen == {"instance": "raw", "other": "kept"}
-
-
-# ---------- chain steps ----------
-
-
-@pytest.mark.django_db
-def test_chain_step_inputs_forwarding_client_args_cannot_replace_the_caller() -> None:
-    """``inputs=lambda ctx: dict(ctx.args)`` is the natural way to hand a chain
-    tool's arguments to a step, and it forwards whatever the client sent."""
-    seen: dict[str, Any] = {}
-
-    def fetch(*, user: Any, pk: int) -> dict[str, Any]:
-        seen["user"] = user
-        return {"pk": pk}
-
-    server = _server()
-    server.register_chain_tool(
-        name="chain",
-        steps=[
-            ChainStep(
-                alias="row",
-                spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=fetch),
-                inputs=lambda ctx: dict(ctx.args),
-            )
-        ],
-    )
-
-    handle_tools_call({"name": "chain", "arguments": {"pk": 3, "user": 7}}, _ctx(server))
-
-    assert seen["user"] == _CALLER
-
-
-@pytest.mark.django_db
-def test_chain_step_inputs_still_owns_the_data_seed() -> None:
-    """Only the identity seeds are reclaimed. ``data`` / ``instance`` stay the
-    ``inputs`` callable's to set — that is how one step feeds the next."""
-    seen: dict[str, Any] = {}
-
-    def service(*, data: Any) -> dict[str, Any]:
-        seen["data"] = data
-        return {"ok": True}
-
-    server = _server()
-    server.register_chain_tool(
-        name="chain",
-        steps=[
-            ChainStep(
-                alias="write",
-                spec=ServiceSpec(service=service, atomic=False),
-                inputs=lambda ctx: {"data": {"from": "inputs"}},
-            )
-        ],
-    )
-
-    handle_tools_call({"name": "chain", "arguments": {}}, _ctx(server))
-
-    assert seen["data"] == {"from": "inputs"}

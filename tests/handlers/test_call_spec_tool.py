@@ -19,7 +19,7 @@ from rest_framework.permissions import BasePermission
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from django_spec_mcp import ChainStep, MCPServer
+from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.protocol.types.tool_result import ToolResult
 
@@ -263,13 +263,3 @@ def test_unknown_tool_name_raises_keyerror() -> None:
     server = _server()
     with pytest.raises(KeyError, match="nope"):
         server.call_tool("nope", user=None)
-
-
-def test_chain_tool_is_unsupported() -> None:
-    server = _server()
-    server.register_chain_tool(
-        name="chain",
-        steps=[ChainStep("made", ServiceSpec(service=lambda **_: {}, atomic=False))],
-    )
-    with pytest.raises(TypeError, match="chain"):
-        server.call_tool("chain", user=None)

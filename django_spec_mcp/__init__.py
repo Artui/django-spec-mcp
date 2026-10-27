@@ -47,8 +47,6 @@ from django_spec_mcp.registry.prompt_registry import PromptRegistry
 from django_spec_mcp.registry.register_tools import register_tools
 from django_spec_mcp.registry.resource_registry import ResourceRegistry
 from django_spec_mcp.registry.tool_registry import ToolRegistry
-from django_spec_mcp.registry.types.chain_context import ChainContext
-from django_spec_mcp.registry.types.chain_step import ChainStep
 from django_spec_mcp.registry.types.query_param import QueryParam
 from django_spec_mcp.registry.types.selector_defaults import SelectorDefaults
 from django_spec_mcp.registry.types.service_defaults import ServiceDefaults
@@ -84,8 +82,6 @@ __all__ = [
     "UI_RESOURCE_MIME_TYPE",
     "AgentConventions",
     "ArgumentBinding",
-    "ChainContext",
-    "ChainStep",
     "DRFPermissionAdapter",
     "DjangoCacheSessionStore",
     "DjangoPermRequired",

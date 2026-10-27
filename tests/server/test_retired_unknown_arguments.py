@@ -2,7 +2,7 @@
 
 drf-services 0.58.0 retired the member: an argument the spec does not declare
 never reaches a callable, so its ``dispatch_spec`` raises ``ValueError`` for it,
-and a chain, which validates its arguments here, raises the same words. The
+and a selector's own validation raises the same words. The
 member stays importable, so a server could still register a tool carrying it
 and fail every call. Each case is one public route that reaches the
 registrars, because a route that skipped the refusal would put that tool back.
@@ -19,7 +19,6 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework_services import SelectorSpec, ServiceSpec
 
 from django_spec_mcp import (
-    ChainStep,
     SelectorDefaults,
     ServiceDefaults,
     ToolDefinition,
@@ -71,22 +70,6 @@ def test_register_selector_tool_refuses_it() -> None:
 
     assert "'lookup'" in str(caught.value)
     assert server.tools.get("lookup") is None
-
-
-def test_register_chain_tool_refuses_it() -> None:
-    # A chain validates its arguments here and raises for the member on every
-    # call; refused at registration, the tool is never listed to fail.
-    server = MCPServer(name="probe")
-
-    with pytest.raises(ImproperlyConfigured, match=MESSAGE) as caught:
-        server.register_chain_tool(
-            name="flow",
-            steps=[ChainStep(alias="issued", spec=_service_spec())],
-            unknown_arguments=RETIRED,
-        )
-
-    assert "'flow'" in str(caught.value)
-    assert server.tools.get("flow") is None
 
 
 def test_the_service_decorator_refuses_it() -> None:
@@ -175,12 +158,6 @@ def test_every_other_member_still_registers(policy: UnknownArguments) -> None:
 
     server.register_service_tool(name="refund", spec=_service_spec(), unknown_arguments=policy)
     server.register_selector_tool(name="lookup", spec=_selector_spec(), unknown_arguments=policy)
-    server.register_chain_tool(
-        name="flow",
-        steps=[ChainStep(alias="issued", spec=_service_spec())],
-        unknown_arguments=policy,
-    )
 
     assert server.tools.get("refund") is not None
     assert server.tools.get("lookup") is not None
-    assert server.tools.get("flow") is not None

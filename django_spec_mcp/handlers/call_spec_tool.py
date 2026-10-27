@@ -56,14 +56,13 @@ from django_spec_mcp.output.error_tool_result import build_error_tool_result
 from django_spec_mcp.output.resolve_structured_output import resolve_structured_output
 from django_spec_mcp.output.tool_result import build_tool_result
 from django_spec_mcp.protocol.types.tool_result import ToolResult
-from django_spec_mcp.registry.types.chain_tool_binding import ChainToolBinding
 from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
 from django_spec_mcp.registry.types.tool_binding import ToolBinding
 from django_spec_mcp.schema.types.agent_conventions import AgentConventions
 
 
 def call_spec_tool(
-    binding: ToolBinding | SelectorToolBinding | ChainToolBinding,
+    binding: ToolBinding | SelectorToolBinding,
     arguments: dict[str, Any],
     *,
     user: Any,
@@ -86,8 +85,6 @@ def call_spec_tool(
     supplied a read-shaping ``QueryParam``: all ``isError`` tool results the model
     can self-correct from. A denied permission raises ``PermissionDenied``, a
     protocol fault the caller maps to its own wire.
-    A chain tool orchestrates several specs, has no single dispatch target, and
-    is rejected with ``TypeError``.
 
     ``pool_seeds`` is the owning server's, handed to ``dispatch_spec`` as the
     wire handlers hand it, so a spec reading a registered seed runs the same
@@ -95,12 +92,6 @@ def call_spec_tool(
     ``conventions`` is the owning server's too, so a refused argument is worded
     here as the wire words it.
     """
-    if isinstance(binding, ChainToolBinding):
-        raise TypeError(
-            f"call_tool does not support chain tool {binding.name!r}: a chain "
-            "orchestrates several specs and has no single dispatch target. Call it "
-            "over the HTTP / JSON-RPC transport instead."
-        )
     # The binding's ``server_arguments`` in place before anything below reads
     # the arguments, as on the wire (``apply_tool_server_arguments``).
     arguments = apply_tool_server_arguments(binding, arguments)

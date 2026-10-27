@@ -21,7 +21,7 @@ from django_service_specs import SelectorKind
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from django_spec_mcp import ChainStep, MCPServer
+from django_spec_mcp import MCPServer
 from django_spec_mcp.adapters.utils import merge_meta
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
@@ -117,19 +117,6 @@ def test_selector_tool_meta_reaches_binding_and_tools_list() -> None:
     )
     assert binding.meta == UI_META
     assert _entry(handle_tools_list(None, _ctx(server)), "tools", "things.list")["_meta"] == UI_META
-
-
-def test_chain_tool_meta_reaches_binding_and_tools_list() -> None:
-    server = _server()
-    binding = server.register_chain_tool(
-        name="things.chain",
-        steps=[ChainStep("a", SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda **_: {}))],
-        meta=UI_META,
-    )
-    assert binding.meta == UI_META
-    assert _entry(handle_tools_list(None, _ctx(server)), "tools", "things.chain")["_meta"] == (
-        UI_META
-    )
 
 
 def test_a_tool_without_meta_emits_no_meta_key() -> None:

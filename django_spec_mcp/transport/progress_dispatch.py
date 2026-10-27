@@ -10,7 +10,6 @@ from django_spec_mcp.constants import PROGRESS_TOKEN_META_KEY, JsonRpcErrorCode
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import judge_tool_permissions
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
-from django_spec_mcp.registry.types.chain_tool_binding import ChainToolBinding
 from django_spec_mcp.transport.response_stream import build_response_stream
 
 
@@ -48,14 +47,13 @@ def can_report_progress(method: str, params: Any, context: MCPCallContext) -> bo
     actually thread a reporter — ``tools/call`` on a service or selector
     binding.
 
-    ``resources/read`` and ``prompts/get`` never receive one, and chain tools
-    build their own kwarg pool with no ``progress`` seed. This gate is where
+    ``resources/read`` and ``prompts/get`` never receive one. This gate is where
     reporting gets re-enabled once one is threaded through.
     """
     if method != "tools/call" or not isinstance(params, dict):
         return False
     binding = _tool_binding(params, context)
-    return binding is not None and not isinstance(binding, ChainToolBinding)
+    return binding is not None
 
 
 def preflight_permissions(method: str, params: Any, context: MCPCallContext) -> JsonRpcError | None:
@@ -97,9 +95,7 @@ def preflight_permissions(method: str, params: Any, context: MCPCallContext) -> 
     # handler is left to name the fault
     # (``test_a_call_with_no_arguments_object_is_judged_on_the_route_defaults``).
     # ``url_kwargs`` is read bare because only a service or a selector binding
-    # gets here: a chain declares none, and ``can_report_progress`` refuses to
-    # stream one, so the transport never pre-flights it
-    # (``test_a_chain_tool_is_not_given_a_stream_it_cannot_use``).
+    # gets here.
     arguments: Any = params.get("arguments")
     allowed, required_scopes = judge_tool_permissions(
         binding, arguments if isinstance(arguments, dict) else {}, context

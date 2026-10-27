@@ -22,7 +22,7 @@ from rest_framework import serializers
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from django_spec_mcp import ChainStep, MCPServer
+from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.types.context import MCPCallContext
@@ -175,27 +175,3 @@ async def test_a_conflicting_selector_tool_serves_no_code_key_over_the_async_tra
     server.register_selector_tool(name="sel", spec=_selector(_raise_conflict), permissions=[])
 
     assert tool_error(await server.acall_tool("sel", user=None)) == _CONFLICT
-
-
-# ---------- a chain step (chain_tool_dispatch) ----------
-
-
-def test_a_refused_chain_step_serves_the_code_beside_the_failed_step() -> None:
-    server = fresh_server()
-    server.register_chain_tool(
-        name="chain", atomic=False, steps=[ChainStep("void", _refused_service())], permissions=[]
-    )
-
-    assert tool_error(_call(server, "chain")) == {**_REFUSED, "failedStep": "void"}
-
-
-def test_a_conflicting_chain_step_serves_no_code_key() -> None:
-    server = fresh_server()
-    server.register_chain_tool(
-        name="chain",
-        atomic=False,
-        steps=[ChainStep("void", _conflicting_service())],
-        permissions=[],
-    )
-
-    assert tool_error(_call(server, "chain")) == {**_CONFLICT, "failedStep": "void"}

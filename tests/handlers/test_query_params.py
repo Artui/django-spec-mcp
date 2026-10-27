@@ -268,24 +268,6 @@ def test_the_endpoint_query_string_no_longer_reaches_a_prompt() -> None:
     assert "seen={}" in out["messages"][0]["content"]["text"]
 
 
-@pytest.mark.django_db
-def test_the_endpoint_query_string_no_longer_reaches_a_chain_step() -> None:
-    # A chain wraps its steps in ``transaction.atomic()`` by default.
-    from django_spec_mcp.registry.types.chain_step import ChainStep
-
-    server = _server()
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        server.register_chain_tool(
-            name="chain",
-            description="d",
-            steps=[ChainStep("only", ServiceSpec(service=_echo_query, atomic=False))],
-        )
-    out = _call(server, "chain", {}, _ctx(server, _http_request("evil=1")))
-    # Single-step chain renders that step's result directly.
-    assert out["structuredContent"] == {"seen": {}}
-
-
 # ---------- registration-time validation ----------
 
 

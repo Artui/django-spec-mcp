@@ -106,7 +106,6 @@ nav:
       - Honor drf-spectacular annotations: recipes/drf-spectacular.md
       - Selector tool with FilterSet: recipes/selector-tool-with-filterset.md
       - Expose a polymorphic action as tools: recipes/polymorphic-action.md
-      - Chain specs into one tool: recipes/chain-tools.md
       - Render a DRF list as an interactive table: recipes/interactive-view.md
       - Register tools from a spec registry: recipes/register-from-spec-registry.md
       - Connect a Pydantic-AI agent: recipes/pydantic-ai-client.md

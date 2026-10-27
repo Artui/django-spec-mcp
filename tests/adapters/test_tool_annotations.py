@@ -1,8 +1,7 @@
 """MCP tool annotations are auto-derived from each tool's mutation profile.
 
 Selector tools advertise ``readOnlyHint``; service tools advertise
-``destructiveHint``; a chain is read-only only when every step is a
-selector. Hints passed explicitly at registration override the derived
+``destructiveHint``. Hints passed explicitly at registration override the derived
 defaults. The values land both on ``binding.annotations`` (the single
 source of truth) and on the ``tools/list`` wire payload.
 """
@@ -16,7 +15,7 @@ from django_service_specs import SelectorKind
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from django_spec_mcp import ChainStep, MCPServer
+from django_spec_mcp import MCPServer
 from django_spec_mcp.adapters.utils import merge_tool_annotations
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
@@ -119,35 +118,6 @@ def test_service_tool_per_spec_override_flips_the_hints() -> None:
     }
 
 
-def test_chain_of_only_selectors_is_read_only() -> None:
-    server = _server()
-    binding = server.register_chain_tool(
-        name="read.chain",
-        steps=[
-            ChainStep("a", SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda **_: {})),
-            ChainStep("b", SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda **_: {})),
-        ],
-    )
-    assert binding.annotations == {"readOnlyHint": True}
-    assert _annotations_for(server, "read.chain") == {"readOnlyHint": True}
-
-
-def test_chain_with_any_service_step_is_destructive() -> None:
-    server = _server()
-    binding = server.register_chain_tool(
-        name="write.chain",
-        steps=[
-            ChainStep("a", SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda **_: {})),
-            ChainStep("b", ServiceSpec(service=lambda **_: {}, atomic=False)),
-        ],
-    )
-    assert binding.annotations == {"readOnlyHint": False, "destructiveHint": True}
-    assert _annotations_for(server, "write.chain") == {
-        "readOnlyHint": False,
-        "destructiveHint": True,
-    }
-
-
 # ---------- idempotentHint derived from a declared ServiceSpec.idempotent ----------
 
 
@@ -202,20 +172,3 @@ def test_a_read_only_tool_never_derives_the_idempotent_hint() -> None:
     # Holds the ``not read_only`` conjunct in ``merge_tool_annotations``: MCP
     # defines ``idempotentHint`` only when ``readOnlyHint`` is false.
     assert merge_tool_annotations(None, read_only=True, idempotent=True) == {"readOnlyHint": True}
-
-
-def test_a_chain_of_idempotent_service_steps_derives_no_idempotent_hint() -> None:
-    # Chaining idempotent steps does not make an idempotent chain: a
-    # ``get_or_create`` step reports "created" only on the first call, so on a
-    # repeat the next step receives different input. Fails if
-    # ``chain_to_tool`` starts passing ``idempotent=``.
-    server = _server()
-    binding = server.register_chain_tool(
-        name="idempotent.chain",
-        steps=[
-            ChainStep("a", ServiceSpec(service=lambda **_: {}, atomic=False, idempotent=True)),
-            ChainStep("b", ServiceSpec(service=lambda **_: {}, atomic=False, idempotent=True)),
-        ],
-    )
-    assert binding.annotations == {"readOnlyHint": False, "destructiveHint": True}
-    assert "idempotentHint" not in _annotations_for(server, "idempotent.chain")

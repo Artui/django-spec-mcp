@@ -18,10 +18,8 @@ from django_spec_mcp.handlers.utils import (
 from django_spec_mcp.output.resolve_structured_output import resolve_structured_output
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.protocol.types.tool import Tool
-from django_spec_mcp.registry.types.chain_tool_binding import ChainToolBinding
 from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
 from django_spec_mcp.schema.agent_conventions import append_agent_conventions
-from django_spec_mcp.schema.chain_tool_schema import build_chain_tool_input_schema
 from django_spec_mcp.schema.output_schema import build_output_schema
 from django_spec_mcp.schema.selector_tool_schema import build_selector_tool_input_schema
 from django_spec_mcp.schema.service_tool_schema import build_service_tool_input_schema
@@ -81,15 +79,12 @@ def handle_tools_list(
 
     tools: list[dict[str, Any]] = []
     for binding in page:
-        # Chain tools advertise their resolved input serializer; selector tools
-        # merge filter / ordering / pagination args in; service tools expose
-        # what drf-services' dispatch declares for them: the input serializer's
-        # schema, or without one a spread service's own parameters, plus their
-        # target lookup. Every reflection is given the server's seeds, which
+        # Selector tools merge filter / ordering / pagination args in; service
+        # tools expose what drf-services' dispatch declares for them: the input
+        # serializer's schema, or without one a spread service's own
+        # parameters, plus their target lookup. Every reflection is given the server's seeds, which
         # fill a parameter of the same name, so it is never asked of the client.
-        if isinstance(binding, ChainToolBinding):
-            input_schema = build_chain_tool_input_schema(binding)
-        elif isinstance(binding, SelectorToolBinding):
+        if isinstance(binding, SelectorToolBinding):
             input_schema = build_selector_tool_input_schema(
                 binding,
                 max_page_size=resolve_bound(binding.max_page_size, context.config.max_page_size),
@@ -127,9 +122,8 @@ def handle_tools_list(
         # actually emits — a LIST result is a bare array, or the pagination
         # envelope — so the schema is kind-aware on every binding, and
         # ``rendered_kind`` is reconciled per binding like the two above. Only
-        # the selector schema once was: a service tool re-fetching a LIST, or a
-        # chain whose output step is one, advertised a single object and served
-        # an array. Only a selector tool paginates, so only it passes the flag.
+        # the selector schema once was: a service tool re-fetching a LIST
+        # advertised a single object and served an array. Only a selector tool paginates, so only it passes the flag.
         output_schema = build_output_schema(
             binding.output_serializer,
             kind=binding.rendered_kind,

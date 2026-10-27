@@ -33,4 +33,13 @@ carries; releases up to 0.54.0 are in
   them under this package's settings key, so there is nothing to catch. Pass the
   collaborators to `MCPServer(auth_backend=..., session_store=...)`, as before.
 
+- **Chain tools.** `MCPServer.register_chain_tool`, `ChainStep`, `ChainContext`
+  and `ChainToolBinding` are gone, with the chain branches of `tools/list`,
+  `tools/call` and the availability check. A chain ran its steps outside the
+  spec dispatch every other tool goes through, so each spec-level behaviour had
+  to be re-implemented for it. To run several operations as one tool, write one
+  service spec whose service calls the others, and register it with
+  `register_service_tool`: it is judged, validated and rendered like any other
+  service tool, and its `atomic` flag owns the transaction.
+
 [Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.0.0...HEAD

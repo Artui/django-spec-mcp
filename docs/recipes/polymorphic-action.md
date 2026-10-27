@@ -61,5 +61,5 @@ server.register_service_tool(
 ```
 
 If several variants genuinely belong together as one atomic operation
-(retrieve-then-write, say), that's a *chain*, not a union — see
-[Chain several specs into one tool](chain-tools.md).
+(retrieve-then-write, say), that's one service spec whose service calls the
+others inside its own transaction, not a union.

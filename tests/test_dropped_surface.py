@@ -17,6 +17,7 @@ import importlib.util
 
 import pytest
 
+import django_spec_mcp
 from django_spec_mcp.conf import DEFAULTS
 from django_spec_mcp.server.mcp_server import MCPServer
 
@@ -26,10 +27,26 @@ from django_spec_mcp.server.mcp_server import MCPServer
     [
         "django_spec_mcp.contrib",
         "django_spec_mcp.check_removed_settings",
+        "django_spec_mcp.adapters.chain_to_tool",
+        "django_spec_mcp.handlers.chain_tool_dispatch",
+        "django_spec_mcp.registry.types.chain_context",
+        "django_spec_mcp.registry.types.chain_step",
+        "django_spec_mcp.registry.types.chain_tool_binding",
+        "django_spec_mcp.schema.chain_tool_schema",
     ],
 )
 def test_a_dropped_module_is_not_importable(module: str) -> None:
     assert importlib.util.find_spec(module) is None
+
+
+@pytest.mark.parametrize("name", ["ChainStep", "ChainContext"])
+def test_a_dropped_name_leaves_the_root(name: str) -> None:
+    assert name not in django_spec_mcp.__all__
+    assert not hasattr(django_spec_mcp, name)
+
+
+def test_the_server_registers_no_chain_tool() -> None:
+    assert not hasattr(MCPServer, "register_chain_tool")
 
 
 @pytest.mark.parametrize(

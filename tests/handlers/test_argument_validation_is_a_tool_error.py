@@ -33,7 +33,7 @@ from rest_framework import serializers as drf_serializers
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from django_spec_mcp import ChainStep, MCPServer
+from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.constants import JsonRpcErrorCode, UnknownArguments
@@ -100,11 +100,6 @@ def _server() -> MCPServer:
         ),
         paginate=True,
     )
-    server.register_chain_tool(
-        name="chain",
-        input_serializer=InvoiceInputSerializer,
-        steps=[ChainStep("made", ServiceSpec(service=_echo, atomic=False))],
-    )
     return server
 
 
@@ -141,16 +136,15 @@ def _assert_invalid_arguments(out: Any) -> dict[str, Any]:
 
 
 # One case per site that answered ``-32602``: the service tool's dispatch
-# (drf-services' ``REJECT``), the selector tool's own ``input_serializer`` pass,
-# and the chain's. ``is_async`` covers the async handler's own service arm, which
-# is a separate ``except``; the selector and chain siblings share theirs.
+# (drf-services' ``REJECT``) and the selector tool's own ``input_serializer``
+# pass. ``is_async`` covers the async handler's own service arm, which is a
+# separate ``except``; the selector siblings share theirs.
 @pytest.mark.parametrize("is_async", [False, True])
 @pytest.mark.parametrize(
     ("name", "arguments"),
     [
         ("service", {"number": "A", "amount_cents": 1, "rogue": 1}),
         ("selector", {"known": 1, "rogue": 1}),
-        ("chain", {"number": "A", "amount_cents": 1, "rogue": 1}),
     ],
 )
 async def test_an_unexpected_argument_is_a_validation_error_result(
@@ -169,7 +163,6 @@ async def test_an_unexpected_argument_is_a_validation_error_result(
     [
         ("service", {"amount_cents": 1}, "number"),
         ("selector", {"known": "not a number"}, "known"),
-        ("chain", {"number": "A", "amount_cents": -1}, "amount_cents"),
     ],
 )
 async def test_an_input_serializer_rejection_is_a_validation_error_result(

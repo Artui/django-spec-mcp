@@ -25,7 +25,7 @@ from django_service_specs import Affordance, SelectorKind, base_pool
 from rest_framework.request import Request
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from django_spec_mcp import ChainStep, MCPServer
+from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
@@ -33,7 +33,7 @@ from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
 from django_spec_mcp.handlers.types.context import MCPCallContext
-from tests.testapp.affordances import ARCHIVE_ORDER, order_selector_spec
+from tests.testapp.affordances import order_selector_spec
 from tests.utils import tool_error
 
 _POOL = "django_spec_mcp.handlers.offered_tools.base_pool"
@@ -249,9 +249,9 @@ def test_the_permission_filter_still_drops_an_available_tool() -> None:
 def test_a_listing_of_tools_declaring_nothing_builds_no_pool(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Declaring nothing costs nothing: a service tool without affordances, a
-    selector tool whose ``affordances`` names another operation, and a chain whose
-    steps declare nothing are listed without a pool."""
+    """Declaring nothing costs nothing: a service tool without affordances and a
+    selector tool whose ``affordances`` names another operation are listed without
+    a pool."""
     built = _pool_spy(monkeypatch)
     server = _server()
     server.register_service_tool(name="post_entry", spec=_service(), permissions=[])
@@ -260,19 +260,7 @@ def test_a_listing_of_tools_declaring_nothing_builds_no_pool(
     server.register_selector_tool(
         name="get_order", spec=order_selector_spec(SelectorKind.RETRIEVE), permissions=[]
     )
-    server.register_chain_tool(
-        name="chain",
-        atomic=False,
-        steps=[
-            ChainStep("entry", _service()),
-            ChainStep(
-                "order",
-                order_selector_spec(SelectorKind.RETRIEVE, affordances={"archive": ARCHIVE_ORDER}),
-            ),
-        ],
-    )
-
-    assert _listed(server) == ["post_entry", "get_order", "chain"]
+    assert _listed(server) == ["post_entry", "get_order"]
     assert built == []
 
 
@@ -343,46 +331,6 @@ async def test_the_async_call_refuses_a_left_out_tool_with_its_code() -> None:
 
     assert listing["tools"] == []
     assert tool_error(out) == _REFUSED
-
-
-# ---------- chains ----------
-
-
-def _chain(server: MCPServer, *specs: ServiceSpec[Any, Any, Any]) -> None:
-    server.register_chain_tool(
-        name="chain",
-        atomic=False,
-        steps=[ChainStep(f"step{index}", spec) for index, spec in enumerate(specs)],
-    )
-
-
-@pytest.mark.parametrize("position", [0, 1, 2], ids=["first", "middle", "last"])
-def test_a_chain_with_an_unavailable_step_is_left_out(position: int) -> None:
-    """Every step runs, in order, with nothing to skip one, so a step refused by
-    an operation condition refuses every call -- wherever it sits in the chain."""
-    specs = [_service(_OPEN), _service(), _service(_OPEN)]
-    specs[position] = _service(_CLOSED)
-    server = _server()
-    _chain(server, *specs)
-
-    assert _listed(server) == []
-
-
-def test_a_chain_whose_steps_are_all_available_is_listed() -> None:
-    server = _server()
-    _chain(server, _service(_OPEN), _service(), _service(_OPEN))
-
-    assert _listed(server) == ["chain"]
-
-
-def test_a_left_out_chain_is_still_called_and_refused_at_its_step() -> None:
-    server = _server()
-    _chain(server, _service(_OPEN), _service(_CLOSED))
-
-    out = handle_tools_call({"name": "chain", "arguments": {}}, _ctx(server))
-
-    assert _listed(server) == []
-    assert tool_error(out) == {**_REFUSED, "failedStep": "step1"}
 
 
 # ---------- pagination and caching ----------

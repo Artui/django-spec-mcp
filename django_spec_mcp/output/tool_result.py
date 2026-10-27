@@ -76,8 +76,8 @@ def build_tool_result(
     ``ServiceSpec(allow_none=True)`` that returned ``None``. It is served as
     ``{}``, both as ``structuredContent`` and as the text block, because MCP
     requires structured content to be an object and asks the text block to
-    carry the same JSON. This is the one place the rule lives, so a selector, a
-    service and a chain answer it the same way on every entry point. The
+    carry the same JSON. This is the one place the rule lives, so a selector
+    and a service answer it the same way on every entry point. The
     advertised ``outputSchema`` of those tools admits the ``{}``
     (``build_output_schema(may_be_empty=...)``). A service with no re-read that
     returns ``None`` without declaring ``allow_none`` is served ``{}`` too,

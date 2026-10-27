@@ -14,7 +14,6 @@ from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
 from django_spec_mcp import (
-    ChainStep,
     MCPServer,
     ToolDefinition,
     register_tools,
@@ -52,17 +51,6 @@ def test_selector_tool_carries_display_metadata() -> None:
     )
     assert b.display_name == "Lister"
     assert b.display_description == "Lists stuff"
-
-
-def test_chain_tool_carries_display_metadata() -> None:
-    b = _server().register_chain_tool(
-        name="t",
-        steps=[ChainStep("a", _svc_spec())],
-        display_name="Flow",
-        display_description="A flow",
-    )
-    assert b.display_name == "Flow"
-    assert b.display_description == "A flow"
 
 
 def test_defaults_to_none_when_unset() -> None:

@@ -4,8 +4,7 @@ The full-transport in-process surface (distinct from the spec-core
 :meth:`MCPServer.call_tool`): tool listing with the merged ``inputSchema`` +
 per-caller listing filter + pagination, and tool execution with the
 transport-level MCP permissions / rate limits, the selector post-fetch pipeline
-(filter / order / paginate), and chain tools — none of which the spec core
-applies. These tests prove the methods delegate to the wire handlers (the
+(filter / order / paginate) — none of which the spec core applies. These tests prove the methods delegate to the wire handlers (the
 behaviour itself is covered exhaustively under ``tests/handlers/``) and build the
 call context correctly off-HTTP.
 """
@@ -22,7 +21,7 @@ from rest_framework.permissions import BasePermission
 from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from django_spec_mcp import ChainStep, JsonRpcError, JsonRpcErrorCode, MCPServer
+from django_spec_mcp import JsonRpcError, JsonRpcErrorCode, MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.permissions.django_perm_required import DjangoPermRequired
 from django_spec_mcp.auth.permissions.scope_required import ScopeRequired
@@ -184,32 +183,6 @@ async def test_acall_tool_applies_read_extras_the_spec_core_omits() -> None:
     payload = out["structuredContent"]
     assert payload["totalPages"] == 2
     assert [item["number"] for item in payload["items"]] == ["B", "C"]
-
-
-@pytest.mark.django_db(transaction=True)
-async def test_acall_tool_runs_a_chain_tool() -> None:
-    """Chain tools — which the spec-core ``call_tool`` rejects with
-    ``TypeError`` — run through the full in-process transport."""
-    server = _server()
-    server.register_chain_tool(
-        name="chain",
-        steps=[
-            ChainStep(
-                "made",
-                ServiceSpec(
-                    service=lambda *, data: Invoice.objects.create(**data),
-                    input_serializer=InvoiceInputSerializer,
-                    atomic=False,
-                    output_selector_spec=SelectorSpec(
-                        kind=SelectorKind.RETRIEVE, output_serializer=InvoiceOutputSerializer
-                    ),
-                ),
-            ),
-        ],
-    )
-    out = await server.acall_tool("chain", {"number": "Z", "amount_cents": 9}, user=None)
-    assert isinstance(out, dict)
-    assert out["structuredContent"]["number"] == "Z"
 
 
 async def test_acall_tool_enforces_mcp_permissions() -> None:

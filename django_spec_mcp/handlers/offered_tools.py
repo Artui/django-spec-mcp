@@ -13,10 +13,9 @@ not exist at list time, so asking it early can deny unfairly. An operation-scope
 condition cannot read arguments by construction, so that reason does not apply,
 and a tool declaring no condition costs nothing here.
 
-The answer is advisory. ``dispatch_spec`` (and a chain's per-step
-``enforce_affordances``) still enforces every affordance at the call, so a
-listing built a moment before a condition flips is answered, when the stale entry
-is called, by an ``ActionUnavailable`` carrying the same ``code``.
+The answer is advisory. ``dispatch_spec`` still enforces every affordance at the
+call, so a listing built a moment before a condition flips is answered, when the
+stale entry is called, by an ``ActionUnavailable`` carrying the same ``code``.
 
 Sync only, and that serves both transports: ``tools/list`` is a sync handler
 that the async transport and ``alist_tools`` run in Django's thread-sensitive
@@ -35,7 +34,6 @@ from rest_framework_services.types.service_spec import ServiceSpec
 
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.registry.tool_registry import ToolBindingLike
-from django_spec_mcp.registry.types.chain_tool_binding import ChainToolBinding
 
 
 def offered_tools(
@@ -61,8 +59,7 @@ def unavailable_tools(
     The same pass over the same bindings, so a name is here exactly when the
     listing omits it: an in-process consumer that lists once and asks this each
     step offers what a fresh ``tools/list`` would, and can say why the rest are
-    missing. For a chain the affordance is the first unmet one in step order,
-    which is the step whose refusal a call would meet first.
+    missing.
     """
     answers, _asked = _answer(bindings, context)
     return {binding.name: unmet for binding, unmet in answers if unmet is not None}
@@ -125,8 +122,7 @@ def _first_unmet(
 ) -> Affordance | None:
     """The first unmet condition across ``gating``, in order, or ``None``.
 
-    Stops at the first spec refusing, as the listing always did, so a later
-    step's condition is not asked once an earlier one has decided.
+    Stops at the first spec refusing, as the listing always did.
 
     ``reserved`` is the server's ``pool_seeds.reserved``, the set dispatch hands
     the condition at the call: a callable condition sees only the reserved
@@ -149,16 +145,6 @@ def _gating_specs(binding: ToolBindingLike) -> tuple[ServiceSpec[Any, Any, Any],
     ``affordances`` names *other* operations to project onto its rows, not a
     condition on the read, so it gates nothing and asks nothing here.
 
-    **A chain is gated by every one of its service steps.** ``_run_steps`` runs the
-    steps in declaration order with no branch that skips one -- a ``ChainStep``
-    is an alias, a spec and an ``inputs`` callable, with nothing to make it
-    conditional -- and a step's refusal ends the chain. So a step whose operation
-    condition is unmet refuses every call that reaches it, and a call that does
-    not reach it has already failed on an earlier step: no call of the chain can
-    succeed, which is the one case this hides a tool for. Were steps ever to
-    become conditional, this would have to stop treating every step as reached,
-    since a step that may be skipped cannot refuse the chain on its own.
-
     Only specs with an operation-scope condition are returned, as drf-services'
     ``operation_affordances`` selects them: the callable conditions, never the
     row conditions, and never a selector's. That is what keeps a listing with
@@ -166,11 +152,7 @@ def _gating_specs(binding: ToolBindingLike) -> tuple[ServiceSpec[Any, Any, Any],
     tool declaring only row conditions is listed exactly as one declaring
     nothing is, since there is no row at list time to ask them about.
     """
-    specs: tuple[Any, ...] = (
-        tuple(step.spec for step in binding.steps)
-        if isinstance(binding, ChainToolBinding)
-        else (binding.spec,)
-    )
+    specs: tuple[Any, ...] = (binding.spec,)
     return tuple(spec for spec in specs if operation_affordances(spec))
 
 
@@ -181,7 +163,7 @@ def _list_time_pool(context: MCPCallContext) -> dict[str, Any]:
     the same kind of object a call's condition reads: the DRF ``Request`` that
     ``build_offline_context`` wraps around a copy of the transport's request,
     with the method forced to ``POST`` and ``query_params`` replaced by an empty
-    mapping, as ``tools/call`` and a chain build it. Handing the raw
+    mapping, as ``tools/call`` builds it. Handing the raw
     ``HttpRequest`` here, or ``None``, would let a condition reading ``request``
     answer differently in the list than at the call -- listing a tool that is
     then refused, or hiding one that would run.

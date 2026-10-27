@@ -99,18 +99,6 @@ directly, through a `ToolDefinition` or through `ServiceDefaults` /
 ::: django_service_specs.types.unknown_arguments.UnknownArguments
 ::: rest_framework_services.types.argument_binding.ArgumentBinding
 
-## Chain tools
-
-`ChainStep` is one step of a `register_chain_tool` sequence — an alias, a
-`ServiceSpec` / `SelectorSpec`, and an `inputs` callable. That callable receives
-a `ChainContext`, which exposes the validated tool arguments as `ctx.args` and
-any prior step's output as `ctx[alias]`. See
-[Chain specs into one tool](../recipes/chain-tools.md).
-
-::: django_spec_mcp.registry.types.chain_step.ChainStep
-::: django_spec_mcp.registry.types.chain_context.ChainContext
-::: django_spec_mcp.registry.types.chain_tool_binding.ChainToolBinding
-
 ## Selector-tool schema
 
 Builds the merged `inputSchema` for selector tools — exposed for projects

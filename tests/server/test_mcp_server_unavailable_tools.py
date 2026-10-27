@@ -19,10 +19,10 @@ from django.db.models import Q
 from django_service_specs import Affordance, SelectorKind, base_pool
 from rest_framework_services.types.service_spec import ServiceSpec
 
-from django_spec_mcp import ChainStep, MCPServer
+from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
-from tests.testapp.affordances import ARCHIVE_ORDER, order_selector_spec
+from tests.testapp.affordances import order_selector_spec
 from tests.testapp.models import Invoice
 
 _POOL = "django_spec_mcp.handlers.offered_tools.base_pool"
@@ -32,7 +32,6 @@ _HOP = "django_spec_mcp.server.mcp_server.sync_to_async"
 """Where the server looks ``sync_to_async`` up, so a spy there sees every hop."""
 
 _CLOSED = Affordance(code="books_closed", reason="The books are closed.", when=lambda: False)
-_FROZEN = Affordance(code="ledger_frozen", reason="The ledger is frozen.", when=lambda: False)
 _OPEN = Affordance(code="books_open", reason="The books are open.", when=lambda: True)
 _ROW_ONLY = Affordance(code="never", reason="Matches no row.", when=Q(pk__in=[]))
 
@@ -106,15 +105,6 @@ def _every_kind(server: MCPServer) -> None:
     server.register_selector_tool(
         name="get_order", spec=order_selector_spec(SelectorKind.RETRIEVE), permissions=[]
     )
-    server.register_chain_tool(
-        name="close_and_freeze",
-        atomic=False,
-        steps=[
-            ChainStep("open", _service(_OPEN)),
-            ChainStep("freeze", _service(_FROZEN)),
-            ChainStep("close", _service(_CLOSED)),
-        ],
-    )
 
 
 # ---------- agreement with the listing ----------
@@ -126,7 +116,7 @@ def test_each_left_out_tool_is_named_with_the_condition_that_left_it_out() -> No
 
     unavailable = server.unavailable_tools(user=None)
 
-    assert unavailable == {"close_books": _CLOSED, "close_and_freeze": _FROZEN}
+    assert unavailable == {"close_books": _CLOSED}
     assert (unavailable["close_books"].code, unavailable["close_books"].reason) == (
         "books_closed",
         "The books are closed.",
@@ -146,15 +136,6 @@ def test_a_name_is_reported_exactly_when_the_listing_omits_it() -> None:
 
     assert set(offered).isdisjoint(unavailable)
     assert sorted([*offered, *unavailable]) == sorted(everything)
-
-
-def test_a_chain_reports_its_first_unmet_step_in_order() -> None:
-    """``ledger_frozen`` is the refusal a call would meet first, since the steps run
-    in declaration order and ``close`` is never reached."""
-    server = _server()
-    _every_kind(server)
-
-    assert server.unavailable_tools(user=None)["close_and_freeze"].code == "ledger_frozen"
 
 
 def test_always_listed_is_never_reported() -> None:
@@ -272,25 +253,14 @@ async def test_a_server_declaring_nothing_to_ask_answers_without_a_hop(
 ) -> None:
     """A consumer asks on every model step, so a server with nothing to ask should
     not cost a thread switch per step. Every tool here is one a pass skips: no
-    affordance, a row condition, a selector projecting another operation, a chain
-    of such steps, and an ``always_listed`` tool whose condition is never asked."""
+    affordance, a row condition, a selector projecting another operation, and an
+    ``always_listed`` tool whose condition is never asked."""
     hops = _hop_spy(monkeypatch)
     server = _server()
     server.register_service_tool(name="post_entry", spec=_service(), permissions=[])
     server.register_service_tool(name="void_invoice", spec=_service(_ROW_ONLY), permissions=[])
     server.register_selector_tool(
         name="get_order", spec=order_selector_spec(SelectorKind.RETRIEVE), permissions=[]
-    )
-    server.register_chain_tool(
-        name="chain",
-        atomic=False,
-        steps=[
-            ChainStep("entry", _service()),
-            ChainStep(
-                "order",
-                order_selector_spec(SelectorKind.RETRIEVE, affordances={"archive": ARCHIVE_ORDER}),
-            ),
-        ],
     )
     server.register_service_tool(
         name="reopen_books", spec=_service(_CLOSED), permissions=[], always_listed=True

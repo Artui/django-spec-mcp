@@ -13,7 +13,6 @@ from django_spec_mcp._compat.acall import acall
 from django_spec_mcp._compat.tracing import span
 from django_spec_mcp.constants import JsonRpcErrorCode, OutputFormat
 from django_spec_mcp.elicitation.types.resolved_input import ResolvedInput
-from django_spec_mcp.handlers.chain_tool_dispatch import dispatch_chain_tool_async
 from django_spec_mcp.handlers.handle_tools_call import _forbidden, _render, _span_attrs
 from django_spec_mcp.handlers.input_dispatch import (
     ask_for_input,
@@ -49,7 +48,6 @@ from django_spec_mcp.output.error_tool_result import build_error_tool_result
 from django_spec_mcp.output.resolve_structured_output import resolve_structured_output
 from django_spec_mcp.output.tool_result import build_tool_result
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
-from django_spec_mcp.registry.types.chain_tool_binding import ChainToolBinding
 from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
 
 
@@ -151,14 +149,9 @@ async def _dispatch_tool_call_async(
     arguments returned are the ones the tool ran with, as in the sync sibling.
     """
     with span("mcp.tools.call", attributes=_span_attrs(binding.name, context)) as otel_span:
-        # Chain and selector tools have their own dispatch helpers; service
-        # tools fall through to the mutation-shaped path below. See the sync
-        # sibling: neither merges a retry's answers.
-        if isinstance(binding, ChainToolBinding):
-            return (
-                await dispatch_chain_tool_async(binding, params, arguments_raw, context, otel_span),
-                arguments_raw,
-            )
+        # Selector tools have their own dispatch helpers; service tools fall
+        # through to the mutation-shaped path below. See the sync sibling: a
+        # selector merges no retry's answers.
         if isinstance(binding, SelectorToolBinding):
             return (
                 await dispatch_selector_tool_async(

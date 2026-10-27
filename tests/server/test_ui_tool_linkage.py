@@ -18,7 +18,6 @@ from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.constants import UI_META_KEY, UIVisibility
 from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
 from django_spec_mcp.handlers.types.context import MCPCallContext
-from django_spec_mcp.registry.types.chain_step import ChainStep
 from django_spec_mcp.registry.types.ui_tool_meta import UIToolMeta
 from django_spec_mcp.server.mcp_server import MCPServer
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
@@ -130,17 +129,6 @@ class TestEveryToolKind:
         server = _server()
         binding = server.register_service_tool(
             name="refund", spec=_service_spec(), ui=UIToolMeta(resource_uri=VIEW_URI)
-        )
-
-        assert binding.meta[UI_META_KEY]["resourceUri"] == VIEW_URI
-
-    def test_a_chain_tool_can_link(self) -> None:
-        server = _server()
-        binding = server.register_chain_tool(
-            name="chained",
-            steps=[ChainStep(alias="one", spec=_selector_spec())],
-            permissions=[_AlwaysAllow()],
-            ui=UIToolMeta(resource_uri=VIEW_URI),
         )
 
         assert binding.meta[UI_META_KEY]["resourceUri"] == VIEW_URI

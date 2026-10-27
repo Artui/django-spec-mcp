@@ -85,7 +85,7 @@ class DRFPermissionAdapter:
         # Held as given, because the copies that keep a permission's writes
         # off the caller's mappings and out of the next check are made
         # elsewhere: ``DispatchShape.build`` copies ``kwargs`` into a fresh view
-        # for every build, and ``dispatch_shape`` and ``chain_shape`` copy
+        # for every build, and ``dispatch_shape`` copies
         # ``data`` into each shape, one per check, which a split declaring
         # nothing once handed back as the caller's own ``arguments``
         # (``test_a_permission_writing_request_data_reaches_neither_the_next_check_nor_the_caller``).

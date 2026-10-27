@@ -111,9 +111,8 @@ class MCPCallContext:
     names (a tenant, a locale, a clock) that hang off ``request`` over HTTP.
 
     Read wherever this context reaches a spec -- every ``dispatch_spec`` /
-    ``adispatch_spec``, each chain step's pool and its affordance check, and the
-    availability check ``tools/list`` runs -- so a condition is asked with the
-    same seeds the call that enforces it resolves. drf-services' own default, so
+    ``adispatch_spec``, and the availability check ``tools/list`` runs -- so a
+    condition is asked with the same seeds the call that enforces it resolves. drf-services' own default, so
     a context built without a server behaves exactly as before."""
 
     conventions: AgentConventions = field(default_factory=AgentConventions)

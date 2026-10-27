@@ -370,21 +370,6 @@ def test_a_selector_tool_has_no_invalidates_kwarg() -> None:
         )
 
 
-def test_a_chain_tool_accepts_invalidates() -> None:
-    """A chain is a sequence of writes by construction here, and it fires once
-    after the whole chain succeeds rather than per step."""
-    from django_spec_mcp import ChainStep
-
-    server = MCPServer(name="chain", auth_backend=AllowAnyBackend())
-    binding = server.register_chain_tool(
-        name="c",
-        description="x",
-        steps=[ChainStep(alias="one", spec=ServiceSpec(service=_service, atomic=False))],
-        invalidates=("a://",),
-    )
-    assert binding.invalidates == ("a://",)
-
-
 @pytest.mark.django_db(transaction=True)
 def test_the_wsgi_transport_hands_the_handler_a_broker() -> None:
     """The announcement is dead on WSGI unless the *transport* passes the broker.

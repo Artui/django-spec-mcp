@@ -138,8 +138,7 @@ it must be a `Serializer` subclass or a dataclass type. An **output** serializer
 is only rendered, so any `BaseSerializer` subclass is accepted there, including
 DRF's read-only pattern that implements just `to_representation`. A dataclass
 is accepted on both sides: as output it renders through a `DataclassSerializer`
-built for it. For a chain tool the message names the step whose serializer was
-refused. A resource has only an output serializer, and it is held to the same
+built for it. A resource has only an output serializer, and it is held to the same
 rule.
 
 Such a tool used to register cleanly. Every call to it then failed, and `tools/list`
@@ -192,29 +191,6 @@ the same for an `instance_selector_spec` beside `many=True` or beside a
 `collection_selector_spec`. A list payload resolves no target, and beside a
 collection lookup dispatch never calls the instance one, so the lookup would be
 declared and never run. Declare one target lookup, or drop `many=True`.
-
-### "declares many=True, so its input_serializer describes one item of a list"
-
-A chain with no `input_serializer` of its own validates and advertises its
-arguments as its first step's. On a `many=True` step that serializer describes one
-item, so the chain listed a single item as its arguments and handed the bulk
-service that one object. Give the chain its own `input_serializer`, and build the
-step's list from it in `inputs`:
-
-```python
-class BulkInvoiceInput(serializers.Serializer):
-    items = InvoiceSerializer(many=True)
-
-
-server.register_chain_tool(
-    name="invoices.bulk_create_and_notify",
-    input_serializer=BulkInvoiceInput,
-    steps=[
-        ChainStep("created", bulk_create_spec, inputs=lambda ctx: {"data": ctx.args["items"]}),
-        ChainStep("notified", notify_spec),
-    ],
-)
-```
 
 ## `ValueError` when registering a resource
 

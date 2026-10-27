@@ -54,7 +54,7 @@ def test_an_unbound_adapter_judges_an_empty_route() -> None:
 
 
 def test_without_a_shape_every_adapter_is_judged_on_an_empty_route() -> None:
-    # The paths with no route to name (prompts, completion, chain steps) pass
+    # The paths with no route to name (prompts, completion) pass
     # none, and their adapters are judged as registered.
     seen: list[dict[str, Any]] = []
 
