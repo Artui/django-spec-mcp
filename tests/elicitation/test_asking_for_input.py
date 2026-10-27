@@ -23,14 +23,21 @@ from typing import Any
 
 import pytest
 from django.core import signing
+from django_service_specs import (
+    AdditionalInputRequired,
+    DataclassValidator,
+    ServiceSpec,
+    Unrestricted,
+)
 
 from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
 from django_spec_mcp.types.request_state_salt import REQUEST_STATE_SALT
-from tests.elicitation.conftest import TOOL, build_kernel_server, context
+from tests.elicitation.conftest import TOOL, DeleteRows, build_kernel_server, context
 from tests.utils import tool_error
 
 
@@ -334,6 +341,39 @@ def test_the_budget_counts_rounds_not_calls(server: MCPServer) -> None:
 
 
 # ---------- other registration shapes ----------
+
+
+def _asks_for_an_undeclared_name(*, count: int, confirmed: bool = False, reason: str = "") -> Any:  # noqa: ARG001
+    raise AdditionalInputRequired("Confirm?", schema={"confirm": {"type": "boolean"}})
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "The kernel tool path does not hand build_requested_schema the names its spec "
+        "admits: kernel_refusals._input_required and input_dispatch.ask_for_input pass "
+        "admitted=, so the question is refused before the user answers it."
+    ),
+)
+def test_a_question_whose_answer_the_spec_refuses_is_an_internal_error() -> None:
+    """The kernel's own question, with no drf-services counterpart: the answer
+    to ``confirm`` comes back as an argument the spec does not declare, which
+    the closed argument set refuses as unknown on the second round. So the
+    first round refuses the question, as an unrenderable one is refused."""
+    server = MCPServer(name="undeclared", auth_backend=AllowAnyBackend())
+    server.register_tool(
+        ServiceSpec(
+            service=_asks_for_an_undeclared_name,
+            validator=DataclassValidator(DeleteRows),
+            permissions=[Unrestricted()],
+            atomic=False,
+        ),
+        name=TOOL,
+    )
+    out = _call(server, {"count": 1})
+    assert isinstance(out, JsonRpcError)
+    assert out.code == -32603
+    assert "'confirm'" in out.message
 
 
 # ---------- async parity ----------

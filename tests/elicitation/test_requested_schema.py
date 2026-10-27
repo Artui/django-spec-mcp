@@ -89,3 +89,27 @@ def test_the_message_names_the_offending_property() -> None:
     entire content of the error."""
     with pytest.raises(ImproperlyConfigured, match="'profile'"):
         build_requested_schema({"confirmed": {"type": "boolean"}, "profile": {"type": "object"}})
+
+
+# ---------- what the spec admits ----------
+
+
+def test_a_property_the_tool_does_not_admit_is_refused() -> None:
+    """The answer comes back as an ordinary argument, and a kernel spec's closed
+    argument set refuses one it does not declare as unknown. Asked anyway, the
+    user fills in a form whose answer the call then refuses, so the question is
+    refused here, where its author can be told which name is wrong."""
+    with pytest.raises(ImproperlyConfigured, match="'confirm'.*count, reason"):
+        build_requested_schema({"confirm": {"type": "boolean"}}, admitted=("count", "reason"))
+
+
+def test_a_property_the_tool_admits_passes() -> None:
+    built = build_requested_schema({"confirmed": {"type": "boolean"}}, admitted=("confirmed",))
+    assert built["properties"] == {"confirmed": {"type": "boolean"}}
+
+
+def test_no_admitted_set_judges_the_schema_alone() -> None:
+    """``None`` is a caller that does not know the set, a drf-services tool or a
+    kernel one passing unknown arguments through, and asks nothing of the names."""
+    built = build_requested_schema({"anything": {"type": "boolean"}}, admitted=None)
+    assert built["properties"] == {"anything": {"type": "boolean"}}

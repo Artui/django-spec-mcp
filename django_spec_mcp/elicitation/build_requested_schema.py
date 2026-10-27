@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from typing import Any
 
 from django.core.exceptions import ImproperlyConfigured
@@ -8,7 +8,9 @@ from django.core.exceptions import ImproperlyConfigured
 from django_spec_mcp.types.elicitation_scalar_types import ELICITATION_SCALAR_TYPES
 
 
-def build_requested_schema(schema: Mapping[str, Any]) -> dict[str, Any]:
+def build_requested_schema(
+    schema: Mapping[str, Any], *, admitted: Collection[str] | None = None
+) -> dict[str, Any]:
     """Turn ``AdditionalInputRequired.schema`` into a spec-legal ``requestedSchema``.
 
     The service declares only the properties — ``{"confirmed": {"type":
@@ -26,11 +28,29 @@ def build_requested_schema(schema: Mapping[str, Any]) -> dict[str, Any]:
     whole result. An unusable schema is a programming error in the service, so
     it fails loudly here, where its author can still be told which property is
     wrong.
+
+    **``admitted`` is the argument names the tool takes from a client**, when
+    the caller knows them: a kernel spec's parameters, less the keys the server
+    owns, under a closed argument set. The answer comes back as an ordinary
+    argument, so a property outside that set is one the call then refuses as
+    unknown, after the user has filled it in; it is refused here instead, as an
+    unrenderable one is. ``None`` asks nothing of the names, for a caller that
+    does not know the set: a drf-services tool, or a kernel one passing unknown
+    arguments through.
     """
     properties: dict[str, Any] = {}
     required: list[str] = []
     for name, definition in schema.items():
         _reject_unusable(name, definition)
+        # Two conjuncts, one branch arc: ``admitted is not None`` is held by
+        # ``test_no_admitted_set_judges_the_schema_alone`` and the membership by
+        # ``test_a_property_the_tool_admits_passes``.
+        if admitted is not None and name not in admitted:
+            raise ImproperlyConfigured(
+                f"AdditionalInputRequired asked for {name!r}, which this tool does not take "
+                f"as an argument ({', '.join(sorted(admitted))}). The answer comes back as "
+                "an argument, so ask for one the spec declares."
+            )
         properties[name] = definition
         if "default" not in definition:
             required.append(name)
