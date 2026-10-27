@@ -11,9 +11,25 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+### Changed
+
+- **The package is `django-spec-mcp`, imported as `django_spec_mcp`.** Every
+  import of `rest_framework_mcp` becomes `django_spec_mcp`, with the same module
+  paths below it. The settings key is `SPEC_MCP`; a `REST_FRAMEWORK_MCP` setting
+  is no longer read, and nothing warns about it, so rename the key. The
+  `serverInfo.name` default is `django-spec-mcp`, and the logger and tracer names
+  follow the import package.
+- **Every name stored outside the process is new**: the cache and Redis
+  prefixes are `spec-mcp:session:`, `spec-mcp:task:`, `spec-mcp:sse`,
+  `spec-mcp:sse-replay`, `spec-mcp:sub`, `spec-mcp:rl`, `spec-mcp:rl-sw` and
+  `spec-mcp:rl-tb`, and elicitation state is signed with a new salt. **The first
+  deploy therefore drops every live session, in-flight task, rate-limit window and
+  pending elicitation**: clients start a new session, and a pending elicitation is
+  asked again.
+
 ### Removed
 
-- **The bundled authorization-server pieces, `django_spec_mcp.contrib`.** Dynamic
+- **The bundled authorization-server pieces, `rest_framework_mcp.contrib`.** Dynamic
   Client Registration (`DynamicClientRegistrationViewSet` and its serializer and
   types), the authorization-server metadata and OpenID discovery views,
   `build_oauth_urlpatterns` with its `mcp-oauth-*` URL names,

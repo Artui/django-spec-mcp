@@ -66,8 +66,8 @@ def check_tool_permissions_declared(
         )
     warnings.warn(
         f"{problem} This is a warning because "
-        "SPEC_MCP['REQUIRE_TOOL_PERMISSIONS'] is False; it is an "
-        "error by default since 0.25.0.",
+        "SPEC_MCP['REQUIRE_TOOL_PERMISSIONS'] is False; by default it is "
+        "an error.",
         UnguardedToolWarning,
         stacklevel=3,
     )

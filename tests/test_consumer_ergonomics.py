@@ -168,7 +168,7 @@ class TestUnguardedToolsAreRefusedByDefault:
 
     def test_the_opt_out_downgrades_it_to_a_warning(self) -> None:
         server = MCPServer(name="t", config=build_mcp_config(require_tool_permissions=False))
-        with pytest.warns(UnguardedToolWarning, match="0.25.0"):
+        with pytest.warns(UnguardedToolWarning, match="by default it is an error"):
             server.register_service_tool(name="t.open", spec=_spec(), description="d")
 
 

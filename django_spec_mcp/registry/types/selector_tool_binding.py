@@ -349,8 +349,8 @@ class SelectorToolBinding(Generic[ResultT, ExtraT]):
         so a project declares its filterable shape once on the spec and both
         the HTTP and MCP transports honour it.
 
-        Typed ``Any`` because ``django-filter`` is optional behind the
-        ``[filter]`` extra, and narrowing would force a hard import here.
+        Typed ``Any`` because ``django-filter`` is optional, behind
+        drf-services' ``[filter]`` extra, and narrowing would force a hard import here.
         """
         return self.spec.filter_set
 

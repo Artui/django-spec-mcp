@@ -511,8 +511,9 @@ class MCPServer:
 
         Filtering **and ordering** are declared on the spec, not here: set
         ``SelectorSpec.filter_set`` and both the HTTP and MCP transports honour
-        it, ordering included via an ``OrderingFilter``. It requires the
-        ``[filter]`` extra (``django-filter``), and schema generation raises a
+        it, ordering included via an ``OrderingFilter``. It requires
+        ``django-filter``, which drf-services installs as its
+        ``[filter]`` extra, and schema generation raises a
         clear ``ImportError`` without it. ``paginate`` stays here, being an MCP
         pipeline mechanic with no spec analogue.
 

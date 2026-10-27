@@ -311,7 +311,7 @@ def test_a_selector_declared_sort_parameter_is_advertised_and_applied() -> None:
     """No ``filter_set`` anywhere: the callable's own parameter is the channel.
 
     Reflected into the ``inputSchema`` as a plain string and spread into the
-    selector's kwargs at dispatch, so a project without the ``[filter]`` extra
+    selector's kwargs at dispatch, so a project without ``django-filter``
     still ships an orderable tool. The FilterSet route is the better one where
     there is a FilterSet — this value reaches ``.order_by()`` with only whatever
     checking the selector itself does — but it is not the only one.
