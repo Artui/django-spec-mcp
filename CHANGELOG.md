@@ -30,7 +30,7 @@ carries; releases up to 0.54.0 are in
   that is not a kernel spec, a knob of the other kind of tool, `scopes=()`,
   `UnknownArguments.PASSTHROUGH`, a resource's `uri_template` variable that no
   read or shape of the spec declares or that the server fills (a reflected read, or
-  a key a `kwargs=` provider always fills), each named in the error, and, for now,
+  a key a typed `kwargs=` provider declares, unless its type admits `UnsetType`), each named in the error, and, for now,
   any `task_policy` but the default.
   A spec declaring `permissions=None` is refused under
   `REQUIRE_TOOL_PERMISSIONS`; with the setting off it registers with an

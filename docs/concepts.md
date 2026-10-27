@@ -1002,8 +1002,9 @@ What changes against the drf-services tools:
   which argument is wrong; `INCLUDE_VALIDATION_VALUE` adds the variables sent
   under `data.value`. A `uri_template` variable must be a read or shape of the
   spec that the server does not fill: registration raises `ImproperlyConfigured`
-  naming the resource and the variable when no read declares it, and when a
-  reflected read or a key a `kwargs=` provider always fills makes it the server's,
+  naming the resource and the variable when no read or shape declares it, and when
+  a reflected read or a key a typed `kwargs=` provider declares, unless its type
+  admits `UnsetType`, makes it the server's,
   since every read would be refused or would serve the provider's value for any URI.
 
 `register_tools(registry, overrides={"invoices.create": {"scopes": ("billing",)}})`
@@ -2200,8 +2201,9 @@ anything else a caller sent.
 
 A kernel tool admits an answer only under a name it takes from a client: a
 parameter the spec declares, less every name the server fills for the call (a
-`server_arguments` entry, a pool seed, or a key a `kwargs=` or `input_data=`
-provider always fills). A question for any other property is a `-32603` naming
+`server_arguments` entry, a pool seed, a reflected `request` or `view` read, or a
+key a typed `kwargs=` or `input_data=` provider declares, unless its type admits
+`UnsetType`). A question for any other property is a `-32603` naming
 the property and the names the tool does take, whether or not the client can be
 asked, since the answer would come back as an argument the call refuses, drops
 or replaces. The author finds out on the first call, not when a user's answer is

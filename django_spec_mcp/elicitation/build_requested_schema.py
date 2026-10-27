@@ -58,7 +58,7 @@ def build_requested_schema(
             raise ImproperlyConfigured(
                 f"AdditionalInputRequired asked for {name!r}, which this tool does not take "
                 "from a client: the spec does not declare it, or the server fills it for the "
-                f"call, so its answer would be refused or replaced. {instead}"
+                f"call, so its answer would be refused, dropped or replaced. {instead}"
             )
         properties[name] = definition
         if "default" not in definition:

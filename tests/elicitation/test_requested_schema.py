@@ -112,7 +112,7 @@ def test_the_refusal_is_worded_for_a_name_the_spec_lacks_and_one_the_server_fill
     assert str(raised.value) == (
         "AdditionalInputRequired asked for 'confirm', which this tool does not take from a "
         "client: the spec does not declare it, or the server fills it for the call, so its "
-        "answer would be refused or replaced. Ask for one of: count, reason."
+        "answer would be refused, dropped or replaced. Ask for one of: count, reason."
     )
 
 
@@ -123,7 +123,7 @@ def test_a_tool_that_takes_nothing_from_a_client_says_so() -> None:
     assert str(raised.value) == (
         "AdditionalInputRequired asked for 'confirm', which this tool does not take from a "
         "client: the spec does not declare it, or the server fills it for the call, so its "
-        "answer would be refused or replaced. This tool takes no argument from a client, "
+        "answer would be refused, dropped or replaced. This tool takes no argument from a client, "
         "so it can ask for nothing."
     )
 

@@ -1632,7 +1632,7 @@ class MCPServer:
         if filled:
             refusals.append(
                 f"variables {filled} are names the server fills for the call (a reflected "
-                "read or a key a provider returns), so a value in the URI would be "
+                "read, or a key a typed provider fills), so a value in the URI would be "
                 "refused or replaced; name them differently"
             )
         if refusals:
