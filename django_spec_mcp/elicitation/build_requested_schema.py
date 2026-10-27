@@ -29,13 +29,16 @@ def build_requested_schema(
     it fails loudly here, where its author can still be told which property is
     wrong.
 
-    **``admitted`` is the argument names the tool takes from a client**, when
-    the caller knows them: a kernel spec's parameters, less the names the server
-    fills. The answer comes back as an ordinary argument, so a property outside
-    that set is one the call then refuses as unknown (or drops), after the user
-    has filled it in; it is refused here instead, as an unrenderable one is.
-    ``None`` asks nothing of the names, for a caller that does not know the set:
-    a drf-services tool.
+    **``admitted`` is the argument names the tool takes from a client**, and the
+    kernel tool path (``run_kernel_tool``, sync and async) always passes it: the
+    spec's parameters less the names the server fills for the call, the binding's
+    ``server_arguments`` and the kernel's ``server_owned_keys`` (``admitted_arguments``).
+    The answer comes back as an ordinary argument, so a property outside that set is
+    one the call would then refuse as unknown, drop under ``IGNORE`` or replace with
+    the server's value, after the user has filled it in; it is refused here instead,
+    as an unrenderable one is, and the ``ImproperlyConfigured`` becomes a ``-32603``
+    naming the property and the names that are admitted. ``None`` asks nothing of the
+    names, for a caller that does not know the set: a drf-services tool.
     """
     properties: dict[str, Any] = {}
     required: list[str] = []
@@ -45,10 +48,17 @@ def build_requested_schema(
         # ``test_no_admitted_set_judges_the_schema_alone`` and the membership by
         # ``test_a_property_the_tool_admits_passes``.
         if admitted is not None and name not in admitted:
+            # Reaches the client verbatim as a ``-32603``, so it holds for both ways
+            # of not being admitted: undeclared, and declared but filled by the server.
+            instead = (
+                f"Ask for one of: {', '.join(sorted(admitted))}."
+                if admitted
+                else "This tool takes no argument from a client, so it can ask for nothing."
+            )
             raise ImproperlyConfigured(
                 f"AdditionalInputRequired asked for {name!r}, which this tool does not take "
-                f"as an argument ({', '.join(sorted(admitted))}). The answer comes back as "
-                "an argument, so ask for one the spec declares."
+                "from a client: the spec does not declare it, or the server fills it for the "
+                f"call, so its answer would be refused or replaced. {instead}"
             )
         properties[name] = definition
         if "default" not in definition:

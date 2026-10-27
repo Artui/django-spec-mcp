@@ -103,6 +103,31 @@ def test_a_property_the_tool_does_not_admit_is_refused() -> None:
         build_requested_schema({"confirm": {"type": "boolean"}}, admitted=("count", "reason"))
 
 
+def test_the_refusal_is_worded_for_a_name_the_spec_lacks_and_one_the_server_fills() -> None:
+    """The message reaches the client verbatim as a ``-32603``, and the set it is given
+    holds neither a name the spec does not declare nor one the server fills, so it must
+    not tell the author to "ask for one the spec declares" when the spec declares it."""
+    with pytest.raises(ImproperlyConfigured) as raised:
+        build_requested_schema({"confirm": {"type": "boolean"}}, admitted=("reason", "count"))
+    assert str(raised.value) == (
+        "AdditionalInputRequired asked for 'confirm', which this tool does not take from a "
+        "client: the spec does not declare it, or the server fills it for the call, so its "
+        "answer would be refused or replaced. Ask for one of: count, reason."
+    )
+
+
+def test_a_tool_that_takes_nothing_from_a_client_says_so() -> None:
+    """An empty set is not rendered as an empty list of names."""
+    with pytest.raises(ImproperlyConfigured) as raised:
+        build_requested_schema({"confirm": {"type": "boolean"}}, admitted=())
+    assert str(raised.value) == (
+        "AdditionalInputRequired asked for 'confirm', which this tool does not take from a "
+        "client: the spec does not declare it, or the server fills it for the call, so its "
+        "answer would be refused or replaced. This tool takes no argument from a client, "
+        "so it can ask for nothing."
+    )
+
+
 def test_a_property_the_tool_admits_passes() -> None:
     built = build_requested_schema({"confirmed": {"type": "boolean"}}, admitted=("confirmed",))
     assert built["properties"] == {"confirmed": {"type": "boolean"}}
