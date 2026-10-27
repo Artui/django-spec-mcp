@@ -44,7 +44,9 @@ def test_reserved_pool_seeds_shape() -> None:
     # seeds") swapped ``request`` and ``serializer`` for ``result`` and
     # ``queryset``: the DRF edge seeds ``request`` itself, which is why
     # ``RESOURCE_EDGE_SEEDS`` exists. The kernel's 0.14.0 reserves
-    # ``call_context``, the one dict a call hands to every stage naming it.
+    # ``call_context``, the one dict a call hands to every stage naming it, and
+    # its 0.16.0 reserves ``shapes``, the arguments a call sends for the spec's
+    # declared shapes.
     assert (
         frozenset(
             {
@@ -56,6 +58,7 @@ def test_reserved_pool_seeds_shape() -> None:
                 "queryset",
                 "progress",
                 "call_context",
+                "shapes",
             }
         )
         == RESERVED_POOL_SEEDS

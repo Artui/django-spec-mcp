@@ -13,6 +13,9 @@ carries; releases up to 0.54.0 are in
 
 ### Changed
 
+- **`django-service-specs` 0.18.0 is the floor.** Its root holds every kernel name
+  this package reads, and it reserves `shapes` as a pool name, so a `PoolSeeds`
+  entry named `shapes` is refused when it is built, as one named `user` is.
 - **The package is `django-spec-mcp`, imported as `django_spec_mcp`.** Every
   import of `rest_framework_mcp` becomes `django_spec_mcp`, with the same module
   paths below it, `constants` apart. The settings key is `SPEC_MCP`; a `REST_FRAMEWORK_MCP` setting

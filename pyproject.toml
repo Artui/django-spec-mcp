@@ -124,11 +124,14 @@ dependencies = [
     # ``adispatch``; below it ``get_object_or_404`` in a selector escapes to the
     # backstop as a server fault. The pydantic-ai package's floor moves with this
     # one: the two routes reach one spec, and with only one raised the same
-    # selector is a not-found on one route and an error on the other. 0.14.0 is
-    # the floor now: it reserves ``call_context`` as a pool name, which
-    # ``RESERVED_POOL_SEEDS`` re-exports and ``pool_seeds=`` therefore refuses,
-    # and drf-services 0.59.0 requires it.
-    "django-service-specs>=0.14.0",
+    # selector is a not-found on one route and an error on the other. 0.14.0
+    # reserves ``call_context`` as a pool name, which ``RESERVED_POOL_SEEDS``
+    # re-exports and ``pool_seeds=`` therefore refuses, and drf-services 0.59.0
+    # requires it. 0.18.0 is the floor now: the kernel route this package moves
+    # onto reads every name from the kernel's root, and 0.18.0 is the first
+    # whose root holds them all, with the call's ``request`` and ``view`` handed
+    # by name to every callable naming one, as a tool's callable expects.
+    "django-service-specs>=0.18.0",
     "djangorestframework-dataclasses>=1.3.1",
     # ``typing_extensions.Unpack`` is used at runtime by the strict service /
     # selector Protocols (PEP 692) we re-export from the sister package.
