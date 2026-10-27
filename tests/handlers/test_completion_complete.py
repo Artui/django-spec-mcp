@@ -6,7 +6,7 @@ The resource half registers kernel ``RETRIEVE`` specs through
 template's variables. A completion is a read of what it completes, so a kernel
 resource's spec permissions answer it as they answer ``resources/read``: the
 class-level checks, asked through the kernel's ``authorize`` with no arguments,
-since a completion names a template rather than a URI, and after the rate
+since a completion names a template rather than a URI, and before the rate
 limit, as the read asks them. A check reading ``arguments`` is handed ``None``
 there and refuses, whether it guards against ``None`` or raises on it, which is
 the kernel form of the original's route-scoped template completing for nobody;
@@ -51,6 +51,7 @@ from django_spec_mcp.transport.in_memory_session_store import InMemorySessionSto
 from tests.kernel_client import KernelClient
 from tests.testapp.auth_backend import HeaderAuthBackend
 from tests.testapp.urlconf_for import urlconf_for
+from tests.utils import RefusingRateLimit
 
 LANGUAGES = ["python", "pytorch", "pyside", "ruby"]
 
@@ -515,14 +516,36 @@ def test_completion_runs_the_bindings_rate_limits() -> None:
     assert result.data == {"retryAfter": 30}
 
 
-def test_a_kernel_resources_spec_is_asked_after_its_rate_limit() -> None:
-    # The read's dispatch asks the spec's checks after the transport's rate
-    # limit, so a caller over the limit learns only that, and the check, which
-    # may query, is not asked for a request that is turned away anyway.
+def test_a_kernel_resources_spec_is_asked_before_its_rate_limit() -> None:
+    # Changed by design: asked after the rate limit while the read asked the
+    # spec inside dispatch, after its own charge. The read now asks it before
+    # the charge, as the drf-services read and completion judged the spec's
+    # permission classes in the binding's own stack, so a caller the spec
+    # refuses is told that and is charged nothing on either.
     check = _Refuses()
+    limit = RefusingRateLimit()
     server = _server()
     server.register_resource(
         _invoice(check),
+        name="invoice",
+        uri_template="invoices://{pk}",
+        rate_limits=[limit],
+        completions={"pk": lambda: ["1"]},
+    )
+
+    result = _complete(server, _INVOICE_PK)
+
+    assert isinstance(result, JsonRpcError)
+    assert result.code == -32006
+    assert check.asked == 1
+    assert limit.consumed == 0
+
+
+def test_a_kernel_resource_its_spec_admits_is_still_charged() -> None:
+    # The other half: a caller the spec admits meets the rate limit after it.
+    server = _server()
+    server.register_resource(
+        _invoice(),
         name="invoice",
         uri_template="invoices://{pk}",
         rate_limits=[_AlwaysLimited()],
@@ -533,7 +556,6 @@ def test_a_kernel_resources_spec_is_asked_after_its_rate_limit() -> None:
 
     assert isinstance(result, JsonRpcError)
     assert result.code == -32005
-    assert check.asked == 0
 
 
 def test_unknown_prompt_is_invalid_params() -> None:

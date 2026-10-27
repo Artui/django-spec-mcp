@@ -400,19 +400,63 @@ async def test_a_check_reading_the_token_sees_the_calls_request(
 
 @pytest.mark.django_db(transaction=True)
 async def test_a_refusal_that_is_not_a_denial_is_left_to_the_handler() -> None:
-    """An unknown argument is an ``isError`` result on both paths, never a ``403``.
+    """An unknown argument from a caller the spec admits is an ``isError`` result
+    on both paths, never a ``403``.
 
     The pre-flight answers only the refusals ``KERNEL_REFUSALS`` answers
-    ``-32006``. The kernel checks the arguments before the permissions, so
-    even a caller ``_Deny`` would refuse is told about the argument first, as
-    dispatch tells it.
+    ``-32006``, and leaves every other one to the handler, which answers it in
+    the stream as it would without one.
     """
-    streamed, plain = await _both(_server(), name="p.denied", arguments={"stray": 1})
+    streamed, plain = await _both(_server(), name="p.export", arguments={"stray": 1})
     assert streamed.status_code == 200
     assert streamed["Content-Type"] == "text/event-stream"
     answer = await _answer(streamed)
     assert answer["result"]["isError"] is True
     assert answer == plain.json()
+
+
+@pytest.mark.django_db(transaction=True)
+async def test_a_caller_the_spec_denies_is_refused_before_its_unknown_argument() -> None:
+    """A caller ``_Deny`` refuses is a ``403`` on both paths, its stray argument unread.
+
+    Changed by design: the pre-flight ran the kernel's prelude in dispatch's
+    order, arguments first, so this caller was told about the argument inside
+    a ``200``, as dispatch told it. The transport now asks the spec's checks
+    before it reads the call's shape, on both paths, so a caller the tool is
+    not for learns nothing of the arguments it takes.
+    """
+    streamed, plain = await _both(_server(), name="p.denied", arguments={"stray": 1})
+    assert streamed.status_code == 403
+    assert _wire(streamed, streamed.json()) == _wire(plain, plain.json())
+
+
+class _Counted(PermissionCheck):
+    """Admits everyone, counting how often it is asked."""
+
+    def __init__(self) -> None:
+        self.asked = 0
+
+    def has_permission(self, principal: Any, spec: Any) -> bool:
+        self.asked += 1
+        return True
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize(("token", "asked"), [("abc123", 2), (None, 1)], ids=["streamed", "plain"])
+async def test_a_streamed_call_asks_the_spec_once_more_than_a_plain_one(
+    token: Any, asked: int
+) -> None:
+    """Once by the pre-flight, before a stream commits its status, and once by the
+    handler, before the charge; ``adispatch`` runs under the handler's grant and
+    asks nothing again."""
+    check = _Counted()
+    server = _bare()
+    server.register_tool(ServiceSpec(service=lambda: {}, permissions=[check]), name="p.counted")
+
+    response = await _post(server, name="p.counted", token=token)
+
+    assert (await _answer(response))["result"]["structuredContent"] == {}
+    assert check.asked == asked
 
 
 @pytest.mark.django_db(transaction=True)

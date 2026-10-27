@@ -347,18 +347,6 @@ async def test_a_caller_the_scope_gate_refuses_is_refused_before_the_argument_is
     assert "pk" in _refused(granted)
 
 
-_DENIED_FIRST = pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "The kernel's dispatch runs its shape check before authorize, so a caller the "
-        "spec denies is told which arguments the tool takes. Fixed by authorizing the "
-        "spec before dispatch on the kernel call path (run_kernel_tool*.py, "
-        "call_kernel_tool.py) and handing dispatch the grant."
-    ),
-)
-
-
-@_DENIED_FIRST
 @pytest.mark.parametrize("route", ["handler", "async_handler", "acall_tool"])
 @pytest.mark.parametrize("name", ["get", "rename"])
 async def test_a_caller_the_spec_denies_is_refused_before_the_argument_is_checked(
@@ -371,7 +359,6 @@ async def test_a_caller_the_spec_denies_is_refused_before_the_argument_is_checke
     assert out.code == JsonRpcErrorCode.FORBIDDEN
 
 
-@_DENIED_FIRST
 @pytest.mark.parametrize("name", ["get", "rename"])
 def test_call_tool_refuses_a_caller_the_spec_denies_before_the_argument_is_checked(
     name: str,

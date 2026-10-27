@@ -10,12 +10,12 @@ order itself - class-level authorization, target resolution, object-level
 authorization, then validation - so these ask it of kernel ``ServiceSpec`` and
 ``SelectorSpec`` tools on every route.
 
-Changed by design: the original held that a denied caller is not told which
-argument it left out. The kernel runs the shape check before authorization,
-so a call missing a required read is refused for its shape whoever makes it.
-What that tells a caller is the spec's declared shape, which ``tools/list``
-already advertises, and nothing about any row; the test pins that it names the
-argument and never reaches the lookup.
+Asked as the original asked it: a denied caller is not told which argument
+it left out. The kernel's ``dispatch`` runs its shape check before
+authorization, so the transport asks the spec's class-level checks itself
+first (``admit_kernel_call``), on every route, and a caller they deny missing
+a required read is refused for its permission. A caller they admit is still
+refused for its shape, and neither reaches the lookup.
 
 Not carried: a spec with no permission classes being guarded by nothing. A
 kernel spec declares ``permissions=None`` only under
@@ -178,11 +178,31 @@ async def test_a_denied_caller_is_answered_alike_for_a_row_that_exists_and_one_t
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("kind", _KINDS)
 @pytest.mark.parametrize("route", _ROUTES)
-async def test_a_call_missing_a_read_is_refused_for_its_shape_before_any_lookup(
+async def test_a_denied_caller_missing_a_read_is_refused_before_its_shape_and_any_lookup(
+    route: str, kind: str
+) -> None:
+    # Changed by design: refused for its shape, the check never asked, while
+    # the kernel's own order was the call's. A shape answer describes a tool
+    # the caller may not call, which the listing hides from it.
+    lookup = _Lookup()
+    check = _Check(admits=False)
+    server = _server(kind, check, lookup)
+
+    out = await _via(server, route, {"note": "x"} if kind == "service" else {})
+
+    assert _forbidden(out), out
+    assert check.asked == ["class"]
+    assert lookup.looked_up == []
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("kind", _KINDS)
+@pytest.mark.parametrize("route", _ROUTES)
+async def test_an_admitted_call_missing_a_read_is_refused_for_its_shape_before_any_lookup(
     route: str, kind: str
 ) -> None:
     lookup = _Lookup()
-    check = _Check(admits=False)
+    check = _Check()
     server = _server(kind, check, lookup)
 
     out = await _via(server, route, {"note": "x"} if kind == "service" else {})
@@ -190,7 +210,7 @@ async def test_a_call_missing_a_read_is_refused_for_its_shape_before_any_lookup(
     error = tool_error(out)
     assert error["type"] == "validation_error"
     assert "pk" in str(error)
-    assert check.asked == []
+    assert check.asked == ["class"]
     assert lookup.looked_up == []
 
 

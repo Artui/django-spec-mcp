@@ -20,11 +20,10 @@ is asked as it was: ``invalidates=`` is rendered from the merged arguments, so
 the notice names the row the service ran on. It is kept beside this file as
 ``test_an_answer_is_judged_on_the_route_it_names_drfs.py``.
 
-Its charge questions hold one way only on the kernel path: a caller admitted
-is charged once, while a caller the spec refuses is charged too, because the
-spec's checks run inside ``dispatch`` after the shell has charged the call. The
-second is held as a strict ``xfail``, fixed by the shell judging a kernel
-spec's checks before the charge, as drfs did.
+Its charge questions are asked as they were: a caller admitted is charged
+once, and a caller the spec refuses is not charged, since the shell asks a
+kernel spec's checks before the charge (``admit_kernel_call``), as drfs judged
+them in the binding's stack.
 """
 
 from __future__ import annotations
@@ -352,16 +351,6 @@ async def test_a_caller_admitted_on_the_answered_row_is_charged_once(
     assert limit.consumed == 1
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "A kernel spec's checks run inside dispatch, after handle_tools_call*.py has charged "
-        "the rate limit, so every caller they refuse is charged and, against a spent quota, "
-        "told RATE_LIMITED. Fixed by the shell judging a kernel spec's checks before the "
-        "charge, as drfs did: on the merged arguments, before consume_rate_limits, handing "
-        "dispatch the grant."
-    ),
-)
 @_ASYNC
 async def test_a_caller_the_spec_refuses_is_not_charged(
     rows: tuple[Invoice, Invoice], is_async: bool

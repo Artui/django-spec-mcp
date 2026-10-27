@@ -12,6 +12,7 @@ from django_spec_mcp._compat.utils import arun_selector_sync_safe
 from django_spec_mcp.auth.permissions.utils import DispatchShape
 from django_spec_mcp.handlers.guard_resource_object import guard_resource_object
 from django_spec_mcp.handlers.handle_tools_call import _span_attrs
+from django_spec_mcp.handlers.kernel_utils import KernelAdmission, admit_kernel_read
 from django_spec_mcp.handlers.read_kernel_resource_async import read_kernel_resource_async
 from django_spec_mcp.handlers.runs_on_kernel import runs_on_kernel
 from django_spec_mcp.handlers.types.context import MCPCallContext
@@ -86,6 +87,17 @@ async def handle_resources_read_async(
                 data={"requiredScopes": required_scopes} if required_scopes else None,
             )
 
+        # See the sync sibling: a kernel resource's spec's own checks, before
+        # the charge, off the loop because a check may query.
+        admission: KernelAdmission | None = None
+        if runs_on_kernel(binding):
+            admitted = await acall(
+                admit_kernel_read, cast(KernelResourceBinding, binding), vars_, context
+            )
+            if isinstance(admitted, JsonRpcError):
+                return admitted
+            admission = admitted
+
         retry_after: int | None = await acall(
             consume_rate_limits, binding.rate_limits, context.http_request, context.token
         )
@@ -96,11 +108,11 @@ async def handle_resources_read_async(
                 data={"retryAfter": retry_after},
             )
 
-        # A kernel resource reads through the kernel from here, the scope gate
-        # and the rate limits above having answered for it as for any other.
-        if runs_on_kernel(binding):
+        # See the sync sibling: a kernel resource reads through the kernel from
+        # here, under the admission its spec's checks gave.
+        if admission is not None:
             return await read_kernel_resource_async(
-                cast(KernelResourceBinding, binding), uri, vars_, context
+                cast(KernelResourceBinding, binding), uri, vars_, admission, context
             )
         # See the sync sibling: URI-template variables ride on ``view.kwargs``,
         # and ``auth`` beside ``user`` keeps the caller.

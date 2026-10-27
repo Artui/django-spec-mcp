@@ -10,11 +10,12 @@ check as ``{"project_pk": 7}``. One that declares ``call_context`` reads the
 request and the resource's name off it, which is the kernel form of the
 original's "one request in both checks".
 
-Asked differently: where the spec's check answers. On the drf-services read the
-permission answered before the rate limit, so a denied caller was charged
-nothing. A kernel resource's checks are the kernel's, asked inside ``dispatch``
-after the shell has charged the rate limits, as a kernel tool's are; only the
-scope gate answers before them. The last test pins that order.
+Asked as the original asked it: where the spec's check answers. On the
+drf-services read the permission answered before the rate limit, so a denied
+caller was charged nothing. A kernel resource's checks are the kernel's, which
+``dispatch`` asks after the shell has charged the rate limits, so the shell asks
+them itself first (``admit_kernel_read``) and dispatch runs under the grant they
+gave. The last test pins that order.
 
 The subscription half asks the same: ``grant_subscription`` grants a watch only
 on the URIs the read would admit, judged by the spec's own checks.
@@ -157,20 +158,31 @@ async def test_a_resource_permission_reads_the_request_the_read_arrived_on(
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
-@pytest.mark.parametrize("uri", ["projects://8", "projects://7"], ids=["denied", "admitted"])
-async def test_the_rate_limit_answers_before_the_specs_check(is_async: bool, uri: str) -> None:
-    # The spec's checks are dispatch's, and the shell charges the quota before
-    # it dispatches, so a caller the check would deny is charged and refused
-    # for the quota, and the check is never asked.
+@pytest.mark.parametrize(
+    ("uri", "code", "consumed"),
+    [
+        ("projects://8", JsonRpcErrorCode.FORBIDDEN, 0),
+        ("projects://7", JsonRpcErrorCode.RATE_LIMITED, 1),
+    ],
+    ids=["denied", "admitted"],
+)
+async def test_the_specs_check_answers_before_the_rate_limit(
+    is_async: bool, uri: str, code: JsonRpcErrorCode, consumed: int
+) -> None:
+    # Changed by design: the rate limit answered first, charging a caller the
+    # check would deny and never asking the check, while the spec's checks ran
+    # inside dispatch alone. Now a denied caller is refused and charged
+    # nothing, as on the drf-services read, and an admitted one is the one the
+    # rate limit then refuses, the check asked once either way.
     limiter = RefusingRateLimit()
     check = _GrantsProjectSeven()
 
     out = await _read(_server(check, limiter), uri, is_async=is_async)
 
     assert isinstance(out, JsonRpcError)
-    assert out.code == JsonRpcErrorCode.RATE_LIMITED
-    assert limiter.consumed == 1
-    assert check.seen == []
+    assert out.code == code
+    assert limiter.consumed == consumed
+    assert len(check.seen) == 1
 
 
 def test_a_subscription_is_granted_the_uris_the_read_would_admit() -> None:

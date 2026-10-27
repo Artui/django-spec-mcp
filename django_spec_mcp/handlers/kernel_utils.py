@@ -16,9 +16,17 @@ from django_service_specs import (
     DispatchError,
     DispatchResult,
     Grant,
+    InvalidArguments,
+    NotPermitted,
     OutputPage,
+    PoolSeeds,
+    PrincipalUnavailable,
     SelectorKind,
     ServiceError,
+    UnknownArguments,
+    authorize,
+    check_call,
+    coerce_flat,
     is_queryset,
     paginate_output,
     present_for_audience,
@@ -53,6 +61,37 @@ logger = get_logger(__name__)
 # The two arguments a paginated ``LIST`` tool takes for its page, which the
 # kernel's argument check would refuse as undeclared if they reached dispatch.
 _PAGE_ARGUMENTS: frozenset[str] = frozenset({"page", "limit"})
+
+
+# The two refusals the kernel's prelude answers before the call is anyone's to
+# charge: a principal its checks refuse, and one with no active account. Both
+# are ``-32006`` in ``KERNEL_REFUSALS``. One arc to coverage at every
+# ``except``: ``PrincipalUnavailable`` is held by
+# ``test_a_deactivated_principal_is_not_charged`` and
+# ``test_a_deactivated_reader_is_not_charged``, ``NotPermitted`` by
+# ``test_a_caller_the_spec_refuses_is_not_charged``.
+_DENIALS: tuple[type[DispatchError], ...] = (NotPermitted, PrincipalUnavailable)
+
+
+@dataclass(frozen=True)
+class KernelAdmission:
+    """A kernel call its spec's class-level checks admitted, as ``dispatch`` is to run it.
+
+    ``principal`` is the very object the grant was minted for, since a grant
+    covers its principal by identity and ``principal_of`` builds a fresh
+    ``AnonymousUser`` on each call
+    (``test_an_anonymous_in_process_caller_reaches_a_kernel_tool``).
+    ``call_context`` is the dict the checks were handed, which dispatch hands
+    on to the run, so what a check leaves in it reaches the service as it
+    would inside one dispatch. ``grant`` is the one dispatch runs under:
+    the checks' own, so they are not asked again
+    (``test_a_check_is_asked_once_per_call``), or what dispatch would have
+    been handed without this step, for a call whose shape check answers first.
+    """
+
+    principal: Any
+    grant: Grant | None
+    call_context: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -130,6 +169,177 @@ def carry_token(request: Any, token: Any) -> Any:
     """
     request.mcp_token = token
     return request
+
+
+def admit_kernel_call(
+    binding: KernelToolBinding | KernelResourceBinding,
+    arguments: dict[str, Any],
+    *,
+    user: Any,
+    request: Any,
+    config: MCPConfig,
+    pool_seeds: PoolSeeds,
+    unknown_arguments: UnknownArguments,
+) -> KernelAdmission:
+    """Ask a kernel spec's class-level checks about a call before the transport acts on it.
+
+    The kernel's ``dispatch`` checks a call's arguments before it asks the
+    spec's checks, and a kernel binding's own ``permissions`` hold only its
+    ``scopes=`` gate. So every route that charges a rate limit, creates a task
+    or answers a missing argument asks the spec first, here, as the
+    drf-services path judged the spec's permission classes in the binding's
+    stack: a caller the tool is not for is refused before it is charged
+    (``test_a_caller_the_spec_refuses_is_not_charged``) and before it learns
+    which arguments the tool takes
+    (``test_a_caller_the_spec_denies_is_refused_before_the_argument_is_checked``).
+
+    ``arguments`` are the ones dispatch is to receive. The checks are asked on
+    them as dispatch asks them, through ``check_call``, the kernel's own
+    prelude, rather than through ``authorize`` on the arguments as sent:
+    ``authorize`` hands a check declaring ``arguments`` the shape check's
+    output, which is not what was sent. ``"8"`` for an ``integer`` reaches the
+    run as ``8``, so a check shown the string compared ``"8" != 8``, admitted,
+    and the run went ahead on the row it refuses
+    (``test_a_check_reads_the_arguments_as_the_shape_check_reads_them``).
+    Nor ``coerce_flat``, which reads flat strings and is not the shape check.
+
+    Only a call whose arguments fail the shape check is asked on them as sent,
+    since it has no checked form. Whatever the checks say there, the call
+    cannot run, so their answer only chooses which refusal is told: theirs
+    (``test_a_check_refusing_a_malformed_argument_is_answered_before_the_shape``)
+    or, when they admit, the shape check's, from dispatch after the charge, as
+    drf-services answered an admitted caller's missing argument
+    (``test_an_admitted_caller_missing_an_argument_is_charged_and_told_which``).
+    A check written to the kernel's promise of checked arguments may raise on
+    them, indexing one left out or parsing one sent malformed; that is no
+    answer, and the shape check's refusal stands as before
+    (``test_a_check_that_cannot_read_unchecked_arguments_leaves_them_to_the_shape_check``).
+    The grant is then never one built on unchecked arguments: dispatch is
+    handed what it would have been handed without this step.
+
+    Raises a denial, ``NotPermitted`` or ``PrincipalUnavailable``, for the
+    caller to answer as ``KERNEL_REFUSALS`` does. Any other refusal is left to
+    dispatch, which raises it again in its own order and is answered as before.
+    What is no refusal, a configuration error
+    (``test_a_handbuilt_unguarded_kernel_tool_is_never_called``) or a check
+    that raises, is raised here, before the charge, as dispatch would have
+    raised it after; on a streamed call that is still before the stream
+    commits its status
+    (``test_a_permission_preflight_that_raises_before_a_stream_is_a_json_rpc_error``).
+    """
+    principal: Any = principal_of(user)
+    context = call_context(request, binding.name)
+    unchecked = unguarded_grant(binding, principal, config)
+    keywords: dict[str, Any] = {"pool_seeds": pool_seeds, "call_context": context}
+    try:
+        _checked, grant = check_call(
+            binding.spec,
+            principal=principal,
+            arguments=arguments,
+            grant=unchecked,
+            unknown_arguments=unknown_arguments,
+            **keywords,
+        )
+    except _DENIALS:
+        raise
+    except InvalidArguments:
+        _refuse_unchecked(binding, principal, arguments, unchecked, keywords)
+        grant = unchecked
+    except (DispatchError, ServiceError):
+        # A refusal that is no denial, such as a ``ServiceError`` a check or a
+        # seed's resolver raises: dispatch raises it again and the call's own
+        # arms answer it, after the charge, as before. One arc to coverage,
+        # each kind held by its case of
+        # ``test_a_check_raising_a_refusal_that_is_no_denial_is_answered_as_before``.
+        grant = unchecked
+    return KernelAdmission(principal=principal, grant=grant, call_context=context)
+
+
+def _refuse_unchecked(
+    binding: KernelToolBinding | KernelResourceBinding,
+    principal: Any,
+    arguments: dict[str, Any],
+    grant: Grant | None,
+    keywords: dict[str, Any],
+) -> None:
+    """Raise the denial a spec's checks give arguments that failed the shape check, if any.
+
+    ``admit_kernel_call`` says why the arguments are the ones as sent, and why
+    anything but a denial is no answer here.
+    """
+    try:
+        authorize(binding.spec, principal, grant=grant, arguments=arguments, **keywords)
+    except _DENIALS:
+        raise
+    except Exception:
+        return
+
+
+def admit_kernel_tool_call(
+    binding: KernelToolBinding, arguments: dict[str, Any], context: MCPCallContext
+) -> KernelAdmission | JsonRpcError:
+    """``admit_kernel_call`` for a ``tools/call`` over the wire, a denial as its answer.
+
+    ``arguments`` carry the server's arguments and any answers merged in; the
+    page a paginated tool takes is split off, as ``run_kernel_tool`` splits it
+    before dispatch, or the kernel would refuse it as unknown ahead of the
+    checks (``test_a_paged_call_its_spec_denies_keeps_its_403``).
+    """
+    dispatched, _page = page_request(binding, arguments, context.config)
+    try:
+        return admit_kernel_call(
+            binding,
+            dispatched,
+            user=context.token.user,
+            request=carry_token(context.http_request, context.token),
+            config=context.config,
+            pool_seeds=context.pool_seeds,
+            unknown_arguments=binding.unknown_arguments,
+        )
+    except _DENIALS as exc:
+        return resource_refusal(
+            exc,
+            KernelRefusalScene(
+                arguments=arguments, config=context.config, conventions=context.conventions
+            ),
+        )
+
+
+def admit_kernel_read(
+    binding: KernelResourceBinding, variables: dict[str, str], context: MCPCallContext
+) -> KernelAdmission | JsonRpcError:
+    """``admit_kernel_call`` for a ``resources/read``, a denial as its answer.
+
+    Asked on the URI's variables read as the spec's types, the arguments
+    ``read_kernel_resource`` dispatches with: ``true`` reaches the read as
+    ``True``, so a check refusing ``True`` refuses before the charge
+    (``test_a_reader_is_judged_on_the_variables_the_read_dispatches``). A variable ``coerce_flat`` cannot
+    read has no checked form, so the checks are asked on the variables as the
+    URI carries them, and the read still fails on it as before
+    (``test_a_reader_refused_on_a_malformed_variable_is_told_so``).
+    """
+    arguments: dict[str, Any]
+    try:
+        arguments = coerce_flat(binding.spec.parameters(), variables)
+    except InvalidArguments:
+        arguments = dict(variables)
+    try:
+        return admit_kernel_call(
+            binding,
+            arguments,
+            user=context.token.user,
+            request=carry_token(context.http_request, context.token),
+            config=context.config,
+            pool_seeds=context.pool_seeds,
+            unknown_arguments=UnknownArguments.REJECT,
+        )
+    except _DENIALS as exc:
+        return resource_refusal(
+            exc,
+            KernelRefusalScene(
+                arguments=variables, config=context.config, conventions=context.conventions
+            ),
+        )
 
 
 def page_request(
@@ -386,7 +596,11 @@ def _coerce_int(value: Any, *, default: int) -> int:
 
 
 __all__ = [
+    "KernelAdmission",
     "KernelPageRequest",
+    "admit_kernel_call",
+    "admit_kernel_read",
+    "admit_kernel_tool_call",
     "bound_unpaginated_rows",
     "call_context",
     "carry_token",

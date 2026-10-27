@@ -10,6 +10,7 @@ from django_spec_mcp._compat.tracing import span
 from django_spec_mcp.auth.permissions.utils import DispatchShape
 from django_spec_mcp.handlers.guard_resource_object import guard_resource_object
 from django_spec_mcp.handlers.handle_tools_call import _span_attrs
+from django_spec_mcp.handlers.kernel_utils import KernelAdmission, admit_kernel_read
 from django_spec_mcp.handlers.read_kernel_resource import read_kernel_resource
 from django_spec_mcp.handlers.runs_on_kernel import runs_on_kernel
 from django_spec_mcp.handlers.types.context import MCPCallContext
@@ -95,6 +96,21 @@ def handle_resources_read(
                 data={"requiredScopes": required_scopes} if required_scopes else None,
             )
 
+        # A kernel resource's binding ``permissions`` hold only its scope gate,
+        # and its spec's own checks run inside ``dispatch``, after the charge
+        # below, so they are asked here first, as the drf-services read judged
+        # the spec's permission classes in the binding's stack above: a reader
+        # they refuse is not charged
+        # (``test_a_reader_the_spec_refuses_is_not_charged``). ``dispatch``
+        # runs under the grant they gave, so they are asked once
+        # (``test_an_admitted_reader_is_charged_once_and_read_once``).
+        admission: KernelAdmission | None = None
+        if runs_on_kernel(binding):
+            admitted = admit_kernel_read(cast(KernelResourceBinding, binding), vars_, context)
+            if isinstance(admitted, JsonRpcError):
+                return admitted
+            admission = admitted
+
         retry_after: int | None = consume_rate_limits(
             binding.rate_limits, context.http_request, context.token
         )
@@ -105,10 +121,12 @@ def handle_resources_read(
                 data={"retryAfter": retry_after},
             )
 
-        # A kernel resource reads through the kernel from here, the scope gate
-        # and the rate limits above having answered for it as for any other.
-        if runs_on_kernel(binding):
-            return read_kernel_resource(cast(KernelResourceBinding, binding), uri, vars_, context)
+        # A kernel resource reads through the kernel from here, the scope gate,
+        # its spec's checks and the rate limits above having answered for it.
+        if admission is not None:
+            return read_kernel_resource(
+                cast(KernelResourceBinding, binding), uri, vars_, admission, context
+            )
         # URI-template variables ride on ``view.kwargs`` so a provider (and
         # the output serializer's context) reads them without re-parsing the
         # URI. ``auth`` beside ``user``, as on a tool's dispatch view: reading

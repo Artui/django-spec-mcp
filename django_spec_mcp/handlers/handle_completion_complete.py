@@ -107,6 +107,14 @@ def handle_completion_complete(
                 data={"requiredScopes": required_scopes} if required_scopes else None,
             )
 
+        # Before the charge, where the read now asks the spec's checks and where
+        # the drf-services completion judged the spec's permission classes, in
+        # the binding's own stack above
+        # (``test_a_kernel_resources_spec_is_asked_before_its_rate_limit``).
+        refused: JsonRpcError | None = _refused_by_the_spec(target, context)
+        if refused is not None:
+            return refused
+
         retry_after: int | None = consume_rate_limits(
             target.rate_limits, context.http_request, context.token
         )
@@ -116,10 +124,6 @@ def handle_completion_complete(
                 "Rate limit exceeded",
                 data={"retryAfter": retry_after},
             )
-
-        refused: JsonRpcError | None = _refused_by_the_spec(target, context)
-        if refused is not None:
-            return refused
 
         drf_request = build_offline_context(
             context.token.user,
@@ -243,8 +247,9 @@ def _refused_by_the_spec(target: _CompletionTarget, context: MCPCallContext) -> 
     A completion dispatches nothing, so without this the scope gate alone
     answered it, and a spec refusing the caller still listed which values exist
     (``test_a_kernel_resources_completion_asks_its_spec_permissions``). Asked
-    after the rate limit, where the read's dispatch asks them, and through the
-    kernel's ``authorize`` with the same principal, grant, context and seeds.
+    before the rate limit, where the read asks them (``admit_kernel_read``),
+    and through the kernel's ``authorize`` with the same principal, grant,
+    context and seeds.
     Stands in for the class-level half of ``dispatch``; there is no row to
     judge. ``arguments`` is ``None``: a completion names a template rather
     than a URI, so a check scoping by a variable decides on nothing and

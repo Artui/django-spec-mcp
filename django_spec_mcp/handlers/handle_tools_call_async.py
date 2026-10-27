@@ -18,6 +18,7 @@ from django_spec_mcp.handlers.input_dispatch import (
     refusal_result,
 )
 from django_spec_mcp.handlers.invalidation_dispatch import announce_invalidations_async
+from django_spec_mcp.handlers.kernel_utils import KernelAdmission, admit_kernel_tool_call
 from django_spec_mcp.handlers.resolve_call_input import resolve_call_input
 from django_spec_mcp.handlers.run_kernel_tool_async import run_kernel_tool_async
 from django_spec_mcp.handlers.runs_on_kernel import runs_on_kernel
@@ -192,8 +193,18 @@ async def _dispatch_tool_call_async(
                 return _forbidden(required_scopes), answered
         arguments_raw = answered
 
-        # See the sync sibling: after both checks, so a caller either one
-        # denies is never charged.
+        # See the sync sibling: a kernel spec's own checks, on the arguments the
+        # tool will run with and before the charge, off the loop because a
+        # check may query.
+        admission: KernelAdmission | None = None
+        if runs_on_kernel(binding):
+            admitted = await acall(admit_kernel_tool_call, binding, arguments_raw, context)
+            if isinstance(admitted, JsonRpcError):
+                return admitted, arguments_raw
+            admission = admitted
+
+        # See the sync sibling: after every check, so a caller one denies is
+        # never charged.
         retry_after: int | None = await acall(
             consume_rate_limits,
             effective_rate_limits(binding, context),
@@ -213,6 +224,13 @@ async def _dispatch_tool_call_async(
         if prior.refused_with is not None:
             return refusal_result(prior.refused_with), arguments_raw
 
+        if admission is not None:
+            return (
+                await run_kernel_tool_async(
+                    binding, params, arguments_raw, admission, prior, context, otel_span
+                ),
+                arguments_raw,
+            )
         result = await _run_service_tool_async(
             binding, params, arguments_raw, prior, context, otel_span
         )
@@ -229,12 +247,8 @@ async def _run_service_tool_async(
 ) -> dict[str, Any] | JsonRpcError:
     """Async sibling of ``handle_tools_call._run_service_tool``.
 
-    A kernel binding leaves for ``run_kernel_tool_async``, as in the sync sibling.
+    A kernel binding never reaches here, as in the sync sibling.
     """
-    if runs_on_kernel(binding):
-        return await run_kernel_tool_async(
-            binding, params, arguments_raw, prior, context, otel_span
-        )
     # See the sync sibling: URL kwargs route through the view, not the params,
     # and the split runs inside the ``try`` so a missing ``required=True``
     # kwarg reaches the ``isError`` mapping instead of escaping.
