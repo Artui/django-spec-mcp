@@ -114,6 +114,7 @@ from django_spec_mcp.transport.types.sse_replay_buffer import SSEReplayBuffer
 from django_spec_mcp.types.jsonrpc_version import JSONRPC_VERSION
 from django_spec_mcp.types.notification_kind import NotificationKind
 from django_spec_mcp.types.output_format import OutputFormat
+from django_spec_mcp.types.reserved_post_fetch_keys import RESERVED_POST_FETCH_KEYS
 from django_spec_mcp.types.resource_edge_seeds import RESOURCE_EDGE_SEEDS
 from django_spec_mcp.types.resource_encoding import ResourceEncoding
 from django_spec_mcp.types.resource_updated_method import RESOURCE_UPDATED_METHOD
@@ -826,6 +827,17 @@ class MCPServer:
             default_output_schema=self._config.include_output_schema,
             default_structured_content=self._config.include_structured_content,
         )
+        # LIST only, as on the drf-services path: a RETRIEVE selector returns
+        # one instance and a service has no kind, so neither has a page to
+        # bound (``test_retrieve_selector_is_exempt``,
+        # ``test_a_service_tool_is_exempt``).
+        if binding.kind is SelectorKind.LIST:
+            _refuse_pagination_named_reads(binding)
+            check_list_pagination_declared(
+                binding.name,
+                paginate=binding.paginate,
+                require=self._config.require_list_pagination,
+            )
         return binding
 
     def register_tools(
@@ -2392,6 +2404,29 @@ def _caller_stacklevel() -> int:
         frame = frame.f_back
         level += 1
     return level
+
+
+def _refuse_pagination_named_reads(binding: KernelToolBinding) -> None:
+    """Refuse a paginated kernel LIST tool whose spec declares ``page`` or ``limit``.
+
+    The read pipeline owns both names on a tool that paginates: the listing
+    advertises them as the page and its size, and the call takes them from the
+    arguments before the selector runs, so a read of either name registered,
+    was advertised as the pipeline's integer and never received the caller's
+    value. Only under ``paginate=True``: an unpaginated LIST tool hands either
+    name to its selector as any read
+    (``test_an_unpaginated_list_tools_pagination_named_read_reaches_the_selector``).
+    """
+    if not binding.paginate:
+        return
+    taken = sorted(binding.spec.parameters().names() & RESERVED_POST_FETCH_KEYS)
+    if taken:
+        raise ImproperlyConfigured(
+            f"MCP tool {binding.name!r}: the spec declares the read(s) {taken!r}, but `page` "
+            "and `limit` belong to the pagination of a tool registered with paginate=True, "
+            "which takes them from the arguments before the selector is called, so the "
+            "read would never receive the caller's value. Rename the read."
+        )
 
 
 def _refuse_retired_argument_binding(name: str, argument_binding: ArgumentBinding) -> None:
