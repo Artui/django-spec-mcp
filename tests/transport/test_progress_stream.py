@@ -36,12 +36,14 @@ from django.contrib.auth import get_user_model
 from django.http import HttpRequest
 from django.test import AsyncClient, override_settings
 from django_service_specs import (
+    DEFAULT_POOL_SEEDS,
     DataclassValidator,
     PermissionCheck,
     SelectorKind,
     SelectorSpec,
     ServerArguments,
     ServiceSpec,
+    UnknownArguments,
     Unrestricted,
 )
 
@@ -83,6 +85,13 @@ class _NeedsWriteScope(PermissionCheck):
 
     def has_permission(self, principal: Any, spec: Any, *, call_context: Any) -> bool:
         return "mcp:write" in call_context["request"].mcp_token.scopes
+
+
+class _DeniesTenantGlobex(PermissionCheck):
+    """Denies on the value of the ``tenant`` seed, which only a server's own seeds supply."""
+
+    def has_permission(self, principal: Any, spec: Any, *, tenant: str) -> bool:
+        return tenant != "globex"
 
 
 @dataclass
@@ -404,6 +413,47 @@ async def test_a_refusal_that_is_not_a_denial_is_left_to_the_handler() -> None:
     answer = await _answer(streamed)
     assert answer["result"]["isError"] is True
     assert answer == plain.json()
+
+
+@pytest.mark.django_db(transaction=True)
+async def test_a_denied_call_the_spec_ignores_unknown_arguments_for_keeps_its_403() -> None:
+    """The pre-flight judges unknown arguments by the binding's own policy.
+
+    A tool registered with ``UnknownArguments.IGNORE`` drops the stray
+    argument and reaches its permission check, so a denied caller is a ``403``
+    on both paths. Judged under the default ``REJECT`` the pre-flight saw an
+    unknown-argument refusal, stood aside, and the denial streamed as
+    ``-32006`` inside a ``200``.
+    """
+    server = _bare()
+    server.register_tool(
+        ServiceSpec(service=lambda: {}, permissions=[_Deny()]),
+        name="p.lenient",
+        unknown_arguments=UnknownArguments.IGNORE,
+    )
+    streamed, plain = await _both(server, name="p.lenient", arguments={"stray": 1})
+    assert streamed.status_code == 403
+    assert _wire(streamed, streamed.json()) == _wire(plain, plain.json())
+
+
+@pytest.mark.django_db(transaction=True)
+async def test_a_check_reading_a_servers_own_seed_is_judged_on_that_seed() -> None:
+    """The pre-flight resolves the seeds the check names from the server's own
+    ``pool_seeds=``. Handed the defaults it cannot resolve ``tenant``, the
+    kernel raises a configuration error the pre-flight does not answer, and the
+    call is a ``500`` where the plain one is a ``403``."""
+    server = MCPServer(
+        name="p",
+        auth_backend=AllowAnyBackend(),
+        session_store=InMemorySessionStore(),
+        pool_seeds=DEFAULT_POOL_SEEDS.extend(tenant=lambda: "globex"),
+    )
+    server.register_tool(
+        ServiceSpec(service=lambda: {}, permissions=[_DeniesTenantGlobex()]), name="p.seeded"
+    )
+    streamed, plain = await _both(server, name="p.seeded")
+    assert streamed.status_code == 403
+    assert _wire(streamed, streamed.json()) == _wire(plain, plain.json())
 
 
 @pytest.mark.django_db(transaction=True)

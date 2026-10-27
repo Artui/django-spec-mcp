@@ -163,8 +163,13 @@ def _kernel_refuses(binding: Any, arguments: dict[str, Any], context: MCPCallCon
       (``test_a_paged_call_its_spec_denies_keeps_its_403``);
     - the call context carrying the token
       (``test_a_check_reading_the_token_sees_the_calls_request``);
-    - and the grant of an unguarded spec
-      (``test_an_unguarded_spec_streams_under_the_grant_its_call_carries``).
+    - the grant of an unguarded spec
+      (``test_an_unguarded_spec_streams_under_the_grant_its_call_carries``);
+    - the binding's own ``unknown_arguments`` policy, since a tool that ignores
+      strays reaches its permission check where the default rejects them first
+      (``test_a_denied_call_the_spec_ignores_unknown_arguments_for_keeps_its_403``);
+    - and the server's own ``pool_seeds``, which a check naming a seed is
+      handed (``test_a_check_reading_a_servers_own_seed_is_judged_on_that_seed``).
 
     Only the two refusals ``KERNEL_REFUSALS`` answers ``-32006`` deny here. Any
     other is left to the handler, which answers it in the stream as it would
