@@ -5,19 +5,18 @@ from dataclasses import dataclass
 from itertools import islice
 from typing import Any
 
-from django.core.exceptions import ImproperlyConfigured
-from django_service_specs import RESERVED_POOL_SEEDS, DispatchError, ServiceError, authorize
+from django_service_specs import RESERVED_POOL_SEEDS, NotPermitted
 from rest_framework_services import build_offline_context, resolve_callable_kwargs
 from rest_framework_services.dispatch.utils import DROPPED_EDGE_SEEDS
 
 from django_spec_mcp._compat.tracing import span
 from django_spec_mcp.handlers.handle_tools_call import _span_attrs
 from django_spec_mcp.handlers.kernel_utils import (
+    admits_without_arguments,
     call_context,
     carry_token,
     principal_of,
     resource_refusal,
-    unguarded_grant,
 )
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.types.kernel_refusal_scene import KernelRefusalScene
@@ -247,54 +246,35 @@ def _refused_by_the_spec(target: _CompletionTarget, context: MCPCallContext) -> 
     A completion dispatches nothing, so without this the scope gate alone
     answered it, and a spec refusing the caller still listed which values exist
     (``test_a_kernel_resources_completion_asks_its_spec_permissions``). Asked
-    before the rate limit, where the read asks them (``admit_kernel_read``),
-    and through the kernel's ``authorize`` with the same principal, grant,
-    context and seeds.
-    Stands in for the class-level half of ``dispatch``; there is no row to
-    judge. ``arguments`` is ``None``: a completion names a template rather
-    than a URI, so a check scoping by a variable decides on nothing and
-    refuses, whether it guards against ``None`` and answers no
+    before the rate limit, where the read asks them (``admit_kernel_read``).
+
+    A completion names a template rather than a URI, so it has no arguments,
+    and is judged as the listing judges the spec, through the same
+    ``admits_without_arguments``: a check scoping by a variable decides on
+    nothing and refuses, whether it guards against ``None`` and answers no
     (``test_a_kernel_resources_completion_is_judged_on_no_arguments``) or
     indexes it and raises
-    (``test_a_check_raising_on_no_arguments_refuses_the_completion_as_the_read_refuses``).
+    (``test_a_check_raising_on_no_arguments_refuses_the_completion_as_the_read_refuses``),
+    and a check raising a ``ServiceError`` refuses it as it hides the template
+    (``test_a_check_raising_a_service_error_refuses_the_completion_as_the_listing``).
+    A configuration error is raised, as the listing and the read raise it
+    (``test_a_misconfigured_check_fails_the_completion_as_the_read``).
     """
     binding = target.kernel
     if binding is None:
         return None
-    principal: Any = principal_of(context.token.user)
-    try:
-        authorize(
-            binding.spec,
-            principal,
-            grant=unguarded_grant(binding, principal, context.config),
-            arguments=None,
-            call_context=call_context(
-                carry_token(context.http_request, context.token), binding.name
-            ),
-            pool_seeds=context.pool_seeds,
-        )
-    except DispatchError as exc:
-        return resource_refusal(
-            exc,
-            KernelRefusalScene(
-                arguments={}, config=context.config, conventions=context.conventions
-            ),
-        )
-    # Raised as the read raises them: a ``ServiceError`` a check raises leaves
-    # ``authorize`` and ``resource_refusal`` re-raises it on the read
-    # (test_a_check_raising_a_service_error_fails_the_completion_as_the_read),
-    # and a configuration error is the mount's, not a refusal
-    # (test_a_misconfigured_check_fails_the_completion_as_the_read). Without
-    # this clause the arm below would swallow both.
-    except (ImproperlyConfigured, ServiceError):
-        raise
-    except Exception:
-        # A check that cannot decide without the arguments a completion does
-        # not have raises on their absence (a ``TypeError`` or ``KeyError`` on
-        # ``None``), and that is a refusal, as ``is_binding_listable`` reads it
-        # at list time, rather than an internal error where the read refuses.
-        return JsonRpcError(JsonRpcErrorCode.FORBIDDEN, "Insufficient permission")
-    return None
+    if admits_without_arguments(
+        binding,
+        principal_of(context.token.user),
+        config=context.config,
+        pool_seeds=context.pool_seeds,
+        call_context=call_context(carry_token(context.http_request, context.token), binding.name),
+    ):
+        return None
+    return resource_refusal(
+        NotPermitted(),
+        KernelRefusalScene(arguments={}, config=context.config, conventions=context.conventions),
+    )
 
 
 def _to_completion(raw: Any) -> Completion:

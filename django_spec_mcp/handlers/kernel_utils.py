@@ -6,6 +6,7 @@ the two paths share only the helpers they call by name.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from itertools import islice
 from typing import Any
@@ -271,6 +272,32 @@ def admits_without_arguments(
     return True
 
 
+def refuses_a_row_alone(spec: Any, refusal: InvalidArguments) -> bool:
+    """Whether ``check_call`` raised ``refusal`` for a ``many`` call's rows, after its checks.
+
+    ``check_call`` raises a refused row of a ``many`` call as
+    ``InvalidArguments``, as it raises a failed shape, but only after its
+    class-level check admitted the checked top level, so that admission is
+    the call's and the row is dispatch's to report, after the charge. Told
+    apart by its tree, keyed by row index under ``many_argument`` alone: a
+    failed top level is raised before the check and without the rows, whose
+    refusals are carried to dispatch's Validator step
+    (``test_check_call_raises_a_refused_row_only_after_admitting_the_top_level``
+    pins both). Until ``check_call`` marks a refused row distinctly, which is
+    asked of the kernel, the tree is the only public sign.
+
+    One arc to coverage. Without the first conjunct an array parameter of a
+    spec that is not ``many``, whose items fail at their index, reads as a
+    refused row
+    (``test_an_array_argument_failing_at_an_index_is_no_refused_row``); without
+    the second every shape failure of a ``many`` spec does
+    (``test_a_many_list_that_is_no_list_is_a_failed_shape``).
+    """
+    return bool(getattr(spec, "many", False)) and isinstance(
+        refusal.detail.get(spec.many_argument), Mapping
+    )
+
+
 def admit_kernel_call(
     binding: KernelToolBinding | KernelResourceBinding,
     arguments: dict[str, Any],
@@ -316,14 +343,21 @@ def admit_kernel_call(
     (``test_an_admitted_caller_missing_an_argument_is_charged_and_told_which``).
     dispatch is then handed what it would have been handed without this step.
 
+    A ``many`` call whose top level passes and whose rows do not is no
+    failed shape: ``check_call`` asked the checks on the checked top level
+    before it raised the row (``refuses_a_row_alone``), so their answer
+    stands, a refusal as ``-32006`` and an admission leaving the row to
+    dispatch, never judged again on no arguments
+    (``test_a_many_call_with_a_refused_row_is_answered_on_its_checked_top_level``).
+
     So the checks are asked once on a call whose arguments pass, and once on
     one whose arguments fail, by that judgment, since dispatch refuses the
-    shape before it asks them. A ``many`` call with a refused row is asked
-    three times: ``check_call`` asks the checks before it raises the row as
-    ``InvalidArguments``, which reads as any shape failure, the judgment asks
-    again, and dispatch asks a third time before it reports the row beside the
-    Validator's refusals of the other rows, which ``check_call`` does not run
-    (``test_a_many_call_with_a_refused_row_is_asked_three_times``).
+    shape before it asks them. An admitted ``many`` call with a refused row is
+    asked twice: ``check_call`` hands back no grant when it raises the row, so
+    dispatch asks again before it reports the row beside the Validator's
+    refusals of the other rows, which ``check_call`` does not run
+    (``test_a_many_call_with_a_refused_row_is_asked_by_its_prelude_and_by_dispatch``).
+    A task's worker asks them again when it runs the call.
 
     Raises a denial, ``NotPermitted`` or ``PrincipalUnavailable``, for the
     caller to answer as ``KERNEL_REFUSALS`` does. Any other refusal is left to
@@ -350,8 +384,8 @@ def admit_kernel_call(
         )
     except _DENIALS:
         raise
-    except InvalidArguments:
-        if not admits_without_arguments(
+    except InvalidArguments as refusal:
+        if not refuses_a_row_alone(binding.spec, refusal) and not admits_without_arguments(
             binding, principal, config=config, pool_seeds=pool_seeds, call_context=context
         ):
             raise NotPermitted() from None
@@ -408,10 +442,14 @@ def admit_kernel_read(
     Asked on the URI's variables read as the spec's types, the arguments
     ``read_kernel_resource`` dispatches with: ``true`` reaches the read as
     ``True``, so a check refusing ``True`` refuses before the charge
-    (``test_a_reader_is_judged_on_the_variables_the_read_dispatches``). A variable ``coerce_flat`` cannot
-    read has no checked form, so the checks are asked on the variables as the
-    URI carries them, and the read still fails on it as before
-    (``test_a_reader_refused_on_a_malformed_variable_is_told_so``).
+    (``test_a_reader_is_judged_on_the_variables_the_read_dispatches``). A
+    variable ``coerce_flat`` cannot read has no checked form, so the call is
+    judged on no arguments, as ``admit_kernel_call`` judges any failed shape: a
+    reader that judgment refuses is ``-32006`` before the charge
+    (``test_a_reader_refused_on_a_malformed_variable_is_told_so``), and one it
+    admits is charged and the read fails on the variable as it did before this
+    step, an internal error, since ``resources/read`` has no answer for
+    invalid arguments.
 
     ``REJECT`` is the read's own policy, the one ``read_kernel_resource``
     dispatches under, and it answers as ``IGNORE`` would only while every
@@ -705,6 +743,7 @@ __all__ = [
     "admit_kernel_read",
     "admit_kernel_tool_call",
     "admits_without_arguments",
+    "refuses_a_row_alone",
     "bound_unpaginated_rows",
     "call_context",
     "carry_token",

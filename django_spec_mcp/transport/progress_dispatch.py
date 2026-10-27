@@ -166,10 +166,10 @@ def _kernel_refuses(binding: Any, arguments: dict[str, Any], context: MCPCallCon
     plain one; ``adispatch`` runs under the handler's grant and asks them no
     third time
     (``test_a_streamed_call_asks_the_spec_once_more_than_a_plain_one``). A
-    call failing it is asked here as ``admit_kernel_call`` counts, so a
-    ``many`` call with a refused row is asked five times streamed, twice here
-    and three times in the handler
-    (``test_a_many_call_with_a_refused_row_is_asked_three_times``).
+    call failing it is asked here as ``admit_kernel_call`` counts, so an
+    admitted ``many`` call with a refused row is asked three times streamed,
+    once here and twice in the handler
+    (``test_a_many_call_with_a_refused_row_is_asked_by_its_prelude_and_by_dispatch``).
     """
     laid: dict[str, Any] = apply_server_arguments(binding.spec, arguments, binding.server_arguments)
     return isinstance(admit_kernel_tool_call(binding, laid, context), JsonRpcError)

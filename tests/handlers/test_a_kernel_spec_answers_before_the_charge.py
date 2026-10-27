@@ -25,8 +25,10 @@ from asgiref.sync import sync_to_async
 from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest
 from django_service_specs import (
+    DEFAULT_POOL_SEEDS,
     DataclassValidator,
     DispatchError,
+    InvalidArguments,
     NotPermitted,
     Parameter,
     Parameters,
@@ -36,6 +38,7 @@ from django_service_specs import (
     ServiceNotFound,
     ServiceSpec,
     UnknownArguments,
+    check_call,
 )
 
 from django_spec_mcp import MCPServer
@@ -295,7 +298,7 @@ async def test_a_check_reads_the_arguments_as_the_shape_check_reads_them(is_asyn
 
 
 @_ASYNC
-async def test_a_check_refusing_a_malformed_argument_is_answered_before_the_shape(
+async def test_a_check_refusing_on_no_arguments_answers_a_malformed_call_before_the_shape(
     is_async: bool,
 ) -> None:
     # A call whose arguments fail the shape check has no checked arguments, so
@@ -466,16 +469,15 @@ def _issue(*, data: list[_Line]) -> list[_Line]:
     return list(data)
 
 
-@pytest.mark.parametrize(("streamed", "asks"), [(False, 3), (True, 5)], ids=["plain", "streamed"])
+@pytest.mark.parametrize(("streamed", "asks"), [(False, 2), (True, 3)], ids=["plain", "streamed"])
 @_ASYNC
-async def test_a_many_call_with_a_refused_row_is_asked_three_times(
+async def test_a_many_call_with_a_refused_row_is_asked_by_its_prelude_and_by_dispatch(
     streamed: bool, asks: int, is_async: bool
 ) -> None:
-    # ``check_call`` raises the first row's refusal after its own ask, as it
-    # raises a failed shape, so the call is judged again on no arguments, and
-    # dispatch, which is what reports the second row's Validator refusal
-    # beside it, asks a third time. The answer is dispatch's, both rows named.
-    # A stream's pre-flight runs the first two asks before the handler.
+    # ``check_call`` asks the checks before it raises the first row's refusal,
+    # which hands back no grant, and dispatch, which is what reports the
+    # second row's Validator refusal beside it, asks again. The answer is
+    # dispatch's, both rows named. A stream's pre-flight asks once more.
     check = _Counted(admits=True)
     server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
     server.register_tool(
@@ -500,6 +502,148 @@ async def test_a_many_call_with_a_refused_row_is_asked_three_times(
     assert check.asked == asks
 
 
+class _TenantOne(PermissionCheck):
+    """Admits tenant 1 alone, indexing ``arguments`` with no guard, so it raises on none."""
+
+    def __init__(self) -> None:
+        self.seen: list[Any] = []
+
+    def has_permission(self, principal: Any, spec: Any, *, arguments: Any) -> bool:
+        self.seen.append(arguments)
+        return arguments["tenant"] == 1
+
+
+def _tenant_bulk(check: PermissionCheck) -> ServiceSpec:
+    return ServiceSpec(
+        service=lambda *, data, tenant: data,
+        many=True,
+        validator=DataclassValidator(_Line),
+        reads=Parameters([Parameter("tenant", "integer", required=True)]),
+        permissions=[check],
+    )
+
+
+_BAD_ROW = [{"number": "A-1", "amount_cents": "x"}]
+
+
+def test_check_call_raises_a_refused_row_only_after_admitting_the_top_level() -> None:
+    # The kernel behaviour ``admit_kernel_call`` reads a refused row by: raised
+    # after the class-level check admitted the checked top level, and keyed by
+    # index under ``many_argument`` alone, where a failed top level is raised
+    # before that check, without the rows. If either changes, this fails.
+    check = _Counted(admits=True)
+    spec = _tenant_bulk(check)
+
+    with pytest.raises(InvalidArguments) as row:
+        check_call(spec, principal=None, arguments={"tenant": 1, "items": _BAD_ROW})
+    assert row.value.detail == {"items": {0: {"amount_cents": ["Expected an integer."]}}}
+    assert check.asked == 1
+
+    with pytest.raises(InvalidArguments) as shape:
+        check_call(spec, principal=None, arguments={"items": _BAD_ROW})
+    assert shape.value.detail == {"tenant": ["This field is required."]}
+    assert check.asked == 1
+
+
+@pytest.mark.parametrize(
+    ("tenant", "admitted"), [(1, True), (2, False)], ids=["admitted", "refused"]
+)
+@pytest.mark.parametrize("streamed", [False, True], ids=["plain", "streamed"])
+@_ASYNC
+async def test_a_many_call_with_a_refused_row_is_answered_on_its_checked_top_level(
+    tenant: int, admitted: bool, streamed: bool, is_async: bool
+) -> None:
+    # The checks admitted or refused the checked top level before the row was
+    # refused, so that answer stands: an admitted caller is told the row after
+    # the charge, never judged again on no arguments, which this check, reading
+    # ``tenant`` unguarded, would refuse.
+    check = _TenantOne()
+    limit = _CountingLimit()
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server.register_tool(_tenant_bulk(check), name="get", rate_limits=[limit])
+    arguments = {"tenant": tenant, "items": _BAD_ROW}
+    if streamed:
+        params = {"name": "get", "arguments": arguments}
+        refused = await sync_to_async(preflight_permissions)("tools/call", params, _ctx(server))
+        assert (refused is None) is admitted
+
+    out = await _call(server, arguments, is_async=is_async)
+
+    if admitted:
+        assert tool_error(out)["detail"] == {
+            "items": {"0": {"amount_cents": ["Expected an integer."]}}
+        }, out
+        assert limit.consumed == 1
+    else:
+        assert _forbidden(out), out
+        assert limit.consumed == 0
+    assert None not in check.seen
+
+
+@_ASYNC
+async def test_an_array_argument_failing_at_an_index_is_no_refused_row(is_async: bool) -> None:
+    # A spec that is not ``many`` fails an array argument's item at its index,
+    # under the argument's name, ``items`` here: a failed shape all the same,
+    # judged on no arguments, which this check refuses.
+    limit = _CountingLimit()
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server.register_tool(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=lambda *, items: {"pk": 1},
+            reads=Parameters([Parameter("items", "array", items="integer", required=True)]),
+            permissions=[_Reads(lambda a: a is not None)],
+        ),
+        name="get",
+        rate_limits=[limit],
+    )
+
+    out = await _call(server, {"items": ["x"]}, is_async=is_async)
+
+    assert _forbidden(out), out
+    assert limit.consumed == 0
+
+
+@_ASYNC
+async def test_a_many_list_that_is_no_list_is_a_failed_shape(is_async: bool) -> None:
+    # Its refusal sits under ``many_argument`` too, as a message rather than
+    # rows by index, so it is judged on no arguments, which ``_TenantOne``
+    # cannot answer.
+    limit = _CountingLimit()
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server.register_tool(_tenant_bulk(_TenantOne()), name="get", rate_limits=[limit])
+
+    out = await _call(server, {"tenant": 1, "items": "no"}, is_async=is_async)
+
+    assert _forbidden(out), out
+    assert limit.consumed == 0
+
+
+class _ScopedToAcme(PermissionCheck):
+    """Admits every class-level question, and a create's scope for the ``tenant`` seed ``acme``."""
+
+    def has_permission(self, principal: Any, spec: Any) -> bool:
+        return True
+
+    def has_scope_permission(self, principal: Any, spec: Any, scope: Any, *, tenant: str) -> bool:
+        return tenant == "acme"
+
+
+def test_a_creates_scope_is_judged_on_the_servers_own_seeds() -> None:
+    # The scope question of a create, asked on no arguments, is offered the
+    # server's pool seeds, as the class-level one is: a check naming a seed
+    # only this server registers is handed it, and admits.
+    server = MCPServer(
+        name="t",
+        auth_backend=AllowAnyBackend(),
+        session_store=None,
+        pool_seeds=DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme"),
+    )
+    server.register_tool(ServiceSpec(service=lambda: {}, permissions=[_ScopedToAcme()]), name="get")
+
+    assert _listed(server) is True
+
+
 @_ASYNC
 async def test_an_always_listed_tool_still_refuses_a_call_failing_its_shape(is_async: bool) -> None:
     # ``always_listed`` decides the listing, not who may call: the check still
@@ -520,7 +664,7 @@ async def test_an_always_listed_tool_still_refuses_a_call_failing_its_shape(is_a
     assert limit.consumed == 0
 
 
-def test_call_tool_refuses_a_caller_the_spec_refuses_on_a_malformed_argument() -> None:
+def test_call_tool_refuses_a_malformed_call_a_check_refuses_on_no_arguments() -> None:
     with pytest.raises(NotPermitted):
         _server(_OnlyRowOne()).call_tool("get", {"pk": "abc"}, user=None)
 
@@ -635,8 +779,8 @@ async def test_a_deactivated_reader_is_not_charged(is_async: bool) -> None:
 
 @_ASYNC
 async def test_a_reader_refused_on_a_malformed_variable_is_told_so(is_async: bool) -> None:
-    # ``abc`` reads as no integer, so the URI's variables have no checked form
-    # either, and the check is asked on them as the URI carries them.
+    # ``abc`` reads as no integer, so the URI's variables have no checked form,
+    # and the call is judged on no arguments, where ``.get`` raises and refuses.
     limit = RefusingRateLimit()
 
     out = await _read(_resource_server(_OnlyRowOne(), limit), "rows://abc", is_async=is_async)
