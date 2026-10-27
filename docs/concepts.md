@@ -952,6 +952,14 @@ What changes against the drf-services tools:
   `requiredScopes`, not only the missing ones. A bare string is one scope, as
   `ScopeRequired` reads it. `scopes=()` is refused, since it reads as a gate
   and admits everyone.
+- **A spec declaring `permissions=None` is unguarded.** With
+  `REQUIRE_TOOL_PERMISSIONS` on, the default, registering one is refused. With
+  it off, the tool or resource registers with one `UnguardedToolWarning` and
+  every call runs without a permission check, under a kernel `Grant` minted for
+  that spec and the calling principal. A spec with permissions of its own is
+  never granted: its checks run whatever the setting says. An operation open to
+  every caller declares `[Unrestricted()]` instead. The scope gate does not
+  count as a guard.
 - **Registration refuses what a kernel tool cannot mean**: a spec that is not a
   kernel spec (`TypeError`), `paginate=` / `max_page_size=` on a service tool or
   a `RETRIEVE`, `invalidates=` on a selector tool, a `task_policy=` other than

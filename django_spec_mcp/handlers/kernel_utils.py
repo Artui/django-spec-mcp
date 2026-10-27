@@ -14,6 +14,7 @@ from django_service_specs import (
     DEFAULT_PAGE_SIZE,
     DispatchError,
     DispatchResult,
+    Grant,
     OutputPage,
     SelectorKind,
     ServiceError,
@@ -80,6 +81,20 @@ def principal_of(user: Any) -> Any:
     (``test_an_anonymous_in_process_caller_reaches_a_kernel_tool``).
     """
     return AnonymousUser() if user is None else user
+
+
+def unguarded_grant(spec: Any, principal: Any) -> Grant | None:
+    """The ``Grant`` an unguarded kernel spec is dispatched under, or ``None``.
+
+    A spec declaring ``permissions=None`` registers only with
+    ``REQUIRE_TOOL_PERMISSIONS`` off (``check_kernel_spec_guarded``), and is then
+    called without a permission check: the kernel's dispatch refuses such a
+    spec on its own, so the call carries a grant bound to this spec and
+    ``principal``, which must be the very principal the call dispatches with.
+    A guarded spec never gets one, so its checks always run
+    (``test_a_guarded_kernel_tool_still_refuses_with_the_setting_off``).
+    """
+    return Grant(spec, principal) if spec.permissions is None else None
 
 
 def carry_token(request: Any, token: Any) -> Any:
@@ -266,4 +281,5 @@ __all__ = [
     "resource_read_result",
     "resource_refusal",
     "tool_result",
+    "unguarded_grant",
 ]

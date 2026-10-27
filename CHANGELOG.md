@@ -27,6 +27,10 @@ carries; releases up to 0.54.0 are in
   names, answering `-32006` with `requiredScopes`. Registration refuses a spec
   that is not a kernel spec, a knob of the other kind of tool, `scopes=()`,
   `UnknownArguments.PASSTHROUGH` and, for now, any `task_policy` but the default.
+  A spec declaring `permissions=None` is refused under
+  `REQUIRE_TOOL_PERMISSIONS`; with the setting off it registers with an
+  `UnguardedToolWarning` and is called without a permission check, under a
+  kernel `Grant` minted per call for that spec and principal.
   The drf-services registration methods are unchanged.
 
 ### Changed

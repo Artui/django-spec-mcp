@@ -16,6 +16,7 @@ from django_spec_mcp.handlers.kernel_utils import (
     present_tool_result,
     principal_of,
     tool_result,
+    unguarded_grant,
 )
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.types.kernel_input_round import KernelInputRound
@@ -53,10 +54,12 @@ async def run_kernel_tool_async(
         input_round=None if binding.is_selector else KernelInputRound(prior, context),
         span=otel_span,
     )
+    principal: Any = principal_of(context.token.user)
     try:
         result = await adispatch(
             binding.spec,
-            principal=principal_of(context.token.user),
+            principal=principal,
+            grant=unguarded_grant(binding.spec, principal),
             arguments=dispatched,
             pool_seeds=context.pool_seeds,
             unknown_arguments=binding.unknown_arguments,

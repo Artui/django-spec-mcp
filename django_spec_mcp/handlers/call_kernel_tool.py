@@ -13,6 +13,7 @@ from django_spec_mcp.handlers.kernel_utils import (
     present_tool_result,
     principal_of,
     tool_result,
+    unguarded_grant,
 )
 from django_spec_mcp.handlers.types.kernel_refusal_scene import KernelRefusalScene
 from django_spec_mcp.protocol.types.tool_result import ToolResult
@@ -45,10 +46,12 @@ def call_kernel_tool(
     there is no further round to ask in.
     """
     dispatched, page = page_request(binding, arguments, config)
+    principal: Any = principal_of(user)
     try:
         result = dispatch(
             binding.spec,
-            principal=principal_of(user),
+            principal=principal,
+            grant=unguarded_grant(binding.spec, principal),
             arguments=dispatched,
             pool_seeds=pool_seeds,
             unknown_arguments=binding.unknown_arguments,

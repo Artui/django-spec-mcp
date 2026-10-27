@@ -286,7 +286,7 @@ def test_a_guarded_kernel_spec_registers_under_require_tool_permissions() -> Non
         ).name
         == "guarded"
     )
-    with pytest.raises(ImproperlyConfigured, match="registered with no permissions"):
+    with pytest.raises(ImproperlyConfigured, match="declares no permissions"):
         server.register_resource(
             SelectorSpec(
                 kind=SelectorKind.RETRIEVE,

@@ -32,6 +32,7 @@ from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 from rest_framework_services.types.validate_channel_names import validate_channel_names
 
+from django_spec_mcp.adapters.check_kernel_spec_guarded import check_kernel_spec_guarded
 from django_spec_mcp.adapters.kernel_selector_to_resource import kernel_selector_to_resource
 from django_spec_mcp.adapters.kernel_spec_to_tool import kernel_spec_to_tool
 from django_spec_mcp.adapters.selector_to_resource import selector_to_resource
@@ -809,10 +810,8 @@ class MCPServer:
         )
         # The spec's own permissions are the tool's guard; the scope gate on
         # ``binding.permissions`` is not one, so it is not what is counted.
-        check_tool_permissions_declared(
-            binding.name,
-            () if binding.spec.permissions is None else tuple(binding.spec.permissions),
-            require=self._config.require_tool_permissions,
+        check_kernel_spec_guarded(
+            binding.name, binding.spec, require=self._config.require_tool_permissions
         )
         check_tool_description_present(
             binding.name, binding.description, require=self._config.require_tool_descriptions
@@ -1554,11 +1553,8 @@ class MCPServer:
         )
         check_completions_declared(f"Resource {name!r}", binding.completions, template_variables)
         # The spec's own permissions are the guard, as for ``register_tool``.
-        check_tool_permissions_declared(
-            binding.name,
-            () if spec.permissions is None else tuple(spec.permissions),
-            require=self._config.require_tool_permissions,
-            kind="resource",
+        check_kernel_spec_guarded(
+            binding.name, spec, require=self._config.require_tool_permissions, kind="resource"
         )
         self._resources.register(binding)
         return binding

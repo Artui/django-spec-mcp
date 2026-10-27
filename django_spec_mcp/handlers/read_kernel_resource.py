@@ -10,6 +10,7 @@ from django_spec_mcp.handlers.kernel_utils import (
     principal_of,
     resource_read_result,
     resource_refusal,
+    unguarded_grant,
 )
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.types.kernel_refusal_scene import KernelRefusalScene
@@ -30,10 +31,12 @@ def read_kernel_resource(
     carries into the types the spec's parameters declare (``coerce_flat``), so
     ``invoices://7`` reaches an ``integer`` ``pk`` as ``7``.
     """
+    principal: Any = principal_of(context.token.user)
     try:
         result = dispatch(
             binding.spec,
-            principal=principal_of(context.token.user),
+            principal=principal,
+            grant=unguarded_grant(binding.spec, principal),
             arguments=coerce_flat(binding.spec.parameters(), variables),
             pool_seeds=context.pool_seeds,
             call_context=call_context(
