@@ -346,3 +346,9 @@ def test_the_kernel_bindings_are_exported_beside_the_others() -> None:
     assert types.KernelToolBinding is KernelToolBinding
     assert types.KernelResourceBinding is KernelResourceBinding
     assert {"KernelToolBinding", "KernelResourceBinding"} <= set(types.__all__)
+
+
+def test_a_binding_built_by_hand_reads_a_bare_string_scope_as_one() -> None:
+    binding = KernelToolBinding(name="t", description="d", spec=_service(), scopes="billing")
+    assert binding.scopes == ("billing",)
+    assert [p.required_scopes() for p in binding.permissions] == [["billing"]]

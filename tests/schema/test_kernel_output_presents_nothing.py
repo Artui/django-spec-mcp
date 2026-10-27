@@ -88,9 +88,9 @@ def test_a_result_that_presents_nothing_conforms_to_its_schema(name: str) -> Non
     schema = _schemas(server)[name]
     served = server.call_tool(name, {}, user=None).to_dict()["structuredContent"]
     assert served == {}
+    jsonschema.validate(served, schema)
     assert schema["type"] == "object"
     assert schema["anyOf"] == [{"required": ["pk", "name"]}, {"maxProperties": 0}]
-    jsonschema.validate(served, schema)
     # Still refuses a half-presented row.
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate({"pk": 1}, schema)

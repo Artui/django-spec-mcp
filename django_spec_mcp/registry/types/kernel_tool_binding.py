@@ -112,6 +112,11 @@ class KernelToolBinding:
             include_structured_content=self.include_structured_content,
             include_output_schema=self.include_output_schema,
         )
+        # A bare string is one scope, as ``ScopeRequired`` and the registrars read
+        # it, so a binding built by hand does not split it per character
+        # (``test_a_binding_built_by_hand_reads_a_bare_string_scope_as_one``).
+        if isinstance(self.scopes, str):
+            object.__setattr__(self, "scopes", (self.scopes,))
         checks: tuple[Any, ...] = (ScopeRequired(list(self.scopes)),) if self.scopes else ()
         object.__setattr__(self, "permissions", checks)
 
