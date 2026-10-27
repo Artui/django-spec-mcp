@@ -5,16 +5,25 @@ from dataclasses import dataclass
 from itertools import islice
 from typing import Any
 
-from django_service_specs import RESERVED_POOL_SEEDS
+from django_service_specs import RESERVED_POOL_SEEDS, DispatchError, ServiceError, authorize
 from rest_framework_services import build_offline_context, resolve_callable_kwargs
 from rest_framework_services.dispatch.utils import DROPPED_EDGE_SEEDS
 
 from django_spec_mcp._compat.tracing import span
 from django_spec_mcp.handlers.handle_tools_call import _span_attrs
+from django_spec_mcp.handlers.kernel_utils import (
+    call_context,
+    carry_token,
+    principal_of,
+    resource_refusal,
+    unguarded_grant,
+)
 from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.handlers.types.kernel_refusal_scene import KernelRefusalScene
 from django_spec_mcp.handlers.utils import check_permissions, consume_rate_limits
 from django_spec_mcp.protocol.types.completion import Completion
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from django_spec_mcp.types.max_completion_values import MAX_COMPLETION_VALUES
 
@@ -107,6 +116,10 @@ def handle_completion_complete(
                 data={"retryAfter": retry_after},
             )
 
+        refused: JsonRpcError | None = _refused_by_the_spec(target, context)
+        if refused is not None:
+            return refused
+
         drf_request = build_offline_context(
             context.token.user,
             None,
@@ -160,6 +173,8 @@ class _CompletionTarget:
     permissions: tuple[Any, ...]
     rate_limits: tuple[Any, ...]
     completions: dict[str, Callable[..., Any]]
+    kernel: KernelResourceBinding | None = None
+    """The kernel resource completed, whose spec's own checks answer too; else ``None``."""
 
     @property
     def label(self) -> str:
@@ -210,12 +225,53 @@ def _resolve_ref(ref: Any, context: MCPCallContext) -> _CompletionTarget | JsonR
             permissions=resource.permissions,
             rate_limits=resource.rate_limits,
             completions=resource.completions,
+            kernel=resource if isinstance(resource, KernelResourceBinding) else None,
         )
 
     return JsonRpcError(
         JsonRpcErrorCode.INVALID_PARAMS,
         f"Unsupported completion ref type: {ref_type!r}. Expected 'ref/prompt' or 'ref/resource'.",
     )
+
+
+def _refused_by_the_spec(target: _CompletionTarget, context: MCPCallContext) -> JsonRpcError | None:
+    """The refusal a kernel resource's spec answers its completion with, or ``None``.
+
+    A kernel resource binding's ``permissions`` hold only its scope gate, since
+    its spec's checks are the kernel's and ``dispatch`` asks them at the read.
+    A completion dispatches nothing, so without this the scope gate alone
+    answered it, and a spec refusing the caller still listed which values exist
+    (``test_a_kernel_resources_completion_asks_its_spec_permissions``). Asked
+    after the rate limit, where the read's dispatch asks them, and through the
+    kernel's ``authorize`` with the same principal, grant, context and seeds.
+    Stands in for the class-level half of ``dispatch``; there is no row to
+    judge. ``arguments`` is ``None``: a completion names a template rather
+    than a URI, so a check scoping by a variable decides on nothing and should
+    refuse (``test_a_kernel_resources_completion_is_judged_on_no_arguments``).
+    """
+    binding = target.kernel
+    if binding is None:
+        return None
+    principal: Any = principal_of(context.token.user)
+    try:
+        authorize(
+            binding.spec,
+            principal,
+            grant=unguarded_grant(binding, principal, context.config),
+            arguments=None,
+            call_context=call_context(
+                carry_token(context.http_request, context.token), binding.name
+            ),
+            pool_seeds=context.pool_seeds,
+        )
+    except (DispatchError, ServiceError) as exc:
+        return resource_refusal(
+            exc,
+            KernelRefusalScene(
+                arguments={}, config=context.config, conventions=context.conventions
+            ),
+        )
+    return None
 
 
 def _to_completion(raw: Any) -> Completion:
