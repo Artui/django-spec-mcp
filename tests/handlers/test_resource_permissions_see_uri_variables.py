@@ -1,11 +1,25 @@
-"""A resource's permission reading ``view.kwargs`` judges the URI a read names.
+"""A kernel resource's permission reading ``arguments`` judges the URI a read names.
 
-A templated resource's variables ride on ``view.kwargs`` once the read
-dispatches, and a permission class scoping by one reads it there, as it would
-read a route capture over HTTP. ``resources/read`` judged the class-level check
-before that, against a stand-in view whose ``kwargs`` were always ``{}``, so
-such a permission denied a caller it admits. A subscription to the same URI is
-judged the way the read is, or it would refuse a caller the read admits.
+The original asked that a drf-services permission class reading
+``view.kwargs`` sees a templated resource's variables, in the class-level check
+and in the object guard, and that a subscription is judged the way the read is.
+A kernel ``PermissionCheck`` has no view: it opts into the call's ``arguments``
+by declaring the keyword, and the read hands the URI-template variables there,
+read into the types the spec's ``reads`` declare, so ``projects://7`` reaches a
+check as ``{"project_pk": 7}``. One that declares ``call_context`` reads the
+request and the resource's name off it, which is the kernel form of the
+original's "one request in both checks".
+
+Asked differently: where the spec's check answers. On the drf-services read the
+permission answered before the rate limit, so a denied caller was charged
+nothing. A kernel resource's checks are the kernel's, asked inside ``dispatch``
+after the shell has charged the rate limits, as a kernel tool's are; only the
+scope gate answers before them. The last test pins that order.
+
+The subscription half asks the same: ``grant_subscription`` grants a watch only
+on the URIs the read would admit, judged by the spec's own checks.
+
+The original is kept beside this file as ``test_resource_permissions_see_uri_variables_drfs.py``.
 """
 
 from __future__ import annotations
@@ -14,10 +28,8 @@ from typing import Any
 
 import pytest
 from asgiref.sync import sync_to_async
-from django.http import HttpRequest, QueryDict
-from django_service_specs import SelectorKind
-from rest_framework.permissions import BasePermission
-from rest_framework_services.types.selector_spec import SelectorSpec
+from django.http import HttpRequest
+from django_service_specs import Parameter, Parameters, PermissionCheck, SelectorKind, SelectorSpec
 
 from django_spec_mcp import MCPServer, SubscriptionFilter
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
@@ -28,26 +40,37 @@ from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.subscriptions.grant_subscription import grant_subscription
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
-from tests.testapp.models import Invoice
-from tests.testapp.serializers import InvoiceOutputSerializer
-from tests.utils import RefusingRateLimit, granting_route
+from tests.utils import RefusingRateLimit
 
 
-def _project_invoices(*, project_pk: str) -> Any:
-    return Invoice.objects.all()
+class _GrantsProjectSeven(PermissionCheck):
+    """Admits a read of project 7 alone, recording what each check was handed."""
+
+    def __init__(self) -> None:
+        self.seen: list[Any] = []
+
+    def has_permission(
+        self, principal: Any, spec: Any, *, arguments: Any = None, call_context: Any = None
+    ) -> bool:
+        self.seen.append((None if arguments is None else dict(arguments), call_context["action"]))
+        return arguments is not None and arguments.get("project_pk") == 7
 
 
-def _server(permission: type[BasePermission], *rate_limits: Any) -> MCPServer:
+def _project(*, project_pk: int) -> dict[str, int]:
+    return {"project": project_pk}
+
+
+def _server(check: PermissionCheck, *rate_limits: Any) -> MCPServer:
     server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
     server.register_resource(
-        name="project-invoices",
-        uri_template="projects://{project_pk}/invoices",
-        selector=SelectorSpec(
-            kind=SelectorKind.LIST,
-            selector=_project_invoices,
-            output_serializer=InvoiceOutputSerializer,
-            permission_classes=[permission],
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=_project,
+            reads=Parameters([Parameter("project_pk", "integer", required=True)]),
+            permissions=[check],
         ),
+        name="project",
+        uri_template="projects://{project_pk}",
         rate_limits=list(rate_limits),
     )
     return server
@@ -71,161 +94,92 @@ async def _read(server: MCPServer, uri: str, *, is_async: bool) -> Any:
     return await sync_to_async(handle_resources_read)({"uri": uri}, _ctx(server))
 
 
-def _forbidden(out: Any) -> bool:
-    return isinstance(out, JsonRpcError) and out.code == JsonRpcErrorCode.FORBIDDEN
-
-
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("is_async", [False, True])
+@pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
 async def test_a_resource_permission_sees_the_uri_variables_of_the_read(is_async: bool) -> None:
-    seen: list[dict[str, Any]] = []
-    server = _server(granting_route("project_pk", "7", seen))
+    check = _GrantsProjectSeven()
 
-    out = await _read(server, "projects://7/invoices", is_async=is_async)
+    out = await _read(_server(check), "projects://7", is_async=is_async)
 
     assert not isinstance(out, JsonRpcError), f"refused: {out!r}"
     assert out["contents"]
-    # Every look it took: the class-level check up front, and the guard's on
-    # the value the selector resolved.
-    assert seen
-    assert all(kwargs == {"project_pk": "7"} for kwargs in seen)
+    assert check.seen == [({"project_pk": 7}, "project")]
 
 
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("is_async", [False, True])
+@pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
 async def test_a_resource_permission_still_denies_a_uri_it_does_not_grant(is_async: bool) -> None:
-    seen: list[dict[str, Any]] = []
-    server = _server(granting_route("project_pk", "7", seen))
+    check = _GrantsProjectSeven()
 
-    out = await _read(server, "projects://8/invoices", is_async=is_async)
-
-    assert _forbidden(out)
-    assert seen == [{"project_pk": "8"}]
-
-
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("is_async", [False, True])
-@pytest.mark.parametrize(
-    ("uri", "refused_with"),
-    [("projects://8/invoices", "permission"), ("projects://7/invoices", "rate limit")],
-)
-async def test_the_permission_still_answers_before_the_rate_limit(
-    is_async: bool, uri: str, refused_with: str
-) -> None:
-    # Binding the variables moved the permission's view, not its place: a
-    # caller it denies is told so and charged nothing, and a caller it admits
-    # is the one the rate limit then refuses.
-    limiter = RefusingRateLimit()
-    server = _server(granting_route("project_pk", "7", []), limiter)
-
-    out = await _read(server, uri, is_async=is_async)
+    out = await _read(_server(check), "projects://8", is_async=is_async)
 
     assert isinstance(out, JsonRpcError)
-    if refused_with == "permission":
-        assert out.code == JsonRpcErrorCode.FORBIDDEN
-        assert limiter.consumed == 0
-    else:
-        assert out.code == JsonRpcErrorCode.RATE_LIMITED
-        assert limiter.consumed == 1
+    assert out.code == JsonRpcErrorCode.FORBIDDEN
+    assert check.seen == [({"project_pk": 8}, "project")]
 
 
-def test_a_subscription_is_granted_the_uris_the_read_would_admit() -> None:
-    seen: list[dict[str, Any]] = []
-    server = _server(granting_route("project_pk", "7", seen))
+class _ReadsTheRequest(PermissionCheck):
+    """Admits only the request the transport received, carrying the caller's token."""
 
-    granted, _ = grant_subscription(
-        SubscriptionFilter(resource_uris=("projects://7/invoices", "projects://8/invoices")),
-        _ctx(server),
-    )
+    def __init__(self, request: HttpRequest, token: TokenInfo) -> None:
+        self.request = request
+        self.token = token
 
-    assert granted.resource_uris == ("projects://7/invoices",)
-    assert seen == [{"project_pk": "7"}, {"project_pk": "8"}]
-
-
-# ----- the stand-in and the guard's view are one request -----
+    def has_permission(self, principal: Any, spec: Any, *, call_context: Any = None) -> bool:
+        request = call_context["request"]
+        return request is self.request and request.mcp_token is self.token
 
 
-class _User:
-    pk = 1
-    is_authenticated = True
-
-
-# What a token backend publishes as ``TokenInfo.raw``, compared by identity.
-_AUTH: object = object()
-
-
-class _ReadsAuthThenUser(BasePermission):
-    """``TokenHasScope``'s order: the backend's payload first, then the caller."""
-
-    def has_permission(self, request: Any, view: Any) -> bool:
-        return request.auth is _AUTH and bool(request.user and request.user.is_authenticated)
-
-
-class _AdmitsTheResourceAction(BasePermission):
-    def has_permission(self, request: Any, view: Any) -> bool:
-        return view.action == "project-invoices"
-
-
-class _AdmitsNoQueryValue(BasePermission):
-    """A resource takes no query value; the endpoint's own query string says ``project=99``."""
-
-    def has_permission(self, request: Any, view: Any) -> bool:
-        return "project" not in request.query_params
-
-
-class _AdmitsNoData(BasePermission):
-    """A read carries no body: ``request.data`` is ``{}`` in both checks."""
-
-    def has_permission(self, request: Any, view: Any) -> bool:
-        return request.data == {}
-
-
-_FAITHFUL = [_ReadsAuthThenUser, _AdmitsTheResourceAction, _AdmitsNoQueryValue, _AdmitsNoData]
-_FAITHFUL_IDS = ["auth", "action", "query-params", "data"]
-
-
-def _caller_ctx(server: MCPServer) -> MCPCallContext:
-    """A signed-in caller with a token payload, on an endpoint whose URL carries a query string."""
-    http_request = HttpRequest()
-    http_request.GET = QueryDict("project=99")
-    return MCPCallContext(
-        http_request=http_request,
-        token=TokenInfo(user=_User(), raw=_AUTH),
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
+async def test_a_resource_permission_reads_the_request_the_read_arrived_on(
+    is_async: bool,
+) -> None:
+    request, token = HttpRequest(), TokenInfo(user=None)
+    server = _server(_ReadsTheRequest(request, token))
+    context = MCPCallContext(
+        http_request=request,
+        token=token,
         tools=server.tools,
         resources=server.resources,
         prompts=server.prompts,
         protocol_version="2025-11-25",
     )
+    params: dict[str, Any] = {"uri": "projects://7"}
+
+    if is_async:
+        out = await handle_resources_read_async(params, context)
+    else:
+        out = await sync_to_async(handle_resources_read)(params, context)
+
+    assert not isinstance(out, JsonRpcError), f"refused: {out!r}"
 
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
-@pytest.mark.parametrize("permission", _FAITHFUL, ids=_FAITHFUL_IDS)
-async def test_a_resource_permission_reads_one_request_in_both_checks(
-    permission: type[BasePermission], is_async: bool
-) -> None:
-    # The stand-in carried the endpoint's query string and no ``view.action``;
-    # the guard's view carried no ``request.auth``, so reading it reset the
-    # caller to ``AnonymousUser``. A permission reading any of the three
-    # refused every caller in one check or the other.
-    server = _server(permission)
-    params: dict[str, Any] = {"uri": "projects://7/invoices"}
+@pytest.mark.parametrize("uri", ["projects://8", "projects://7"], ids=["denied", "admitted"])
+async def test_the_rate_limit_answers_before_the_specs_check(is_async: bool, uri: str) -> None:
+    # The spec's checks are dispatch's, and the shell charges the quota before
+    # it dispatches, so a caller the check would deny is charged and refused
+    # for the quota, and the check is never asked.
+    limiter = RefusingRateLimit()
+    check = _GrantsProjectSeven()
 
-    if is_async:
-        out = await handle_resources_read_async(params, _caller_ctx(server))
-    else:
-        out = await sync_to_async(handle_resources_read)(params, _caller_ctx(server))
+    out = await _read(_server(check, limiter), uri, is_async=is_async)
 
-    assert not isinstance(out, JsonRpcError), f"refused: {out!r}"
-    assert out["contents"]
+    assert isinstance(out, JsonRpcError)
+    assert out.code == JsonRpcErrorCode.RATE_LIMITED
+    assert limiter.consumed == 1
+    assert check.seen == []
 
 
-@pytest.mark.parametrize("permission", _FAITHFUL, ids=_FAITHFUL_IDS)
-def test_a_subscription_reads_the_request_the_read_does(permission: type[BasePermission]) -> None:
-    server = _server(permission)
+def test_a_subscription_is_granted_the_uris_the_read_would_admit() -> None:
+    check = _GrantsProjectSeven()
+    server = _server(check)
 
     granted, _ = grant_subscription(
-        SubscriptionFilter(resource_uris=("projects://7/invoices",)), _caller_ctx(server)
+        SubscriptionFilter(resource_uris=("projects://7", "projects://8")), _ctx(server)
     )
 
-    assert granted.resource_uris == ("projects://7/invoices",)
+    assert granted.resource_uris == ("projects://7",)
+    assert check.seen == [({"project_pk": 7}, "project"), ({"project_pk": 8}, "project")]

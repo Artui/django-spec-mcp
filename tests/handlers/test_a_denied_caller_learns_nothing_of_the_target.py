@@ -1,29 +1,47 @@
-"""A caller the spec's permission denies learns nothing about the target it named.
+"""A caller a kernel spec's permission denies learns nothing about the target it named.
 
-A spec's ``has_permission`` may read what the dispatch view carries: the call's
-``request.data``, its ``query_params``, or ``view.action``. Such a permission
-was judged on the wire only by the target guard, after the lookup, so a denied
-caller was answered ``-32006`` for a row that exists, ``not_found`` for one
-that does not, and told the name of an argument it left out. ``call_tool``
-already judged it before dispatch; every route now does, against the dispatch
-view, and the binding's wrapped copy judges a stand-in built from the same
-shape before that. The target guard is narrowed to the object-level check, so
-``has_permission`` is asked once per check rather than once more per call.
+The original asked it of drf-services permission classes judged against a
+dispatch view: that a denied caller is answered ``-32006`` alike for a row that
+exists and one that does not, that the class-level check is asked once and not
+again on the resolved row, that the object-level check still refuses a row,
+that a list target is not judged row by row, and that a denied caller is
+refused before its input is validated. The kernel's ``dispatch`` fixes that
+order itself - class-level authorization, target resolution, object-level
+authorization, then validation - so these ask it of kernel ``ServiceSpec`` and
+``SelectorSpec`` tools on every route.
+
+Changed by design: the original held that a denied caller is not told which
+argument it left out. The kernel runs the shape check before authorization,
+so a call missing a required read is refused for its shape whoever makes it.
+What that tells a caller is the spec's declared shape, which ``tools/list``
+already advertises, and nothing about any row; the test pins that it names the
+argument and never reaches the lookup.
+
+Not carried: a spec with no permission classes being guarded by nothing. A
+kernel spec declares ``permissions=None`` only under
+``REQUIRE_TOOL_PERMISSIONS=False``, which ``test_kernel_unguarded.py`` asks.
+
+The original is kept beside this file as ``test_a_denied_caller_learns_nothing_of_the_target_drfs.py``.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
 from asgiref.sync import sync_to_async
 from django.http import HttpRequest
-from django_service_specs import SelectorKind
-from rest_framework import serializers
-from rest_framework.exceptions import PermissionDenied
-from rest_framework.permissions import BasePermission
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_service_specs import (
+    DataclassValidator,
+    NotPermitted,
+    Parameter,
+    Parameters,
+    PermissionCheck,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+)
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
@@ -33,64 +51,74 @@ from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_a
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
-from tests.testapp.models import Invoice
+from tests.utils import tool_error
 
 _ROUTES = ["handler", "async_handler", "acall_tool", "call_tool"]
 _KINDS = ["service", "selector"]
 
 # Row 1 exists and row 2 does not.
 _ROWS: dict[int, dict[str, Any]] = {1: {"id": 1}}
+_PK = Parameters([Parameter("pk", "integer", required=True)])
 
 
-class _RefusesTheDispatchedAction(BasePermission):
-    """Refuses the call the dispatch view describes.
+class _Check(PermissionCheck):
+    """Answers each question as configured, counting how often each was asked."""
 
-    The dispatch view carries the tool's name, and so does the stand-in the
-    binding's wrapped check judges, which once carried ``None`` and admitted.
-    On ``call_tool``, which judges no stand-in, the dispatch view's check is
-    the one that refuses; on the other routes the stand-in answers first, and
-    ``test_the_dispatch_view_judges_before_the_lookup_when_the_stand_in_admits``
-    holds the dispatch view's check there.
-    """
+    def __init__(self, *, admits: bool = True, admits_rows: bool = True) -> None:
+        self.admits = admits
+        self.admits_rows = admits_rows
+        self.asked: list[str] = []
 
-    def has_permission(self, request: Any, view: Any) -> bool:
-        return view.action != "tool"
+    def has_permission(self, principal: Any, spec: Any) -> bool:
+        self.asked.append("class")
+        return self.admits
+
+    def has_object_permission(self, principal: Any, spec: Any, target: Any) -> bool:
+        self.asked.append("object")
+        return self.admits_rows
+
+    def has_scope_permission(self, principal: Any, spec: Any, scope: Any) -> bool:
+        self.asked.append("scope")
+        return True
 
 
-class _Row(serializers.Serializer):
-    id = serializers.IntegerField()
+class _Lookup:
+    """The target selector, recording every ``pk`` it was asked to find."""
+
+    def __init__(self) -> None:
+        self.looked_up: list[int] = []
+
+    def __call__(self, *, pk: int) -> dict[str, Any] | None:
+        self.looked_up.append(pk)
+        return _ROWS.get(pk)
 
 
-def _server(kind: str, permission: type[BasePermission] | None, lookup: Any) -> MCPServer:
-    """One tool named ``tool``, of ``kind``, whose target ``lookup`` finds by ``pk``.
+@dataclass
+class _Note:
+    note: str
 
-    ``permission=None`` declares ``permission_classes=None``.
-    """
-    permission_classes: list[type[BasePermission]] | None = (
-        None if permission is None else [permission]
-    )
+    def __post_init__(self) -> None:
+        if self.note == "rejected":
+            raise ValueError("This note is rejected.")
+
+
+def _server(kind: str, check: PermissionCheck, lookup: _Lookup) -> MCPServer:
+    """One tool named ``tool``, of ``kind``, whose target ``lookup`` finds by ``pk``."""
     server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
     if kind == "service":
-        server.register_service_tool(
-            name="tool",
-            description="Touch a row.",
-            spec=ServiceSpec(
-                service=lambda instance=None: {"touched": True},
-                permission_classes=permission_classes,
-                instance_selector_spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lookup),
+        spec: Any = ServiceSpec(
+            service=lambda instance: {"touched": instance["id"]},
+            instance_selector_spec=SelectorSpec(
+                kind=SelectorKind.RETRIEVE, selector=lookup, reads=_PK
             ),
+            validator=DataclassValidator(_Note),
+            permissions=[check],
         )
     else:
-        server.register_selector_tool(
-            name="tool",
-            description="Read a row.",
-            spec=SelectorSpec(
-                kind=SelectorKind.RETRIEVE,
-                selector=lookup,
-                output_serializer=_Row,
-                permission_classes=permission_classes,
-            ),
+        spec = SelectorSpec(
+            kind=SelectorKind.RETRIEVE, selector=lookup, reads=_PK, permissions=[check]
         )
+    server.register_tool(spec, name="tool", description="Touch a row.")
     return server
 
 
@@ -111,7 +139,7 @@ async def _via(server: MCPServer, route: str, arguments: dict[str, Any]) -> Any:
     if route == "call_tool":
         try:
             result: Any = await sync_to_async(server.call_tool)("tool", arguments, user=None)
-        except PermissionDenied:
+        except NotPermitted:
             return JsonRpcError(JsonRpcErrorCode.FORBIDDEN, "Insufficient permission")
         return result.to_dict()
     if route == "acall_tool":
@@ -122,272 +150,118 @@ async def _via(server: MCPServer, route: str, arguments: dict[str, Any]) -> Any:
     return await sync_to_async(handle_tools_call)(params, _ctx(server))
 
 
+def _arguments(kind: str, pk: int) -> dict[str, Any]:
+    return {"pk": pk, "note": "x"} if kind == "service" else {"pk": pk}
+
+
+def _forbidden(out: Any) -> bool:
+    return isinstance(out, JsonRpcError) and out.code == JsonRpcErrorCode.FORBIDDEN
+
+
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("kind", _KINDS)
 @pytest.mark.parametrize("route", _ROUTES)
 async def test_a_denied_caller_is_answered_alike_for_a_row_that_exists_and_one_that_does_not(
     route: str, kind: str
 ) -> None:
-    looked_up: list[Any] = []
+    lookup = _Lookup()
+    server = _server(kind, _Check(admits=False), lookup)
 
-    def _lookup(*, pk: int) -> Any:
-        looked_up.append(pk)
-        return _ROWS.get(pk)
+    found = await _via(server, route, _arguments(kind, 1))
+    missing = await _via(server, route, _arguments(kind, 2))
 
-    server = _server(kind, _RefusesTheDispatchedAction, _lookup)
-
-    existing = await _via(server, route, {"pk": 1})
-    missing = await _via(server, route, {"pk": 2})
-
-    assert isinstance(existing, JsonRpcError), f"answered {existing!r}"
-    assert isinstance(missing, JsonRpcError), f"answered {missing!r}"
-    assert (existing.code, existing.message) == (missing.code, missing.message)
-    assert existing.code == JsonRpcErrorCode.FORBIDDEN
-    # Judged before the lookup, so the lookup leaks nothing either.
-    assert looked_up == []
-
-
-def _admitting_every_other_check() -> type[BasePermission]:
-    """A permission whose answer changes between the two checks of one call.
-
-    It admits the first check of a call and refuses the second, so the
-    binding's stand-in admits and the dispatch view refuses. With the stand-in
-    built from the dispatch view's own shape, nothing else tells the two apart.
-    """
-    checks: list[None] = []
-
-    class _AdmittingEveryOtherCheck(BasePermission):
-        def has_permission(self, request: Any, view: Any) -> bool:
-            checks.append(None)
-            return len(checks) % 2 == 1
-
-    return _AdmittingEveryOtherCheck
-
-
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("kind", _KINDS)
-@pytest.mark.parametrize("route", ["handler", "async_handler", "acall_tool"])
-async def test_the_dispatch_view_judges_before_the_lookup_when_the_stand_in_admits(
-    route: str, kind: str
-) -> None:
-    # The dispatch view's class-level check is kept beside the stand-in's. Where
-    # the stand-in admits and the dispatch view refuses, the refusal still comes
-    # before the lookup: answered by the target guard, a denied caller was told
-    # ``-32006`` for a row that exists and ``not_found`` for one that does not.
-    looked_up: list[Any] = []
-
-    def _lookup(*, pk: int) -> Any:
-        looked_up.append(pk)
-        return _ROWS.get(pk)
-
-    server = _server(kind, _admitting_every_other_check(), _lookup)
-
-    existing = await _via(server, route, {"pk": 1})
-    missing = await _via(server, route, {"pk": 2})
-
-    assert isinstance(existing, JsonRpcError), f"answered {existing!r}"
-    assert isinstance(missing, JsonRpcError), f"answered {missing!r}"
-    assert existing.code == missing.code == JsonRpcErrorCode.FORBIDDEN
-    assert looked_up == []
+    assert _forbidden(found), found
+    assert _forbidden(missing), missing
+    assert lookup.looked_up == []
 
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("kind", _KINDS)
 @pytest.mark.parametrize("route", _ROUTES)
-async def test_a_denied_caller_is_not_told_which_argument_it_left_out(
+async def test_a_call_missing_a_read_is_refused_for_its_shape_before_any_lookup(
     route: str, kind: str
 ) -> None:
-    server = _server(kind, _RefusesTheDispatchedAction, lambda *, pk: _ROWS.get(pk))
+    lookup = _Lookup()
+    check = _Check(admits=False)
+    server = _server(kind, check, lookup)
 
-    out = await _via(server, route, {})
+    out = await _via(server, route, {"note": "x"} if kind == "service" else {})
 
-    assert isinstance(out, JsonRpcError), f"answered {out!r}"
-    assert out.code == JsonRpcErrorCode.FORBIDDEN
-    assert "pk" not in repr(out)
-
-
-# ----- the target guard runs only what the up-front check did not -----
-
-
-def _counting(calls: list[str]) -> type[BasePermission]:
-    """A permission admitting everything and recording each check it is asked."""
-
-    class _Counting(BasePermission):
-        def has_permission(self, request: Any, view: Any) -> bool:
-            calls.append("class")
-            return True
-
-        def has_object_permission(self, request: Any, view: Any, obj: Any) -> bool:
-            calls.append("object")
-            return True
-
-    return _Counting
+    error = tool_error(out)
+    assert error["type"] == "validation_error"
+    assert "pk" in str(error)
+    assert check.asked == []
+    assert lookup.looked_up == []
 
 
-def _refusing_the_row(calls: list[str]) -> type[BasePermission]:
-    """A permission admitting every caller and refusing every row."""
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("kind", _KINDS)
+@pytest.mark.parametrize("pk", [1, 2], ids=["found", "missing"])
+async def test_the_class_level_check_is_asked_once_whatever_the_lookup_finds(
+    kind: str, pk: int
+) -> None:
+    # Once for a missing row as for a found one, so how often the check is
+    # asked says nothing about whether the row exists; only a found row is
+    # then judged at the object level.
+    check = _Check()
+    server = _server(kind, check, _Lookup())
 
-    class _RefusingTheRow(BasePermission):
-        def has_object_permission(self, request: Any, view: Any, obj: Any) -> bool:
-            calls.append("object")
-            return False
+    await _via(server, "handler", _arguments(kind, pk))
 
-    return _RefusingTheRow
-
-
-# The wire judges the binding's wrapped copy of the class as well, against a
-# stand-in of the same request, which ``call_tool`` does not consult; the
-# dispatch view's up-front check is one more on every route.
-_CLASS_CHECKS: dict[str, int] = {
-    "handler": 2,
-    "async_handler": 2,
-    "acall_tool": 2,
-    "call_tool": 1,
-}
-
-
-def _invoice(*, pk: int) -> Any:
-    return Invoice.objects.filter(pk=pk)
+    assert check.asked == (["class", "object"] if pk == 1 else ["class"])
 
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("kind", _KINDS)
 @pytest.mark.parametrize("route", _ROUTES)
-async def test_the_class_level_check_is_not_run_again_on_the_resolved_row(
-    route: str, kind: str
-) -> None:
-    row: Invoice = await Invoice.objects.acreate(number="A-1")
-    calls: list[str] = []
-    server = _server(kind, _counting(calls), _invoice)
+async def test_the_object_level_check_still_refuses_a_row(route: str, kind: str) -> None:
+    server = _server(kind, _Check(admits_rows=False), _Lookup())
 
-    out = await _via(server, route, {"pk": row.pk})
+    out = await _via(server, route, _arguments(kind, 1))
 
-    assert not isinstance(out, JsonRpcError), f"answered {out!r}"
-    assert out.get("isError") is not True, out
-    assert calls == ["class"] * _CLASS_CHECKS[route] + ["object"]
+    assert _forbidden(out), out
 
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("kind", _KINDS)
-@pytest.mark.parametrize("route", _ROUTES)
-async def test_a_missing_row_is_asked_the_class_level_check_as_often_as_a_found_one(
-    route: str, kind: str
-) -> None:
-    # The class-level check runs before the lookup, so a row that does not
-    # exist is asked it as often as one that does, and no object-level check
-    # follows: twice per call where a stand-in judges too, once on
-    # ``call_tool``.
-    calls: list[str] = []
-    server = _server(kind, _counting(calls), _invoice)
+async def test_a_permitted_row_is_served(kind: str) -> None:
+    out = await _via(_server(kind, _Check(), _Lookup()), "handler", _arguments(kind, 1))
 
-    out = await _via(server, route, {"pk": 404})
-
-    assert not isinstance(out, JsonRpcError), f"answered {out!r}"
-    assert calls == ["class"] * _CLASS_CHECKS[route]
+    assert not out.get("isError"), out
+    assert out["structuredContent"] == ({"touched": 1} if kind == "service" else {"id": 1})
 
 
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("kind", _KINDS)
-@pytest.mark.parametrize("route", _ROUTES)
-async def test_the_narrowed_guard_still_refuses_a_row_the_object_check_denies(
-    route: str, kind: str
-) -> None:
-    row: Invoice = await Invoice.objects.acreate(number="A-1")
-    calls: list[str] = []
-    server = _server(kind, _refusing_the_row(calls), _invoice)
-
-    out = await _via(server, route, {"pk": row.pk})
-
-    assert isinstance(out, JsonRpcError), f"answered {out!r}"
-    assert out.code == JsonRpcErrorCode.FORBIDDEN
-    assert calls == ["object"]
-
-
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("kind", _KINDS)
-@pytest.mark.parametrize("route", _ROUTES)
-async def test_a_spec_with_no_permission_classes_is_guarded_by_nothing(
-    route: str, kind: str
-) -> None:
-    # ``permission_classes=None`` inherits a view's classes over HTTP, and off
-    # HTTP there is no view to inherit from, so nothing judges the row.
-    row: Invoice = await Invoice.objects.acreate(number="A-1")
-    server = _server(kind, None, _invoice)
-
-    out = await _via(server, route, {"pk": row.pk})
-
-    assert not isinstance(out, JsonRpcError), f"answered {out!r}"
-    assert out.get("isError") is not True, out
-
-
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("route", _ROUTES)
-async def test_a_list_target_is_not_judged_row_by_row(route: str) -> None:
-    # A LIST resolves a queryset, which no ``has_object_permission`` is asked
-    # about: object permissions are a per-row concept, as drf-services rules.
-    await Invoice.objects.acreate(number="A-1")
-    calls: list[str] = []
+async def test_a_list_target_is_judged_as_a_set_not_row_by_row() -> None:
+    check = _Check(admits_rows=False)
     server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
-    server.register_selector_tool(
-        name="tool",
-        description="List rows.",
-        spec=SelectorSpec(
-            kind=SelectorKind.LIST,
-            selector=lambda: Invoice.objects.all(),
-            output_serializer=_Row,
-            permission_classes=[_refusing_the_row(calls)],
+    server.register_tool(
+        SelectorSpec(
+            kind=SelectorKind.LIST, selector=lambda: [{"id": 1}, {"id": 2}], permissions=[check]
         ),
+        name="tool",
     )
 
-    out = await _via(server, route, {})
+    out = await _via(server, "handler", {})
 
-    assert not isinstance(out, JsonRpcError), f"answered {out!r}"
-    assert out.get("isError") is not True, out
-    assert calls == []
-
-
-class _Counted(serializers.Serializer):
-    count = serializers.IntegerField()
-
-
-class _LookedUpAndCounted(_Counted):
-    pk = serializers.IntegerField()
+    assert out["structuredContent"] == [{"id": 1}, {"id": 2}]
+    assert check.asked == ["class", "scope"]
 
 
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("kind", _KINDS)
 @pytest.mark.parametrize("route", _ROUTES)
-async def test_a_denied_caller_is_refused_before_its_input_is_validated(
-    route: str, kind: str
-) -> None:
-    # A validation error would describe the input the tool accepts.
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
-    lookup = SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda *, pk: _ROWS.get(pk))
-    if kind == "service":
-        server.register_service_tool(
-            name="tool",
-            description="Touch a row.",
-            spec=ServiceSpec(
-                service=lambda *, data, instance=None: {"touched": True},
-                input_serializer=_Counted,
-                permission_classes=[_RefusesTheDispatchedAction],
-                instance_selector_spec=lookup,
-            ),
-        )
-    else:
-        server.register_selector_tool(
-            name="tool",
-            description="Read a row.",
-            spec=SelectorSpec(
-                kind=SelectorKind.RETRIEVE,
-                selector=lambda *, pk, count: _ROWS.get(pk),
-                output_serializer=_Row,
-                permission_classes=[_RefusesTheDispatchedAction],
-            ),
-            input_serializer=_LookedUpAndCounted,
-        )
+async def test_a_denied_caller_is_refused_before_its_input_is_validated(route: str) -> None:
+    # The note passes the shape check and fails the validator: a validator
+    # answering first would tell a denied caller what the input is held to,
+    # and that the row resolved.
+    server = _server("service", _Check(admits=False), _Lookup())
 
-    out = await _via(server, route, {"pk": 1, "count": "many"})
+    out = await _via(server, route, {"pk": 1, "note": "rejected"})
+    # Sized so the validator is what refuses an admitted caller the same call.
+    admitted = await _via(
+        _server("service", _Check(), _Lookup()), route, {"pk": 1, "note": "rejected"}
+    )
 
-    assert isinstance(out, JsonRpcError), f"answered {out!r}"
-    assert out.code == JsonRpcErrorCode.FORBIDDEN
+    assert _forbidden(out), out
+    assert tool_error(admitted)["type"] == "validation_error"
+    assert "This note is rejected." in str(tool_error(admitted))

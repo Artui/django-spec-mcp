@@ -1,13 +1,25 @@
+"""``prompts/list`` and ``prompts/get``, with nothing of drf-services in the subject.
+
+A prompt is not a spec: ``register_prompt`` takes a ``render`` callable and
+``permissions`` that judge the transport's request and token, so the kernel
+cut changes nothing it asks. This file is the original with one question
+left out: a ``DRFPermissionAdapter`` wrapping a DRF permission class reading the
+prompt's arguments off ``request.data`` and its name off ``view.action``. A
+DRF class has no kernel counterpart, and a prompt's permission on the kernel
+path is an ``MCPPermission`` (or the scope gate), which is handed the request
+and the token and never the arguments; the last test here holds that. The
+original is kept beside this file as ``test_prompts_drfs.py``.
+"""
+
 from __future__ import annotations
 
-from typing import Any, ClassVar
+from typing import Any
 
 import pytest
 from asgiref.sync import sync_to_async
-from django.http import HttpRequest, QueryDict
-from rest_framework.permissions import BasePermission
+from django.http import HttpRequest
 
-from django_spec_mcp import DRFPermissionAdapter, MCPServer
+from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_prompts_get import handle_prompts_get
@@ -336,49 +348,36 @@ def test_prompt_message_text_helper() -> None:
     assert msg.content == {"type": "text", "text": "hi"}
 
 
-class _RefusesDeny(BasePermission):
-    """Refuses a call whose arguments name ``deny``; records what each check carried."""
+class _Recording:
+    """An ``MCPPermission`` refusing every call, recording what each check was handed."""
 
-    seen: ClassVar[list[tuple[Any, ...]]]
+    def __init__(self) -> None:
+        self.seen: list[tuple[Any, Any]] = []
 
-    def has_permission(self, request: Any, view: Any) -> bool:
-        type(self).seen.append((dict(request.data), view.action, dict(request.query_params)))
-        return "deny" not in request.data
+    def has_permission(self, request: HttpRequest, token: TokenInfo) -> bool:
+        self.seen.append((request, token))
+        return False
 
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
-async def test_a_prompt_permission_reads_the_prompts_arguments(is_async: bool) -> None:
-    # Judged against ``{}``, a permission written over the prompt's arguments
-    # admitted every call: the arguments never reached ``request.data``.
-    class _Recording(_RefusesDeny):
-        seen = []
+async def test_a_prompt_permission_is_judged_on_the_request_and_token_alone(
+    is_async: bool,
+) -> None:
+    # The whole of what a non-DRF prompt permission sees: the transport's own
+    # request and the resolved token, once per get, and nothing of the
+    # arguments, which reach ``render`` and no check.
+    permission = _Recording()
+    server = _server()
+    server.register_prompt(name="p", render=lambda **_: "hello", permissions=[permission])
+    context = _ctx(server)
+    params: dict[str, Any] = {"name": "p", "arguments": {"deny": "1"}}
 
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
-    server.register_prompt(
-        name="p", render=lambda **_: "hello", permissions=[DRFPermissionAdapter(_Recording)]
-    )
-    # The endpoint's own query string, which no prompt check reads.
-    http_request = HttpRequest()
-    http_request.GET = QueryDict("deny=1")
-    context = MCPCallContext(
-        http_request=http_request,
-        token=TokenInfo(user=None),
-        tools=server.tools,
-        resources=server.resources,
-        prompts=server.prompts,
-        protocol_version="2025-11-25",
-    )
+    if is_async:
+        out = await handle_prompts_get_async(params, context)
+    else:
+        out = await sync_to_async(handle_prompts_get)(params, context)
 
-    async def _get(arguments: dict[str, Any]) -> Any:
-        params: dict[str, Any] = {"name": "p", "arguments": arguments}
-        if is_async:
-            return await handle_prompts_get_async(params, context)
-        return await sync_to_async(handle_prompts_get)(params, context)
-
-    denied = await _get({"deny": "1"})
-    admitted = await _get({"note": "x"})
-
-    assert isinstance(denied, JsonRpcError) and denied.code == JsonRpcErrorCode.FORBIDDEN
-    assert not isinstance(admitted, JsonRpcError), admitted
-    assert _Recording.seen == [({"deny": "1"}, "p", {}), ({"note": "x"}, "p", {})]
+    assert isinstance(out, JsonRpcError) and out.code == JsonRpcErrorCode.FORBIDDEN
+    assert out.data is None
+    assert permission.seen == [(context.http_request, context.token)]

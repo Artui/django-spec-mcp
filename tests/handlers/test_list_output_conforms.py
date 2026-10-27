@@ -1,206 +1,179 @@
-"""A tool whose result renders as a list advertises, and serves, a list.
+"""A kernel tool whose result presents as a list advertises, and serves, a list.
 
-``build_output_schema`` has always been kind-aware, but ``tools/list`` only told it
-the kind for a selector tool. A service tool whose ``output_selector_spec``
-re-fetches a ``LIST`` advertised the bare item schema while ``structuredContent``
-carried an array -- a result every strict client rejects.
+The original asked it of drf-services specs: a service tool whose
+``output_selector_spec`` re-fetches a ``LIST`` advertised the bare item schema
+while serving an array. Here every case registers a kernel spec with
+``include_output_schema=True``, calls it, and runs the served payload through
+``assert_tool_result_conforms``, which is what a client holding the schema
+would check, with each ``RETRIEVE`` twin riding along so a fix answering every
+tool with an array fails too.
 
-Every case registers with ``include_output_schema=True``, calls the tool, and runs
-the served payload through ``assert_tool_result_conforms``, which is what a client
-holding the schema would check. The ``RETRIEVE`` twin of each rides along, so a fix
-that answered every service with an array would fail too; the selector tool is
-the precedent the service tool now follows, and holds that its own shape did not
-move.
+The original's cases, in their kernel form:
+
+- a selector tool, and a service tool re-fetching through an output selector,
+  of either kind;
+- a service declaring ``returns_many``, the kernel's form of a ``LIST`` output
+  declaration with no selector: it presents the service's own return as the
+  set;
+- a ``many`` service, whose rows are its result. Changed by design: the
+  original held that such a service never runs its output selector, and the
+  kernel's re-reads, so the selector's kind decides what is served.
+
+Not carried: that a ``LIST`` declaration with no selector refuses a return that
+is no set, naming the type the service returned. The kernel's ``returns_many``
+iterates whatever the service returns, so a mapping is presented as its keys
+and fails in the presenter, and an ``int`` as not iterable; whether the kernel
+should refuse it by name is the kernel's question, not this transport's.
+
+The original is kept beside this file as ``test_list_output_conforms_drfs.py``.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
-from django.core.exceptions import ImproperlyConfigured
-from django_service_specs import SelectorKind
-from rest_framework import serializers
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_service_specs import (
+    DataclassPresenter,
+    DataclassValidator,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+)
 
 from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.testing import assert_tool_result_conforms
-from tests.testapp.affordances import fresh_server, order_selector_spec
 
+pytestmark = pytest.mark.django_db(transaction=True)
+
+OPEN = [Unrestricted()]
 _ROW: dict[str, Any] = {"number": "A-1"}
 
 
-def _orders(kind: SelectorKind) -> Any:
-    # No affordances: the declaration is not what this file is about.
-    return order_selector_spec(kind, affordances=None)
+@dataclass
+class _Order:
+    number: str
 
 
-def _re_fetching_service(kind: SelectorKind) -> ServiceSpec[Any, Any, Any]:
-    return ServiceSpec(service=lambda **_: None, atomic=False, output_selector_spec=_orders(kind))
+def _rows(kind: SelectorKind, row: dict[str, Any] = _ROW) -> Any:
+    return [_Order(**row)] if kind is SelectorKind.LIST else _Order(**row)
 
 
-def _register(server: MCPServer, shape: str, kind: SelectorKind) -> None:
-    common: dict[str, Any] = {"name": "orders", "permissions": [], "include_output_schema": True}
-    if shape == "selector_tool":
-        server.register_selector_tool(spec=_orders(kind), **common)
-    else:
-        server.register_service_tool(spec=_re_fetching_service(kind), **common)
+def _orders(kind: SelectorKind, row: dict[str, Any] = _ROW, **spec: Any) -> SelectorSpec:
+    return SelectorSpec(
+        kind=kind, selector=lambda: _rows(kind, row), presenter=DataclassPresenter(_Order), **spec
+    )
 
 
-_SHAPES = ["selector_tool", "service_tool"]
+def _server(spec: Any) -> MCPServer:
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server.register_tool(spec, name="orders", include_output_schema=True)
+    return server
 
 
-@pytest.mark.parametrize("shape", _SHAPES)
-@pytest.mark.parametrize(
+async def _listed_and_served(server: MCPServer, arguments: Any = None) -> tuple[Any, Any]:
+    listing: Any = server.list_tools(user=None)
+    tool: Any = next(entry for entry in listing["tools"] if entry["name"] == "orders")
+    result: Any = await server.acall_tool("orders", arguments, user=None)
+    assert result.get("isError") is not True, result
+    assert_tool_result_conforms(tool, result)
+    return tool, result
+
+
+_KINDS = pytest.mark.parametrize(
     ("kind", "served"),
     [
         pytest.param(SelectorKind.LIST, [_ROW], id="list"),
         pytest.param(SelectorKind.RETRIEVE, _ROW, id="retrieve"),
     ],
 )
+
+
+@_KINDS
+@pytest.mark.parametrize("shape", ["selector_tool", "service_tool"])
 async def test_the_served_payload_conforms_to_the_advertised_schema(
     shape: str, kind: SelectorKind, served: Any
 ) -> None:
-    server = fresh_server()
-    _register(server, shape, kind)
+    if shape == "selector_tool":
+        spec: Any = _orders(kind, permissions=OPEN)
+    else:
+        spec = ServiceSpec(
+            service=lambda: None, atomic=False, output_selector_spec=_orders(kind), permissions=OPEN
+        )
 
-    listing: Any = server.list_tools(user=None)
-    tool: Any = next(entry for entry in listing["tools"] if entry["name"] == "orders")
-    result: Any = await server.acall_tool("orders", user=None)
+    tool, result = await _listed_and_served(_server(spec))
 
-    assert result.get("isError") is not True, result
     assert result["structuredContent"] == served
-    assert_tool_result_conforms(tool, result)
     # Named outright as well: a schema loose enough to accept both shapes would
     # conform either way, and the shape is the contract.
     assert tool["outputSchema"]["type"] == ("array" if kind is SelectorKind.LIST else "object")
 
 
-async def test_a_list_output_spec_with_no_selector_renders_and_advertises_a_list() -> None:
-    """The nested ``kind`` alone makes a list: with no selector there is no re-fetch,
-    and drf-services presents the service's own return as the set the declaration
-    says it is, which a service tool serves. It used to read the return as one
-    object, which a service tool can no longer serve:
-    drf-services refuses a ``LIST`` declaration whose service returns a mapping."""
+async def test_a_service_returning_many_renders_and_advertises_a_list() -> None:
     spec = ServiceSpec(
-        service=lambda **_: [dict(_ROW)],
+        service=lambda: [_Order(**_ROW)],
         atomic=False,
-        output_selector_spec=order_selector_spec(
-            SelectorKind.LIST, selector=None, affordances=None
-        ),
+        returns_many=True,
+        presenter=DataclassPresenter(_Order),
+        permissions=OPEN,
     )
-    server = fresh_server()
-    common: dict[str, Any] = {"name": "orders", "permissions": [], "include_output_schema": True}
-    server.register_service_tool(spec=spec, **common)
 
-    listing: Any = server.list_tools(user=None)
-    tool: Any = next(entry for entry in listing["tools"] if entry["name"] == "orders")
-    result: Any = await server.acall_tool("orders", user=None)
+    tool, result = await _listed_and_served(_server(spec))
 
     assert result["structuredContent"] == [_ROW]
     assert tool["outputSchema"]["type"] == "array"
-    assert_tool_result_conforms(tool, result)
 
 
-@pytest.mark.parametrize(
-    "returned",
-    [
-        pytest.param(dict(_ROW), id="mapping"),
-        pytest.param("A-1", id="str"),
-        pytest.param(b"A-1", id="bytes"),
-        pytest.param(1, id="non-iterable"),
-        pytest.param(None, id="none"),
-    ],
-)
-async def test_a_list_output_spec_with_no_selector_refuses_a_return_that_is_no_set(
-    returned: Any,
-) -> None:
-    """drf-services refuses the declaration's author rather than presenting a mapping
-    as a list: the service has run, so this is a server fault and not a tool error a
-    caller could act on."""
-    spec = ServiceSpec(
-        service=lambda **_: returned,
-        atomic=False,
-        output_selector_spec=order_selector_spec(
-            SelectorKind.LIST, selector=None, affordances=None
-        ),
-    )
-    server = fresh_server()
-    server.register_service_tool(name="orders", spec=spec, permissions=[])
-
-    with pytest.raises(ImproperlyConfigured, match="kind=LIST with no selector") as caught:
-        await server.acall_tool("orders", user=None)
-    assert f"returned {type(returned).__name__}," in str(caught.value)
+def _placed(*, data: list[_Order]) -> list[_Order]:
+    return list(data)
 
 
-class _Order(serializers.Serializer):
-    number = serializers.CharField()
-
-
-def _placed(*, data: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [dict(item) for item in data]
-
-
-async def test_a_list_payload_service_renders_and_advertises_an_array() -> None:
-    """drf-services dispatches a ``many=True`` spec to a list result and renders it
-    ``many=True`` whatever its output declaration says, so its result is an array
-    with no ``LIST`` re-fetch. The schema said one object. The ``RETRIEVE`` here
-    is what a bulk spec reusing its single-item output declaration carries."""
+async def test_a_many_service_serves_its_rows_as_an_array() -> None:
     spec = ServiceSpec(
         service=_placed,
         atomic=False,
         many=True,
-        input_serializer=_Order,
-        output_selector_spec=order_selector_spec(
-            SelectorKind.RETRIEVE, selector=None, affordances=None
-        ),
+        validator=DataclassValidator(_Order),
+        presenter=DataclassPresenter(_Order),
+        permissions=OPEN,
     )
-    server = fresh_server()
-    common: dict[str, Any] = {"name": "orders", "permissions": [], "include_output_schema": True}
-    server.register_service_tool(spec=spec, **common)
 
-    listing: Any = server.list_tools(user=None)
-    tool: Any = next(entry for entry in listing["tools"] if entry["name"] == "orders")
-    result: Any = await server.acall_tool("orders", {"items": [_ROW, _ROW]}, user=None)
+    tool, result = await _listed_and_served(_server(spec), {"items": [_ROW, _ROW]})
 
-    assert result.get("isError") is not True, result
     assert result["structuredContent"] == [_ROW, _ROW]
     assert tool["outputSchema"]["type"] == "array"
-    assert_tool_result_conforms(tool, result)
 
 
 _RE_FETCHED: dict[str, Any] = {"number": "Z-9"}
 
 
 @pytest.mark.parametrize(
-    ("kind", "re_fetched"),
+    ("kind", "served"),
     [
         pytest.param(SelectorKind.LIST, [_RE_FETCHED], id="list"),
         pytest.param(SelectorKind.RETRIEVE, _RE_FETCHED, id="retrieve"),
     ],
 )
-async def test_a_list_payload_service_is_never_re_fetched(
-    kind: SelectorKind, re_fetched: Any
+async def test_a_many_services_output_selector_re_reads_and_its_kind_decides(
+    kind: SelectorKind, served: Any
 ) -> None:
-    """drf-services never runs a ``many=True`` spec's output selector, so the list
-    the service returned is what renders."""
+    # Changed by design: drf-services never ran a ``many`` spec's output
+    # selector. The kernel's re-reads what the bulk write produced, and its
+    # kind decides what is presented, so the schema follows the kind and the
+    # served payload conforms to it either way.
     spec = ServiceSpec(
         service=_placed,
         atomic=False,
         many=True,
-        input_serializer=_Order,
-        output_selector_spec=order_selector_spec(
-            kind, selector=lambda **_: re_fetched, affordances=None
-        ),
+        validator=DataclassValidator(_Order),
+        output_selector_spec=_orders(kind, _RE_FETCHED),
+        permissions=OPEN,
     )
-    server = fresh_server()
-    common: dict[str, Any] = {"name": "orders", "permissions": [], "include_output_schema": True}
-    server.register_service_tool(spec=spec, **common)
 
-    listing: Any = server.list_tools(user=None)
-    tool: Any = next(entry for entry in listing["tools"] if entry["name"] == "orders")
-    result: Any = await server.acall_tool("orders", {"items": [_ROW, _ROW]}, user=None)
+    tool, result = await _listed_and_served(_server(spec), {"items": [_ROW, _ROW]})
 
-    assert result.get("isError") is not True, result
-    assert result["structuredContent"] == [_ROW, _ROW]
-    assert_tool_result_conforms(tool, result)
+    assert result["structuredContent"] == served
+    assert tool["outputSchema"]["type"] == ("array" if kind is SelectorKind.LIST else "object")

@@ -1,39 +1,45 @@
-"""Async sibling for selector-tool dispatch — exercises the async handler path.
+"""What only the async route asks of a kernel selector tool.
 
-Mirrors a focused subset of the sync tests; full per-pipeline coverage
-lives in ``test_selector_tool_dispatch.py``.
+The original was the async twin of a subset of the sync pipeline tests; on the
+kernel path every one of those runs on both handlers in
+``test_selector_tool_dispatch.py``, so this file asks what is particular to an
+async caller: an ``async def`` selector is awaited by ``adispatch`` and still
+answers the sync handler, and a paginated call's presenter is handed the page
+and not the whole set, which is the kernel form of the original's
+output-context provider receiving the resolved page. The original is kept
+beside this file as ``test_selector_tool_dispatch_async_drfs.py``.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-import django_filters
 import pytest
+from asgiref.sync import sync_to_async
 from django.http import HttpRequest
-from django_service_specs import SelectorKind
-from rest_framework import permissions as drf_permissions
-from rest_framework_services.types.selector_spec import SelectorSpec
+from django_service_specs import DataclassPresenter, SelectorKind, SelectorSpec, Unrestricted
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.types.context import MCPCallContext
-from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
-from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
-from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
+from tests.testapp.kernel_shapes import InvoiceOutput
 from tests.testapp.models import Invoice
-from tests.testapp.serializers import InvoiceOutputSerializer
-from tests.utils import tool_error
+
+pytestmark = pytest.mark.django_db(transaction=True)
 
 
-def _server() -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore())
+def _server(spec: SelectorSpec, **tool: Any) -> MCPServer:
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server.register_tool(spec, name="invoices.list", **tool)
+    return server
 
 
-def _ctx(server: MCPServer) -> MCPCallContext:
-    return MCPCallContext(
+async def _call(server: MCPServer, arguments: dict[str, Any], *, is_async: bool) -> Any:
+    params: dict[str, Any] = {"name": "invoices.list", "arguments": arguments}
+    context = MCPCallContext(
         http_request=HttpRequest(),
         token=TokenInfo(user=None),
         tools=server.tools,
@@ -41,264 +47,61 @@ def _ctx(server: MCPServer) -> MCPCallContext:
         prompts=server.prompts,
         protocol_version="2025-11-25",
     )
+    if is_async:
+        return await handle_tools_call_async(params, context)
+    return await sync_to_async(handle_tools_call)(params, context)
 
 
-class InvoiceFilterSet(django_filters.FilterSet):
-    sent = django_filters.BooleanFilter()
-    # Ordering has one declaration channel, and it is this one — so the async
-    # path has to honour it exactly as the sync path does.
-    ordering = django_filters.OrderingFilter(fields=(("amount_cents", "amount"),))
-
-    class Meta:
-        model = Invoice
-        fields = ["sent"]
+async def _list_invoices() -> list[Invoice]:
+    return [invoice async for invoice in Invoice.objects.order_by("amount_cents")]
 
 
-@pytest.mark.django_db(transaction=True)
-async def test_async_filter_then_order_then_paginate() -> None:
-    """Async dispatch runs the same filter/order/paginate pipeline as sync."""
-    from asgiref.sync import sync_to_async
+class _RecordingPresenter(DataclassPresenter):
+    """Presents as ``DataclassPresenter`` does, recording each row it was handed."""
 
-    @sync_to_async
-    def _setup() -> None:
-        Invoice.objects.create(number="A", amount_cents=100, sent=True)
-        Invoice.objects.create(number="B", amount_cents=200, sent=False)
-        Invoice.objects.create(number="C", amount_cents=300, sent=True)
-        Invoice.objects.create(number="D", amount_cents=400, sent=True)
+    def __init__(self) -> None:
+        super().__init__(InvoiceOutput)
+        self.handed: list[str] = []
 
-    await _setup()
+    def present(self, value: Any) -> Any:
+        self.handed.append(value.number)
+        return super().present(value)
 
-    server = _server()
 
-    def list_invoices() -> Any:
-        return Invoice.objects.all()
-
-    server.register_selector_tool(
-        name="invoices.list",
-        spec=SelectorSpec(
+@pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
+async def test_an_async_selector_answers_either_handler(is_async: bool) -> None:
+    for n in range(3):
+        await Invoice.objects.acreate(number=f"INV-{n}", amount_cents=n)
+    server = _server(
+        SelectorSpec(
             kind=SelectorKind.LIST,
-            selector=list_invoices,
-            output_serializer=InvoiceOutputSerializer,
-            filter_set=InvoiceFilterSet,
+            selector=_list_invoices,
+            presenter=DataclassPresenter(InvoiceOutput),
+            permissions=[Unrestricted()],
+        )
+    )
+
+    out = await _call(server, {}, is_async=is_async)
+
+    assert [row["number"] for row in out["structuredContent"]] == ["INV-0", "INV-1", "INV-2"]
+
+
+@pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
+async def test_a_paginated_presenter_is_handed_the_page_alone(is_async: bool) -> None:
+    for n in range(5):
+        await Invoice.objects.acreate(number=f"INV-{n}", amount_cents=n)
+    presenter = _RecordingPresenter()
+    server = _server(
+        SelectorSpec(
+            kind=SelectorKind.LIST,
+            selector=lambda: Invoice.objects.order_by("amount_cents"),
+            presenter=presenter,
+            permissions=[Unrestricted()],
         ),
         paginate=True,
     )
 
-    out = await handle_tools_call_async(
-        {
-            "name": "invoices.list",
-            "arguments": {"sent": True, "ordering": "amount", "page": 1, "limit": 2},
-        },
-        _ctx(server),
-    )
-    assert isinstance(out, dict)
-    payload = out["structuredContent"]
-    assert payload["page"] == 1
-    assert payload["totalPages"] == 2
-    assert [item["number"] for item in payload["items"]] == ["A", "C"]
+    out = await _call(server, {"page": 2, "limit": 2}, is_async=is_async)
 
-
-async def test_async_translates_service_validation_error() -> None:
-    from django_service_specs import ServiceValidationError
-
-    server = _server()
-
-    def selector() -> None:
-        raise ServiceValidationError({"f": ["bad"]})
-
-    server.register_selector_tool(
-        name="x",
-        spec=SelectorSpec(kind=SelectorKind.LIST, selector=selector),
-    )
-    out = await handle_tools_call_async({"name": "x", "arguments": {}}, _ctx(server))
-    error = tool_error(out)
-    assert error["type"] == "validation_error"
-    assert error["detail"] == {"f": ["bad"]}
-
-
-async def test_async_translates_service_error_with_recording(settings) -> None:
-    """``RECORD_SERVICE_EXCEPTIONS=True`` on the async path."""
-    from django_service_specs import ServiceError
-
-    settings.SPEC_MCP = {
-        "REQUIRE_TOOL_PERMISSIONS": False,
-        "RECORD_SERVICE_EXCEPTIONS": True,
-    }
-    server = _server()
-
-    def selector() -> None:
-        raise ServiceError("nope")
-
-    server.register_selector_tool(
-        name="x",
-        spec=SelectorSpec(kind=SelectorKind.LIST, selector=selector),
-    )
-    out = await handle_tools_call_async({"name": "x", "arguments": {}}, _ctx(server))
-    assert tool_error(out)["type"] == "service_error"
-
-
-async def test_async_translates_service_error_without_recording() -> None:
-    """``ServiceError`` on the async path without OTel recording (default)."""
-    from django_service_specs import ServiceError
-
-    server = _server()
-
-    def selector() -> None:
-        raise ServiceError("nope")
-
-    server.register_selector_tool(
-        name="x",
-        spec=SelectorSpec(kind=SelectorKind.LIST, selector=selector),
-    )
-    out = await handle_tools_call_async({"name": "x", "arguments": {}}, _ctx(server))
-    error = tool_error(out)
-    assert error["type"] == "service_error"
-    assert error["message"] == "nope"
-
-
-async def test_async_input_serializer_rejects_invalid() -> None:
-    from rest_framework import serializers as drf_serializers
-
-    class _Args(drf_serializers.Serializer):
-        flag = drf_serializers.BooleanField()
-
-    server = _server()
-
-    # Takes the field: a selector is never handed ``data``, so one requiring it
-    # is refused at registration.
-    def selector(*, flag: bool) -> list[Any]:  # noqa: ARG001
-        return []
-
-    server.register_selector_tool(
-        name="x",
-        spec=SelectorSpec(kind=SelectorKind.LIST, selector=selector),
-        input_serializer=_Args,
-    )
-    out = await handle_tools_call_async(
-        {"name": "x", "arguments": {"flag": "not-a-bool"}}, _ctx(server)
-    )
-    # Input validation: a ``validation_error`` result keyed by field, not ``-32602``.
-    error = tool_error(out)
-    assert error["type"] == "validation_error"
-    assert list(error["detail"]) == ["flag"]
-
-
-async def test_async_denies_on_permission() -> None:
-    class _Deny:
-        def has_permission(self, request: HttpRequest, token: TokenInfo) -> bool:
-            return False
-
-        def required_scopes(self) -> list[str]:
-            return ["x"]
-
-    server = _server()
-
-    def selector() -> list[Any]:
-        return []
-
-    server.register_selector_tool(
-        name="x",
-        spec=SelectorSpec(kind=SelectorKind.LIST, selector=selector),
-        permissions=[_Deny()],
-    )
-    out = await handle_tools_call_async({"name": "x", "arguments": {}}, _ctx(server))
-    assert isinstance(out, JsonRpcError)
-    assert out.code == -32006
-
-
-@pytest.mark.django_db(transaction=True)
-async def test_async_selector_provider_receives_resolved_data_extra() -> None:
-    """Async dispatch forwards the resolved-data extra (``page``) to the
-    output-context provider just like the sync path."""
-    from asgiref.sync import sync_to_async
-
-    @sync_to_async
-    def _setup() -> None:
-        for i in range(3):
-            Invoice.objects.create(number=f"INV-{i}", amount_cents=i)
-
-    await _setup()
-    seen: dict[str, Any] = {}
-
-    def _list() -> Any:
-        return Invoice.objects.all().order_by("amount_cents")
-
-    def _ctx_provider(view: Any, request: Any, *, page: Any) -> dict[str, Any]:  # noqa: ARG001
-        seen["numbers"] = [inv.number for inv in page]
-        return {}
-
-    server = _server()
-    server.register_selector_tool(
-        name="invoices.list",
-        spec=SelectorSpec(
-            kind=SelectorKind.LIST,
-            selector=_list,
-            output_serializer=InvoiceOutputSerializer,
-            output_serializer_context=_ctx_provider,
-        ),
-    )
-    out = await handle_tools_call_async({"name": "invoices.list", "arguments": {}}, _ctx(server))
-    assert isinstance(out, dict)
-    assert seen["numbers"] == ["INV-0", "INV-1", "INV-2"]
-
-
-# ---------- object-level permissions, async twin ----------
-
-
-class _OnlyMine(drf_permissions.BasePermission):
-    """Anyone may call the tool; only the owner may see the row."""
-
-    def has_permission(self, request: Any, view: Any) -> bool:  # noqa: ARG002
-        return True
-
-    def has_object_permission(self, request: Any, view: Any, obj: Any) -> bool:  # noqa: ARG002
-        return obj.number == "MINE"
-
-
-def _invoice_by_pk(*, pk: int) -> Any:
-    return Invoice.objects.filter(pk=pk)
-
-
-def _register_guarded_retrieve(server: MCPServer) -> None:
-    server.register_selector_tool(
-        name="invoices.get",
-        spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            selector=_invoice_by_pk,
-            output_serializer=InvoiceOutputSerializer,
-            permission_classes=[_OnlyMine],
-        ),
-    )
-
-
-@pytest.mark.django_db(transaction=True)
-async def test_async_object_permissions_run_against_the_resolved_row() -> None:
-    """The async path enforces the row check its sync sibling does."""
-    from asgiref.sync import sync_to_async
-
-    theirs = await sync_to_async(Invoice.objects.create)(number="THEIRS", amount_cents=100)
-    server = _server()
-    _register_guarded_retrieve(server)
-
-    out = await handle_tools_call_async(
-        {"name": "invoices.get", "arguments": {"pk": theirs.pk}}, _ctx(server)
-    )
-
-    assert isinstance(out, JsonRpcError)
-    assert out.code == JsonRpcErrorCode.FORBIDDEN
-
-
-@pytest.mark.django_db(transaction=True)
-async def test_async_object_permissions_still_serve_a_permitted_row() -> None:
-    from asgiref.sync import sync_to_async
-
-    mine = await sync_to_async(Invoice.objects.create)(number="MINE", amount_cents=100)
-    server = _server()
-    _register_guarded_retrieve(server)
-
-    out = await handle_tools_call_async(
-        {"name": "invoices.get", "arguments": {"pk": mine.pk}}, _ctx(server)
-    )
-
-    assert isinstance(out, dict)
-    assert out["structuredContent"]["number"] == "MINE"
+    assert [row["number"] for row in out["structuredContent"]["items"]] == ["INV-2", "INV-3"]
+    assert presenter.handed == ["INV-2", "INV-3"]

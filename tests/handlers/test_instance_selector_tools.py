@@ -1,37 +1,106 @@
-"""Sister-repo 0.16 adoption: ``instance_selector_spec`` / ``partial`` /
-``serializer``-in-pool on MCP service-tool dispatch."""
+"""A kernel service tool's target selector resolves the row its service acts on.
+
+The original asked it of drf-services' ``instance_selector_spec``, ``partial``
+and the ``serializer`` seed. A kernel ``ServiceSpec`` carries the first two:
+its ``instance_selector_spec`` is a ``RETRIEVE`` ``SelectorSpec`` whose
+``reads`` name the lookup, and dispatch hands the resolved row to the
+``Validator``'s context and to the service as ``instance``. Asked here, on both
+handlers where the original asked both: the service receives the row, a
+missing one (``None``, an empty queryset, ``DoesNotExist``) is a tool-level
+``not_found``, a non-queryset return is used as it is, the lookup's own
+``annotations`` and ``kwargs`` provider shape it, a caller cannot stand in for
+a seed, and ``partial`` relaxes what the Validator requires.
+
+Not carried: a service declaring ``serializer`` receiving the bound DRF
+serializer. A kernel Validator hands the service its validated values, and
+there is no serializer to bind. The lookup key declared again by the body is
+asked in its kernel form: refused when the tool is registered.
+
+The original is kept beside this file as ``test_instance_selector_tools_drfs.py``.
+"""
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
+from asgiref.sync import sync_to_async
 from django.core.exceptions import ImproperlyConfigured
-from django.db.models import IntegerField, QuerySet, Value
+from django.db.models import QuerySet, Value
 from django.http import HttpRequest
-from django_service_specs import SelectorKind
-from rest_framework import serializers as drf_serializers
-from rest_framework_services import ArgumentBinding
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_service_specs import (
+    DataclassValidator,
+    Parameter,
+    Parameters,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+    Validated,
+    ValidationContext,
+    Validator,
+)
 
+from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.types.context import MCPCallContext
-from django_spec_mcp.server.mcp_server import MCPServer
-from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.testapp.models import Invoice
 from tests.utils import tool_error
 
+pytestmark = pytest.mark.django_db(transaction=True)
 
-def _server() -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore())
+OPEN = [Unrestricted()]
+_PK = Parameters((Parameter("pk", "integer", required=True),))
+routes = pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
 
 
-def _ctx(server: MCPServer) -> MCPCallContext:
-    return MCPCallContext(
+@dataclass
+class _Number:
+    number: str
+
+
+@dataclass
+class _Rename:
+    pk: int
+    number: str
+
+
+def _invoice_by_pk(*, pk: int) -> QuerySet[Invoice]:
+    return Invoice.objects.filter(pk=pk)
+
+
+def _lookup(selector: Any = _invoice_by_pk, **spec: Any) -> SelectorSpec:
+    return SelectorSpec(kind=SelectorKind.RETRIEVE, selector=selector, reads=_PK, **spec)
+
+
+def _rename_invoice(*, instance: Invoice, number: str) -> dict[str, Any]:
+    instance.number = number
+    instance.save(update_fields=["number"])
+    return {"number": instance.number}
+
+
+def _server(**spec: Any) -> MCPServer:
+    fields: dict[str, Any] = {
+        "service": _rename_invoice,
+        "validator": DataclassValidator(_Number),
+        "instance_selector_spec": _lookup(),
+        "atomic": False,
+        "permissions": OPEN,
+        **spec,
+    }
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server.register_tool(ServiceSpec(**fields), name="invoices.rename")
+    return server
+
+
+async def _call(server: MCPServer, arguments: dict[str, Any], *, is_async: bool) -> Any:
+    params: dict[str, Any] = {"name": "invoices.rename", "arguments": arguments}
+    context = MCPCallContext(
         http_request=HttpRequest(),
         token=TokenInfo(user=None),
         tools=server.tools,
@@ -39,380 +108,195 @@ def _ctx(server: MCPServer) -> MCPCallContext:
         prompts=server.prompts,
         protocol_version="2025-11-25",
     )
+    if is_async:
+        return await handle_tools_call_async(params, context)
+    return await sync_to_async(handle_tools_call)(params, context)
 
 
-def _invoice_by_pk(*, pk: int) -> QuerySet[Invoice]:
-    return Invoice.objects.filter(pk=pk)
-
-
-_INSTANCE_SPEC = SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_invoice_by_pk)
-
-
-class _RenameInput(drf_serializers.Serializer):
-    pk = drf_serializers.IntegerField()
-    number = drf_serializers.CharField()
-
-
-class _NumberInput(drf_serializers.Serializer):
-    """The body of a rename whose row comes from the target lookup.
-
-    The lookup reads ``pk`` itself, so the serializer does not declare it: drf-services
-    refuses a call whose input serializer writes a name the target lookup reads, rather
-    than letting the body choose the row, and registration refuses a serializer that does
-    (``test_a_lookup_key_declared_as_a_serializer_field_is_refused``).
-    """
-
-    number = drf_serializers.CharField()
-
-
-def _rename_invoice(*, instance: Invoice, data: dict[str, Any]) -> dict[str, Any]:
-    instance.number = data["number"]
-    instance.save(update_fields=["number"])
-    return {"number": instance.number}
-
-
-def _register_rename(
-    server: MCPServer,
-    *,
-    input_serializer: type[drf_serializers.Serializer] = _NumberInput,
-    **spec_overrides: Any,
-) -> None:
-    spec = ServiceSpec(
-        service=_rename_invoice,
-        input_serializer=input_serializer,
-        instance_selector_spec=_INSTANCE_SPEC,
-        atomic=False,
-        **spec_overrides,
-    )
-    server.register_service_tool(
-        name="invoices.rename",
-        spec=spec,
-        argument_binding=ArgumentBinding.SPREAD_AUTHOR_WINS,
-        permissions=[],
-    )
-
-
-@pytest.mark.django_db
-def test_service_tool_receives_spec_resolved_instance() -> None:
-    invoice = Invoice.objects.create(number="orig")
-    server = _server()
-    _register_rename(server)
-    out = handle_tools_call(
-        {"name": "invoices.rename", "arguments": {"pk": invoice.pk, "number": "new"}},
-        _ctx(server),
-    )
-    assert isinstance(out, dict) and "isError" not in out
-    invoice.refresh_from_db()
-    assert invoice.number == "new"
-
-
-def test_a_lookup_key_declared_as_a_serializer_field_is_refused() -> None:
-    """A body field cannot name the row the target lookup resolves.
-
-    drf-services withholds a name the target lookup reads from the input serializer's
-    data, so a serializer declaring it as a writable field would see it missing on every
-    call. Registration refuses it, naming the field and the lookup; every registrar and
-    binding is a case of ``tests/adapters/test_lookup_key_input_field.py``.
-    """
-    server = _server()
-    with pytest.raises(ImproperlyConfigured, match=r"declares field\(s\) \['pk'\]"):
-        _register_rename(server, input_serializer=_RenameInput)
-    assert server.tools.get("invoices.rename") is None
-
-
-@pytest.mark.django_db(transaction=True)
-async def test_async_service_tool_receives_spec_resolved_instance() -> None:
+@routes
+async def test_the_service_receives_the_resolved_row(is_async: bool) -> None:
     invoice = await Invoice.objects.acreate(number="orig")
-    server = _server()
-    _register_rename(server)
-    out = await handle_tools_call_async(
-        {"name": "invoices.rename", "arguments": {"pk": invoice.pk, "number": "new"}},
-        _ctx(server),
-    )
-    assert isinstance(out, dict) and "isError" not in out
+
+    out = await _call(_server(), {"pk": invoice.pk, "number": "new"}, is_async=is_async)
+
+    assert "isError" not in out, out
     await invoice.arefresh_from_db()
     assert invoice.number == "new"
 
 
-@pytest.mark.django_db
-def test_missing_row_is_a_tool_level_not_found() -> None:
-    server = _server()
-    _register_rename(server)
-    out = handle_tools_call(
-        {"name": "invoices.rename", "arguments": {"pk": 99999, "number": "new"}},
-        _ctx(server),
-    )
-    error = tool_error(out)
-    assert error["type"] == "not_found"
+def test_a_lookup_key_the_validator_also_declares_is_refused_at_registration() -> None:
+    # A body field cannot name the row the target lookup resolves. The spec
+    # itself builds; registering it asks its parameters, which refuse the pair.
+    with pytest.raises(ImproperlyConfigured, match=r"\['pk'\] are declared by two sources"):
+        _server(validator=DataclassValidator(_Rename))
 
 
-@pytest.mark.django_db(transaction=True)
-async def test_async_missing_row_is_a_tool_level_not_found() -> None:
-    server = _server()
-    _register_rename(server)
-    out = await handle_tools_call_async(
-        {"name": "invoices.rename", "arguments": {"pk": 99999, "number": "new"}},
-        _ctx(server),
-    )
-    assert tool_error(out)["type"] == "not_found"
+def _strict_get(*, pk: int) -> Invoice:
+    return Invoice.objects.get(pk=pk)
 
 
-@pytest.mark.django_db
-def test_does_not_exist_from_instance_selector_is_not_found() -> None:
-    def strict_lookup(*, pk: int) -> Invoice:
-        return Invoice.objects.get(pk=pk)
+@routes
+@pytest.mark.parametrize(
+    "selector",
+    [_invoice_by_pk, _strict_get, lambda *, pk: None],
+    ids=["empty-queryset", "does-not-exist", "none"],
+)
+async def test_a_missing_row_is_a_tool_level_not_found(selector: Any, is_async: bool) -> None:
+    server = _server(instance_selector_spec=_lookup(selector))
 
-    server = _server()
-    spec = ServiceSpec(
-        service=_rename_invoice,
-        input_serializer=_NumberInput,
-        instance_selector_spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=strict_lookup),
-        atomic=False,
-    )
-    server.register_service_tool(
-        name="invoices.rename",
-        spec=spec,
-        argument_binding=ArgumentBinding.SPREAD_AUTHOR_WINS,
-        permissions=[],
-    )
-    out = handle_tools_call(
-        {"name": "invoices.rename", "arguments": {"pk": 99999, "number": "new"}},
-        _ctx(server),
-    )
-    assert tool_error(out)["type"] == "not_found"
+    out = await _call(server, {"pk": 99999, "number": "new"}, is_async=is_async)
+
+    assert tool_error(out) == {
+        "type": "not_found",
+        "message": "invoices.rename: no matching instance found",
+    }
 
 
-@pytest.mark.django_db
-def test_non_queryset_instance_selector_return_is_used_directly() -> None:
-    def direct_lookup(*, pk: int) -> Invoice | None:
-        return Invoice.objects.filter(pk=pk).first()
+@routes
+async def test_a_non_queryset_return_is_used_as_it_is(is_async: bool) -> None:
+    invoice = await Invoice.objects.acreate(number="orig")
 
-    invoice = Invoice.objects.create(number="orig")
-    server = _server()
-    spec = ServiceSpec(
-        service=_rename_invoice,
-        input_serializer=_NumberInput,
-        instance_selector_spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=direct_lookup),
-        atomic=False,
+    out = await _call(
+        _server(instance_selector_spec=_lookup(_strict_get)),
+        {"pk": invoice.pk, "number": "new"},
+        is_async=is_async,
     )
-    server.register_service_tool(
-        name="invoices.rename",
-        spec=spec,
-        argument_binding=ArgumentBinding.SPREAD_AUTHOR_WINS,
-        permissions=[],
-    )
-    out = handle_tools_call(
-        {"name": "invoices.rename", "arguments": {"pk": invoice.pk, "number": "new"}},
-        _ctx(server),
-    )
-    assert "isError" not in out
-    invoice.refresh_from_db()
+
+    assert "isError" not in out, out
+    await invoice.arefresh_from_db()
     assert invoice.number == "new"
 
 
-@pytest.mark.django_db
-def test_queryset_shaping_applies_to_instance_lookup() -> None:
+def test_the_lookups_shaping_reaches_the_row() -> None:
+    invoice = Invoice.objects.create(number="orig")
     seen: dict[str, Any] = {}
 
-    def service(*, instance: Invoice) -> None:
+    def service(*, instance: Any) -> None:
         seen["marker"] = instance.marker
 
-    invoice = Invoice.objects.create(number="x")
-    server = _server()
-    spec = ServiceSpec(
+    server = _server(
         service=service,
-        instance_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            selector=_invoice_by_pk,
-            annotations={"marker": Value(42, output_field=IntegerField())},
-        ),
-        atomic=False,
+        validator=None,
+        instance_selector_spec=_lookup(annotations={"marker": Value(42)}),
     )
-    server.register_service_tool(
-        name="invoices.touch",
-        spec=spec,
-        argument_binding=ArgumentBinding.SPREAD_AUTHOR_WINS,
-        permissions=[],
-    )
-    out = handle_tools_call(
-        {"name": "invoices.touch", "arguments": {"pk": invoice.pk}}, _ctx(server)
-    )
-    assert "isError" not in out
+
+    out = server.call_tool("invoices.rename", {"pk": invoice.pk}, user=None).to_dict()
+
+    assert "isError" not in out, out
     assert seen["marker"] == 42
 
 
-@pytest.mark.django_db
-def test_nested_spec_kwargs_provider_feeds_lookup_pool() -> None:
-    def scoped_lookup(*, pk: int, only_sent: bool) -> QuerySet[Invoice]:
-        qs = Invoice.objects.filter(pk=pk)
-        return qs.filter(sent=True) if only_sent else qs
+def test_the_lookups_kwargs_provider_scopes_the_row() -> None:
+    # The provider fills ``only_sent``, which no read declares, so the lookup
+    # finds a sent row, refuses an unsent one, and a caller naming the value
+    # is refused for an argument the tool does not take.
+    unsent = Invoice.objects.create(number="unsent", sent=False)
+    sent = Invoice.objects.create(number="sent", sent=True)
 
-    unsent = Invoice.objects.create(number="x", sent=False)
-    server = _server()
-    spec = ServiceSpec(
-        service=_rename_invoice,
-        input_serializer=_NumberInput,
-        instance_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            selector=scoped_lookup,
-            kwargs=lambda view, request: {"only_sent": True},
-        ),
-        atomic=False,
+    def scoped(*, pk: int, only_sent: bool) -> QuerySet[Invoice]:
+        return Invoice.objects.filter(pk=pk, sent=only_sent)
+
+    server = _server(
+        instance_selector_spec=_lookup(scoped, kwargs=lambda: {"only_sent": True}),
     )
-    server.register_service_tool(
-        name="invoices.rename",
-        spec=spec,
-        argument_binding=ArgumentBinding.SPREAD_AUTHOR_WINS,
-        permissions=[],
-    )
-    out = handle_tools_call(
-        {"name": "invoices.rename", "arguments": {"pk": unsent.pk, "number": "new"}},
-        _ctx(server),
-    )
-    # Provider scoped the lookup to sent invoices; the unsent row is invisible.
-    assert tool_error(out)["type"] == "not_found"
+
+    def call(**arguments: Any) -> dict[str, Any]:
+        return server.call_tool("invoices.rename", arguments, user=None).to_dict()
+
+    assert call(pk=sent.pk, number="x")["structuredContent"] == {"number": "x"}
+    assert tool_error(call(pk=unsent.pk, number="x"))["type"] == "not_found"
+    refused = tool_error(call(pk=unsent.pk, number="x", only_sent=False))
+    assert refused["type"] == "validation_error"
+    assert "only_sent" in refused["detail"]
 
 
-@pytest.mark.django_db
-def test_input_serializer_sees_resolved_instance() -> None:
-    seen: dict[str, Any] = {}
+class _RecordingValidator(DataclassValidator):
+    """Validates as ``DataclassValidator`` does, recording the row in its context."""
 
-    class _Recording(drf_serializers.Serializer):
-        number = drf_serializers.CharField()
+    def __init__(self) -> None:
+        super().__init__(_Number)
+        self.targets: list[Any] = []
 
-        def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-            seen["instance"] = self.instance
-            return attrs
+    def validated(self, arguments: Mapping[str, Any], context: ValidationContext) -> Validated:
+        self.targets.append(context.target)
+        return super().validated(arguments, context)
 
+
+def test_the_validator_sees_the_resolved_row() -> None:
     invoice = Invoice.objects.create(number="orig")
-    server = _server()
-    spec = ServiceSpec(
-        service=_rename_invoice,
-        input_serializer=_Recording,
-        instance_selector_spec=_INSTANCE_SPEC,
-        atomic=False,
+    validator = _RecordingValidator()
+    server = _server(validator=validator)
+
+    out = server.call_tool("invoices.rename", {"pk": invoice.pk, "number": "new"}, user=None)
+
+    assert "isError" not in out.to_dict()
+    assert validator.targets == [invoice]
+
+
+@routes
+async def test_a_caller_cannot_stand_in_for_a_seed(is_async: bool) -> None:
+    # ``instance`` and ``data`` are the dispatcher's, so a caller naming them
+    # is refused for arguments the spec does not declare, and the row is
+    # never touched.
+    invoice = await Invoice.objects.acreate(number="orig")
+
+    out = await _call(
+        _server(),
+        {"pk": invoice.pk, "number": "new", "instance": "evil", "data": {"number": "evil"}},
+        is_async=is_async,
     )
-    server.register_service_tool(
-        name="invoices.rename",
-        spec=spec,
-        argument_binding=ArgumentBinding.SPREAD_AUTHOR_WINS,
-        permissions=[],
-    )
-    out = handle_tools_call(
-        {"name": "invoices.rename", "arguments": {"pk": invoice.pk, "number": "new"}},
-        _ctx(server),
-    )
-    assert "isError" not in out
-    assert seen["instance"] == invoice
+
+    assert tool_error(out)["type"] == "validation_error"
+    await invoice.arefresh_from_db()
+    assert invoice.number == "orig"
 
 
-@pytest.mark.django_db
-def test_service_declaring_serializer_receives_bound_instance() -> None:
-    captured: dict[str, Any] = {}
+class _SentFields(Validator):
+    """Binds only what was sent on a partial call, requiring both fields otherwise.
 
-    class _CreateInput(drf_serializers.Serializer):
-        number = drf_serializers.CharField()
+    ``DataclassValidator`` builds every field, so a spec declaring ``partial``
+    over it is refused when built; a partial call needs a Validator that can
+    bind a part.
+    """
 
-        def create(self, validated_data: dict[str, Any]) -> Invoice:
-            return Invoice.objects.create(**validated_data)
+    def parameters(self) -> Parameters:
+        return Parameters(
+            (
+                Parameter("title", "string", required=True),
+                Parameter("note", "string", required=True),
+            )
+        )
 
-    def service(*, serializer: Any) -> dict[str, Any]:
-        captured["serializer"] = serializer
-        created = serializer.save()
-        return {"pk": created.pk}
-
-    server = _server()
-    server.register_service_tool(
-        name="invoices.create",
-        spec=ServiceSpec(service=service, input_serializer=_CreateInput, atomic=False),
-        permissions=[],
-    )
-    out = handle_tools_call(
-        {"name": "invoices.create", "arguments": {"number": "n-1"}}, _ctx(server)
-    )
-    assert "isError" not in out
-    assert isinstance(captured["serializer"], _CreateInput)
-    assert Invoice.objects.filter(number="n-1").exists()
+    def validate(self, arguments: Mapping[str, Any], context: ValidationContext) -> dict[str, Any]:
+        return dict(arguments)
 
 
-@pytest.mark.django_db
-def test_reserved_seeds_cannot_be_poisoned_from_arguments() -> None:
-    captured: dict[str, Any] = {}
-
-    def service(*, instance: Invoice, serializer: Any, data: dict[str, Any]) -> None:
-        captured["instance"] = instance
-        captured["serializer"] = serializer
-
-    invoice = Invoice.objects.create(number="x")
-    server = _server()
-    spec = ServiceSpec(
-        service=service,
-        input_serializer=_NumberInput,
-        instance_selector_spec=_INSTANCE_SPEC,
-        atomic=False,
-    )
-    server.register_service_tool(
-        name="invoices.touch",
-        spec=spec,
-        argument_binding=ArgumentBinding.SPREAD_AUTHOR_WINS,
-        permissions=[],
-    )
-    # ``instance`` / ``serializer`` keys in the client arguments are reserved
-    # pool seeds: exempt from the unknown-key check, stripped from the spread.
-    out = handle_tools_call(
-        {
-            "name": "invoices.touch",
-            "arguments": {
-                "pk": invoice.pk,
-                "number": "y",
-                "instance": "evil",
-                "serializer": "evil",
-            },
-        },
-        _ctx(server),
-    )
-    assert "isError" not in out
-    assert captured["instance"] == invoice
-    assert isinstance(captured["serializer"], _NumberInput)
-
-
-@pytest.mark.django_db
-def test_spec_partial_relaxes_required_fields() -> None:
-    captured: dict[str, Any] = {}
-
-    def service(*, data: dict[str, Any]) -> dict[str, Any]:
+def _captured(captured: dict[str, Any]) -> Any:
+    def service(*, data: Any) -> None:
         captured["data"] = data
-        return {}
 
-    server = _server()
-    server.register_service_tool(
-        name="invoices.patch",
-        spec=ServiceSpec(
-            service=service, input_serializer=_RenameInput, partial=True, atomic=False
-        ),
-        permissions=[],
+    return service
+
+
+def test_partial_relaxes_what_the_validator_requires() -> None:
+    captured: dict[str, Any] = {}
+    server = _server(
+        service=_captured(captured),
+        validator=_SentFields(),
+        instance_selector_spec=None,
+        partial=True,
     )
-    out = handle_tools_call({"name": "invoices.patch", "arguments": {}}, _ctx(server))
-    assert "isError" not in out
-    assert captured["data"] == {}
+
+    out = server.call_tool("invoices.rename", {"note": "n"}, user=None).to_dict()
+
+    assert "isError" not in out, out
+    assert captured["data"] == {"note": "n"}
 
 
-@pytest.mark.django_db
-def test_default_validation_stays_non_partial() -> None:
-    server = _server()
+def test_without_partial_every_required_field_is_refused_at_once() -> None:
+    server = _server(service=_captured({}), validator=_SentFields(), instance_selector_spec=None)
 
-    def service(*, data: dict[str, Any]) -> None:
-        return None
+    error = tool_error(server.call_tool("invoices.rename", {}, user=None).to_dict())
 
-    server.register_service_tool(
-        name="invoices.full",
-        spec=ServiceSpec(service=service, input_serializer=_RenameInput, atomic=False),
-        permissions=[],
-    )
-    out = handle_tools_call({"name": "invoices.full", "arguments": {}}, _ctx(server))
-
-    # Non-partial: the omitted required field is refused, as input validation --
-    # a ``validation_error`` result, which is how every refused argument answers.
-    error = tool_error(out)
     assert error["type"] == "validation_error"
-    assert {"pk", "number"} <= set(error["detail"])
+    assert {"title", "note"} <= set(error["detail"])

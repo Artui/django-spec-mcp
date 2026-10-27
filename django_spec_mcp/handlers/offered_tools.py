@@ -29,11 +29,14 @@ from collections.abc import Iterable
 from typing import Any
 
 from django_service_specs import Affordance, base_pool, operation_affordances
+from django_service_specs import unmet_operation_affordance as kernel_unmet_affordance
 from rest_framework_services import build_offline_context, unmet_operation_affordance
 from rest_framework_services.types.service_spec import ServiceSpec
 
+from django_spec_mcp.handlers.kernel_utils import call_context, carry_token, principal_of
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.registry.tool_registry import ToolBindingLike
+from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 
 
 def offered_tools(
@@ -87,22 +90,73 @@ def _answer(
     ``tools/call`` is refused with a ``code`` is the same trade the permission
     case already makes.
 
-    **One pool per pass, built only when first needed.** Most tools declare no
-    condition, so a pass over them builds nothing; the first binding that does
-    builds the pool every later one is asked against, since the seeds are the
-    same for every tool in one request.
+    **Pools are built only when needed.** Most tools declare no condition, so
+    a pass over them builds nothing. A drf-services tool's pool is built once,
+    by the first binding asking a condition, and every later one is asked
+    against it, since its seeds are the same for every tool in one request. A
+    kernel tool's pool is built per tool, because its call builds one per tool
+    (``_kernel_unmet``).
     """
     pool: dict[str, Any] | None = None
+    asked_a_kernel_tool = False
     answers: list[tuple[ToolBindingLike, Affordance | None]] = []
     for binding in bindings:
-        gating: tuple[ServiceSpec[Any, Any, Any], ...] = _asked_specs(binding)
+        gating: tuple[Any, ...] = _asked_specs(binding)
         if not gating:
             answers.append((binding, None))
+            continue
+        if isinstance(binding, KernelToolBinding):
+            asked_a_kernel_tool = True
+            answers.append((binding, _kernel_unmet(binding, context)))
             continue
         if pool is None:
             pool = _list_time_pool(context)
         answers.append((binding, _first_unmet(gating, pool, context.pool_seeds.reserved)))
-    return answers, pool is not None
+    # A pool is built only for a binding that asks a condition, so either one
+    # built means the listing is this caller's: the drfs half is held by
+    # test_offered_tools_drfs.py::test_a_listing_that_asked_a_condition_is_private,
+    # the kernel half by test_offered_tools.py's test of the same name.
+    return answers, pool is not None or asked_a_kernel_tool
+
+
+def _kernel_unmet(binding: KernelToolBinding, context: MCPCallContext) -> Affordance | None:
+    """The first unmet operation condition of a kernel tool, asked as its call asks it.
+
+    A kernel condition has no ``request`` seed: it reads the call's
+    ``call_context``, which the call builds per tool, with the transport's
+    request carrying the token and the tool's name as ``action``. Handed the
+    drf-services pool instead, a condition reading ``call_context["request"]``
+    raised at list time (``test_the_condition_sees_the_context_and_user_a_call_would``).
+
+    **The pool is built per tool, from that same context**, as the call's
+    dispatch builds it (the kernel's ``seeded_base``): ``base_pool`` with the
+    context in, so a seed's resolver declaring ``request`` or ``view`` reads
+    the context's, then the context taken back out, since it is no seed and
+    the condition is handed it beside the pool. Built with no context, a
+    resolver declaring ``request`` raised ``TypeError`` for the whole listing
+    (test_a_seed_reading_the_request_is_resolved_for_the_listing_as_for_the_call),
+    and one defaulting it hid a tool the call admits
+    (test_a_seed_defaulting_the_request_does_not_hide_a_tool_the_call_admits).
+    Per tool rather than once per listing because a resolver may declare
+    ``call_context`` itself and read ``action``, which is this tool's name:
+    a shared pool would hand every later tool the first one's
+    (test_each_tool_s_seeds_are_resolved_with_its_own_action). The seeds
+    resolve once per conditioned tool, as they resolve once per call.
+    """
+    tool_context = call_context(carry_token(context.http_request, context.token), binding.name)
+    pool = base_pool(
+        user=principal_of(context.token.user),
+        seeds=context.pool_seeds,
+        call_context=tool_context,
+    )
+    # The key ``base_pool`` was handed it under; the condition is handed the
+    # same dict as ``call_context=`` instead, and the kernel refuses a pool
+    # carrying a context beside a different one
+    # (test_a_pool_is_built_per_conditioned_tool fails without this line).
+    del pool["call_context"]
+    return kernel_unmet_affordance(
+        binding.spec, pool, reserved=context.pool_seeds.reserved, call_context=tool_context
+    )
 
 
 def _asked_specs(binding: ToolBindingLike) -> tuple[ServiceSpec[Any, Any, Any], ...]:
