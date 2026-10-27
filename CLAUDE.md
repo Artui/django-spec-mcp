@@ -42,6 +42,8 @@ Rules are non-negotiable unless flagged as a heuristic.
     types move into a `types/` sibling and are re-exported from the package's
     `__init__.py` for ergonomic imports. Example: `registry/types/tool_binding.py`
     holds the dataclass; `registry/tool_registry.py` holds the functional class.
+    The root `types/` re-exports its whole surface from `types/__init__.py`, and the
+    package root re-exports only the public subset of it.
 
 ## API style rules
 

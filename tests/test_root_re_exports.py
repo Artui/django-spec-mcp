@@ -1,9 +1,9 @@
-"""The names the root re-exports from the packages that own them.
+"""Names this package reads from the packages that own them, pinned to their shape.
 
-``ArgumentBinding`` is drf-services', and ``UnknownArguments`` and
-``RESERVED_POOL_SEEDS`` are the kernel's. Each is pinned to its full shape here, so
-an upstream change to one fails a test in this package rather than moving a name
-it exports without a word.
+The root re-exports ``ArgumentBinding``, drf-services', and ``UnknownArguments``,
+the kernel's. ``RESERVED_POOL_SEEDS`` is the kernel's too and is read from it
+directly. Each is pinned to its full shape here, so an upstream change to one
+fails a test in this package rather than moving a name it uses without a word.
 """
 
 from __future__ import annotations

@@ -22,7 +22,10 @@ TYPES = Path(django_spec_mcp.types.__file__).parent
 def _package_imports(path: Path) -> list[str]:
     found = []
     for node in ast.walk(ast.parse(path.read_text())):
-        if isinstance(node, ast.ImportFrom) and node.module:
+        if isinstance(node, ast.ImportFrom) and node.level:
+            # A relative import can only name this package.
+            found.append("django_spec_mcp." + "." * node.level + (node.module or ""))
+        elif isinstance(node, ast.ImportFrom) and node.module:
             found.append(node.module)
         elif isinstance(node, ast.Import):
             found.extend(alias.name for alias in node.names)
