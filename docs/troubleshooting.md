@@ -250,23 +250,6 @@ DjangoOAuthToolkitBackend(
 )
 ```
 
-### Mount order against `oauth2_provider`
-
-django-oauth-toolkit 3.4.0 serves its own `register/` and
-`.well-known/oauth-authorization-server`. Django resolves first-match, so
-mounting DOT's urls **before** `build_oauth_urlpatterns(...)` means DOT answers
-those paths — silently, with different content.
-
-```python
-def test_our_oauth_routes_are_not_shadowed():
-    from django_spec_mcp.contrib.oauth import check_oauth_url_shadowing
-
-    assert check_oauth_url_shadowing() == []
-```
-
-It is a function you call rather than a Django system check because this package
-is a library with no `AppConfig` — there is nowhere to register one.
-
 ## A tool result is too large for the client
 
 `MAX_RESULT_BYTES` (default 5 MiB) bounds the wire payload, but a client's

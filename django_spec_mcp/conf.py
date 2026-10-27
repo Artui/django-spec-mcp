@@ -66,9 +66,6 @@ DEFAULTS: dict[str, Any] = {
     # ``ServiceValidationError`` is never recorded — it is client input
     # failure, not a server fault.
     "RECORD_SERVICE_EXCEPTIONS": False,
-    "DCR_ENABLED": False,
-    "DCR_INITIAL_ACCESS_TOKEN": None,
-    "SIMPLEJWT_ACCESS_COOKIE": "access",
     "FILTER_LISTINGS_BY_PERMISSIONS": False,
     "REQUIRE_TOOL_PERMISSIONS": True,
     "REQUIRE_TOOL_DESCRIPTIONS": False,

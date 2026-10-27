@@ -33,12 +33,9 @@ class AllowAnyBackend:
         )
 
     def authorization_server_metadata(self) -> AuthorizationServerMetadata:
-        # The ``contrib.oauth`` mount reads this exception as "skip the AS-side
-        # endpoints", keeping the URL conf to what the backend can serve.
         raise NotImplementedError(
             "AllowAnyBackend doesn't host an authorization server. "
-            "Configure a real auth backend (e.g. DjangoOAuthToolkitBackend) "
-            "before mounting build_oauth_urlpatterns()."
+            "Configure a real auth backend (e.g. DjangoOAuthToolkitBackend)."
         )
 
     def www_authenticate_challenge(

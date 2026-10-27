@@ -22,10 +22,8 @@ class MCPAuthBackend(Protocol):
     ``/.well-known/oauth-protected-resource`` view (RFC 9728); the PRM ViewSet
     calls ``.to_dict()`` on the returned dataclass for the wire shape.
 
-    ``authorization_server_metadata`` is consumed by the optional
-    ``django_spec_mcp.contrib.oauth`` mount. A backend that hosts no
-    authorization server raises ``NotImplementedError`` so the contrib
-    code can skip the AS endpoint matrix cleanly.
+    ``authorization_server_metadata`` describes the authorization server a
+    backend fronts. A backend that hosts none raises ``NotImplementedError``.
 
     Backends MUST be safe to instantiate without arguments — settings-driven
     configuration belongs inside the backend's own module.

@@ -1,0 +1,37 @@
+"""What this package does not carry over from ``djangorestframework-mcp-server``.
+
+Each name below was public there and is gone here on purpose: the bundled
+authorization-server pieces (a project runs its own authorization server and
+verifies its own tokens through ``MCPAuthBackend``), the guard against settings
+keys a fresh package never had, chain tools (a service spec that calls the
+others replaces one), and the extras that only re-exposed another package's.
+
+A dropped name left behind fails at import where it is loud, but a dropped name
+left in a re-export, a settings default or an extra fails nowhere: it is simply
+still there. So each one is asserted absent.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+
+import pytest
+
+from django_spec_mcp.conf import DEFAULTS
+
+
+@pytest.mark.parametrize(
+    "module",
+    [
+        "django_spec_mcp.contrib",
+    ],
+)
+def test_a_dropped_module_is_not_importable(module: str) -> None:
+    assert importlib.util.find_spec(module) is None
+
+
+@pytest.mark.parametrize(
+    "key", ["DCR_ENABLED", "DCR_INITIAL_ACCESS_TOKEN", "SIMPLEJWT_ACCESS_COOKIE"]
+)
+def test_a_dropped_setting_has_no_default(key: str) -> None:
+    assert key not in DEFAULTS

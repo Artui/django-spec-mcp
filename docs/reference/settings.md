@@ -138,14 +138,6 @@ See [What the package bounds](../performance.md#what-the-package-bounds).
 | `REQUIRE_TOOL_DESCRIPTIONS` | `False` | Registering a tool with no `description` raises `ImproperlyConfigured` instead of emitting `UndescribedToolWarning`. The description is the only thing a model reads to decide whether and how to call a tool, so an empty one ships a tool that cannot be used correctly — and `tools/list` renders it indistinguishably from a documented one. There is deliberately **no docstring fallback**: a docstring is written for the next developer, not for a model choosing between tools. See [Documenting tools](../concepts.md#documenting-tools). |
 | `FILTER_LISTINGS_BY_PERMISSIONS` | `False` | Drop bindings whose `permissions` deny the caller from `tools/list`, `resources/list`, `resources/templates/list` and `prompts/list`. Per-binding `always_listed=True` opts one back in as a discovery aid. A tool whose operation-scope affordance is unmet is left out of `tools/list` whatever this says. |
 
-## OAuth
-
-| Key | Default | What it does |
-|---|---|---|
-| `DCR_ENABLED` | `False` | Default for `build_oauth_urlpatterns(dcr_enabled=)`. RFC 7591 dynamic client registration; `False` makes `/oauth/register/` refuse every request with 403. An open DCR endpoint lets anyone create an OAuth client against your authorization server — one with no owning user, which is why only the `authorization_code` grant is registerable here. **DCR is deprecated by MCP revision `2026-07-28`** in favour of Client ID Metadata Documents, with an earliest removal of the first revision released on or after 2027-07-28; prefer `OAUTH2_PROVIDER["CIMD_ENABLED"]` and turn this on only for clients that cannot use it. See [Authentication](../auth.md#oauth-contrib-mount). |
-| `DCR_INITIAL_ACCESS_TOKEN` | `None` | Default for `build_oauth_urlpatterns(dcr_initial_access_token=)`. The RFC 7591 §3 initial access token clients must present as `Authorization: Bearer …`. `None` means no token check — anyone who can reach the endpoint can register. |
-| `SIMPLEJWT_ACCESS_COOKIE` | `"access"` | Default for `SimpleJWTCookieAdapter(cookie_name=)` (`[jwt]` extra) — the cookie it reads access tokens from. Matches `djangorestframework-simplejwt`'s documented `AUTH_COOKIE` default. |
-
 ## Observability
 
 | Key | Default | What it does |

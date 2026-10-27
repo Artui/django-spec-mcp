@@ -375,8 +375,8 @@ class DjangoOAuthToolkitBackend:
         """Return the RFC 8414 metadata payload for the DOT-hosted authorization server.
 
         Endpoints are built from this backend's first ``authorization_servers``
-        entry plus the endpoint paths, which default to the ``contrib.oauth``
-        mount convention (``/oauth/authorize/``, ``/oauth/token/``,
+        entry plus the endpoint paths, which default to a conventional
+        authorization-server mount (``/oauth/authorize/``, ``/oauth/token/``,
         ``/oauth/register/``) and are constructor arguments for a project that
         mounts DOT somewhere else.
 
@@ -396,15 +396,9 @@ class DjangoOAuthToolkitBackend:
         deliberate on two counts.
 
         Structurally it is the only answer available here. Whether the endpoint
-        accepts registrations is decided per *mount*:
-        ``build_oauth_urlpatterns(dcr_enabled=...)`` resolves it into
-        ``as_view(...)``, and ``SPEC_MCP['DCR_ENABLED']`` is only that
-        argument's default. This backend never sees the argument, so gating the
-        advertisement on the global would withdraw a working endpoint from any
-        deployment that enables DCR at the mount — the flow that exists so two
-        mounts in one project can differ. A client that registers against a
-        disabled endpoint gets an immediate, well-formed ``403
-        invalid_request``, not a hang.
+        accepts registrations is decided by the authorization server the project
+        mounts, which this backend never sees, so gating the advertisement here
+        would withdraw a working endpoint from any deployment that enables it.
 
         By protocol the advertisement also costs a modern client nothing. The
         ``2026-07-28`` registration priority order is pre-registration, then
