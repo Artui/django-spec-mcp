@@ -1,0 +1,174 @@
+"""MCP tool annotations are auto-derived from each tool's mutation profile.
+
+Selector tools advertise ``readOnlyHint``; service tools advertise
+``destructiveHint``. Hints passed explicitly at registration override the derived
+defaults. The values land both on ``binding.annotations`` (the single
+source of truth) and on the ``tools/list`` wire payload.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from django.http import HttpRequest
+from django_service_specs import SelectorKind
+from rest_framework_services.types.selector_spec import SelectorSpec
+from rest_framework_services.types.service_spec import ServiceSpec
+
+from django_spec_mcp import MCPServer
+from django_spec_mcp.adapters.utils import merge_tool_annotations
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
+from django_spec_mcp.handlers.types.context import MCPCallContext
+
+
+def _server() -> MCPServer:
+    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+
+
+def _ctx(server: MCPServer) -> MCPCallContext:
+    return MCPCallContext(
+        http_request=HttpRequest(),
+        token=TokenInfo(user=None),
+        tools=server.tools,
+        resources=server.resources,
+        prompts=server.prompts,
+        protocol_version="2025-11-25",
+    )
+
+
+def _annotations_for(server: MCPServer, name: str) -> Any:
+    out: Any = handle_tools_list(None, _ctx(server))
+    tool = next(t for t in out["tools"] if t["name"] == name)
+    return tool.get("annotations")
+
+
+# ---------- merge_tool_annotations (unit) ----------
+
+
+def test_read_only_derives_only_read_only_hint() -> None:
+    # destructive / idempotent are spec-meaningful only when not read-only,
+    # so they are deliberately absent here.
+    assert merge_tool_annotations(None, read_only=True) == {"readOnlyHint": True}
+
+
+def test_mutation_derives_destructive_hint() -> None:
+    assert merge_tool_annotations(None, read_only=False) == {
+        "readOnlyHint": False,
+        "destructiveHint": True,
+    }
+
+
+def test_explicit_hints_override_derived_defaults() -> None:
+    merged = merge_tool_annotations(
+        {"destructiveHint": False, "idempotentHint": True}, read_only=False
+    )
+    assert merged == {
+        "readOnlyHint": False,
+        "destructiveHint": False,
+        "idempotentHint": True,
+    }
+
+
+def test_explicit_title_rides_alongside_a_read_only_tool() -> None:
+    assert merge_tool_annotations({"title": "List things"}, read_only=True) == {
+        "readOnlyHint": True,
+        "title": "List things",
+    }
+
+
+# ---------- end to end through tools/list ----------
+
+
+def test_selector_tool_is_read_only() -> None:
+    server = _server()
+    binding = server.register_selector_tool(
+        name="things.list",
+        spec=SelectorSpec(kind=SelectorKind.LIST, selector=lambda **_: []),
+    )
+    assert binding.annotations == {"readOnlyHint": True}
+    assert _annotations_for(server, "things.list") == {"readOnlyHint": True}
+
+
+def test_service_tool_is_destructive() -> None:
+    server = _server()
+    binding = server.register_service_tool(
+        name="things.create",
+        spec=ServiceSpec(service=lambda **_: {}, atomic=False),
+    )
+    assert binding.annotations == {"readOnlyHint": False, "destructiveHint": True}
+    assert _annotations_for(server, "things.create") == {
+        "readOnlyHint": False,
+        "destructiveHint": True,
+    }
+
+
+def test_service_tool_per_spec_override_flips_the_hints() -> None:
+    server = _server()
+    server.register_service_tool(
+        name="things.upsert",
+        spec=ServiceSpec(service=lambda **_: {}, atomic=False),
+        annotations={"destructiveHint": False, "idempotentHint": True},
+    )
+    assert _annotations_for(server, "things.upsert") == {
+        "readOnlyHint": False,
+        "destructiveHint": False,
+        "idempotentHint": True,
+    }
+
+
+# ---------- idempotentHint derived from a declared ServiceSpec.idempotent ----------
+
+
+def test_a_service_spec_declared_idempotent_advertises_the_hint() -> None:
+    server = _server()
+    binding = server.register_service_tool(
+        name="things.put",
+        spec=ServiceSpec(service=lambda **_: {}, atomic=False, idempotent=True),
+    )
+    expected = {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True}
+    assert binding.annotations == expected
+    assert _annotations_for(server, "things.put") == expected
+
+
+def test_a_service_spec_declared_not_idempotent_advertises_the_hint_false() -> None:
+    # A declared ``False`` is a statement, unlike ``None``: drf-services keeps the
+    # two apart so a transport publishing the fact can tell them apart too.
+    server = _server()
+    server.register_service_tool(
+        name="things.append",
+        spec=ServiceSpec(service=lambda **_: {}, atomic=False, idempotent=False),
+    )
+    assert _annotations_for(server, "things.append") == {
+        "readOnlyHint": False,
+        "destructiveHint": True,
+        "idempotentHint": False,
+    }
+
+
+def test_an_undeclared_service_spec_leaves_the_hint_absent() -> None:
+    # ``idempotent=None`` is the default and means nothing was said, so the
+    # hint stays off the wire and a client falls back to the MCP default.
+    server = _server()
+    server.register_service_tool(
+        name="things.touch",
+        spec=ServiceSpec(service=lambda **_: {}, atomic=False, idempotent=None),
+    )
+    assert "idempotentHint" not in _annotations_for(server, "things.touch")
+
+
+def test_explicit_annotations_win_over_a_declared_idempotent() -> None:
+    server = _server()
+    server.register_service_tool(
+        name="things.reset",
+        spec=ServiceSpec(service=lambda **_: {}, atomic=False, idempotent=True),
+        annotations={"idempotentHint": False},
+    )
+    assert _annotations_for(server, "things.reset")["idempotentHint"] is False
+
+
+def test_a_read_only_tool_never_derives_the_idempotent_hint() -> None:
+    # Holds the ``not read_only`` conjunct in ``merge_tool_annotations``: MCP
+    # defines ``idempotentHint`` only when ``readOnlyHint`` is false.
+    assert merge_tool_annotations(None, read_only=True, idempotent=True) == {"readOnlyHint": True}

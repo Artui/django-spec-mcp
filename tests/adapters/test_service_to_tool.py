@@ -1,11 +1,19 @@
-"""``service_spec_to_tool`` -- what a service spec needs before it becomes a tool.
+"""What a kernel ``many`` service spec needs before it becomes a tool.
 
-A ``many=True`` spec validates its input as a list, and MCP ``arguments`` is always
-a JSON object, so the list travels under the one argument ``spec.many_argument``
-names. Such a spec used to be refused here; it registers now, and what is refused
-instead is a declaration that would stop the list reaching dispatch or make every
-call fail: a URL kwarg or query param taking the argument's name, a spreading
-argument binding, and a collection target beside the list.
+A ``many=True`` spec validates a list of rows, and MCP ``arguments`` is always a
+JSON object, so the list travels under the one argument ``many_argument`` names.
+Asked of kernel specs registered with ``register_tool`` and ``register_tools``:
+such a spec registers, advertises the list under that name and delivers the
+validated rows to ``data``; a row that fails validation is named by its index in
+the detail; and the declarations that would stop the list reaching dispatch are
+refused by the kernel, a read taking the name ``many_argument`` declares (and
+not the default ``items`` when it declares another) and a target lookup beside
+the list.
+
+The drf-services original also refused a ``UrlKwarg`` or ``QueryParam`` taking
+the argument's name and a spreading ``ArgumentBinding``; a kernel spec has
+neither, so those have no counterpart. It is kept beside this file as
+``test_service_to_tool_drfs.py``.
 """
 
 from __future__ import annotations
@@ -14,216 +22,155 @@ from typing import Any
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
-from django.http import HttpRequest
-from django_service_specs import SelectorKind, SpecRegistry
-from rest_framework import serializers
-from rest_framework_services import ArgumentBinding
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_service_specs import (
+    DataclassValidator,
+    Parameter,
+    Parameters,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    SpecRegistry,
+    Unrestricted,
+)
 
-from django_spec_mcp import MCPServer, QueryParam, UrlKwarg
+from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.auth.types.token_info import TokenInfo
-from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
-from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
-from django_spec_mcp.handlers.types.context import MCPCallContext
-from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
-from tests.testapp.serializers import InvoiceInputSerializer
+from tests.testapp.kernel_shapes import InvoiceInput
 from tests.utils import tool_error
+
+_ROWS = [{"number": "A"}, {"number": "B", "amount_cents": 3}]
+
+
+def _numbers(*, data: list[InvoiceInput]) -> list[str]:
+    return [row.number for row in data]
+
+
+def _many(**declared: Any) -> ServiceSpec:
+    return ServiceSpec(
+        service=_numbers,
+        atomic=False,
+        permissions=[Unrestricted()],
+        validator=DataclassValidator(InvoiceInput),
+        many=True,
+        **declared,
+    )
 
 
 def _server() -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore())
+    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
 
 
-def _ctx(server: MCPServer) -> MCPCallContext:
-    return MCPCallContext(
-        http_request=HttpRequest(),
-        token=TokenInfo(user=None),
-        tools=server.tools,
-        resources=server.resources,
-        prompts=server.prompts,
-        protocol_version="2025-11-25",
-    )
-
-
-def _count(*, data: Any) -> dict[str, int]:
-    return {"count": len(data)}
-
-
-def _bulk_spec(**overrides: Any) -> ServiceSpec:
-    return ServiceSpec(
-        service=_count,
-        atomic=False,
-        many=True,
-        input_serializer=InvoiceInputSerializer,
-        **overrides,
-    )
-
-
-def test_a_many_spec_registers() -> None:
+def _registered(spec: ServiceSpec) -> MCPServer:
     server = _server()
+    server.register_tool(spec, name="t", description="Record invoices.")
+    return server
 
-    server.register_service_tool(name="bulk", spec=_bulk_spec())
 
-    assert "bulk" in server.tools
+@pytest.mark.parametrize("argument", ["items", "rows"])
+def test_a_many_spec_advertises_the_list_under_its_argument(argument: str) -> None:
+    server = _registered(_many(many_argument=argument))
+    listed: Any = server.list_tools(user=None)
+
+    schema = listed["tools"][0]["inputSchema"]
+
+    assert set(schema["properties"]) == {argument}
+    assert schema["required"] == [argument]
+    assert schema["properties"][argument]["type"] == "array"
+    assert schema["properties"][argument]["items"]["required"] == ["number"]
+
+
+@pytest.mark.parametrize("argument", ["items", "rows"])
+def test_a_many_spec_delivers_the_validated_rows_to_data(argument: str) -> None:
+    server = _registered(_many(many_argument=argument))
+
+    out = server.call_tool("t", {argument: _ROWS}, user=None).to_dict()
+
+    assert out.get("isError") is not True, out
+    assert out["structuredContent"] == ["A", "B"]
+
+
+def test_a_payload_that_is_not_a_list_is_a_validation_error() -> None:
+    server = _registered(_many())
+
+    out = server.call_tool("t", {"items": {"number": "A"}}, user=None).to_dict()
+
+    assert tool_error(out)["type"] == "validation_error"
+
+
+def test_a_row_that_fails_validation_is_named_by_its_index_in_the_detail() -> None:
+    # The kernel keys the detail by the failing row's index under the argument
+    # that carries the list, whichever DRF is installed; the drf-services answer
+    # took its shape from the DRF version.
+    server = _registered(_many())
+
+    out = server.call_tool(
+        "t", {"items": [{"number": "A"}, {"amount_cents": 2}]}, user=None
+    ).to_dict()
+
+    error = tool_error(out)
+    assert error["type"] == "validation_error"
+    assert error["detail"] == {"items": {"1": {"number": ["This field is required."]}}}
+
+
+def test_a_many_spec_may_read_a_name_other_than_the_one_it_declares_for_the_list() -> None:
+    # The collision is with ``many_argument``, not with the default: under
+    # ``rows`` a read of ``items`` is free, and a read of ``rows`` is not.
+    spec = _many(many_argument="rows", reads=Parameters([Parameter("items", "string")]))
+
+    listed: Any = _registered(spec).list_tools(user=None)
+    schema = listed["tools"][0]["inputSchema"]
+
+    assert set(schema["properties"]) == {"rows", "items"}
+    with pytest.raises(ImproperlyConfigured, match="'rows'"):
+        _registered(_many(many_argument="rows", reads=Parameters([Parameter("rows", "string")])))
 
 
 def test_a_many_spec_in_a_registry_registers() -> None:
-    """The path a project exposing its REST specs wholesale takes, which the refusal
-    once made it narrow with ``by_tag`` first."""
     registry = SpecRegistry()
-    # The kernel's registry refuses a spec declaring no permissions at all; an empty
-    # ``permission_classes`` is drf-services' explicit "anyone may run it".
-    registry.register("bulk", _bulk_spec(permission_classes=[]), tags=("write",))
-    server = _server()
+    registry.register("invoices.record", _many())
 
-    server.register_specs(registry)
+    (binding,) = _server().register_tools(registry)
 
-    assert "bulk" in server.tools
+    assert binding.name == "invoices.record"
 
 
-# ---------- a channel taking the list's name ----------
+def test_a_read_named_as_the_list_argument_is_refused() -> None:
+    # The kernel refuses two declarations of one name when the spec's
+    # parameters are assembled, which ``register_tool`` does to compile the
+    # schema, so the list can never be shadowed by a read of its name.
+    with pytest.raises(ImproperlyConfigured, match="'items'"):
+        _registered(_many(reads=Parameters([Parameter("items", "string")])))
 
 
-@pytest.mark.parametrize(
-    "channel",
-    [
-        pytest.param({"url_kwargs": (UrlKwarg("items"),)}, id="url_kwarg"),
-        pytest.param({"query_params": (QueryParam("items"),)}, id="query_param"),
-    ],
-)
-def test_a_channel_named_as_the_list_argument_is_refused(channel: dict[str, Any]) -> None:
-    """Both channels pop their name out of the arguments before dispatch, so the
-    list would never arrive and every call would fail as a missing argument."""
-    server = _server()
-
-    with pytest.raises(ImproperlyConfigured, match=r"'bulk'.*'items'.*many_argument"):
-        server.register_service_tool(name="bulk", spec=_bulk_spec(), **channel)
-
-    assert "bulk" not in server.tools
-
-
-def test_the_collision_is_with_the_name_the_spec_declares() -> None:
-    """The refusal reads ``spec.many_argument``, not the default: a spec whose list
-    travels as ``rows`` is refused a ``rows`` kwarg and may route one named
-    ``items``."""
-    server = _server()
-
-    with pytest.raises(ImproperlyConfigured, match=r"'rows'.*many_argument"):
-        server.register_service_tool(
-            name="bulk", spec=_bulk_spec(many_argument="rows"), url_kwargs=(UrlKwarg("rows"),)
-        )
-    server.register_service_tool(
-        name="bulk", spec=_bulk_spec(many_argument="rows"), url_kwargs=(UrlKwarg("items"),)
+def test_a_single_item_spec_may_read_an_argument_named_items() -> None:
+    spec = ServiceSpec(
+        service=lambda *, items: items,
+        atomic=False,
+        permissions=[Unrestricted()],
+        reads=Parameters([Parameter("items", "string", required=True)]),
     )
 
-    assert "bulk" in server.tools
+    out = _registered(spec).call_tool("t", {"items": "x"}, user=None).to_dict()
 
-
-def test_a_single_item_spec_may_route_a_channel_named_items() -> None:
-    """Only a list payload reserves the name. Holds the ``many`` half of the
-    collision check, which a name-only comparison would drop."""
-    server = _server()
-
-    server.register_service_tool(
-        name="one",
-        spec=ServiceSpec(service=_count, atomic=False, input_serializer=InvoiceInputSerializer),
-        url_kwargs=(UrlKwarg("items"),),
-    )
-
-    assert "one" in server.tools
-
-
-# ---------- declarations a list payload cannot honour ----------
-
-
-def test_a_spreading_argument_binding_is_refused() -> None:
-    """The service receives the whole list as ``data``, so there is nothing to
-    spread: drf-services hands a spreading ``many`` dispatch what ``AUTO`` does."""
-    server = _server()
-
-    with pytest.raises(ImproperlyConfigured, match=r"'bulk'.*argument_binding"):
-        server.register_service_tool(
-            name="bulk", spec=_bulk_spec(), argument_binding=ArgumentBinding.SPREAD_AUTHOR_WINS
-        )
-
-
-_INSTANCE = SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda **_: None)
-_COLLECTION = SelectorSpec(kind=SelectorKind.LIST, selector=lambda **_: [])
+    assert out["structuredContent"] == "x"
 
 
 @pytest.mark.parametrize(
     ("declared", "named"),
     [
-        pytest.param(
-            {"instance_selector_spec": _INSTANCE, "collection_selector_spec": _COLLECTION},
-            "both instance_selector_spec and collection_selector_spec",
-            id="instance-beside-collection",
+        (
+            {"instance_selector_spec": SelectorSpec(kind=SelectorKind.RETRIEVE, selector=dict)},
+            "instance_selector_spec",
         ),
-        pytest.param(
-            {"many": True, "instance_selector_spec": _INSTANCE},
-            "instance_selector_spec with many=True",
-            id="instance-on-a-list-payload",
-        ),
-        pytest.param(
-            {"many": True, "collection_selector_spec": _COLLECTION},
-            "collection_selector_spec with many=True",
-            id="collection-on-a-list-payload",
+        (
+            {"collection_selector_spec": SelectorSpec(kind=SelectorKind.LIST, selector=list)},
+            "collection_selector_spec",
         ),
     ],
 )
-def test_a_spec_declaring_a_lookup_dispatch_never_calls_is_refused(
+def test_a_lookup_beside_the_list_is_refused_when_the_spec_is_built(
     declared: dict[str, Any], named: str
 ) -> None:
-    """drf-services refuses the spec when it is built, so no such spec reaches
-    registration. This server made the last of these checks itself at registration,
-    and reads every service's target lookup (``schema.utils.target_lookup``) as the
-    one the spec declares, which only this refusal makes the lookup dispatch calls."""
-    with pytest.raises(ImproperlyConfigured, match=rf"ServiceSpec declares {named}"):
-        ServiceSpec(service=_count, atomic=False, **declared)
-
-
-# ---------- the documented alternative still works ----------
-
-
-class _Items(serializers.Serializer):
-    items = InvoiceInputSerializer(many=True)
-
-
-def _count_items(*, data: dict[str, Any]) -> dict[str, int]:
-    return {"count": len(data["items"])}
-
-
-@pytest.mark.django_db
-def test_the_list_as_a_named_serializer_field_works() -> None:
-    """A spec that must accept arguments beside the list keeps this shape, so it
-    stays documented: advertised as an array, and every item validated against the
-    item serializer."""
-    server = _server()
-    server.register_service_tool(
-        name="bulk",
-        spec=ServiceSpec(service=_count_items, atomic=False, input_serializer=_Items),
-    )
-    listed: Any = handle_tools_list({}, _ctx(server))
-    schema = next(t for t in listed["tools"] if t["name"] == "bulk")["inputSchema"]
-    item = {"number": "A-1", "amount_cents": 1}
-
-    ok: Any = handle_tools_call(
-        {"name": "bulk", "arguments": {"items": [item, item]}}, _ctx(server)
-    )
-    bad: Any = handle_tools_call(
-        {"name": "bulk", "arguments": {"items": [item, {**item, "amount_cents": -1}]}},
-        _ctx(server),
-    )
-
-    assert schema["properties"]["items"]["type"] == "array"
-    assert ok["structuredContent"] == {"count": 2}
-    # Read as encoded, which is what reaches the client: ``tool_error`` decodes the
-    # result's text block. DRF 3.18 keys a nested list's errors by the invalid
-    # items' indexes, which encoding turns into string keys; below it they are a
-    # list holding an empty object for each valid item. The floor is below 3.18,
-    # so both shapes reach clients.
-    items = tool_error(bad)["detail"]["items"]
-    by_index = items if isinstance(items, dict) else {str(i): e for i, e in enumerate(items) if e}
-    assert by_index == {"1": {"amount_cents": ["Ensure this value is greater than or equal to 0."]}}
+    # A list of rows resolves no target, so dispatch would never run the lookup.
+    with pytest.raises(ImproperlyConfigured, match=f"declares a {named} with many=True"):
+        _many(**declared)

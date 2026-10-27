@@ -1,12 +1,17 @@
-"""``selector_to_resource`` — what a resource registration does and does not carry.
+"""A kernel resource carries every field of its spec, because the read dispatches it.
 
-The adapter insists on a full ``SelectorSpec`` because the spec is the unit of
-registration everywhere in this package, but ``resources/read`` dispatches the
-bare selector callable: it never builds the queryset, never resolves an output
-serializer context, never runs a precondition. Taking a spec that declares those
-and dropping them silently is the failure this module pins — a
-``preconditions`` gate that holds on every other transport and simply does not
-run here looks exactly like success.
+``register_resource(spec, ...)`` with a kernel ``RETRIEVE`` ``SelectorSpec``
+reads through the kernel's ``dispatch``, so what the spec declares runs on
+``resources/read`` as it runs on every other transport: a precondition gates the
+read, the presenter renders the row and queryset shaping is applied. Asked here:
+a spec declaring any of those registers, and a read runs its precondition and
+its presenter.
+
+The drf-services original pinned the opposite: ``selector_to_resource`` held a
+bare selector callable and refused at registration every spec field the read
+path could not apply, since dropping a precondition silently looks like
+success. With nothing dropped there is nothing to refuse. It is kept beside
+this file as ``test_selector_to_resource_drfs.py``.
 """
 
 from __future__ import annotations
@@ -14,80 +19,121 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from django_service_specs import SelectorKind
-from rest_framework import serializers
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django.http import HttpRequest
+from django_service_specs import (
+    DataclassPresenter,
+    Parameter,
+    Parameters,
+    SelectorKind,
+    SelectorSpec,
+    ServiceError,
+    Unrestricted,
+)
 
-from django_spec_mcp.adapters.selector_to_resource import selector_to_resource
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.handlers.utils import resource_not_found_code
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from tests.testapp.kernel_shapes import InvoiceOutput
+from tests.testapp.models import Invoice
 
 
-def _rows(user: Any = None) -> list[dict[str, Any]]:
-    return [{"id": 1}]
+def _invoice(*, pk: int) -> Any:
+    return Invoice.objects.filter(pk=pk)
 
 
-def _require_subscription(**kwargs: Any) -> None:
-    raise AssertionError("precondition must never be reachable through a resource read")
+def _spec(**declared: Any) -> SelectorSpec:
+    return SelectorSpec(
+        kind=SelectorKind.RETRIEVE,
+        selector=_invoice,
+        permissions=[Unrestricted()],
+        reads=Parameters([Parameter("pk", "integer", required=True)]),
+        presenter=DataclassPresenter(InvoiceOutput),
+        **declared,
+    )
 
 
-def _with_tenant(**kwargs: Any) -> dict[str, Any]:
-    return {"tenant": "t1"}
+def _server(spec: SelectorSpec) -> MCPServer:
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server.register_resource(spec, name="invoice", uri_template="invoices://{pk}")
+    return server
 
 
-class _Out(serializers.Serializer):
-    id = serializers.IntegerField()
+def _read(server: MCPServer, uri: str) -> Any:
+    context = MCPCallContext(
+        http_request=HttpRequest(),
+        token=TokenInfo(user=None),
+        tools=server.tools,
+        resources=server.resources,
+        prompts=server.prompts,
+        protocol_version="2025-11-25",
+    )
+    return handle_resources_read({"uri": uri}, context)
+
+
+def _closed(**_: Any) -> None:
+    raise ServiceError("Invoices are closed for the night.")
 
 
 @pytest.mark.parametrize(
     ("field", "value"),
     [
-        ("affordances", {"cancel": ServiceSpec(service=lambda **_: None)}),
+        ("preconditions", [_closed]),
+        ("extend_queryset", lambda queryset: queryset),
         ("allow_none", True),
-        ("annotations", {"n": 1}),
-        ("extend_queryset", lambda qs, view, request: qs),
-        ("filter_set", object),
         ("metadata", {"k": "v"}),
-        ("output_serializer_context", _with_tenant),
-        ("prefetch_related", ["tags"]),
-        ("preconditions", [_require_subscription]),
-        ("progress_reporter", lambda **kw: None),
-        ("select_related", ["owner"]),
     ],
 )
-def test_a_spec_field_the_read_path_cannot_apply_is_refused_at_registration(
+def test_a_spec_field_the_drfs_read_path_refused_registers_and_is_kept(
     field: str, value: Any
 ) -> None:
-    spec = SelectorSpec(kind=SelectorKind.LIST, selector=_rows, **{field: value})
-    with pytest.raises(ValueError, match=field):
-        selector_to_resource(name="r", uri_template="r://x", selector=spec)
+    spec = _spec(**{field: value})
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+
+    binding: Any = server.register_resource(spec, name="invoice", uri_template="invoices://{pk}")
+
+    assert binding.spec is spec
 
 
-def test_the_refusal_names_every_dropped_field_at_once() -> None:
-    spec = SelectorSpec(
-        kind=SelectorKind.LIST,
-        selector=_rows,
-        select_related=["owner"],
-        preconditions=[_require_subscription],
-    )
-    with pytest.raises(ValueError) as excinfo:
-        selector_to_resource(name="r", uri_template="r://x", selector=spec)
-    message = str(excinfo.value)
-    assert "'preconditions'" in message
-    assert "'select_related'" in message
-    # And says what to do instead, since the spec itself is not the problem.
-    assert "selector tool" in message
+@pytest.mark.django_db
+def test_a_read_runs_the_specs_precondition() -> None:
+    # That the precondition ran, with the URI's variable in its pool, is this
+    # module's question. How a refusal from it is answered belongs to the read
+    # path, so the precondition here records and lets the read through.
+    seen: list[Any] = []
+
+    def _seen(*, pk: int) -> None:
+        seen.append(pk)
+
+    invoice = Invoice.objects.create(number="INV-1")
+    server = _server(_spec(preconditions=[_seen]))
+
+    _read(server, f"invoices://{invoice.pk}")
+
+    assert seen == [invoice.pk]
 
 
-def test_the_carried_fields_still_register() -> None:
-    """The five the read path honours are unaffected."""
-    spec = SelectorSpec(
-        kind=SelectorKind.LIST,
-        selector=_rows,
-        output_serializer=_Out,
-        kwargs=lambda view: {},
-    )
-    binding = selector_to_resource(name="r", uri_template="r://x", selector=spec)
-    assert binding.selector is _rows
-    assert binding.kind is SelectorKind.LIST
-    assert binding.output_serializer is _Out
-    assert binding.kwargs_provider is spec.kwargs
+@pytest.mark.django_db
+def test_a_read_applies_the_specs_queryset_shaping() -> None:
+    # ``extend_queryset`` narrowing the row away makes the read a miss, which
+    # only a read that shapes the selector's queryset can answer.
+    invoice = Invoice.objects.create(number="INV-1")
+    server = _server(_spec(extend_queryset=lambda queryset: queryset.none()))
+
+    out = _read(server, f"invoices://{invoice.pk}")
+
+    assert isinstance(out, JsonRpcError)
+    assert out.code == resource_not_found_code("2025-11-25")
+
+
+@pytest.mark.django_db
+def test_a_read_renders_the_row_through_the_specs_presenter() -> None:
+    invoice = Invoice.objects.create(number="INV-1", amount_cents=250)
+
+    out = _read(_server(_spec()), f"invoices://{invoice.pk}")
+
+    assert '"number": "INV-1"' in out["contents"][0]["text"]
+    assert '"amount_cents": 250' in out["contents"][0]["text"]

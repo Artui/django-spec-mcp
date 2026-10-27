@@ -1,256 +1,166 @@
-"""An ``input_serializer`` field named after a value dispatch fills itself is refused.
+"""A kernel tool's argument named after a value dispatch fills itself.
 
-Under a spreading binding the validated fields are spread into the callable's
-pool, where a seed of the same name (the kernel's ``RESERVED_POOL_SEEDS``, the
-DRF edge's ``TOOL_EDGE_SEEDS``, a seed the server registers) keeps its own
-value. The field registered, was advertised in the tool's ``inputSchema``, and
-its value never reached a parameter of its name: a selector's ran on its
-default, or on the seed for ``request`` / ``user`` / ``view``, and no call was
-refused. So it is refused at registration, naming the tool, the field and the
-reservation, on every registrar and both tool kinds.
+Asked of kernel specs registered with ``register_tool``, where a seed and an
+argument of one name meet in three ways:
 
-What still registers, each case holding one condition of the guard
-(``adapters.utils.validate_reserved_input_fields``): a service under ``BUNDLE``,
-which receives the field inside ``data``; a read-only field and a
-``HiddenField``, which take nothing from the caller; and a field bound with
-``source=`` to another name, whose value reaches that name.
+- a parameter named after one of the kernel's ``RESERVED_POOL_SEEDS`` (``user``,
+  ``data``, ``instance`` and the rest) is refused by the kernel when the spec's
+  parameters are assembled, so no tool can carry it;
+- a top-level Validator field named like a seed the server registers stays the
+  caller's: it is advertised, validates into ``data``, and the service's
+  parameter of that name keeps the seed;
+- a ``reads`` entry nobody marked ``reflected``, named like a registered seed or
+  like the call's own ``request`` / ``view``, is refused by the kernel's
+  ``dispatch`` on every call. ``register_tool`` registers it, so the tool is
+  listed and no call to it can succeed. Those two tests are strict xfails until
+  registration refuses it. The kernel's ``check_call`` answers it today, off
+  label, as a side effect of running ``dispatch``'s prelude; the ask is a public
+  kernel reader of exactly this, preferred because every package registering
+  kernel specs needs the same registration-time answer, with ``MCPServer``
+  handing its ``pool_seeds`` to ``kernel_spec_to_tool``.
+
+The drf-services original asked this of an ``input_serializer`` field under each
+``ArgumentBinding``, refused at registration because the seed silently won the
+service's pool; on the kernel the Validator's field reaches ``data`` instead, so
+the refusal is no longer the answer for it. It is kept beside this file as
+``test_reserved_input_fields_drfs.py``.
 """
 
 from __future__ import annotations
 
-import dataclasses
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
-from django.http import HttpRequest
-from django_service_specs import DEFAULT_POOL_SEEDS, RESERVED_POOL_SEEDS, SelectorKind, SpecRegistry
-from rest_framework import serializers
-from rest_framework.permissions import AllowAny
-from rest_framework_services import ArgumentBinding, SelectorSpec, ServiceSpec
+from django_service_specs import (
+    DEFAULT_POOL_SEEDS,
+    DataclassValidator,
+    Parameter,
+    Parameters,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+)
 
+from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.auth.types.token_info import TokenInfo
-from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
-from django_spec_mcp.handlers.types.context import MCPCallContext
-from django_spec_mcp.server.mcp_server import MCPServer
-from django_spec_mcp.types.tool_edge_seeds import TOOL_EDGE_SEEDS
 
-_RESERVED = sorted(RESERVED_POOL_SEEDS | TOOL_EDGE_SEEDS)
-_ROUTES = ["direct", "decorator", "register_specs"]
-_KINDS = ["selector", "service"]
+_SEEDED = DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme")
 
 
-def _server(**kwargs: Any) -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None, **kwargs)
+def _server(**options: Any) -> MCPServer:
+    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None, **options)
 
 
-def _input(name: str, **field_kwargs: Any) -> type[serializers.Serializer]:
-    return type("Input", (serializers.Serializer,), {name: serializers.CharField(**field_kwargs)})
+@dataclass
+class _User:
+    user: str
 
 
-def _register(
-    server: MCPServer,
-    *,
-    route: str,
-    kind: str,
-    input_serializer: type,
-    argument_binding: ArgumentBinding = ArgumentBinding.SPREAD_AUTHOR_WINS,
-    seen: dict[str, Any] | None = None,
-    owner: bool = False,
-) -> None:
-    """Register one tool named ``op`` of ``kind`` through ``route``, recording its kwargs."""
-    record = seen if seen is not None else {}
+@dataclass
+class _Tenant:
+    tenant: str
 
-    def call(**kwargs: Any) -> list[Any]:
-        record.update(kwargs)
-        return []
 
-    if owner:
-        # A declared ``owner``: a bare catch-all receives no undeclared name.
-        def call(*, owner: Any = None, **kwargs: Any) -> list[Any]:  # noqa: F811
-            record.update(kwargs, owner=owner)
-            return []
+def test_a_validator_field_named_after_a_reserved_seed_is_refused_at_registration() -> None:
+    # The kernel refuses it when the spec's parameters are assembled, which is
+    # at construction or, where the Validator's annotations are strings, at the
+    # first ``parameters()``; ``register_tool`` asks for them to compile the
+    # schema, so either way no listing ever shows the field.
+    spec = ServiceSpec(
+        service=lambda *, data: None,
+        atomic=False,
+        permissions=[Unrestricted()],
+        validator=DataclassValidator(_User),
+    )
 
-    if route == "decorator":
-        if kind == "selector":
-            server.selector_tool(
-                name="op",
-                kind=SelectorKind.LIST,
-                input_serializer=input_serializer,
-                argument_binding=argument_binding,
-                permissions=[],
-            )(call)
+    with pytest.raises(ImproperlyConfigured, match=r"declares the parameter\(s\) \['user'\]"):
+        _server().register_tool(spec, name="t")
+
+
+@pytest.mark.parametrize("kind", ["service", "selector"])
+def test_a_read_named_after_a_reserved_seed_is_refused_when_the_spec_is_built(kind: str) -> None:
+    reads = Parameters([Parameter("instance", "string", required=True)])
+
+    with pytest.raises(
+        ImproperlyConfigured, match=r"reads declares the parameter\(s\) \['instance'\]"
+    ):
+        if kind == "service":
+            ServiceSpec(service=lambda: None, atomic=False, reads=reads)
         else:
-            server.service_tool(
-                name="op",
-                input_serializer=input_serializer,
-                argument_binding=argument_binding,
-                atomic=False,
-                permissions=[],
-            )(call)
-        return
-    spec: Any
-    knobs: dict[str, Any] = {"argument_binding": argument_binding, "permissions": []}
-    if kind == "selector":
-        spec = SelectorSpec(kind=SelectorKind.LIST, selector=call, permission_classes=[AllowAny])
-        knobs["input_serializer"] = input_serializer
-    else:
-        spec = ServiceSpec(
-            service=call,
-            input_serializer=input_serializer,
+            SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda: None, reads=reads)
+
+
+def test_a_validator_field_named_like_a_registered_seed_is_the_callers_and_reaches_data() -> None:
+    # Changed by design: the drf-services path refused such a field, because
+    # the seed silently outranked it in the service's pool. The kernel keeps
+    # the caller's value in ``data`` and the seed in the parameter, so each
+    # reaches the service under its own name and nothing is lost.
+    server = _server(pool_seeds=_SEEDED)
+    server.register_tool(
+        ServiceSpec(
+            service=lambda *, data, tenant: {"sent": data.tenant, "seeded": tenant},
             atomic=False,
-            permission_classes=[AllowAny],
+            permissions=[Unrestricted()],
+            validator=DataclassValidator(_Tenant),
+        ),
+        name="t",
+    )
+    listed: Any = server.list_tools(user=None)
+
+    out = server.call_tool("t", {"tenant": "mine"}, user=None).to_dict()
+
+    assert listed["tools"][0]["inputSchema"]["required"] == ["tenant"]
+    assert out["structuredContent"] == {"sent": "mine", "seeded": "acme"}
+
+
+@pytest.mark.xfail(
+    strict=True,
+    # "DID NOT RAISE" only, so no other error can keep the test quietly xfailed.
+    raises=pytest.fail.Exception,
+    reason=(
+        "register_tool accepts a read a registered seed occupies, which dispatch refuses "
+        "on every call. Fix: a public kernel reader of the parameters dispatch refuses "
+        "(preferred, as several packages need it; check_call detects them today, off "
+        "label), which kernel_spec_to_tool asks, with MCPServer._kernel_tool_binding "
+        "passing pool_seeds=self._pool_seeds."
+    ),
+)
+def test_a_read_named_like_a_registered_seed_is_refused_at_registration() -> None:
+    # The spec is built inside the block, so a refusal from either layer, the
+    # spec's construction or the registration, turns the xfail into an XPASS.
+    with pytest.raises(ImproperlyConfigured, match="tenant"):
+        spec = ServiceSpec(
+            service=lambda *, tenant: tenant,
+            atomic=False,
+            permissions=[Unrestricted()],
+            reads=Parameters([Parameter("tenant", "string", required=True)]),
         )
-    if route == "direct":
-        if kind == "selector":
-            server.register_selector_tool(name="op", spec=spec, **knobs)
-        else:
-            server.register_service_tool(name="op", spec=spec, **knobs)
-        return
-    registry = SpecRegistry()
-    registry.register("op", spec)
-    server.register_specs(registry, overrides={"op": knobs})
+        _server(pool_seeds=_SEEDED).register_tool(spec, name="t")
 
 
-def _call(server: MCPServer, arguments: dict[str, Any]) -> Any:
-    ctx = MCPCallContext(
-        http_request=HttpRequest(),
-        token=TokenInfo(user=None),
-        tools=server.tools,
-        resources=server.resources,
-        prompts=server.prompts,
-        protocol_version="2025-11-25",
-    )
-    return handle_tools_call({"name": "op", "arguments": arguments}, ctx)
-
-
-@pytest.mark.filterwarnings("ignore::UserWarning")
-@pytest.mark.parametrize("kind", _KINDS)
-@pytest.mark.parametrize("route", _ROUTES)
-@pytest.mark.parametrize("name", _RESERVED)
-def test_a_field_named_after_a_seed_is_refused_at_registration(
-    name: str, route: str, kind: str
-) -> None:
-    server = _server()
-
-    with pytest.raises(ImproperlyConfigured) as caught:
-        _register(server, route=route, kind=kind, input_serializer=_input(name, required=False))
-
-    message = str(caught.value)
-    assert "tool 'op'" in message
-    assert f"input_serializer declares field(s) {[name]!r}" in message
-    assert "dispatch fills itself" in message
-    assert server.tools.get("op") is None
-
-
-@pytest.mark.filterwarnings("ignore::UserWarning")
-@pytest.mark.parametrize("kind", _KINDS)
-def test_a_dataclass_input_field_named_after_a_seed_is_refused(kind: str) -> None:
-    @dataclasses.dataclass
-    class Input:
-        result: str = ""
-
-    with pytest.raises(ImproperlyConfigured, match=r"declares field\(s\) \['result'\]"):
-        _register(_server(), route="direct", kind=kind, input_serializer=Input)
-
-
-@pytest.mark.filterwarnings("ignore::UserWarning")
-@pytest.mark.parametrize("kind", _KINDS)
-def test_a_field_named_after_a_seed_the_server_registers_is_refused(kind: str) -> None:
-    # A registered seed takes its name in every pool as the kernel's own do.
-    server = _server(pool_seeds=DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme"))
-
-    with pytest.raises(ImproperlyConfigured, match=r"declares field\(s\) \['tenant'\]"):
-        _register(server, route="direct", kind=kind, input_serializer=_input("tenant"))
-
-
-@pytest.mark.filterwarnings("ignore::UserWarning")
-@pytest.mark.parametrize(
-    "binding",
-    [ArgumentBinding.AUTO, ArgumentBinding.SPREAD_AUTHOR_WINS],
-    ids=lambda member: member.name,
+@pytest.mark.xfail(
+    strict=True,
+    # "DID NOT RAISE" only, so no other error can keep the test quietly xfailed.
+    raises=pytest.fail.Exception,
+    reason=(
+        "register_tool accepts a read named request or view, which dispatch refuses on "
+        "every mount and every call. Fix: a public kernel reader of the parameters "
+        "dispatch refuses (preferred, as several packages need it; check_call detects "
+        "them today, off label) for kernel_spec_to_tool to ask, or the kernel refusing "
+        "a read of either name nobody marked reflected when the spec is built, as it "
+        "refuses RESERVED_POOL_SEEDS."
+    ),
 )
-def test_a_selector_field_named_after_a_seed_is_refused_under_every_binding(
-    binding: ArgumentBinding,
-) -> None:
-    # Every binding a selector registers with spreads; ``AUTO`` holds the
-    # guard's selector condition, since for a service it bundles.
-    with pytest.raises(ImproperlyConfigured, match=r"declares field\(s\) \['result'\]"):
-        _register(
-            _server(),
-            route="direct",
-            kind="selector",
-            input_serializer=_input("result", required=False),
-            argument_binding=binding,
+@pytest.mark.parametrize("name", ["request", "view"])
+def test_a_read_named_after_the_calls_own_seat_is_refused_at_registration(name: str) -> None:
+    with pytest.raises(ImproperlyConfigured, match=name):
+        spec = SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=lambda **_: None,
+            permissions=[Unrestricted()],
+            reads=Parameters([Parameter(name, "string", required=True)]),
         )
-
-
-@pytest.mark.django_db
-@pytest.mark.parametrize(
-    "binding", [ArgumentBinding.BUNDLE, ArgumentBinding.AUTO], ids=lambda member: member.name
-)
-@pytest.mark.parametrize("name", _RESERVED)
-def test_a_bundled_service_receives_the_field_inside_data(
-    name: str, binding: ArgumentBinding
-) -> None:
-    # ``BUNDLE`` (and ``AUTO``, which bundles a service) spreads nothing, so the
-    # field is the payload's and no seed meets it. Holds the guard's
-    # spreading-binding condition.
-    seen: dict[str, Any] = {}
-    server = _server()
-    _register(
-        server,
-        route="direct",
-        kind="service",
-        input_serializer=_input(name, required=False),
-        argument_binding=binding,
-        seen=seen,
-    )
-
-    _call(server, {name: "sent"})
-
-    assert seen["data"] == {name: "sent"}
-
-
-@pytest.mark.filterwarnings("ignore::UserWarning")
-@pytest.mark.parametrize("kind", _KINDS)
-@pytest.mark.parametrize(
-    "field",
-    [
-        serializers.CharField(read_only=True),
-        serializers.HiddenField(default="server"),
-    ],
-    ids=["read-only", "hidden"],
-)
-def test_a_field_that_takes_nothing_from_the_caller_registers(kind: str, field: Any) -> None:
-    # Neither field reads the arguments, so no caller's value is lost. A
-    # ``HiddenField`` named ``user`` defaulting to the current user is the
-    # common DRF shape this must leave alone.
-    server = _server()
-    input_serializer = type("Input", (serializers.Serializer,), {"user": field})
-
-    _register(server, route="direct", kind=kind, input_serializer=input_serializer)
-
-    assert server.tools.get("op") is not None
-
-
-@pytest.mark.django_db
-@pytest.mark.filterwarnings("ignore::UserWarning")
-@pytest.mark.parametrize("kind", _KINDS)
-def test_a_field_bound_to_another_name_reaches_that_name(kind: str) -> None:
-    # ``source=`` puts the value under ``owner``, which no seed takes.
-    seen: dict[str, Any] = {}
-    server = _server()
-    _register(
-        server,
-        route="direct",
-        kind=kind,
-        input_serializer=_input("user", source="owner"),
-        seen=seen,
-        owner=True,
-    )
-
-    _call(server, {"user": "sent"})
-
-    assert seen["owner"] == "sent"
+        _server().register_tool(spec, name="t")
