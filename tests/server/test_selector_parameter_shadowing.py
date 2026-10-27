@@ -114,7 +114,5 @@ def test_a_retrieve_tools_pagination_named_read_registers() -> None:
 
 
 def test_a_paginated_list_tool_with_other_reads_still_registers() -> None:
-    binding = _server().register_tool(
-        _spec("status"), name="rows", description="d", paginate=True
-    )
+    binding = _server().register_tool(_spec("status"), name="rows", description="d", paginate=True)
     assert binding.paginate is True
