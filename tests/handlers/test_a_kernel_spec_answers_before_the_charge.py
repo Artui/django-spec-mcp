@@ -17,7 +17,8 @@ handlers, and what a check reading ``arguments`` sees.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+import warnings
+from dataclasses import dataclass, replace
 from typing import Any
 
 import pytest
@@ -44,6 +45,8 @@ from django_service_specs import (
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.config.build_mcp_config import build_mcp_config
+from django_spec_mcp.handlers.handle_completion_complete import handle_completion_complete
 from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
 from django_spec_mcp.handlers.handle_resources_read_async import handle_resources_read_async
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
@@ -52,6 +55,7 @@ from django_spec_mcp.handlers.is_binding_listable import is_binding_listable
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
+from django_spec_mcp.server.utils import UnguardedToolWarning
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from django_spec_mcp.transport.progress_dispatch import preflight_permissions
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
@@ -644,6 +648,122 @@ def test_a_creates_scope_is_judged_on_the_servers_own_seeds() -> None:
     assert _listed(server) is True
 
 
+class _NamesTheTenant(PermissionCheck):
+    """Admits the ``tenant`` seed ``acme`` alone, a seed only its server registers."""
+
+    def has_permission(self, principal: Any, spec: Any, *, tenant: str) -> bool:
+        return tenant == "acme"
+
+
+class _NamesTheAction(PermissionCheck):
+    """Admits a call whose ``call_context`` names the ``get`` action."""
+
+    def has_permission(self, principal: Any, spec: Any, *, call_context: Any) -> bool:
+        return call_context.get("action") == "get"
+
+
+def _acme(**kwargs: Any) -> MCPServer:
+    return MCPServer(
+        name="t",
+        auth_backend=AllowAnyBackend(),
+        session_store=None,
+        pool_seeds=DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme"),
+        **kwargs,
+    )
+
+
+def _strict() -> MCPServer:
+    # The test settings turn ``REQUIRE_TOOL_PERMISSIONS`` off, so only a server
+    # turning it on tells its own setting apart from the settings' default.
+    return _acme(config=replace(build_mcp_config(), require_tool_permissions=True))
+
+
+def _marked_elsewhere(register: Any) -> Any:
+    """A binding a server with the setting off marked unguarded, as ``register`` builds it."""
+    lenient = _acme(config=replace(build_mcp_config(), require_tool_permissions=False))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UnguardedToolWarning)
+        return register(lenient)
+
+
+def _unguarded() -> SelectorSpec:
+    return SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_row, reads=Parameters([_PK]))
+
+
+@pytest.mark.parametrize("case", ["seeds", "context"])
+@_ASYNC
+async def test_a_call_failing_its_shape_is_judged_with_what_its_call_carries(
+    case: str, is_async: bool
+) -> None:
+    # Judged on no arguments, but with the server's seeds and the call's
+    # context, as the call is: each admits here, so the caller is told the
+    # shape after the charge.
+    limit = _CountingLimit()
+    server = _acme()
+    check = _NamesTheTenant() if case == "seeds" else _NamesTheAction()
+    server.register_tool(_get(check), name="get", rate_limits=[limit])
+
+    out = await _call(server, {"pk": "abc"}, is_async=is_async)
+
+    assert tool_error(out)["type"] == "validation_error", out
+    assert limit.consumed == 1
+
+
+@_ASYNC
+async def test_a_call_failing_its_shape_is_judged_under_the_answering_servers_setting(
+    is_async: bool,
+) -> None:
+    # A binding marked unguarded elsewhere is granted no call by a server with
+    # the setting on, so it refuses every caller, uncharged.
+    limit = _CountingLimit()
+    server = _strict()
+    server.tools.register(
+        _marked_elsewhere(
+            lambda lenient: lenient.register_tool(_unguarded(), name="get", rate_limits=[limit])
+        )
+    )
+
+    out = await _call(server, {"pk": "abc"}, is_async=is_async)
+
+    assert _forbidden(out), out
+    assert limit.consumed == 0
+
+
+@pytest.mark.parametrize("case", ["seeds", "setting"])
+def test_a_completion_is_judged_with_the_servers_seeds_and_setting(case: str) -> None:
+    if case == "seeds":
+        server = _acme()
+        server.register_resource(
+            _get(_NamesTheTenant()),
+            name="row",
+            uri_template="rows://{pk}",
+            completions={"pk": lambda: ["1"]},
+        )
+    else:
+        server = _strict()
+        server.resources.register(
+            _marked_elsewhere(
+                lambda lenient: lenient.register_resource(
+                    _unguarded(),
+                    name="row",
+                    uri_template="rows://{pk}",
+                    completions={"pk": lambda: ["1"]},
+                )
+            )
+        )
+    params = {
+        "ref": {"type": "ref/resource", "uri": "rows://{pk}"},
+        "argument": {"name": "pk", "value": ""},
+    }
+
+    out: Any = handle_completion_complete(params, _ctx(server))
+
+    if case == "seeds":
+        assert out["completion"]["values"] == ["1"], out
+    else:
+        assert _forbidden(out), out
+
+
 @_ASYNC
 async def test_an_always_listed_tool_still_refuses_a_call_failing_its_shape(is_async: bool) -> None:
     # ``always_listed`` decides the listing, not who may call: the check still
@@ -787,6 +907,20 @@ async def test_a_reader_refused_on_a_malformed_variable_is_told_so(is_async: boo
 
     assert _forbidden(out), out
     assert limit.consumed == 0
+
+
+@_ASYNC
+async def test_an_admitted_reader_of_a_malformed_variable_is_charged_and_fails_the_read(
+    is_async: bool,
+) -> None:
+    # The judgment admits, so the read is charged and fails on the variable as
+    # it did before the judgment: ``resources/read`` has no answer for invalid
+    # arguments, so the refusal is raised on, to the transport's internal error.
+    limit = _CountingLimit()
+
+    with pytest.raises(InvalidArguments):
+        await _read(_resource_server(_Counted(admits=True), limit), "rows://abc", is_async=is_async)
+    assert limit.consumed == 1
 
 
 @_ASYNC

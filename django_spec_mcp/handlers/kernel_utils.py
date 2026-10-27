@@ -185,8 +185,10 @@ def admits_without_arguments(
     """Whether ``binding``'s spec lets ``principal`` past its checks, asked with no arguments.
 
     The question a listing filtered by permission asks of a kernel spec
-    (``is_binding_listable``), and the one a call whose arguments fail the
-    shape check is asked (``admit_kernel_call``), so a caller is refused
+    (``is_binding_listable``), the one a completion is asked, since it has no
+    arguments (``handle_completion_complete``), and the one a call whose
+    arguments fail the shape check is asked (``admit_kernel_call``), so a
+    caller is refused
     before it learns which argument it left out exactly when that listing
     would hide the tool from it
     (``test_a_call_failing_its_shape_is_refused_first_exactly_when_the_listing_hides_it``).
@@ -449,7 +451,8 @@ def admit_kernel_read(
     (``test_a_reader_refused_on_a_malformed_variable_is_told_so``), and one it
     admits is charged and the read fails on the variable as it did before this
     step, an internal error, since ``resources/read`` has no answer for
-    invalid arguments.
+    invalid arguments
+    (``test_an_admitted_reader_of_a_malformed_variable_is_charged_and_fails_the_read``).
 
     ``REJECT`` is the read's own policy, the one ``read_kernel_resource``
     dispatches under, and it answers as ``IGNORE`` would only while every
