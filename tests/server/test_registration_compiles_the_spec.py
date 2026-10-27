@@ -12,8 +12,11 @@ declaring ``preconditions``, a ``reads`` entry the dispatcher seeds, such as
 ``user``) never reaches a registrar. One refusal still arrives late: a read
 named after a seed this server's calls carry, the call's own ``request`` and
 ``view`` or a seed registered on ``pool_seeds=``. The kernel refuses it at
-dispatch, so the tool registers, is listed with the read as an argument, and
-fails every call with ``ImproperlyConfigured``. Registration should refuse it.
+dispatch, so the tool registers and fails every call with
+``ImproperlyConfigured``; it is listed with the read as an argument for
+``request`` and ``view``, but a read named after a registered seed is absent
+from the ``inputSchema``, since a seed answers it. Registration should refuse
+it.
 
 The kernel decides which reads a seed may share a name with (a ``reflected``
 read, a top-level Validator field) in ``dispatch.utils.seed_named_parameters``,
@@ -30,7 +33,7 @@ declares reads with ``Parameter`` and carries its markings on its presenter.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Annotated
+from typing import Annotated, Any
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
@@ -122,3 +125,15 @@ def test_a_presenter_whose_markings_cannot_project_is_refused_at_registration() 
     # The rest of the server still lists.
     server.register_tool(_spec("status"), name="other", description="d", paginate=True)
     assert [tool["name"] for tool in server.list_tools(user=None)["tools"]] == ["other"]
+
+
+@pytest.mark.parametrize(("read", "listed"), [("request", True), ("view", True), ("tenant", False)])
+def test_a_read_a_seed_occupies_is_listed_only_for_request_and_view(
+    read: str, listed: bool
+) -> None:
+    """The module docstring's claim about the ``inputSchema`` of each late-refused read."""
+    server = _server()
+    server.register_tool(_spec(read), name="sel", description="d", paginate=True)
+    tools: Any = server.list_tools(user=None)["tools"]
+    (schema,) = (tool["inputSchema"] for tool in tools)
+    assert (read in schema["properties"]) is listed

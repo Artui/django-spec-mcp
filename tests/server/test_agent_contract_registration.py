@@ -5,14 +5,19 @@ names the record, which is a handle, which it never sees) is declared once, in
 the presenter's dataclass, as ``Annotated`` markings (``AgentInvoiceOutput``, the
 kernel twin of ``AgentInvoiceSerializer``). These cases check that the mount
 reads it through each public entry point, ``register_tool`` and a
-``register_tools`` entry, as far as the served payload, because a shared declaration nobody reads is worse than none.
+``register_tools`` entry, as far as the served payload, because a shared
+declaration nobody reads is worse than none. It is asked of a selector tool and
+of a service tool, which present through the same declaration.
 
 The drf-services original asked this of an entry's ``OfflineContract`` and is
 kept beside this file as ``test_agent_contract_registration_drfs.py``. Its
 ``url_kwargs`` and ``query_params`` have no kernel counterpart, since a kernel
 spec declares its route and query values as ``reads``, which the schema lane
 asks; nor does overriding the contract per mount, since ``field_audiences`` is
-not a knob a kernel tool keeps. Two labels raising naming the tool is asked at
+not a knob a kernel tool keeps. Its ``test_the_decorator_form_forwards_it`` has
+no counterpart either: a kernel spec registers through ``register_tool`` and
+``register_tools`` and has no decorator form to forward the markings through.
+Two labels raising naming the tool is asked at
 registration in ``test_registration_compiles_the_spec.py``.
 """
 
@@ -27,6 +32,7 @@ from django_service_specs import (
     RegisteredSpec,
     SelectorKind,
     SelectorSpec,
+    ServiceSpec,
     SpecRegistry,
     Unrestricted,
 )
@@ -81,3 +87,42 @@ def test_the_served_payload_reads_them_too(build: Any) -> None:
     (item,) = result.structured_content["items"]
     assert "sent" not in item
     assert item["number"] == "INV-7"
+
+
+def _service_spec() -> ServiceSpec:
+    return ServiceSpec(
+        service=lambda: AgentInvoiceOutput(id=7, number="INV-7", amount_cents=100, sent=True),
+        presenter=DataclassPresenter(AgentInvoiceOutput),
+        permissions=[Unrestricted()],
+    )
+
+
+def _service_direct() -> MCPServer:
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server.register_tool(_service_spec(), name="issue", description="d")
+    return server
+
+
+def _service_bulk() -> MCPServer:
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server.register_tools(
+        SpecRegistry([RegisteredSpec(name="issue", spec=_service_spec())]),
+        overrides={"issue": {"description": "d"}},
+    )
+    return server
+
+
+service_registrars = pytest.mark.parametrize(
+    "build", [_service_direct, _service_bulk], ids=["register_tool", "bulk"]
+)
+
+
+@service_registrars
+@pytest.mark.django_db
+def test_a_service_tool_reads_the_presenters_markings(build: Any) -> None:
+    server = build()
+    projection = server.tools.get("issue").audience_projection
+    assert projection.audience("sent") is FieldAudience.HIDDEN
+    result = server.call_tool("issue", {}, user=None)
+    assert "sent" not in result.structured_content
+    assert result.structured_content["number"] == "INV-7"

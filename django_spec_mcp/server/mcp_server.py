@@ -846,8 +846,15 @@ class MCPServer:
             # Only this warning earns the spec its per-call grant; a binding
             # passed straight to ``tools.register`` is never marked.
             object.__setattr__(binding, "unguarded", True)
+        # ``register_tools`` reaches here through a generator and ``register_tool``
+        # directly, so the depth to the caller is counted rather than fixed; the
+        # extra level is the check's own frame.
+        caller_level = _caller_stacklevel() + 1
         check_tool_description_present(
-            binding.name, binding.description, require=self._config.require_tool_descriptions
+            binding.name,
+            binding.description,
+            require=self._config.require_tool_descriptions,
+            stacklevel=caller_level,
         )
         resolve_structured_output(
             include_output_schema_override=binding.include_output_schema,
@@ -866,6 +873,7 @@ class MCPServer:
                 binding.name,
                 paginate=binding.paginate,
                 require=self._config.require_list_pagination,
+                stacklevel=caller_level,
             )
         return binding
 
@@ -2424,7 +2432,10 @@ def _caller_stacklevel() -> int:
     level would blame this package for some of them. Counted from the frame
     that calls ``warnings.warn``, which is level 1
     (``test_each_mount_level_knob_warns_naming_its_replacement`` asserts the
-    caller's file).
+    caller's file). The kernel registrars' description and pagination warnings
+    count the same way, one level further for the check's own frame
+    (``test_the_warning_points_at_the_registering_line_not_this_package`` in the
+    undescribed and unbounded-list suites).
     """
     package = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) + os.sep
     frame = sys._getframe(1)

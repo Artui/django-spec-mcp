@@ -124,3 +124,17 @@ def test_warning_can_be_filtered_by_category() -> None:
         warnings.simplefilter("error", UndescribedToolWarning)
         with pytest.raises(UndescribedToolWarning):
             server.register_tool(_service(), name="x")
+
+
+def test_the_warning_points_at_the_registering_line_not_this_package() -> None:
+    """A warning blames the caller's file, through both registrars.
+
+    ``register_tool`` and ``register_tools`` reach the check at different
+    depths (the second through a generator), so a fixed ``stacklevel`` would
+    name a frame inside this package for one of them.
+    """
+    registry = SpecRegistry([RegisteredSpec(name="y", spec=_service())])
+    (direct,) = _undescribed(lambda: _server().register_tool(_service(), name="x"))
+    (batch,) = _undescribed(lambda: _server().register_tools(registry))
+    assert direct.filename == __file__
+    assert batch.filename == __file__

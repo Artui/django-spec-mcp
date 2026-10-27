@@ -68,7 +68,7 @@ repos:
         entry: '⚠|⭐|⛔|✅|❌|❗|❓|⭕|⚡|☑|✔|✖|✨|❤|⏸|⏰|⌛|⁉|‼|️|\xf0\x9f[\x80-\xbf][\x80-\xbf]'
         language: pygrep
         types: [text]
-        exclude: '^(\.pre-commit-config\.yaml|tests/server/test_mcp_server\.py|tests/tasks/test_task_stores\.py)$'
+        exclude: '^(\.pre-commit-config\.yaml|tests/server/test_mcp_server(_drfs)?\.py|tests/tasks/test_task_stores\.py)$'
 
       # Structural rather than a pattern, so it is a script where the guards
       # above are pygrep. A merge or a rebase can rearrange this file without

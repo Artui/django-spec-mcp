@@ -81,8 +81,15 @@ class UndescribedToolWarning(UserWarning):
     """
 
 
-def check_tool_description_present(name: str, description: str | None, *, require: bool) -> None:
+def check_tool_description_present(
+    name: str, description: str | None, *, require: bool, stacklevel: int = 3
+) -> None:
     """Warn (or raise) when a tool binding carries no description.
+
+    ``stacklevel`` is counted from this function. The default is right for a
+    registrar that calls this directly and is itself called by the user's code;
+    a registrar that sits deeper passes its own count, as the kernel registrars
+    do (``test_the_warning_points_at_the_registering_line_not_this_package``).
 
     Deliberately **no docstring fallback.** A docstring is written for the next
     developer, not for a model choosing between tools, so promoting one would
@@ -102,7 +109,7 @@ def check_tool_description_present(name: str, description: str | None, *, requir
     )
     if require:
         raise ImproperlyConfigured(message)
-    warnings.warn(message, UndescribedToolWarning, stacklevel=3)
+    warnings.warn(message, UndescribedToolWarning, stacklevel=stacklevel)
 
 
 class UnboundedListWarning(UserWarning):
@@ -112,8 +119,14 @@ class UnboundedListWarning(UserWarning):
     """
 
 
-def check_list_pagination_declared(name: str, *, paginate: bool, require: bool) -> None:
+def check_list_pagination_declared(
+    name: str, *, paginate: bool, require: bool, stacklevel: int = 3
+) -> None:
     """Warn (or raise) when a LIST selector tool has no pagination.
+
+    ``stacklevel`` is counted from this function, as on
+    ``check_tool_description_present``
+    (``test_the_warning_points_at_the_registering_line_not_this_package``).
 
     **Why this warns rather than silently clamping.** A ``paginate=True`` tool
     clamps safely because ``totalPages`` / ``hasNext`` tell the model rows were
@@ -138,7 +151,7 @@ def check_list_pagination_declared(name: str, *, paginate: bool, require: bool) 
     )
     if require:
         raise ImproperlyConfigured(message)
-    warnings.warn(message, UnboundedListWarning, stacklevel=3)
+    warnings.warn(message, UnboundedListWarning, stacklevel=stacklevel)
 
 
 def build_ui_tool_meta(

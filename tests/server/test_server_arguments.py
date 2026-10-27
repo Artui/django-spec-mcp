@@ -6,23 +6,29 @@ neither: ``tools/list`` leaves them out of the ``inputSchema`` and its
 ``required``. A bound value wins over whatever the caller sends under its name,
 a bound value fills a read the spec requires, and a binding that cannot mean
 what it says is refused at registration naming the tool, however the binding
-reached the registry. Whether a value reaches the callable through each
+reached the registry. A caller restating a bound value with a different one is
+logged once, by tool and argument name and never by value, and a retry's
+``inputResponses`` cannot replace a bound value, on the synchronous and the
+asynchronous handler alike. Whether a value reaches the callable through each
 registrar is asked in ``test_server_arguments_on_every_registrar.py``.
 
 The drf-services original is kept beside this file as
 ``test_server_arguments_drfs.py``. Its ``UrlKwarg`` route captures and
 ``QueryParam`` query values have no kernel counterpart, since a kernel spec's
-reads are its arguments wherever they come from; nor does its logging of a
-caller restating a bound value, which the drf-services dispatch wrote. Its wire
+reads are its arguments wherever they come from. Its logging of a caller
+restating a bound value is shared: the kernel route calls the same
+``apply_tool_server_arguments``, so it is asked here of a kernel tool. Its wire
 and in-process questions are asked here in process.
 """
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any
 
 import pytest
+from asgiref.sync import async_to_sync
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import (
     DEFAULT_POOL_SEEDS,
@@ -39,7 +45,11 @@ from django_service_specs import (
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
+from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
+from tests.subscriptions.test_subscription_core import _context
 
 
 @dataclass
@@ -110,14 +120,22 @@ def test_a_binding_fills_a_required_read() -> None:
     assert result.structured_content == {"project": 7, "draw": 0}
 
 
-def test_the_bound_value_wins_and_the_withheld_one_is_dropped() -> None:
+def test_the_bound_value_wins_and_the_withheld_one_is_dropped(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     server = _server()
     server.register_tool(_selector(), name="card", description="d", server_arguments=_SCOPED)
-    result = server.call_tool("card", {"project": 99, "draw": 3}, user=None)
+    with caplog.at_level(logging.WARNING, logger="django_spec_mcp"):
+        result = server.call_tool("card", {"project": 99, "draw": 3}, user=None)
     # Both are dropped rather than refused, as the original's bound project
     # wins and its withheld sibling is dropped.
     assert result.is_error is False
     assert result.structured_content == {"project": 7, "draw": 0}
+    # Held by the withheld conjunct of ``apply_tool_server_arguments``: a
+    # withheld name is logged whenever the caller sent it.
+    (message,) = _dropped(caplog)
+    assert "draw" in message
+    assert "project" in message
 
 
 @pytest.mark.django_db
@@ -174,3 +192,61 @@ def test_no_binding_leaves_the_tool_as_it_was() -> None:
     assert set(_schema(server, "card")["properties"]) == {"project", "draw"}
     result = server.call_tool("card", {"project": 3}, user=None)
     assert result.structured_content == {"project": 3, "draw": 0}
+
+
+def _dropped(caplog: pytest.LogCaptureFixture) -> list[str]:
+    return [
+        r.getMessage() for r in caplog.records if "dropped the caller's value" in r.getMessage()
+    ]
+
+
+def test_a_caller_restating_a_bound_value_with_another_is_logged_once(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Held by the ``repr(...) != repr(...)`` conjunct of ``apply_tool_server_arguments``.
+
+    The restated call below logs nothing only because the comparison sees the
+    caller's value equal the server's; without it both calls would log, which is
+    also what a task worker replaying already-applied arguments would do.
+    """
+    server = _server()
+    bind = ServerArguments(values={"project": 7})
+    server.register_tool(_selector(), name="rows", description="d", server_arguments=bind)
+
+    with caplog.at_level(logging.WARNING, logger="django_spec_mcp"):
+        server.call_tool("rows", {"project": 9}, user=None)
+        server.call_tool("rows", {"project": 7}, user=None)
+
+    (message,) = _dropped(caplog)
+    assert "MCP tool 'rows'" in message
+    assert "project" in message
+    # The values are the consumer's data: only the names are logged.
+    assert "9" not in message
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
+def test_an_answer_cannot_replace_a_bound_value(is_async: bool) -> None:
+    """A retry's ``inputResponses`` merge over the arguments with no limit on their keys.
+
+    A first call can carry one too. Held by the second
+    ``apply_tool_server_arguments`` in ``handle_tools_call`` and its async
+    sibling, applied over what the answers produced.
+    """
+    server = _server()
+    bind = ServerArguments(values={"project": 7})
+    server.register_tool(_service(), name="note", description="d", server_arguments=bind)
+    params = {
+        "name": "note",
+        "arguments": {"note": "hi"},
+        "inputResponses": {ELICITATION_KEY: {"action": "accept", "content": {"project": 8}}},
+    }
+    context = _context(server, client_capabilities={"elicitation": {}})
+
+    if is_async:
+        result = async_to_sync(handle_tools_call_async)(params, context)
+    else:
+        result = handle_tools_call(params, context)
+
+    assert not result.get("isError"), result
+    assert result["structuredContent"] == {"project": 7, "note": "hi"}

@@ -145,3 +145,19 @@ def test_require_list_pagination_allows_a_paginated_tool() -> None:
     server = _server(require_list_pagination=True)
     binding = server.register_tool(_list(), name="x", description="d", paginate=True)
     assert binding.paginate is True
+
+
+def test_the_warning_points_at_the_registering_line_not_this_package() -> None:
+    """A warning blames the caller's file, through both registrars.
+
+    ``register_tool`` and ``register_tools`` reach the check at different
+    depths (the second through a generator), so a fixed ``stacklevel`` would
+    name a frame inside this package for one of them.
+    """
+    registry = SpecRegistry([RegisteredSpec(name="y", spec=_list())])
+    (direct,) = _unbounded(lambda: _server().register_tool(_list(), name="x", description="d"))
+    (batch,) = _unbounded(
+        lambda: _server().register_tools(registry, overrides={"y": {"description": "d"}})
+    )
+    assert direct.filename == __file__
+    assert batch.filename == __file__
