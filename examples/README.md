@@ -17,7 +17,7 @@ Each example ships its own `manage.py`. From the example's directory:
 
 ```bash
 # Set up the deps in a fresh venv (uses the workspace install, no extras unless noted)
-uv pip install -e "../.." "../..[filter,oauth]"
+uv pip install -e "../.." "../..[oauth]" django-filter
 
 # Migrate, run, smoke-test
 python manage.py migrate

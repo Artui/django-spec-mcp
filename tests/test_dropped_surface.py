@@ -13,6 +13,7 @@ still there. So each one is asserted absent.
 
 from __future__ import annotations
 
+import importlib.metadata
 import importlib.util
 
 import pytest
@@ -60,3 +61,9 @@ def test_a_settings_key_drf_mcp_once_removed_is_not_refused(settings) -> None:
     """A fresh package has no history of these keys, so nothing guards them."""
     settings.SPEC_MCP = {"AUTH_BACKEND": "some.dotted.Path"}
     MCPServer(name="dropped-surface")
+
+
+@pytest.mark.parametrize("extra", ["jwt", "spectacular", "filter"])
+def test_a_dropped_extra_is_not_declared(extra: str) -> None:
+    declared = importlib.metadata.metadata("django-spec-mcp").get_all("Provides-Extra") or []
+    assert extra not in declared

@@ -81,8 +81,9 @@ jobs:
       # the runner exposes. The floor claim is about the oldest configuration
       # we support, so that is the one to install, and leaving the choice to
       # the image makes the answer drift when the image does. It is not
-      # academic: django-filter 23.1, the bottom of the `filter` extra's
-      # window, calls `pkgutil.find_loader`, which Python 3.14 removed.
+      # academic: django-filter 23.1, the bottom of the dev group's
+      # django-filter window, calls `pkgutil.find_loader`, which Python 3.14
+      # removed.
       - name: Install Python 3.10
         run: uv python install 3.10
       # `--refresh` on both resolutions below. This job's whole claim is "what a

@@ -89,9 +89,7 @@ pip install "django-spec-mcp[toon]"                      # +TOON encoder
 pip install "django-spec-mcp[oauth]"                     # +django-oauth-toolkit backend
 pip install "django-spec-mcp[redis]"                     # +Redis SSE broker for multi-worker ASGI
 pip install "django-spec-mcp[otel]"                      # +OpenTelemetry instrumentation
-pip install "django-spec-mcp[filter]"                    # +django-filter for selector-tool FilterSets
-pip install "django-spec-mcp[spectacular]"               # +drf-spectacular schema overrides
-pip install "django-spec-mcp[toon,oauth,redis,otel,filter,spectacular]"  # everything
+pip install "django-spec-mcp[toon,oauth,redis,otel]"     # everything
 ```
 
 …or with `uv`:
@@ -102,9 +100,7 @@ uv add "django-spec-mcp[toon]"                           # +TOON encoder
 uv add "django-spec-mcp[oauth]"                          # +django-oauth-toolkit backend
 uv add "django-spec-mcp[redis]"                          # +Redis SSE broker for multi-worker ASGI
 uv add "django-spec-mcp[otel]"                           # +OpenTelemetry instrumentation
-uv add "django-spec-mcp[filter]"                         # +django-filter for selector-tool FilterSets
-uv add "django-spec-mcp[spectacular]"                    # +drf-spectacular schema overrides
-uv add "django-spec-mcp[toon,oauth,redis,otel,filter,spectacular]"  # everything
+uv add "django-spec-mcp[toon,oauth,redis,otel]"          # everything
 ```
 
 Optional extras degrade gracefully:

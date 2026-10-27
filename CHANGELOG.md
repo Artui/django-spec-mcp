@@ -42,4 +42,12 @@ carries; releases up to 0.54.0 are in
   `register_service_tool`: it is judged, validated and rendered like any other
   service tool, and its `atomic` flag owns the transaction.
 
+- **The `jwt`, `spectacular` and `filter` extras.** `jwt` only installed
+  djangorestframework-simplejwt for the cookie adapter removed above. The other
+  two only re-exposed a package drf-services already reads: a tool's
+  `inputSchema` still honours `@extend_schema_*` annotations, and a selector
+  spec's `FilterSet` still runs. A project using either has the package
+  installed already; one that does not runs `pip install drf-spectacular` or
+  `pip install django-filter`.
+
 [Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.0.0...HEAD

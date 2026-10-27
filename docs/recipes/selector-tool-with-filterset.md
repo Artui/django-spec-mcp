@@ -23,12 +23,12 @@ arguments → validate(merged inputSchema)
 Each knob is opt-in. A bare `register_selector_tool` with no
 filter/order/paginate behaves like a plain RPC read.
 
-## Install the optional extra
+## Install django-filter
 
-`spec.filter_set` requires `django-filter`:
+`spec.filter_set` requires `django-filter`, which this package does not pull in:
 
 ```bash
-pip install "django-spec-mcp[filter]"
+pip install django-filter
 ```
 
 Without it, importing `django_spec_mcp` still works — the

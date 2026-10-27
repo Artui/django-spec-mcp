@@ -150,8 +150,7 @@ toon = ["python-toon>=0.1.3"]
 # was an unknown key DOT ignored, so the server advertised no CIMD support and
 # every client fell back to DCR; and enforcement had no field to read, so
 # turning it on refused every request. Also the release that makes DOT serve
-# its own ``register/`` and ``.well-known/oauth-authorization-server``, which
-# is what ``check_oauth_url_shadowing`` exists to catch.
+# its own ``register/`` and ``.well-known/oauth-authorization-server``.
 # 3.4.0 requires Python >=3.10 and Django >=4.2, which are already this
 # package's own floors, so nothing else has to move with it.
 oauth = ["django-oauth-toolkit>=3.4"]
@@ -159,14 +158,6 @@ oauth = ["django-oauth-toolkit>=3.4"]
 # replay buffer call — first exists in 5.0.1.
 redis = ["redis>=5.0.1"]
 otel = ["opentelemetry-api>=1.27"]
-spectacular = ["drf-spectacular>=0.27"]
-filter = ["django-filter>=23"]
-# Pulls in djangorestframework-simplejwt for the SimpleJWTCookieAdapter
-# (django_spec_mcp.contrib.oauth.adapters.simplejwt_cookie). The
-# adapter is opt-in: configure ``AUTH_USER_ADAPTER`` to enable it.
-# 5.3.1, not 5.3: 5.3.0 imports ``pkg_resources`` at module level, so it does
-# not import at all on an environment without setuptools.
-jwt = ["djangorestframework-simplejwt>=5.3.1"]
 # Powers ``django_spec_mcp.testing.assert_tool_result_conforms``, which
 # validates a real tool result against the ``outputSchema`` the server
 # advertised for it. Test-time code, so ``jsonschema`` stays out of the runtime
@@ -235,9 +226,15 @@ dev = [
     # while the submodule does not, and the checker cannot tell that from a
     # dependency that moved out from under the docs.
     "opentelemetry-exporter-otlp-proto-grpc>=1.27",
-    "drf-spectacular>=0.27",
+    # The ``FilterSet`` a selector spec declares is drf-services' and runs on
+    # django-filter, which the selector-filtering tests exercise. A project
+    # declaring one installs django-filter itself, so it is no extra here.
     "django-filter>=23",
-    "djangorestframework-simplejwt>=5.3.1",
+    # Likewise drf-spectacular: drf-services reads its ``@extend_schema_*``
+    # annotations into a tool's ``inputSchema``, the recipe documenting that
+    # imports it, and ``tests/schema/test_spectacular_annotations.py`` holds the
+    # recipe's claims. A project using the annotations has it installed already.
+    "drf-spectacular>=0.27",
     # The ``test`` extra's dependency, declared here too because ``uv sync
     # --all-groups`` installs groups but not extras — the suite that covers the
     # conformance helper would otherwise run without it in the test matrix.

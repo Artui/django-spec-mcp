@@ -3,20 +3,19 @@
 If your project already uses [`drf-spectacular`](https://drf-spectacular.readthedocs.io/)
 to generate OpenAPI for the HTTP transport, the same `@extend_schema_*`
 decorators feed the MCP `inputSchema` automatically — no separate
-annotation layer needed. The integration is **opt-in via install**:
-spectacular is detected by checking for `_spectacular_annotation` on the
-serializer class, so projects that don't have spectacular installed see
-zero overhead.
+annotation layer needed. The schema is built by drf-services, which reads
+the `_spectacular_annotation` the decorators stamp on a serializer class or
+field and never imports spectacular itself, so projects that don't have it
+installed see zero overhead.
 
 ## Install
 
 ```bash
-pip install "django-spec-mcp[spectacular]"
+pip install drf-spectacular
 ```
 
-This pulls in `drf-spectacular>=0.27`. No app config change required —
-the MCP package only reads the metadata spectacular has already attached
-to your serializers.
+No app config change required — the schema builder only reads the metadata
+spectacular has already attached to your serializers.
 
 ## What's honored
 
