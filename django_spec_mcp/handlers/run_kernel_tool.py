@@ -17,6 +17,7 @@ from django_spec_mcp.handlers.kernel_utils import (
     tool_result,
 )
 from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.handlers.types.kernel_input_round import KernelInputRound
 from django_spec_mcp.handlers.types.kernel_refusal_scene import KernelRefusalScene
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
@@ -47,8 +48,7 @@ def run_kernel_tool(
         # A selector asks for nothing, as a drf-services selector does not: a
         # request for input from one is a service error, not a round trip
         # (``test_a_kernel_selector_ignores_a_round_trip``).
-        prior=None if binding.is_selector else prior,
-        context=None if binding.is_selector else context,
+        input_round=None if binding.is_selector else KernelInputRound(prior, context),
         span=otel_span,
     )
     try:

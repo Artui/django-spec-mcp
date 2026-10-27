@@ -84,10 +84,16 @@ def _input_required(
 ) -> ToolResult | dict[str, Any] | JsonRpcError:
     """MRTR's ``input_required`` on the wire; a service error where there is no
     further round to ask in, which is how the in-process ``call_tool`` answers
-    it on the drf-services path."""
-    if scene.prior is None or scene.context is None:
+    it on the drf-services path.
+
+    One condition, the round being there or not: held both ways by
+    ``test_additional_input_required_asks_for_input`` (a wire service tool,
+    which asks) and by ``test_call_tool_answers_a_request_for_input_as_a_service_error``
+    and ``test_a_kernel_selector_asking_for_input_is_answered_as_a_drfs_selector_is``
+    (no round, so a service error)."""
+    if scene.input_round is None:
         return service_error_result(exc)
-    return ask_for_input(exc, scene.prior, scene.context)
+    return ask_for_input(exc, scene.input_round.prior, scene.input_round.context)
 
 
 def _service_error(exc: ServiceError, scene: KernelRefusalScene) -> ToolResult:
