@@ -102,6 +102,10 @@ def _one(pk: int) -> dict[str, int]:
     return {"pk": pk}
 
 
+def _all() -> dict[str, int]:
+    return {"count": 0}
+
+
 def _rows() -> list[dict[str, int]]:
     return []
 
@@ -269,6 +273,9 @@ def test_a_registered_unguarded_tool_is_listed_where_its_call_is_granted() -> No
         server.register_tool(ServiceSpec(service=_write), name="t")
 
     assert _listed(server, None) == {"t"}
+    # The grant does not let a deactivated caller through, as it does not at
+    # the call.
+    assert _listed(server, _user("gone", is_active=False)) == set()
 
     strict = _server()
     strict.tools.register(server.tools.get("t"))
@@ -304,9 +311,10 @@ def test_each_spec_listing_hands_the_server_s_seeds_and_setting(
             server.register_tool(_service(check), name="guarded")
             server.tools.register(lenient.register_tool(ServiceSpec(service=_write), name="open"))
         else:
-            spec = SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_one, permissions=[check])
+            selector = _one if "{pk}" in uri else _all
+            spec = SelectorSpec(kind=SelectorKind.RETRIEVE, selector=selector, permissions=[check])
             server.register_resource(spec, uri_template=uri, name="guarded")
-            open_spec = SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_one)
+            open_spec = SelectorSpec(kind=SelectorKind.RETRIEVE, selector=selector)
             server.resources.register(
                 lenient.register_resource(open_spec, uri_template=f"{uri}/open", name="open")
             )

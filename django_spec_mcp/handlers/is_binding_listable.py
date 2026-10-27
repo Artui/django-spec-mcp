@@ -104,13 +104,14 @@ def _kernel_spec_admits(
 ) -> bool:
     """Whether the kernel would let this caller past ``binding``'s spec's checks.
 
-    Asked with what a call hands dispatch (``run_kernel_tool``), so a listing and
-    a call cannot disagree about who passes: the same principal, the grant only
-    the registrar's mark earns, the server's pool seeds, and a call context whose
-    request carries the token. No arguments: a listing has none, and ``None`` is
-    the kernel's word for that. A refusal (``NotPermitted``), or a deactivated
-    principal (``PrincipalUnavailable``, which ``authorize`` raises when handed
-    pool seeds, as dispatch does), hides the binding.
+    Asked with what a call over the wire hands dispatch (``run_kernel_tool``),
+    so the listing and that call agree about who passes: the same principal,
+    the grant only the registrar's mark earns, the server's pool seeds, and a
+    call context whose request carries the token. No arguments: a listing has
+    none, and ``None`` is the kernel's word for that. A refusal
+    (``NotPermitted``) hides the binding, and so does a deactivated principal
+    (``PrincipalUnavailable``), which ``authorize`` refuses when handed pool
+    seeds as dispatch does, ahead of any grant, so on an unguarded spec too.
     """
     principal: Any = principal_of(token.user)
     grant = unguarded_grant(binding, principal, config)
