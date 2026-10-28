@@ -170,13 +170,14 @@ async def test_a_form_a_spec_parsed_is_parsed_for_the_caller(how: str) -> None:
 
 @_HOW
 async def test_an_encoding_a_spec_sets_is_the_callers(how: str) -> None:
-    """Setting ``encoding`` discards the parsed ``POST`` so it is parsed again
-    under the new one: the caller's, which is then the ``POST`` the spec
-    parsed, under the encoding the spec set."""
+    """Setting ``encoding`` discards the parsed ``POST`` and the decoded
+    ``GET`` so they are decoded again under the new one: the caller's, which
+    are then the spec's, under the encoding the spec set."""
     handed = RequestFactory().post(
-        "/view", data=b"name=n", content_type="application/x-www-form-urlencoded"
+        "/view?q=1", data=b"name=n", content_type="application/x-www-form-urlencoded"
     )
     before = handed.POST
+    before_get = handed.GET
     parsed: list[Any] = []
 
     def spec(request: Any) -> str:
@@ -189,6 +190,7 @@ async def test_an_encoding_a_spec_sets_is_the_callers(how: str) -> None:
     assert handed.encoding == "UTF-8"
     assert handed.POST is parsed[0]
     assert handed.POST is not before
+    assert handed.GET is not before_get
 
 
 @_HOW

@@ -228,9 +228,10 @@ def seat(request: Any, principal: Any) -> Any:
 # ``body``, ``read``, ``_load_post_and_files`` and the ``encoding``,
 # ``upload_handlers`` and ``multipart_parser_class`` setters, which a method
 # override on the copy could not reach. The configuration names go with the
-# parse they configure: the ``encoding`` setter discards the parsed ``POST``,
-# and the other two refuse once ``FILES`` is parsed, so a copy configuring
-# itself alone would discard or refuse on the caller's parse. ``ASGIRequest``'s
+# parse they configure: the ``encoding`` setter discards the parsed ``POST``
+# and the decoded ``GET``, so ``GET`` is shared with it, and the other two
+# refuse once ``FILES`` is parsed, so a copy configuring itself alone would
+# discard or refuse on the caller's parse. ``ASGIRequest``'s
 # ``_post_parse_error`` is set in ``__init__`` and read by nothing, so it is
 # not here. The test holding each name is on ``copy_request``.
 _REQUEST_SHARES: frozenset[str] = frozenset(
@@ -241,6 +242,7 @@ _REQUEST_SHARES: frozenset[str] = frozenset(
         "_post",
         "_files",
         "_encoding",
+        "GET",
         "_upload_handlers",
         "_multipart_parser_class",
     }
@@ -329,7 +331,7 @@ def copy_request(request: Any) -> Any:
       ``test_a_spec_draining_the_stream_drains_it_for_the_caller``;
     - ``_post``, ``_files``:
       ``test_a_form_a_spec_parsed_is_parsed_for_the_caller``;
-    - ``_encoding``: ``test_an_encoding_a_spec_sets_is_the_callers``;
+    - ``_encoding``, ``GET``: ``test_an_encoding_a_spec_sets_is_the_callers``;
     - ``_upload_handlers``:
       ``test_upload_handlers_a_spec_sets_are_the_callers``;
     - ``_multipart_parser_class``, Django 6.1's:
@@ -340,8 +342,8 @@ def copy_request(request: Any) -> Any:
     write them on ``self``. Everything else is a shallow copy of the
     ``__dict__``, taken onto an instance made with ``object.__new__``, which
     skips ``__init__`` and the ``__reduce_ex__`` route ``copy.copy`` takes:
-    ``META``, ``GET``, the cookies and the session are the same objects, and
-    an attribute the copy sets or deletes is its own
+    ``META`` and the session are the same objects, and an attribute the copy
+    sets or deletes is its own
     (``test_deleting_an_attribute_on_the_copy_leaves_the_caller_its_own``).
     The copy is an instance of a subclass of the handed request's class,
     named as it is (``test_a_copy_reads_as_the_request_it_copies``).

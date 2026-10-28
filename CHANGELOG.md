@@ -246,8 +246,9 @@ carries; releases up to 0.54.0 are in
   view handing its own request keeps serving as its user after the call, and
   concurrent calls sharing one request each see their own. The user is all
   the copy owns: its body, its stream and whatever has been parsed from them
-  (`POST`, `FILES`, the encoding and upload handlers they are parsed with) are
-  read and written on the handed request itself, so a spec reading
+  (`POST` and `FILES`, the upload handlers they are parsed with, and the
+  encoding they and `GET` are decoded with) are read and written on the handed
+  request itself, so a spec reading
   `request.body` caches it for the caller, a spec draining the stream drains it
   for the caller, and a body no spec reads is left unread, exactly as if the
   request had been handed over. A DRF `Request` is copied with the
