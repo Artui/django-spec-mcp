@@ -5,6 +5,7 @@ import re
 import sys
 import warnings
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import replace
 from typing import Any, cast
 
 from asgiref.sync import sync_to_async
@@ -16,6 +17,7 @@ from django_service_specs import (
     UNSET,
     Affordance,
     FieldMarking,
+    Parameters,
     PoolSeeds,
     SelectorKind,
     ServerArguments,
@@ -711,7 +713,9 @@ class MCPServer:
         ``pool_seeds``: a parameter named like a registered seed or the call's
         own ``request`` or ``view``, a positional-only parameter with no
         default, a keyword the callable requires that nothing fills, and an
-        optional read over a keyword the callable requires.
+        optional read over a keyword the callable requires. A read
+        ``server_arguments`` binds a value to is filled on every call, so it is
+        never refused as optional.
 
         ``display_name`` and ``display_description`` are labels for in-process
         consumers, read off the binding and never sent on the wire.
@@ -855,8 +859,12 @@ class MCPServer:
         # seeds, so the refusal is the one ``dispatch`` would make
         # (``test_a_read_a_seed_occupies_is_refused_at_registration``,
         # ``test_a_required_parameter_nothing_fills_is_refused_at_registration``).
+        # Asked of the spec as this server calls it: a read the binding's
+        # ``server_arguments`` fill is never left out, so it is judged as
+        # demanded (``_as_called``). The binding keeps the spec as declared.
+        bound = frozenset(binding.server_arguments.values)
         try:
-            check_seeds(binding.spec, pool_seeds=self._pool_seeds)
+            check_seeds(_as_called(binding.spec, bound), pool_seeds=self._pool_seeds)
         except ImproperlyConfigured as exc:
             raise ImproperlyConfigured(f"MCP tool {binding.name!r}: {exc}") from exc
         # The spec's own permissions are the tool's guard; the scope gate on
@@ -2531,6 +2539,55 @@ def _refuse_pagination_named_reads(binding: KernelToolBinding) -> None:
             "which takes them from the arguments before the selector is called, so the "
             "read would never receive the caller's value. Rename the read."
         )
+
+
+def _as_called(
+    spec: KernelServiceSpec | KernelSelectorSpec, bound: frozenset[str]
+) -> KernelServiceSpec | KernelSelectorSpec:
+    """``spec`` as a call on this server meets it: every read in ``bound`` demanded.
+
+    ``bound`` is a binding's ``server_arguments.values``, which replace the
+    caller's arguments of those names on every call, so such a read is never
+    left out whatever it declares. ``check_seeds`` reads a read declared
+    optional over a keyword with no default as one a call may leave out, and
+    so refuses it; asked of this copy instead, it refuses only the reads the
+    server does not fill
+    (``test_an_optional_read_the_server_binds_registers_and_is_filled``,
+    ``test_an_optional_read_the_server_does_not_bind_is_still_refused``). A
+    target selector's reads are the call's arguments too, so its seat is read
+    the same way (``test_an_optional_lookup_read_the_server_binds_registers_and_is_filled``,
+    one case per seat). Only for the check: the binding keeps the declared spec.
+    """
+    if isinstance(spec, KernelServiceSpec):
+        if spec.instance_selector_spec is not None:
+            spec = spec.derive(
+                instance_selector_spec=cast(
+                    KernelSelectorSpec, _demanding(spec.instance_selector_spec, bound)
+                )
+            )
+        if spec.collection_selector_spec is not None:
+            spec = spec.derive(
+                collection_selector_spec=cast(
+                    KernelSelectorSpec, _demanding(spec.collection_selector_spec, bound)
+                )
+            )
+    return _demanding(spec, bound)
+
+
+def _demanding(
+    spec: KernelServiceSpec | KernelSelectorSpec, bound: frozenset[str]
+) -> KernelServiceSpec | KernelSelectorSpec:
+    """``spec`` with each of its own reads named in ``bound`` required, and declaring no default."""
+    if not bound & spec.reads.names():
+        return spec
+    return spec.derive(
+        reads=Parameters.of(
+            *(
+                replace(read, required=True, default=UNSET) if read.name in bound else read
+                for read in spec.reads
+            )
+        )
+    )
 
 
 def _refuse_retired_argument_binding(name: str, argument_binding: ArgumentBinding) -> None:
