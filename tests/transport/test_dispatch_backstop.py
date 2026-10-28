@@ -126,8 +126,8 @@ def _upstream_forbidden() -> Any:
     raise _UpstreamForbidden(SECRET)
 
 
-# A library's own ``PermissionDenied``: the name DRF's carries, from another
-# module, so only the module half of ``is_raised_denial``'s check refuses it.
+# A library's own ``PermissionDenied``: Django's name, on a class that is not
+# Django's, so ``is_raised_denial`` answers it a fault.
 _NamesakeForbidden: type[Exception] = type(
     "PermissionDenied", (_UpstreamForbidden,), {"__module__": "some_sdk.errors"}
 )

@@ -1,21 +1,14 @@
-"""What each name in ``TOOL_EDGE_SEEDS`` is to a kernel tool call.
+"""What each of a tool call's seed names is to a kernel tool.
 
-The constant is the DRF edge's: drf-services seeds ``request`` and ``view`` on
-every ``dispatch_spec`` and its validator binds ``serializer``, so the drfs
-registrars reserve the three beside the kernel's ``RESERVED_POOL_SEEDS``. On the
-kernel path the first two are the kernel's own ``CALL_SEEDS``, read off the
-call's context, and ``serializer`` is an ordinary argument, since a kernel
-Validator binds nothing of that name. So this asks what each of the three is to
-a kernel tool: ``serializer`` is advertised and received; a read named
-``request`` or ``view`` is refused by the kernel when the spec is built, and
-one named after a seed the server registers is refused at registration,
-because no caller's value of that name reaches the service. A top-level Validator field of such a name is not a defect: the
-kernel documents it as the caller's, validated into ``data`` and never handed
-to the service under that name, so the last test here holds that answer.
-
-The drf-services original pinned the constant to drf-services' own
-``EDGE_SEEDS`` and ``DROPPED_EDGE_SEEDS``; it is kept beside this file as
-``test_tool_edge_seeds_drfs.py``. The constant goes with the drfs registrars.
+``request`` and ``view`` are the kernel's ``CALL_SEEDS``, read off the call's
+context, and ``serializer`` is an ordinary argument, since a kernel Validator
+binds nothing of that name. So ``serializer`` is advertised and received; a
+read named ``request`` or ``view`` is refused by the kernel when the spec is
+built, and one named after a seed the server registers is refused at
+registration, because no caller's value of that name reaches the service. A
+top-level Validator field of such a name is not a defect: the kernel documents
+it as the caller's, validated into ``data`` and never handed to the service
+under that name, so the last test here holds that answer.
 """
 
 from __future__ import annotations
@@ -28,7 +21,6 @@ from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import (
     CALL_SEEDS,
     DEFAULT_POOL_SEEDS,
-    RESERVED_POOL_SEEDS,
     DataclassValidator,
     Parameter,
     Parameters,
@@ -38,7 +30,6 @@ from django_service_specs import (
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.types.tool_edge_seeds import TOOL_EDGE_SEEDS
 
 
 def _echo(**pool: Any) -> dict[str, Any]:
@@ -55,8 +46,6 @@ def _echoed(out: Any, name: str) -> Any:
 SEEDS = DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme")
 
 EDGE_NAMES = sorted(CALL_SEEDS | {"serializer"})
-"""The constant's names, spelled out: the constant goes with the drfs registrars,
-and these questions outlive it."""
 
 
 def _server(spec: ServiceSpec) -> MCPServer:
@@ -66,12 +55,6 @@ def _server(spec: ServiceSpec) -> MCPServer:
     )
     server.register_tool(spec, name="echo", description="Echo the arguments.")
     return server
-
-
-def test_the_tool_edge_seeds_are_the_kernels_call_seeds_and_the_drf_validators_name() -> None:
-    assert CALL_SEEDS < TOOL_EDGE_SEEDS
-    assert {"serializer"} == TOOL_EDGE_SEEDS - CALL_SEEDS
-    assert not (TOOL_EDGE_SEEDS & RESERVED_POOL_SEEDS)
 
 
 @pytest.mark.django_db

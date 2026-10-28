@@ -119,15 +119,9 @@ def is_raised_denial(exc: BaseException) -> bool:
 
     Django's ``PermissionDenied`` is one
     (``test_a_raised_permission_denial_is_a_denial_not_a_fault`` in
-    ``test_dispatch_backstop.py``). The second check is there only for the
-    drf-services path, and goes with it: a drf-services permission class raises
-    DRF's ``PermissionDenied``, which is not a subclass of Django's, so it is
-    recognised by the module and name of a class in its MRO, which needs no
-    import of DRF (the same test in ``test_dispatch_backstop_drfs.py``). Its
-    name half is what keeps DRF's other exceptions faults
-    (``test_an_escaping_api_exception_is_a_json_rpc_internal_error`` there),
-    and its module half is what refuses another
-    library's class named ``PermissionDenied`` (the ``namesake`` case of
+    ``test_dispatch_backstop.py``), and only it: another library's class named
+    ``PermissionDenied`` is a fault like any other exception
+    (the ``namesake`` case of
     ``test_an_exception_declaring_a_403_is_still_a_server_fault``).
 
     **Not by the status an exception declares.** An HTTP client's error for an
@@ -136,10 +130,7 @@ def is_raised_denial(exc: BaseException) -> bool:
     server fault, answered ``500`` and logged at ``ERROR``
     (``test_an_exception_declaring_a_403_is_still_a_server_fault``).
     """
-    return isinstance(exc, PermissionDenied) or any(
-        cls.__module__ == "rest_framework.exceptions" and cls.__name__ == "PermissionDenied"
-        for cls in type(exc).__mro__
-    )
+    return isinstance(exc, PermissionDenied)
 
 
 def is_permission_denial(result: Any) -> bool:
@@ -159,12 +150,9 @@ def raised_denial_error() -> JsonRpcError:
     Both views' backstop catches a raised denial (``is_raised_denial``) ahead
     of its catch-all and answers with this. Every handler already maps a
     ``PermissionDenied`` it catches to ``FORBIDDEN``; what reaches the backstop
-    is one raised where no handler is looking, above all by a permission class
-    that raises instead of returning ``False`` (a common DRF idiom, and the only
-    way a class wrapped in ``DRFPermissionAdapter`` can attach a message). DRF's
-    ``handle_exception`` used to answer it with a ``403``, a bare DRF body but a
-    denial; the catch-all would turn it into a ``500`` and an ``ERROR`` log,
-    reporting a refusal as a server fault.
+    is one raised where no handler is looking, above all by a permission that
+    raises instead of returning ``False``. The catch-all would turn it into a
+    ``500`` and an ``ERROR`` log, reporting a refusal as a server fault.
 
     Handed back into the view's normal result path rather than answered on the
     spot, so a raised denial gets exactly what a returned one gets: the era's

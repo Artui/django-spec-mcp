@@ -333,20 +333,34 @@ def test_a_sibling_named_as_a_kernel_seed_does_not_reach_the_completer(name: str
     assert seen["other"] == "kept"
 
 
-def test_a_sibling_named_as_a_name_drf_services_drops_never_reaches_the_completer() -> None:
-    """``serializer`` is no kernel seed, but drf-services drops a caller's key of
-    that name everywhere else, so a completer is not handed one either."""
+def test_a_sibling_named_serializer_reaches_the_completer_as_on_a_tool() -> None:
+    """``serializer`` is no seed, and a kernel tool receives a caller's key of
+    that name, so a completer is handed it as any other sibling."""
     seen: dict[str, Any] = {}
 
     def completer(*, value: str, **kwargs: Any) -> list[str]:
         seen.update(kwargs)
         return ["a"]
 
-    out = _complete(_server_with_completer(completer), {"serializer": "attacker", "other": "kept"})
+    out = _complete(_server_with_completer(completer), {"serializer": "sent", "other": "kept"})
 
     assert isinstance(out, dict)
-    assert "serializer" not in seen
+    assert seen["serializer"] == "sent"
     assert seen["other"] == "kept"
+
+
+def test_a_sibling_named_request_is_outranked_by_the_seed() -> None:
+    """``request`` is no kernel seed and is not stripped, so it is the seed
+    written over the spread that keeps a caller's value out."""
+    seen: dict[str, Any] = {}
+
+    def completer(*, value: str, request: Any) -> list[str]:
+        seen["request"] = request
+        return ["a"]
+
+    _complete(_server_with_completer(completer), {"request": "spoofed"})
+
+    assert isinstance(seen["request"], HttpRequest)
 
 
 def test_an_ordinary_sibling_still_reaches_the_completer_by_name() -> None:
