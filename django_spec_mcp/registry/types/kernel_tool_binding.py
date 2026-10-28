@@ -69,11 +69,34 @@ class KernelToolBinding:
     include_structured_content: bool | None = None
     include_output_schema: bool | None = None
     invalidates: tuple[str, ...] = ()
-    """Service tools only; see ``ToolBinding.invalidates``."""
+    """Service tools only: URI templates naming the resources a successful call
+    changed.
+
+    Published as ``notifications/resources/updated`` once the transaction
+    commits, so subscribers re-read. Same ``{var}`` syntax as a resource's
+    ``uri_template``, rendered against the result merged with the call's
+    arguments:
+
+        invalidates=("invoices://{pk}", "invoices://")
+
+    **Name the collection too if you want it watched.** Topic matching is
+    exact: a prefix rule would match ``invoices://1`` against
+    ``invoices://11`` and miss a tenant-scoped scheme entirely.
+
+    Only calls that go through this server fire it. A management command, a
+    Celery job or an admin edit changes the same rows and publishes nothing;
+    ``MCPServer.notify_resource_updated`` covers those."""
     paginate: bool = False
-    """``LIST`` selector tools only; see ``SelectorToolBinding.paginate``."""
+    """``LIST`` selector tools only: serve the result a page at a time, under
+    the model-supplied ``page`` and ``limit``."""
     max_page_size: int | None | UnsetType = UNSET
-    """``LIST`` selector tools only; see ``SelectorToolBinding.max_page_size``."""
+    """``LIST`` selector tools only: the per-tool ceiling on the model-supplied
+    ``limit``. ``UNSET`` defers to the server's ``MAX_PAGE_SIZE``, ``None``
+    serves any ``limit`` the model asks for.
+
+    Only meaningful with ``paginate=True``: an unpaginated selector has no
+    ``limit`` to clamp, and clamping its result would drop rows with nothing in
+    the payload to say so (see ``UnboundedListWarning``)."""
     max_result_bytes: int | None | UnsetType = UNSET
     dispatch_timeout: float | None | UnsetType = UNSET
     always_listed: bool = False

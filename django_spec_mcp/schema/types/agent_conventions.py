@@ -61,23 +61,22 @@ class AgentConventions:
 
     handle_line: str | None = HANDLE_LINE
     """The line appended to the description of a tool whose output carries a
-    handle, after ``Identify records by `<label>`.`` when the output serializer
+    handle, after ``Identify records by `<label>`.`` when the presenter
     declares a label. ``None`` drops the line and that prefix with it. No
     placeholders."""
 
     query_param_on_pages: str | None = PAGED_QUERY_PARAM_SCOPE
-    """What a read-shaping ``QueryParam`` applies to on a tool that returns a
-    page. Appended to the param's description in the tool's ``inputSchema``, and
+    """What a read-shaping parameter, one of a spec's ``shapes``, applies to on
+    a tool that returns a page. Appended to the param's description in the tool's ``inputSchema``, and
     to the ``isError`` message when a value it supplied is refused while that
     tool's result is rendered. ``None`` drops it from both. No placeholders."""
 
     missing_arguments: str = MISSING_ARGUMENTS
     """The message of a ``validation_error`` result for a call that left out
     arguments the tool's selectors cannot run without: a selector parameter
-    with no default, a service tool's target lookup, a
-    ``UrlKwarg(required=True)``. ``{names}`` is the missing names, sorted, each
+    with no default or a service tool's target lookup. ``{names}`` is the missing names, sorted, each
     in backticks, joined with ``", "``; the ``detail`` stays keyed by each name.
-    An input serializer's own refusal, a missing field included, keeps
+    A validator's own refusal, a missing field included, keeps
     ``"Invalid arguments"``. Never ``None``, empty or only whitespace: it is
     the result's whole message."""
 

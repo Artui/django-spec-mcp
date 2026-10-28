@@ -39,20 +39,19 @@ KernelRefusalAnswer = Callable[
 def _insufficient_permission(
     exc: NotPermitted | PrincipalUnavailable, scene: KernelRefusalScene
 ) -> JsonRpcError:
-    """``-32006`` with no ``data``, as drf-services' ``PermissionDenied`` is answered
-    from inside dispatch: the scope gate's ``requiredScopes`` belong to the
-    transport's own check, which answers before dispatch is reached."""
+    """``-32006`` with no ``data``: the scope gate's ``requiredScopes`` belong to
+    the transport's own check, which answers before dispatch is reached, so a
+    refusal from inside dispatch names no scope."""
     return JsonRpcError(JsonRpcErrorCode.FORBIDDEN, "Insufficient permission")
 
 
 def _invalid_arguments(exc: InvalidArguments, scene: KernelRefusalScene) -> ToolResult:
     """The validation ``isError``, its ``detail`` the refusal's own per-field map.
 
-    The shape ``validation_error_result`` serves a DRF ``ValidationError`` in on
-    the drf-services path. A refusal naming arguments the call left out is
-    worded in the server's ``AgentConventions.missing_arguments``, from the
-    kernel's own reading of the refusal (``InvalidArguments.missing``), as the
-    drf-services path words its missing-argument check
+    The shape ``validation_error_result`` serves. A refusal naming arguments
+    the call left out is worded in the server's
+    ``AgentConventions.missing_arguments``, from the kernel's own reading of the
+    refusal (``InvalidArguments.missing``)
     (``test_a_missing_argument_is_worded_by_the_server``); any other refusal is
     ``Invalid arguments``. The detail is the same either way, every refused
     argument in it, so a call that left one argument out and sent another wrong
@@ -96,7 +95,7 @@ def _input_required(
 ) -> ToolResult | dict[str, Any] | JsonRpcError:
     """MRTR's ``input_required`` on the wire; a service error where there is no
     further round to ask in, which is how the in-process ``call_tool`` answers
-    it on the drf-services path.
+    it.
 
     One condition, the round being there or not: held both ways by
     ``test_additional_input_required_asks_for_input`` (a wire service tool,
@@ -148,7 +147,6 @@ KERNEL_REFUSALS: Mapping[type[BaseException], KernelRefusalAnswer] = MappingProx
 )
 """How the kernel path answers each refusal ``dispatch`` raises, in order.
 
-The answers are the ones the drf-services path gives the matching refusal:
 ``-32006`` for a denied or deactivated principal, the validation ``isError`` for
 refused input, MRTR's ``input_required`` for a service asking for more, and the
 service ``isError`` for any other ``ServiceError``. The kernel's

@@ -42,17 +42,16 @@ def run_kernel_tool(
     principal, grant and call context the checks were asked with, so a call
     whose arguments passed the shape check is not asked again (a call whose
     arguments failed it is counted in ``admit_kernel_call``), a refusal
-    answered through
-    ``KERNEL_REFUSALS``, a ``not_found`` worded as the drf-services path words
-    it, and the presented value as the tool result.
+    answered through ``KERNEL_REFUSALS``, a ``not_found`` worded by
+    ``not_found_result``, and the presented value as the tool result.
     """
     dispatched, page = page_request(binding, arguments, context.config)
     scene = KernelRefusalScene(
         arguments=arguments,
         config=context.config,
         conventions=context.conventions,
-        # A selector asks for nothing, as a drf-services selector does not: a
-        # request for input from one is a service error, not a round trip
+        # A selector asks for nothing: a request for input from one is a
+        # service error, not a round trip
         # (``test_a_kernel_selector_ignores_a_round_trip``).
         input_round=None
         if binding.is_selector

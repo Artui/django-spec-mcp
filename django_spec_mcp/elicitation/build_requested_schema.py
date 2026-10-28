@@ -38,7 +38,7 @@ def build_requested_schema(
     the server's value, after the user has filled it in; it is refused here instead,
     as an unrenderable one is, and the ``ImproperlyConfigured`` becomes a ``-32603``
     naming the property and the names that are admitted. ``None`` asks nothing of the
-    names, for a caller that does not know the set: a drf-services tool.
+    names, for a caller that does not know the set.
     """
     properties: dict[str, Any] = {}
     required: list[str] = []

@@ -104,9 +104,7 @@ def handle_completion_complete(
                 data={"requiredScopes": required_scopes} if required_scopes else None,
             )
 
-        # Before the charge, where the read now asks the spec's checks and where
-        # the drf-services completion judged the spec's permission classes, in
-        # the binding's own stack above
+        # Before the charge, where the read asks the spec's checks too
         # (``test_a_kernel_resources_spec_is_asked_before_its_rate_limit``).
         refused: JsonRpcError | None = _refused_by_the_spec(target, context)
         if refused is not None:

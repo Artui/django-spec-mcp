@@ -138,9 +138,8 @@ def _kernel_refuses(binding: Any, arguments: dict[str, Any], context: MCPCallCon
     here. Any other refusal is left to the handler, which answers it in the
     stream as it would without one
     (``test_a_refusal_that_is_not_a_denial_is_left_to_the_handler``).
-    Arguments a retry's answers would merge in are not seen here, as the
-    drf-services pre-flight does not see them either: the handler judges
-    those again. So when the arguments pass the shape check the checks are
+    Arguments a retry's answers would merge in are not seen here: the handler
+    judges those again. So when the arguments pass the shape check the checks are
     asked twice for a streamed call, here and in the handler, and once for a
     plain one; ``adispatch`` runs under the handler's grant and asks them no
     third time

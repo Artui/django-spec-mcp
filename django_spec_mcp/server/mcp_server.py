@@ -664,8 +664,8 @@ class MCPServer:
         """List the tools this server exposes, exactly as the wire would.
 
         The in-process twin of a ``tools/list`` request: one page of the tool catalog
-        with the *same* merged ``inputSchema`` the HTTP transport advertises (serializer
-        fields plus a selector tool's filter / ordering / pagination arguments and the
+        with the *same* ``inputSchema`` the HTTP transport advertises (the spec's
+        parameters, a paginated tool's ``page`` / ``limit`` and the
         ``additionalProperties`` policy), the same per-caller listing-permission filter
         (``FILTER_LISTINGS_BY_PERMISSIONS``) and the same opaque-cursor pagination —
         pass the returned ``nextCursor`` back for the next page. A
@@ -782,8 +782,7 @@ class MCPServer:
 
         The in-process twin of a ``tools/call`` request: routes through the same async
         handler the wire uses, so the transport-level MCP permissions and rate limits,
-        the selector post-fetch pipeline (filter / order / paginate), a selector
-        binding's MCP-only ``input_serializer`` and the output format all
+        the pagination of a ``LIST`` tool and the output format all
         apply — everything ``call_tool`` omits. Returns the wire's result payload (a
         ``dict`` carrying ``content`` / ``structuredContent`` / ``isError``), or a
         [`JsonRpcError`][django_spec_mcp.protocol.types.json_rpc_error.JsonRpcError]
@@ -1290,7 +1289,7 @@ class MCPServer:
         construction.
 
         ``meta`` is the generic ``_meta`` bundle for this prompt's
-        ``prompts/list`` entry — see ``register_service_tool``.
+        ``prompts/list`` entry — see ``register_tool``.
         """
         binding = PromptBinding(
             name=name,

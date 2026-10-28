@@ -16,8 +16,8 @@ def kernel_tool_entry(binding: KernelToolBinding, context: MCPCallContext) -> di
     """A kernel tool's ``tools/list`` entry.
 
     The schemas are the kernel's (``kernel_tool_input_schema``,
-    ``kernel_tool_output_schema``); everything else is assembled as the
-    drf-services entries are, from the same settings: the ``outputSchema``
+    ``kernel_tool_output_schema``); everything else is assembled from the
+    server's settings: the ``outputSchema``
     behind ``include_output_schema``, the handle convention appended to the
     description, and ``annotations`` / ``_meta`` as registered.
     """

@@ -38,9 +38,7 @@ def call_kernel_tool(
     """The in-process ``call_tool`` of a kernel tool, through ``dispatch``.
 
     ``arguments`` already carry the binding's server arguments. The scope gate
-    is not judged here: there is no token in process, as there is none for the
-    drf-services path's in-process call, whose transport permissions it skips
-    alike. The spec's own permissions are the kernel's, asked of ``user``
+    is not judged here: there is no token in process. The spec's own permissions are the kernel's, asked of ``user``
     before ``dispatch`` checks the arguments, as on the wire
     (``admit_kernel_call``), so a caller they refuse is told that rather than
     which argument it left out
@@ -60,7 +58,7 @@ def call_kernel_tool(
     # ``user`` is the one the call runs as, as ``acall_tool``'s is
     # (``test_sync_call_tool_hands_a_copy_carrying_the_acting_user``); with
     # none handed, a minimal one bearing that user is synthesised, as
-    # ``acall_tool`` and the drf-services path do
+    # ``acall_tool`` does
     # (``test_sync_call_tool_with_no_request_hands_one_carrying_the_acting_user``).
     if request is not None:
         request = copy_request(request, request_classes)

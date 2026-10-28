@@ -5,8 +5,7 @@ from __future__ import annotations
 RESOURCE_EDGE_SEEDS: frozenset[str] = frozenset({"request"})
 """Pool keys ``resources/read`` seeds itself, beyond the kernel's reserved set.
 
-``RESERVED_POOL_SEEDS`` is the kernel's, and since drf-services 0.58.0 it no
-longer lists ``request``: off HTTP there is none, so the kernel leaves it to an
+``RESERVED_POOL_SEEDS`` is the kernel's, and it does not list ``request``: off HTTP there is none, so the kernel leaves it to an
 HTTP adapter to seed. ``resources/read`` does, laying the synthesised request
 over the URI-template variables, so a variable named ``request`` would never
 reach the selector. ``register_resource`` reserves these beside the kernel's

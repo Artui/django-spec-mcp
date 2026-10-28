@@ -25,7 +25,7 @@ def _bound(value: int | float | None | UnsetType, setting: str) -> Any:
 
     ``None`` is a *meaningful value* for the outbound bounds ("no ceiling"), so
     it cannot double as the "not supplied" sentinel the other arguments use.
-    ``UNSET`` (drf-services' sentinel) carries that distinction:
+    ``UNSET`` (the kernel's sentinel) carries that distinction:
     ``build_mcp_config()`` takes the setting,
     ``build_mcp_config(dispatch_timeout=None)`` disables the deadline.
     """

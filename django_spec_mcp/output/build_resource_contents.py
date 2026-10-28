@@ -14,14 +14,11 @@ def build_resource_contents(
     uri: str,
     raw: Any,
 ) -> ResourceContents | JsonRpcError:
-    """Encode a resource's body into one ``resources/read`` block.
+    """Encode a view resource's body into one ``resources/read`` block.
 
-    Shared by both read handlers' plain path, a view's among them, and by
-    ``read_drfs_resource`` and its async sibling, which render ``raw`` through
-    the binding's ``output_serializer`` first
-    (``render_drfs_resource_output``). The read paths are full parallel
-    implementations rather than wrappers, so the encoding lives here, or the
-    two transports drift and only one gets a fix.
+    Shared by both read handlers' view path. The two handlers are full
+    parallel implementations rather than wrappers, so the encoding lives here,
+    or the sync and async reads drift and only one gets a fix.
 
     Encoded through ``encode_resource_contents``, the step a kernel resource's
     read shares: per the binding's
@@ -35,5 +32,5 @@ def build_resource_contents(
         raw,
         binding=binding,
         uri=uri,
-        producer="the selector (after any output_serializer)",
+        producer="the selector",
     )
