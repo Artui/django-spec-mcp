@@ -140,6 +140,14 @@ carries; releases up to 0.54.0 are in
   reads what the call hands it. A registered seed's resolver runs once per
   conditioned kernel tool per listing, as it runs once per call, so a seed that
   queries is paid for per tool.
+- **A presenter refusing a caller's shape is the caller's `validation_error`.** A
+  `ServiceValidationError` a kernel tool's presenter raises while rendering is
+  answered as an `isError` `validation_error` naming the `shapes` the caller sent,
+  with the server's `query_param_on_pages` sentence on a paged tool, as the
+  drf-services path answers a refused read-shaping `QueryParam`, on the wire and
+  from `call_tool` alike. With no shape sent, a `null` one or one the server's
+  `server_arguments` answers for, the error is the server's and is raised as before:
+  a `-32603` on the wire. Anything else a presenter raises stays the server's.
 
 ### Changed
 
