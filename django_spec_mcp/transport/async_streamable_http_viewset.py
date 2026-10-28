@@ -1,19 +1,20 @@
 from __future__ import annotations
 
-import asyncio
 import dataclasses
 import json
-from typing import Any, cast
+from collections.abc import Callable, Mapping
+from typing import Any
 
-from django.core.exceptions import PermissionDenied as DjangoPermissionDenied
-from django.http import HttpResponse, HttpResponseBase, JsonResponse
+from django.http import (
+    HttpRequest,
+    HttpResponse,
+    HttpResponseBase,
+    HttpResponseNotAllowed,
+    JsonResponse,
+)
 from django.utils.decorators import classonlymethod
+from django.views import View
 from django_service_specs import DEFAULT_POOL_SEEDS, PoolSeeds, ProgressReporter
-from rest_framework.exceptions import PermissionDenied
-from rest_framework.permissions import AllowAny
-from rest_framework.renderers import JSONRenderer
-from rest_framework.request import Request
-from rest_framework.viewsets import ViewSet
 
 from django_spec_mcp._compat.acall import acall
 from django_spec_mcp.auth.principal_for_token import principal_for_token
@@ -59,10 +60,17 @@ from django_spec_mcp.transport.types.session_store import SessionStore
 from django_spec_mcp.transport.types.sse_broker import SSEBroker
 from django_spec_mcp.transport.types.sse_replay_buffer import SSEReplayBuffer
 from django_spec_mcp.transport.utils import (
+    allowed_methods,
+    carry_principal,
+    exempt_endpoint,
     insufficient_scope_challenge,
     is_permission_denial,
+    is_raised_denial,
     modern_error_status,
+    not_acceptable,
     raised_denial_error,
+    route_actions,
+    seat_anonymous,
     session_gate_failure,
 )
 from django_spec_mcp.transport.validate_modern_request import validate_modern_request
@@ -75,6 +83,19 @@ from django_spec_mcp.types.subscriptions_listen_method import SUBSCRIPTIONS_LIST
 
 _SESSION_HEADER: str = "Mcp-Session-Id"
 _VERSION_HEADER: str = "Mcp-Protocol-Version"
+# JSON, and the server-sent events a GET, a subscription or a streamed call
+# answers with. ``text/event-stream`` alone is the ``Accept`` the spec tells a
+# client to send for the GET stream, so it is served rather than refused
+# (``test_an_accept_naming_only_a_stream_reaches_the_async_endpoint``).
+_ANSWERS_WITH: tuple[str, ...] = ("application/json", "text/event-stream")
+
+# Passed to ``as_view`` by ``MCPServer``, so the canonical routing lives next to
+# the view rather than in the URL conf.
+ASYNC_STREAMABLE_HTTP_ACTION_MAP: dict[str, str] = {
+    "post": "handle_jsonrpc",
+    "get": "handle_get",
+    "delete": "terminate_session",
+}
 
 
 logger = get_logger(__name__)
@@ -118,10 +139,11 @@ def _internal_error_response(message: JsonRpcRequest) -> JsonResponse:
     )
 
 
-class AsyncStreamableHttpViewSet(ViewSet):
+class AsyncStreamableHttpViewSet(View):
     """Async sibling of ``StreamableHttpViewSet`` for ASGI deployments.
 
-    Wire behaviour matches the sync ViewSet for POST and DELETE — same headers, same
+    A plain Django view whose actions are all ``async def``, so Django awaits it
+    with no thread hop. Wire behaviour matches the sync view for POST and DELETE — same headers, same
     status codes, same JSON-RPC shapes — and the reasoning behind the shared checks
     lives there. The async path additionally serves server-initiated SSE on GET when an
     [`SSEBroker`][django_spec_mcp.transport.types.sse_broker.SSEBroker] is wired in;
@@ -132,9 +154,12 @@ class AsyncStreamableHttpViewSet(ViewSet):
     works under ASGI.
     """
 
-    authentication_classes = ()
-    permission_classes = (AllowAny,)
-    renderer_classes = (JSONRenderer,)
+    actions: Mapping[str, str] = ASYNC_STREAMABLE_HTTP_ACTION_MAP
+    # Declared rather than computed: Django derives it from the class's own
+    # ``get`` / ``post`` / ... methods, and these are bound per instance from
+    # ``actions``, so the class has none for it to read. Every action is
+    # ``async def``, and with this set Django's ``options`` and ``405`` answer
+    # as coroutines too.
     view_is_async: bool = True
 
     tools: ToolRegistry | None = None
@@ -142,8 +167,9 @@ class AsyncStreamableHttpViewSet(ViewSet):
     prompts: PromptRegistry | None = None
     auth_backend: MCPAuthBackend | None = None
     session_store: SessionStore | None = None
-    # Async-only: a subscription is a stream that stays open, which a sync WSGI
-    # view cannot hold. The sync viewset is deliberately not given one.
+    # Serving a subscription is async-only: it is a stream that stays open,
+    # which a sync WSGI view cannot hold. The sync view is given one only to
+    # publish to it.
     subscription_broker: SubscriptionBroker | None = None
     # ``None`` on both means this server runs no tasks.
     task_store: TaskStore | None = None
@@ -151,101 +177,53 @@ class AsyncStreamableHttpViewSet(ViewSet):
     sse_broker: SSEBroker | None = None
     sse_replay_buffer: SSEReplayBuffer | None = None
     # Identity the owning server resolved at construction. Unlike the
-    # collaborators above these stay optional at dispatch: a hand-wired viewset
+    # collaborators above these stay optional at dispatch: a hand-wired view
     # with no server still answers ``initialize``, falling back to
     # ``SERVER_INFO``.
     server_info: Implementation | None = None
     instructions: str | None = None
     config: MCPConfig | None = None
     # The owning server's ``pool_seeds=``, read into every context this view
-    # builds. drf-services' default for a hand-wired viewset, which is exactly
+    # builds. drf-services' default for a hand-wired view, which is exactly
     # the seeds dispatch would use with none passed.
     pool_seeds: PoolSeeds = DEFAULT_POOL_SEEDS
     # The owning server's ``conventions=``, read into every context this view
     # builds, so the wording it serves is that server's. The defaults for a
-    # hand-wired viewset, which is what a server given none would say.
+    # hand-wired view, which is what a server given none would say.
     conventions: AgentConventions = AgentConventions()
 
     @classonlymethod
-    def as_view(cls, actions: Any = None, **initkwargs: Any) -> Any:
-        """Wrap DRF's sync ``as_view`` so Django routes the callable as async.
+    def as_view(
+        cls, actions: Mapping[str, str] | None = None, **initkwargs: Any
+    ) -> Callable[..., Any]:
+        """Build the view function routing ``actions``, the canonical map if ``None``.
 
-        ``ViewSet.as_view`` returns a sync function calling
-        ``self.dispatch(request)``; because our ``dispatch`` is ``async def``,
-        that wrapper hands Django an unawaited coroutine and the request
-        handler raises. Wrapping and tagging it with the ``_is_coroutine``
-        marker tells the handler to ``await`` the view instead.
+        Django marks the function a coroutine function because
+        ``view_is_async`` is set, so the handler awaits it.
         """
-        sync_view = super().as_view(actions=actions, **initkwargs)
+        routed: Mapping[str, str] = cls.actions if actions is None else actions
+        view = super().as_view(actions=routed, **initkwargs)
+        return exempt_endpoint(view, routed, cls)
 
-        async def async_view(request: Any, *args: Any, **kwargs: Any) -> HttpResponseBase:
-            # Our overridden ``dispatch`` is async, so this is a coroutine the
-            # DRF stub does not know about; the cast bypasses its ``Response``
-            # return-type narrowing.
-            return await cast(Any, sync_view(request, *args, **kwargs))
-
-        # Carries over the introspection attributes and, load-bearingly, the
-        # middleware opt-out flags: ``CsrfViewMiddleware`` and
-        # ``LoginRequiredMiddleware`` read ``csrf_exempt`` / ``login_required``
-        # off the *resolved callable*, which is this wrapper rather than the
-        # sync view underneath, so without them a POST or DELETE 403s on a
-        # missing CSRF token or 302s to the login page — for a bearer-token
-        # transport that has neither. Copied wholesale so a future DRF/Django
-        # attribute cannot silently go missing; dunders are skipped because
-        # ``__wrapped__`` would point introspection at the sync view.
-        for attr, value in sync_view.__dict__.items():
-            if not attr.startswith("__"):
-                setattr(async_view, attr, value)
-        # Django's marker for "this callable returns a coroutine", so
-        # ``django.core.handlers.base`` awaits it. The underscore-prefixed name
-        # is a private asyncio detail, but Django relies on it stably.
-        async_view._is_coroutine = (  # ty: ignore[unresolved-attribute]
-            asyncio.coroutines._is_coroutine  # ty: ignore[unresolved-attribute]
-        )
-        return async_view
+    def setup(self, request: HttpRequest, *args: Any, **kwargs: Any) -> None:
+        route_actions(self, self.actions)
+        super().setup(request, *args, **kwargs)
 
     async def dispatch(  # ty: ignore[invalid-method-override]
-        self, request: Any, *args: Any, **kwargs: Any
+        self, request: HttpRequest, *args: Any, **kwargs: Any
     ) -> HttpResponseBase:
-        """Async-aware mirror of ``rest_framework.views.APIView.dispatch``.
+        refused: JsonResponse | None = not_acceptable(request, _ANSWERS_WITH)
+        if refused is not None:
+            return refused
+        # Every route is a coroutine here, Django's ``options`` and ``405``
+        # included, because ``view_is_async`` is set; the stub types the sync
+        # base's return, not the coroutine it hands back.
+        routed: Any = super().dispatch(request, *args, **kwargs)
+        return await routed
 
-        DRF's stock ``dispatch`` is sync: it passes whatever the handler
-        returns to ``finalize_response``, which ``isinstance``-checks against
-        ``HttpResponseBase`` and so chokes on the coroutine an ``async def``
-        action returns. DRF 3.16+ added async hooks at the framework edges but
-        the ViewSet dispatch path still assumes sync, so until that lands
-        upstream this override is what avoids an ``async_to_sync`` thread-hop.
-        """
-        self.args = args
-        self.kwargs = kwargs
-        request = self.initialize_request(request, *args, **kwargs)
-        self.request = request
-        self.headers = self.default_response_headers
+    # ----- actions (routed by ``as_view``'s map) -----
 
-        try:
-            self.initial(request, *args, **kwargs)
-            # The DRF stub types ``request.method`` as ``str | None``; inside
-            # an HTTP request flow it is always populated.
-            method: str = request.method.lower()  # ty: ignore[unresolved-attribute]
-            handler = getattr(self, method, self.http_method_not_allowed)
-            result = handler(request, *args, **kwargs)
-            # Action handlers are async, but the base class's
-            # ``http_method_not_allowed`` is sync — accept either shape so a
-            # stray sync handler does not 500.
-            response = await result if asyncio.iscoroutine(result) else result
-        except Exception as exc:
-            response = self.handle_exception(exc)
-
-        # ``finalize_response`` is typed ``response: Response`` on the stub but
-        # accepts ``HttpResponseBase`` at runtime, short-circuiting for
-        # non-Response shapes — which is what our actions deliberately return.
-        self.response = self.finalize_response(request, cast(Any, response), *args, **kwargs)
-        return self.response
-
-    # ----- DRF async action methods -----
-
-    async def handle_jsonrpc(self, request: Request) -> HttpResponseBase:
-        http_request = request._request  # noqa: SLF001
+    async def handle_jsonrpc(self, http_request: HttpRequest) -> HttpResponseBase:
         guard: HttpResponse | None = self._check_origin(http_request)
         if guard is not None:
             return guard
@@ -377,11 +355,11 @@ class AsyncStreamableHttpViewSet(ViewSet):
             if streamed is not None:
                 return streamed
             result: Any = await adispatch(message.method, _params_dict(message.params), context)
-        except (PermissionDenied, DjangoPermissionDenied):
+        except Exception as exc:  # noqa: BLE001 — the backstop; see ``_internal_error_response``
+            if not is_raised_denial(exc):
+                return _internal_error_response(message)
             # A denial raised rather than returned; see ``raised_denial_error``.
             result = raised_denial_error()
-        except Exception:  # noqa: BLE001 — the backstop; see ``_internal_error_response``
-            return _internal_error_response(message)
 
         if isinstance(result, JsonRpcError):
             response_body = JsonRpcResponse(id=message.id, error=result).to_dict()
@@ -479,11 +457,11 @@ class AsyncStreamableHttpViewSet(ViewSet):
             if streamed is not None:
                 return streamed
             result: Any = await adispatch(message.method, _params_dict(message.params), context)
-        except (PermissionDenied, DjangoPermissionDenied):
+        except Exception as exc:  # noqa: BLE001 — the backstop; see ``_internal_error_response``
+            if not is_raised_denial(exc):
+                return _internal_error_response(message)
             # A denial raised rather than returned; see ``raised_denial_error``.
             result = raised_denial_error()
-        except Exception:  # noqa: BLE001 — the backstop; see ``_internal_error_response``
-            return _internal_error_response(message)
         if isinstance(result, JsonRpcError):
             body = JsonRpcResponse(id=message.id, error=result).to_dict()
             status: int = modern_error_status(result)
@@ -495,7 +473,7 @@ class AsyncStreamableHttpViewSet(ViewSet):
             return response
         return JsonResponse(JsonRpcResponse(id=message.id, result=result).to_dict())
 
-    async def handle_get(self, request: Request) -> HttpResponseBase:
+    async def handle_get(self, http_request: HttpRequest) -> HttpResponseBase:
         """GET action: open a server-pushed SSE stream for the current session.
 
         - 405 if no broker is configured, or sessions are off (nothing to
@@ -521,12 +499,11 @@ class AsyncStreamableHttpViewSet(ViewSet):
         past any proxy's idle timeout. ``subscriptions/listen`` is bounded on
         exactly these two axes for exactly this reason.
         """
-        http_request = request._request  # noqa: SLF001
         guard: HttpResponse | None = self._check_origin(http_request)
         if guard is not None:
             return guard
         if self._modern_era_requested(http_request):
-            return HttpResponse(status=405)
+            return self._method_not_allowed()
 
         broker = self.sse_broker
         if broker is None or not self._sessions_enabled():
@@ -539,7 +516,7 @@ class AsyncStreamableHttpViewSet(ViewSet):
             # asks the client to go get one. Method support is a fact about
             # the resource, not about the caller — the same reasoning
             # ``_handle_modern`` applies to era detection.
-            return HttpResponse(status=405)
+            return self._method_not_allowed()
 
         token = await self._authenticate(http_request)
         if token is None:
@@ -597,21 +574,20 @@ class AsyncStreamableHttpViewSet(ViewSet):
             max_seconds=config.sse_stream_max_seconds,
         )
 
-    async def terminate_session(self, request: Request) -> HttpResponse:
+    async def terminate_session(self, http_request: HttpRequest) -> HttpResponse:
         """DELETE action: end the session named by ``MCP-Session-Id``.
 
         Requires authentication, and only the principal a session was
         minted for can destroy it — a wrong-principal (or unknown) id
         renders 404 without touching the session.
         """
-        http_request = request._request  # noqa: SLF001
         guard: HttpResponse | None = self._check_origin(http_request)
         if guard is not None:
             return guard
         if self._modern_era_requested(http_request) or not self._sessions_enabled():
             # No sessions to terminate — the spec's blessed answer for a server
             # that does not let clients terminate sessions.
-            return HttpResponse(status=405)
+            return self._method_not_allowed()
         token = await self._authenticate(http_request)
         if token is None:
             return self._unauthenticated_response()
@@ -760,9 +736,23 @@ class AsyncStreamableHttpViewSet(ViewSet):
 
     # ----- collaborator accessors -----
 
-    async def _authenticate(self, http_request: Any) -> Any:
+    def _method_not_allowed(self) -> HttpResponse:
+        """A ``405`` naming the methods this view routes, as RFC 9110 requires."""
+        return HttpResponseNotAllowed(allowed_methods(self))
+
+    async def _authenticate(self, http_request: HttpRequest) -> Any:
+        """Resolve the caller's token; on success the request is the token's.
+
+        As the sync view's: the backend sees an anonymous request, and an
+        authenticated one carries the token's principal from here on, ahead of
+        every context, stream pre-flight and subscription grant built from it.
+        """
         backend = self._require_auth_backend()
-        return await acall(backend.authenticate, http_request)
+        seat_anonymous(http_request)
+        token: Any = await acall(backend.authenticate, http_request)
+        if token is not None:
+            carry_principal(http_request, token)
+        return token
 
     def _unauthenticated_response(self) -> JsonResponse:
         challenge: str = self._require_auth_backend().www_authenticate_challenge(
@@ -826,15 +816,6 @@ def _params_dict(params: Any) -> dict[str, Any] | None:
     if isinstance(params, dict):
         return params
     return None  # JSON-RPC list params are not used by MCP today.
-
-
-# Passed directly to ``as_view``, so the canonical mapping lives next to the
-# ViewSet rather than in the URL conf.
-ASYNC_STREAMABLE_HTTP_ACTION_MAP: dict[str, str] = {
-    "post": "handle_jsonrpc",
-    "get": "handle_get",
-    "delete": "terminate_session",
-}
 
 
 __all__ = ["ASYNC_STREAMABLE_HTTP_ACTION_MAP", "AsyncStreamableHttpViewSet"]

@@ -166,6 +166,39 @@ carries; releases up to 0.54.0 are in
 
 ### Changed
 
+- **The MCP endpoint and the protected-resource metadata view are plain Django
+  views**, no longer DRF viewsets, so **no `REST_FRAMEWORK` setting reaches them**:
+  a project's `DEFAULT_THROTTLE_CLASSES`, `DEFAULT_AUTHENTICATION_CLASSES`,
+  renderers and `EXCEPTION_HANDLER` stop applying to the endpoint. The package's
+  own rate limits, `rate_limits=` on each tool, resource and prompt, are what
+  limit a caller, and `MCPAuthBackend` is the only authentication. An auth backend
+  answers an unauthenticated caller by returning `None`, which is the `401` with
+  its challenge: an exception it raises from `authenticate` is no longer rendered
+  by DRF, and nothing maps it in DRF's place. Django's `PermissionDenied` and
+  `Http404` raised there render as Django's own HTML `403` and `404` pages, and
+  any other exception, an `AuthenticationFailed` included (a `403` reading
+  `{"detail": ...}` until now), is a `500`. What a client
+  sees changes in a few places: `OPTIONS` answers `200` with `Allow` and an empty
+  body, where it served DRF's metadata, the class docstring included; `Allow` is
+  sent on a `405` and an `OPTIONS` answer only; a method the endpoint does not
+  route is a `405` with an empty body rather than a JSON `detail`; a `?format=`
+  query is ignored rather than answered `404`; and the async endpoint serves an
+  `Accept` naming only `text/event-stream`, the header the spec tells a client to
+  send for the GET stream, which was refused with a `406`. The sync endpoint,
+  which never streams, answers a `GET` or `HEAD` with its bodyless `405` whatever
+  the `Accept`, where one naming only `text/event-stream` was a `406`. The `406`
+  for an `Accept` admitting nothing the endpoint answers with is kept, as are the
+  CSRF and login-required opt-outs, and it now follows Django's reading of the
+  header. So an `Accept` of `application/json;q=0, text/event-stream`, which
+  was served a `200`, is a `406` from the sync endpoint wherever Django reads a
+  `q` of `0` as declaring JSON unacceptable, as Django 5.2 does, since JSON is
+  all that endpoint answers with; Django 4.2 ignores the `q` and still serves it. The `406` body and the
+  metadata document are serialized with `json.dumps` defaults, so they carry
+  `", "` and `": "` separators and escape non-ASCII characters, where DRF wrote
+  them compact and in UTF-8. `request.user` and `request.auser()` are the
+  bearer token's principal from the moment the request authenticates, so an
+  `MCPPermission` never judges the user a session cookie names, and the auth
+  backend is handed an anonymous request whatever the cookie says.
 - **`django-service-specs` 0.18.0 is the floor.** Its root holds every kernel name
   this package reads, and it reserves `shapes` as a pool name, so a `PoolSeeds`
   entry named `shapes` is refused when it is built, as one named `user` is.

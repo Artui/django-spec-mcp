@@ -32,7 +32,6 @@ from django.test import AsyncClient, Client, override_settings
 from django_service_specs import SelectorKind
 from rest_framework import serializers
 from rest_framework.exceptions import PermissionDenied, ValidationError
-from rest_framework.throttling import BaseThrottle
 from rest_framework_services.types.selector_spec import SelectorSpec
 
 from django_spec_mcp import MCPServer, ScopeRequired
@@ -41,9 +40,7 @@ from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.subscriptions.in_memory_subscription_broker import (
     InMemorySubscriptionBroker,
 )
-from django_spec_mcp.transport.async_streamable_http_viewset import AsyncStreamableHttpViewSet
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
-from django_spec_mcp.transport.streamable_http_viewset import StreamableHttpViewSet
 from tests.testapp.models import Invoice
 from tests.testapp.urlconf_for import urlconf_for
 from tests.utils import tool_error
@@ -618,39 +615,3 @@ async def test_an_unknown_method_keeps_its_own_answer(is_async: bool, modern: bo
     response = await _post(is_async, _server(), "nope/nothing", {}, modern=modern)
     assert response.status_code == (404 if modern else 200), response.content
     assert response.json()["error"]["code"] == -32601
-
-
-class _DenyingThrottle(BaseThrottle):
-    def allow_request(self, request: Any, view: Any) -> bool:
-        return False
-
-    def wait(self) -> float:
-        return 7
-
-
-@pytest.mark.parametrize(
-    "viewset", [StreamableHttpViewSet, AsyncStreamableHttpViewSet], ids=["sync", "async"]
-)
-async def test_a_drf_throttle_keeps_its_429_and_retry_after(
-    viewset: type, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """DRF's ``initial()`` runs before the action, so the backstop cannot see it.
-
-    A project whose ``DEFAULT_THROTTLE_CLASSES`` reaches these viewsets keeps
-    the ``429`` and ``Retry-After`` DRF renders for it. Patched on the class
-    because DRF binds that setting to ``APIView`` at import.
-    """
-    monkeypatch.setattr(viewset, "throttle_classes", (_DenyingThrottle,))
-    is_async = viewset is AsyncStreamableHttpViewSet
-    body, headers = _request("tools/call", {"name": "ok.gated", "arguments": {}}, modern=True)
-    with override_settings(ROOT_URLCONF=urlconf_for(_server(), is_async=is_async)):
-        if is_async:
-            response = await AsyncClient().post(
-                "/mcp/", data=body, content_type="application/json", headers=headers
-            )
-        else:
-            response = await sync_to_async(Client().post)(
-                "/mcp/", data=body, content_type="application/json", headers=headers
-            )
-    assert response.status_code == 429, response.content
-    assert response["Retry-After"] == "7"

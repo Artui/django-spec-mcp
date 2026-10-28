@@ -7,10 +7,10 @@ drf-services server gives them. The drf-services original read
 ``tests.testapp.async_urls`` and is kept beside this file as
 ``test_async_streamable_http_view_drfs.py``.
 
-One of its questions has no kernel counterpart: an exception inside an action
-being routed through DRF's ``handle_exception``. That is a property of the view
-being a DRF viewset, not of anything a kernel spec declares, and what a kernel
-tool raising is answered with is held by ``test_dispatch_backstop.py``.
+One of its questions is gone: an exception inside an action being routed
+through DRF's ``handle_exception``. The view is a plain Django view now, which
+no DRF setting reaches, and what a tool raising is answered with is held by
+``test_dispatch_backstop.py``.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ import json
 from typing import Any
 
 import pytest
+from asgiref.sync import iscoroutinefunction
 from django import VERSION as DJANGO_VERSION
 from django.http import HttpRequest
 from django.test import AsyncClient, RequestFactory, override_settings
@@ -583,10 +584,10 @@ async def test_acall_invokes_sync_function_via_thread() -> None:
 # ----- middleware opt-out flags -----
 #
 # Django's ``CsrfViewMiddleware`` and ``LoginRequiredMiddleware`` read their
-# opt-out flags off the *resolved* callable — the async wrapper, not the sync
-# view DRF built underneath it. The wrapper has to carry them or POST/DELETE
-# to the MCP endpoint 403s (no CSRF token) or 302s to a login page, neither of
-# which a bearer-token transport can satisfy.
+# opt-out flags off the *resolved* callable, which is the function ``as_view``
+# returns. It has to carry them or POST/DELETE to the MCP endpoint 403s (no
+# CSRF token) or 302s to a login page, neither of which a bearer-token
+# transport can satisfy.
 
 _CSRF_MIDDLEWARE = ["django.middleware.csrf.CsrfViewMiddleware"]
 
@@ -609,13 +610,20 @@ def test_async_view_opts_out_of_login_required() -> None:
     assert _async_view().login_required is False
 
 
-def test_async_view_keeps_drf_introspection_attributes() -> None:
+def test_async_view_names_its_class_and_the_map_it_routes() -> None:
+    """``view.cls`` and ``view.actions`` keep the names they were always read by."""
     view = _async_view()
     assert view.cls is AsyncStreamableHttpViewSet
+    assert view.view_class is AsyncStreamableHttpViewSet
     assert view.actions == ASYNC_STREAMABLE_HTTP_ACTION_MAP
-    # ``__wrapped__`` is deliberately *not* carried over: it would point
-    # introspection at the sync view through the async wrapper.
+    # No wrapper sits between Django and the view any more, so there is
+    # nothing for ``__wrapped__`` to point introspection at.
     assert not hasattr(view, "__wrapped__")
+
+
+def test_async_view_is_a_coroutine_function() -> None:
+    """Django awaits the view because ``as_view`` marked it, with no thread hop."""
+    assert iscoroutinefunction(_async_view())
 
 
 async def test_async_post_passes_csrf_middleware(async_urlconf) -> None:

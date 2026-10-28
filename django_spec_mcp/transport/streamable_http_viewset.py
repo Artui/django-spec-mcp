@@ -1,16 +1,19 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable, Mapping
 from typing import Any
 
-from django.core.exceptions import PermissionDenied as DjangoPermissionDenied
-from django.http import HttpResponse, JsonResponse
+from django.http import (
+    HttpRequest,
+    HttpResponse,
+    HttpResponseBase,
+    HttpResponseNotAllowed,
+    JsonResponse,
+)
+from django.utils.decorators import classonlymethod
+from django.views import View
 from django_service_specs import DEFAULT_POOL_SEEDS, PoolSeeds
-from rest_framework.exceptions import PermissionDenied
-from rest_framework.permissions import AllowAny
-from rest_framework.renderers import JSONRenderer
-from rest_framework.request import Request
-from rest_framework.viewsets import ViewSet
 
 from django_spec_mcp._compat.reject_awaitable import reject_awaitable
 from django_spec_mcp.auth.principal_for_token import principal_for_token
@@ -37,10 +40,17 @@ from django_spec_mcp.transport.origin_validation import is_origin_allowed
 from django_spec_mcp.transport.types.request_metadata import RequestMetadata
 from django_spec_mcp.transport.types.session_store import SessionStore
 from django_spec_mcp.transport.utils import (
+    allowed_methods,
+    carry_principal,
+    exempt_endpoint,
     insufficient_scope_challenge,
     is_permission_denial,
+    is_raised_denial,
     modern_error_status,
+    not_acceptable,
     raised_denial_error,
+    route_actions,
+    seat_anonymous,
     session_gate_failure,
 )
 from django_spec_mcp.transport.validate_modern_request import validate_modern_request
@@ -52,6 +62,24 @@ from django_spec_mcp.types.sessionless_methods import SESSIONLESS_METHODS
 
 _SESSION_HEADER: str = "Mcp-Session-Id"
 _VERSION_HEADER: str = "Mcp-Protocol-Version"
+# WSGI never streams, so JSON is all this view answers a POST, DELETE or
+# OPTIONS with, and a client accepting only ``text/event-stream`` there cannot
+# be served (``test_the_sync_endpoint_refuses_an_accept_naming_only_a_stream``).
+_ANSWERS_WITH: tuple[str, ...] = ("application/json",)
+# Answered with a bodyless ``405`` whatever the ``Accept``, so never refused
+# for it: the spec has a GET list ``text/event-stream`` and a server that
+# offers no stream answer ``405``, which negotiating first turned into a ``406``
+# (``test_a_sync_get_naming_only_a_stream_is_the_405_not_a_406``). ``head``
+# because Django routes it to the ``get`` handler.
+_UNNEGOTIATED: frozenset[str] = frozenset({"GET", "HEAD"})
+
+# Passed to ``as_view`` by ``MCPServer``, so the canonical routing lives next to
+# the view rather than in the URL conf.
+STREAMABLE_HTTP_ACTION_MAP: dict[str, str] = {
+    "post": "handle_jsonrpc",
+    "get": "handle_get",
+    "delete": "terminate_session",
+}
 
 
 logger = get_logger(__name__)
@@ -85,19 +113,15 @@ def _internal_error_response(message: JsonRpcRequest) -> JsonResponse:
     responses are all built from those return values. What reaches this is
     what nothing mapped, which makes it a server fault whatever its type.
 
-    Without it the exception left the action and DRF's ``handle_exception``
-    rendered it: an ``APIException`` as a bare DRF body under the exception's
-    own status (a serializer's ``ValidationError`` arrived as a ``400`` reading
-    ``["..."]``, with no ``jsonrpc`` and no ``id``, so a spec-following client
-    could not even match it to the request it sent), and anything else as
-    Django's ``500`` page. Neither was a JSON-RPC reply at all.
+    Without it the exception would leave the view as Django's ``500`` page,
+    which is not a JSON-RPC reply at all: a spec-following client could not
+    even match it to the request it sent.
 
-    **Nothing is meant to escape.** DRF's own mappings that do produce a
-    response (a throttle's ``429`` with ``Retry-After``, content negotiation's
-    ``406``) run in ``initial()``, before this action is called, so the
-    backstop cannot reach them. tests/transport/test_dispatch_backstop.py pins
-    those, and the denial, rate-limit and unknown-method answers the handlers
-    return rather than raise.
+    **Nothing is meant to escape.** The ``406`` for an ``Accept`` header the
+    view cannot answer is decided in ``dispatch``, before this action is
+    called, so the backstop cannot reach it.
+    tests/transport/test_dispatch_backstop.py pins the denial, rate-limit and
+    unknown-method answers the handlers return rather than raise.
 
     **The status stays a ``500``** so proxies, load balancers and error-rate
     monitoring still count a server fault, which a ``200`` carrying the error
@@ -169,36 +193,36 @@ def _reject_awaitable_session(result: Any, *, store: Any, method: str) -> Any:
     )
 
 
-class StreamableHttpViewSet(ViewSet):
+class StreamableHttpViewSet(View):
     """The single ``/mcp`` endpoint per MCP 2025-11-25 (Streamable HTTP).
 
-    Wires three HTTP methods to one URL through DRF's ViewSet action map
-    (``StreamableHttpViewSet.as_view({"post": "handle_jsonrpc", "get":
-    "handle_get", "delete": "terminate_session"}, ...)``):
+    A plain Django view routing three HTTP methods to one URL through the
+    action map ``as_view`` is given (``StreamableHttpViewSet.as_view({"post":
+    "handle_jsonrpc", "get": "handle_get", "delete": "terminate_session"},
+    ...)``, which is ``STREAMABLE_HTTP_ACTION_MAP``):
 
     - **POST** → exactly one JSON-RPC message, returns ``application/json``
       (or HTTP 202 for notifications).
     - **GET** → not implemented in v1; returns 405 (allowed by spec).
     - **DELETE** → terminates the session referenced by ``MCP-Session-Id``.
 
-    The transport bypasses DRF's default request lifecycle on purpose:
-    ``authentication_classes`` is empty because
-    [`MCPAuthBackend`][django_spec_mcp.auth.types.auth_backend.MCPAuthBackend] is the
-    auth layer (DRF's ``SessionAuthentication`` would fight with the bearer-token shape
-    MCP advertises), and ``permission_classes`` is ``AllowAny`` because per-binding
-    permissions live on the registered tool / resource / prompt.
+    ``HEAD`` takes the ``GET`` handler and ``OPTIONS`` is Django's, naming the
+    methods in ``Allow``. Nothing of a project's own middleware decides who
+    calls: [`MCPAuthBackend`][django_spec_mcp.auth.types.auth_backend.MCPAuthBackend]
+    is the auth layer, the view is CSRF-exempt and never redirected to a login
+    page, and per-binding permissions live on the registered tool, resource and
+    prompt. Rate limits are the package's own, ``rate_limits=`` on each binding;
+    no DRF throttle, authentication class, renderer or exception handler
+    reaches this view.
 
     Collaborators (registries, auth backend, session store) are instance-scoped and
     passed in by [`MCPServer`][django_spec_mcp.server.mcp_server.MCPServer] through
     ``as_view``, never looked up at module level, so independent servers in one process
     cannot interfere."""
 
-    authentication_classes = ()
-    permission_classes = (AllowAny,)
-    renderer_classes = (JSONRenderer,)
-
-    # ``as_view`` requires kwargs to be existing class attributes, so these are
-    # declared with ``None`` defaults for the server to populate.
+    # Django's ``as_view`` requires kwargs to be existing class attributes, so
+    # these are declared with defaults for the server to populate.
+    actions: Mapping[str, str] = STREAMABLE_HTTP_ACTION_MAP
     tools: ToolRegistry | None = None
     resources: ResourceRegistry | None = None
     prompts: PromptRegistry | None = None
@@ -209,32 +233,51 @@ class StreamableHttpViewSet(ViewSet):
     task_executor: TaskExecutor | None = None
     # **Publishing only.** Serving ``subscriptions/listen`` needs a stream that
     # stays open, which a sync WSGI view cannot hold, so that action is the
-    # async viewset's alone. Announcing an ``invalidates=`` change is the other
+    # async view's alone. Announcing an ``invalidates=`` change is the other
     # direction and costs nothing but a publish, so a tool mutating over WSGI
     # while subscribers hold their streams on an ASGI process still reaches
     # them - the exact split a cross-process broker exists for.
     subscription_broker: SubscriptionBroker | None = None
     # Identity the owning server resolved at construction. Unlike the
-    # collaborators above these stay optional at dispatch: a hand-wired viewset
+    # collaborators above these stay optional at dispatch: a hand-wired view
     # with no server still answers ``initialize``, falling back to
     # ``SERVER_INFO``.
     server_info: Implementation | None = None
     instructions: str | None = None
     config: MCPConfig | None = None
     # The owning server's ``pool_seeds=``, read into every context this view
-    # builds. drf-services' default for a hand-wired viewset, which is exactly
+    # builds. drf-services' default for a hand-wired view, which is exactly
     # the seeds dispatch would use with none passed.
     pool_seeds: PoolSeeds = DEFAULT_POOL_SEEDS
     # The owning server's ``conventions=``, read into every context this view
     # builds, so the wording it serves is that server's. The defaults for a
-    # hand-wired viewset, which is what a server given none would say.
+    # hand-wired view, which is what a server given none would say.
     conventions: AgentConventions = AgentConventions()
 
-    # ----- DRF action methods (mapped via ``as_view({...})``) -----
+    @classonlymethod
+    def as_view(
+        cls, actions: Mapping[str, str] | None = None, **initkwargs: Any
+    ) -> Callable[..., Any]:
+        """Build the view function routing ``actions``, the canonical map if ``None``."""
+        routed: Mapping[str, str] = cls.actions if actions is None else actions
+        view = super().as_view(actions=routed, **initkwargs)
+        return exempt_endpoint(view, routed, cls)
 
-    def handle_jsonrpc(self, request: Request) -> HttpResponse:
+    def setup(self, request: HttpRequest, *args: Any, **kwargs: Any) -> None:
+        route_actions(self, self.actions)
+        super().setup(request, *args, **kwargs)
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        if request.method not in _UNNEGOTIATED:
+            refused: JsonResponse | None = not_acceptable(request, _ANSWERS_WITH)
+            if refused is not None:
+                return refused
+        return super().dispatch(request, *args, **kwargs)
+
+    # ----- actions (routed by ``as_view``'s map) -----
+
+    def handle_jsonrpc(self, http_request: HttpRequest) -> HttpResponse:
         """POST action: parse a single JSON-RPC message and dispatch."""
-        http_request = request._request  # noqa: SLF001 — unwrap DRF Request for legacy helpers
         guard: HttpResponse | None = self._check_origin(http_request)
         if guard is not None:
             return guard
@@ -377,11 +420,11 @@ class StreamableHttpViewSet(ViewSet):
 
         try:
             result: Any = dispatch(message.method, _params_dict(message.params), context)
-        except (PermissionDenied, DjangoPermissionDenied):
+        except Exception as exc:  # noqa: BLE001 — the backstop; see ``_internal_error_response``
+            if not is_raised_denial(exc):
+                return _internal_error_response(message)
             # A denial raised rather than returned; see ``raised_denial_error``.
             result = raised_denial_error()
-        except Exception:  # noqa: BLE001 — the backstop; see ``_internal_error_response``
-            return _internal_error_response(message)
 
         if isinstance(result, JsonRpcError):
             response_body = JsonRpcResponse(id=message.id, error=result).to_dict()
@@ -479,11 +522,11 @@ class StreamableHttpViewSet(ViewSet):
         # routed to the legacy path — and rejected there.
         try:
             result: Any = dispatch(message.method, _params_dict(message.params), context)
-        except (PermissionDenied, DjangoPermissionDenied):
+        except Exception as exc:  # noqa: BLE001 — the backstop; see ``_internal_error_response``
+            if not is_raised_denial(exc):
+                return _internal_error_response(message)
             # A denial raised rather than returned; see ``raised_denial_error``.
             result = raised_denial_error()
-        except Exception:  # noqa: BLE001 — the backstop; see ``_internal_error_response``
-            return _internal_error_response(message)
         if isinstance(result, JsonRpcError):
             body = JsonRpcResponse(id=message.id, error=result).to_dict()
             status: int = modern_error_status(result)
@@ -495,7 +538,7 @@ class StreamableHttpViewSet(ViewSet):
             return response
         return JsonResponse(JsonRpcResponse(id=message.id, result=result).to_dict())
 
-    def handle_get(self, request: Request) -> HttpResponse:
+    def handle_get(self, http_request: HttpRequest) -> HttpResponse:
         """GET action: SSE-from-server isn't implemented in v1; 405 per spec.
 
         Unconditional, and so decided without authenticating. This once
@@ -511,27 +554,25 @@ class StreamableHttpViewSet(ViewSet):
         guards a stream a credential can actually open. WSGI serves no stream
         on any configuration, so it inherited the gate without the reason.
         """
-        http_request = request._request  # noqa: SLF001
         guard: HttpResponse | None = self._check_origin(http_request)
         if guard is not None:
             return guard
-        return HttpResponse(status=405)
+        return self._method_not_allowed()
 
-    def terminate_session(self, request: Request) -> HttpResponse:
+    def terminate_session(self, http_request: HttpRequest) -> HttpResponse:
         """DELETE action: end the session named by ``MCP-Session-Id``.
 
         Requires authentication, and only the principal a session was
         minted for can destroy it — a wrong-principal (or unknown) id
         renders 404 without touching the session.
         """
-        http_request = request._request  # noqa: SLF001
         guard: HttpResponse | None = self._check_origin(http_request)
         if guard is not None:
             return guard
         if self._modern_era_requested(http_request) or not self._sessions_enabled():
             # The spec's blessed answer for a server that does not let clients
             # terminate sessions, which is exactly true when there are none.
-            return HttpResponse(status=405)
+            return self._method_not_allowed()
         token = self._authenticate(http_request)
         if token is None:
             return self._unauthenticated_response()
@@ -562,9 +603,24 @@ class StreamableHttpViewSet(ViewSet):
 
     # ----- collaborator accessors -----
 
-    def _authenticate(self, http_request: Any) -> Any:
+    def _method_not_allowed(self) -> HttpResponse:
+        """A ``405`` naming the methods this view routes, as RFC 9110 requires."""
+        return HttpResponseNotAllowed(allowed_methods(self))
+
+    def _authenticate(self, http_request: HttpRequest) -> Any:
+        """Resolve the caller's token; on success the request is the token's.
+
+        The backend is handed an anonymous request (``seat_anonymous``), and an
+        authenticated one carries the token's principal from here on
+        (``carry_principal``), so every context this view builds afterwards
+        reads the token's caller.
+        """
         backend: MCPAuthBackend = self._require_auth_backend()
-        return _reject_awaitable_token(backend.authenticate(http_request), backend=backend)
+        seat_anonymous(http_request)
+        token: Any = _reject_awaitable_token(backend.authenticate(http_request), backend=backend)
+        if token is not None:
+            carry_principal(http_request, token)
+        return token
 
     def _unauthenticated_response(self) -> JsonResponse:
         challenge: str = self._require_auth_backend().www_authenticate_challenge(
@@ -628,15 +684,6 @@ def _params_dict(params: Any) -> dict[str, Any] | None:
     if isinstance(params, dict):
         return params
     return None  # JSON-RPC list params are not used by MCP today.
-
-
-# Passed directly to ``as_view``, so the canonical mapping lives next to the
-# ViewSet rather than in the URL conf.
-STREAMABLE_HTTP_ACTION_MAP: dict[str, str] = {
-    "post": "handle_jsonrpc",
-    "get": "handle_get",
-    "delete": "terminate_session",
-}
 
 
 __all__ = ["STREAMABLE_HTTP_ACTION_MAP", "StreamableHttpViewSet"]

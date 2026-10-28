@@ -1,14 +1,154 @@
-"""Shared helpers for the sync and async streamable-HTTP viewsets."""
+"""Shared helpers for the sync and async streamable-HTTP views."""
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from typing import Any
 
+from django.contrib.auth.models import AnonymousUser
+from django.core.exceptions import PermissionDenied
+from django.http import HttpRequest, JsonResponse
+from django.views import View
+
 from django_spec_mcp.auth.types.auth_backend import MCPAuthBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.handlers.kernel_utils import principal_of
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from django_spec_mcp.types.session_missing_hint import SESSION_MISSING_HINT
 from django_spec_mcp.types.session_unknown_hint import SESSION_UNKNOWN_HINT
+
+NOT_ACCEPTABLE_DETAIL: str = "Could not satisfy the request Accept header."
+"""The ``406`` body's ``detail``, worded as the endpoints have always answered it."""
+
+
+def not_acceptable(request: HttpRequest, media_types: tuple[str, ...]) -> JsonResponse | None:
+    """The ``406`` for an ``Accept`` header admitting none of ``media_types``, else ``None``.
+
+    ``media_types`` is what the endpoint can answer with. A request with no
+    ``Accept`` header accepts anything, and an empty one accepts nothing, which
+    is how Django's ``HttpRequest.accepts`` reads them. Asked before the method
+    is routed, so an ``OPTIONS`` or a method the endpoint does not serve is
+    refused the same way, as the endpoints did when they were DRF viewsets
+    (``test_an_accept_admitting_nothing_the_endpoint_serves_is_a_406``).
+    """
+    if any(request.accepts(media_type) for media_type in media_types):
+        return None
+    return JsonResponse({"detail": NOT_ACCEPTABLE_DETAIL}, status=406)
+
+
+def route_actions(view: View, actions: Mapping[str, str]) -> None:
+    """Bind each HTTP method in ``actions`` to the view method it names.
+
+    ``actions`` is the map ``as_view`` was given, ``{"post": "handle_jsonrpc",
+    ...}``. Django's ``View`` routes a method to the attribute of that name, so
+    binding them on the instance, before ``View.setup`` gives ``head`` the
+    ``get`` handler, is all the routing there is; a method the map leaves out
+    gets Django's ``405`` with an ``Allow`` header naming the rest.
+    """
+    for method, action in actions.items():
+        setattr(view, method, getattr(view, action))
+
+
+def allowed_methods(view: View) -> list[str]:
+    """The methods ``view`` answers, upper-cased, for an ``Allow`` header.
+
+    Read off the instance, because ``route_actions`` binds the routed methods
+    there; it is the list Django's own ``405`` and ``OPTIONS`` answers name, so
+    every ``Allow`` the view sends agrees
+    (``test_a_delete_with_sessions_off_is_a_405_naming_the_methods``).
+    """
+    return [method.upper() for method in view.http_method_names if hasattr(view, method)]
+
+
+def exempt_endpoint(view: Callable[..., Any], actions: Mapping[str, str], cls: type) -> Any:
+    """Mark a view function as opting out of CSRF and of ``LoginRequiredMiddleware``.
+
+    The endpoints authenticate with a bearer token through ``MCPAuthBackend``,
+    so a CSRF token or a login redirect is something no MCP client can satisfy
+    (``test_a_session_cookie_does_not_bring_csrf_to_the_endpoint``,
+    ``test_login_required_middleware_never_redirects_an_endpoint``). Set as
+    attributes rather than through ``csrf_exempt`` and ``login_not_required``:
+    on Django 4.2 ``csrf_exempt`` wraps an async view in a sync function, and
+    ``login_not_required`` does not exist before 5.1. The middleware reads
+    both off the resolved callable.
+
+    ``actions`` and ``cls`` are carried as ``view.actions`` and ``view.cls``,
+    the names the routed map and the class have always been read by.
+    """
+    view.csrf_exempt = True  # ty: ignore[unresolved-attribute]
+    view.login_required = False  # ty: ignore[unresolved-attribute]
+    view.actions = dict(actions)  # ty: ignore[unresolved-attribute]
+    view.cls = cls  # ty: ignore[unresolved-attribute]
+    return view
+
+
+def seat_user(request: HttpRequest, user: Any) -> None:
+    """Make ``user`` the request's ``user``, and what its ``auser`` returns."""
+
+    async def auser() -> Any:
+        return user
+
+    request.user = user
+    request.auser = auser
+
+
+def carry_principal(request: HttpRequest, token: TokenInfo) -> None:
+    """Put the token on ``request`` as ``mcp_token``, and its principal as the user.
+
+    Called the moment a request authenticates, so everything judged on this
+    request afterwards (an ``MCPPermission`` gating a prompt, a streamed
+    call's pre-flight, a handler) judges the bearer token's principal, never
+    the user ``AuthenticationMiddleware`` read off a session cookie
+    (``test_a_permission_sees_the_tokens_principal_not_the_sessions``), and an
+    ``AnonymousUser`` when the token names no one
+    (``test_a_token_naming_no_one_leaves_an_anonymous_user_not_the_sessions``).
+    The values are the ones the handlers' ``carry_token`` writes, so a handler
+    writing them again changes nothing.
+    """
+    request.mcp_token = token  # ty: ignore[unresolved-attribute]
+    seat_user(request, principal_of(token.user))
+
+
+def seat_anonymous(request: HttpRequest) -> None:
+    """Clear whatever user the middleware resolved, before the auth backend runs.
+
+    The endpoints are CSRF-exempt, so a backend taking a session cookie's
+    user for the caller (``AllowAnyBackend`` reads ``request.user``) would let
+    any page the user visits call tools as them. The backend sees an
+    anonymous request, as it did when DRF's empty ``authentication_classes``
+    wrote ``AnonymousUser`` there
+    (``test_a_session_user_is_not_the_caller_the_auth_backend_sees``).
+    """
+    seat_user(request, AnonymousUser())
+
+
+def is_raised_denial(exc: BaseException) -> bool:
+    """Whether an exception escaping dispatch is a permission denial, not a fault.
+
+    Django's ``PermissionDenied`` is one
+    (``test_a_raised_permission_denial_is_a_denial_not_a_fault`` in
+    ``test_dispatch_backstop.py``). The second check is there only for the
+    drf-services path, and goes with it: a drf-services permission class raises
+    DRF's ``PermissionDenied``, which is not a subclass of Django's, so it is
+    recognised by the module and name of a class in its MRO, which needs no
+    import of DRF (the same test in ``test_dispatch_backstop_drfs.py``). Its
+    name half is what keeps DRF's other exceptions faults
+    (``test_an_escaping_api_exception_is_a_json_rpc_internal_error`` there),
+    and its module half is what refuses another
+    library's class named ``PermissionDenied`` (the ``namesake`` case of
+    ``test_an_exception_declaring_a_403_is_still_a_server_fault``).
+
+    **Not by the status an exception declares.** An HTTP client's error for an
+    upstream ``403`` carries ``status_code = 403`` too (``openai`` and
+    ``anthropic`` both do), and a tool whose upstream key was rejected is a
+    server fault, answered ``500`` and logged at ``ERROR``
+    (``test_an_exception_declaring_a_403_is_still_a_server_fault``).
+    """
+    return isinstance(exc, PermissionDenied) or any(
+        cls.__module__ == "rest_framework.exceptions" and cls.__name__ == "PermissionDenied"
+        for cls in type(exc).__mro__
+    )
 
 
 def is_permission_denial(result: Any) -> bool:
@@ -25,7 +165,7 @@ def is_permission_denial(result: Any) -> bool:
 def raised_denial_error() -> JsonRpcError:
     """The ``FORBIDDEN`` a handler returns for a denial, for one that was raised.
 
-    Both viewsets' backstop catches DRF's and Django's ``PermissionDenied`` ahead
+    Both views' backstop catches a raised denial (``is_raised_denial``) ahead
     of its catch-all and answers with this. Every handler already maps a
     ``PermissionDenied`` it catches to ``FORBIDDEN``; what reaches the backstop
     is one raised where no handler is looking, above all by a permission class
@@ -35,7 +175,7 @@ def raised_denial_error() -> JsonRpcError:
     denial; the catch-all would turn it into a ``500`` and an ``ERROR`` log,
     reporting a refusal as a server fault.
 
-    Handed back into the viewset's normal result path rather than answered on the
+    Handed back into the view's normal result path rather than answered on the
     spot, so a raised denial gets exactly what a returned one gets: the era's
     status and the ``WWW-Authenticate`` challenge. The exception's own message is
     not echoed, matching the handlers, whose ``except PermissionDenied`` arms
@@ -104,7 +244,7 @@ def session_gate_failure(
 ) -> tuple[str, int, str] | None:
     """Decide the legacy session gate's outcome. ``None`` means the request passes.
 
-    Returns ``(message, status, hint)``, shared by the sync and async viewsets
+    Returns ``(message, status, hint)``, shared by the sync and async views
     so the two cannot drift. ``hint`` is the ``MCP-Error`` slug.
 
     **The two statuses are not interchangeable.** A request *without* an
@@ -127,9 +267,18 @@ def session_gate_failure(
 
 
 __all__ = [
+    "NOT_ACCEPTABLE_DETAIL",
+    "allowed_methods",
+    "carry_principal",
+    "exempt_endpoint",
     "insufficient_scope_challenge",
     "is_permission_denial",
+    "is_raised_denial",
     "modern_error_status",
+    "not_acceptable",
     "raised_denial_error",
+    "route_actions",
+    "seat_anonymous",
+    "seat_user",
     "session_gate_failure",
 ]
