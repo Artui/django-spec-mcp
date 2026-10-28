@@ -171,3 +171,75 @@ async def test_a_token_naming_no_one_leaves_an_anonymous_user_not_the_sessions(
     request, _ = recording.seen[0]
     assert isinstance(request.user, AnonymousUser)
     assert isinstance(await request.auser(), AnonymousUser)
+
+
+class _Keeping(_BearerBackend):
+    """The bearer backend, keeping the request it authenticated and the token it gave."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.kept: list[tuple[HttpRequest, TokenInfo | None]] = []
+
+    def authenticate(self, request: HttpRequest) -> TokenInfo | None:
+        token = super().authenticate(request)
+        self.kept.append((request, token))
+        return token
+
+
+def _ping_body() -> tuple[str, dict[str, str]]:
+    meta = {
+        "io.modelcontextprotocol/protocolVersion": _MODERN,
+        "io.modelcontextprotocol/clientCapabilities": {},
+    }
+    body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "ping", "params": {"_meta": meta}})
+    headers = {
+        "Mcp-Protocol-Version": _MODERN,
+        "Mcp-Method": "ping",
+        "Authorization": "Bearer token-holder",
+    }
+    return body, headers
+
+
+def _sync_ping(session_user: Any) -> Any:
+    client = Client()
+    client.force_login(session_user)
+    body, headers = _ping_body()
+    return client.post("/mcp/", body, content_type="application/json", headers=headers)
+
+
+async def _async_ping(session_user: Any) -> Any:
+    client = AsyncClient()
+    await sync_to_async(client.force_login)(session_user)
+    body, headers = _ping_body()
+    return await client.post("/mcp/", body, content_type="application/json", headers=headers)
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
+async def test_a_request_no_handler_reads_still_carries_the_tokens_principal(
+    is_async: bool,
+) -> None:
+    """``ping`` reaches no handler that seats a user, so what the request
+    carries afterwards is what the endpoint wrote the moment it authenticated,
+    and a middleware or view reading it after the endpoint sees the token's
+    principal, never the session's."""
+    users = get_user_model().objects
+    session_user = await users.acreate(username="cookie-holder")
+    token_user = await users.acreate(username="token-holder")
+    backend = _Keeping()
+
+    server = MCPServer(name="principal", auth_backend=backend, session_store=InMemorySessionStore())
+    with override_settings(
+        ROOT_URLCONF=urlconf_for(server, is_async=is_async), **_SESSION_SETTINGS
+    ):
+        if is_async:
+            response = await _async_ping(session_user)
+        else:
+            response = await sync_to_async(_sync_ping)(session_user)
+
+    assert response.status_code == 200, response.content
+    assert "result" in response.json(), response.json()
+    request, token = backend.kept[0]
+    assert request.user == token_user
+    assert await request.auser() == token_user
+    assert request.mcp_token is token

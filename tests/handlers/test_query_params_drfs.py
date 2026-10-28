@@ -27,7 +27,6 @@ from rest_framework_services.types.service_spec import ServiceSpec
 from django_spec_mcp import MCPServer, QueryParam, UrlKwarg
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
-from django_spec_mcp.handlers.handle_prompts_get import handle_prompts_get
 from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
@@ -255,17 +254,6 @@ def test_the_endpoint_query_string_no_longer_reaches_a_resource() -> None:
         )
     out = handle_resources_read({"uri": "echo://all"}, _ctx(server, _http_request("evil=1")))
     assert '"seen": {}' in out["contents"][0]["text"]
-
-
-def test_the_endpoint_query_string_no_longer_reaches_a_prompt() -> None:
-    server = _server()
-
-    def _render(*, request: Any) -> str:
-        return f"seen={dict(request.query_params.items())}"
-
-    server.register_prompt(name="p", description="d", render=_render)
-    out = handle_prompts_get({"name": "p"}, _ctx(server, _http_request("evil=1")))
-    assert "seen={}" in out["messages"][0]["content"]["text"]
 
 
 # ---------- registration-time validation ----------

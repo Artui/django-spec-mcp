@@ -40,6 +40,7 @@ from django_service_specs import (
 from django_spec_mcp import JsonRpcError, JsonRpcErrorCode, MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.conf import get_setting
+from django_spec_mcp.handlers.kernel_utils import carry_token
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.testapp.kernel_shapes import InvoiceInput, InvoiceOutput
 from tests.testapp.models import Invoice
@@ -215,18 +216,21 @@ def test_call_context_synthesises_a_request_bearing_the_user() -> None:
     assert ctx.protocol_version == get_setting("PROTOCOL_VERSIONS")[0]
 
 
-def test_call_context_uses_a_provided_request_verbatim() -> None:
+def test_call_context_leaves_a_provided_request_untouched() -> None:
     server = _server()
     request = HttpRequest()
     request.method = "GET"
     sentinel = object()
     request.user = sentinel  # type: ignore[attr-defined]
     ctx = server._call_context(user=None, request=request)
-    # The real request is threaded through untouched (method not forced to POST,
-    # its pre-set user left alone) — only synthetic requests are mutated.
-    assert ctx.http_request is request
+    # What every handler does with the request before handing it on.
+    carry_token(ctx.http_request, ctx.token)
+    # The call works on a copy carrying what the real request does (its method
+    # not forced to POST); the caller's own request is left as it was.
+    assert ctx.http_request is not request
     assert ctx.http_request.method == "GET"
-    assert ctx.http_request.user is sentinel  # type: ignore[attr-defined]
+    assert request.user is sentinel  # type: ignore[attr-defined]
+    assert not hasattr(request, "mcp_token")
 
 
 # ----- scopes on the in-process surface -----

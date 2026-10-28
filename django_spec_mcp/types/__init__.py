@@ -3,6 +3,7 @@
 from django_spec_mcp.types.cache_scope import CacheScope
 from django_spec_mcp.types.client_capabilities_meta_key import CLIENT_CAPABILITIES_META_KEY
 from django_spec_mcp.types.client_info_meta_key import CLIENT_INFO_META_KEY
+from django_spec_mcp.types.completion_edge_seeds import COMPLETION_EDGE_SEEDS
 from django_spec_mcp.types.elicit_action import ElicitAction
 from django_spec_mcp.types.elicitation_create_method import ELICITATION_CREATE_METHOD
 from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
@@ -51,6 +52,7 @@ from django_spec_mcp.types.ui_visibility import UIVisibility
 __all__ = [
     "CLIENT_CAPABILITIES_META_KEY",
     "CLIENT_INFO_META_KEY",
+    "COMPLETION_EDGE_SEEDS",
     "CacheScope",
     "ELICITATION_CREATE_METHOD",
     "ELICITATION_KEY",

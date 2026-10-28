@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from rest_framework_services import build_offline_context, resolve_callable_kwargs
+from django_service_specs import resolve_callable_kwargs
 
 from django_spec_mcp._compat.acall import acall
 from django_spec_mcp._compat.tracing import span
 from django_spec_mcp.handlers.handle_tools_call import _span_attrs
+from django_spec_mcp.handlers.kernel_utils import carry_token
 from django_spec_mcp.handlers.render_prompt_messages import normalize_render_result
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import (
@@ -91,21 +92,14 @@ async def handle_prompts_get_async(
                 data={"retryAfter": retry_after},
             )
 
-        drf_request = build_offline_context(
-            context.token.user,
-            None,
-            http_request=context.http_request,
-            # See the sync sibling: nothing here reads ``request.query_params``,
-            # and the empty mapping keeps the endpoint's own out if that changes.
-            query_params={},
-        ).request
-        # See the sync sibling: the transport's seeds land *after* the
-        # client-supplied arguments, so an argument named ``user`` or
-        # ``request`` shadows nothing.
+        # See the sync sibling: the transport's own ``HttpRequest``, carrying
+        # the token, and the seeds land *after* the client-supplied arguments,
+        # so an argument named ``user`` or ``request`` shadows nothing.
+        request = carry_token(context.http_request, context.token)
         pool: dict[str, Any] = {
             **arguments_raw,
-            "request": drf_request,
-            "user": context.token.user,
+            "request": request,
+            "user": request.user,
         }
         kwargs: dict[str, Any] = resolve_callable_kwargs(binding.render, pool)
         raw: Any = await acall(binding.render, **kwargs)

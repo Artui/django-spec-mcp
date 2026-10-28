@@ -12,7 +12,7 @@ from django.views import View
 
 from django_spec_mcp.auth.types.auth_backend import MCPAuthBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
-from django_spec_mcp.handlers.kernel_utils import principal_of
+from django_spec_mcp.handlers.kernel_utils import carry_token, seat
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from django_spec_mcp.types.session_missing_hint import SESSION_MISSING_HINT
@@ -83,16 +83,6 @@ def exempt_endpoint(view: Callable[..., Any], actions: Mapping[str, str], cls: t
     return view
 
 
-def seat_user(request: HttpRequest, user: Any) -> None:
-    """Make ``user`` the request's ``user``, and what its ``auser`` returns."""
-
-    async def auser() -> Any:
-        return user
-
-    request.user = user
-    request.auser = auser
-
-
 def carry_principal(request: HttpRequest, token: TokenInfo) -> None:
     """Put the token on ``request`` as ``mcp_token``, and its principal as the user.
 
@@ -102,12 +92,13 @@ def carry_principal(request: HttpRequest, token: TokenInfo) -> None:
     the user ``AuthenticationMiddleware`` read off a session cookie
     (``test_a_permission_sees_the_tokens_principal_not_the_sessions``), and an
     ``AnonymousUser`` when the token names no one
-    (``test_a_token_naming_no_one_leaves_an_anonymous_user_not_the_sessions``).
-    The values are the ones the handlers' ``carry_token`` writes, so a handler
-    writing them again changes nothing.
+    (``test_a_token_naming_no_one_leaves_an_anonymous_user_not_the_sessions``),
+    on a request no handler reads as on one a handler does
+    (``test_a_request_no_handler_reads_still_carries_the_tokens_principal``).
+    It is the handlers' ``carry_token``, called earlier, so a handler writing
+    the same values again changes nothing.
     """
-    request.mcp_token = token  # ty: ignore[unresolved-attribute]
-    seat_user(request, principal_of(token.user))
+    carry_token(request, token)
 
 
 def seat_anonymous(request: HttpRequest) -> None:
@@ -120,7 +111,7 @@ def seat_anonymous(request: HttpRequest) -> None:
     wrote ``AnonymousUser`` there
     (``test_a_session_user_is_not_the_caller_the_auth_backend_sees``).
     """
-    seat_user(request, AnonymousUser())
+    seat(request, AnonymousUser())
 
 
 def is_raised_denial(exc: BaseException) -> bool:
@@ -279,6 +270,5 @@ __all__ = [
     "raised_denial_error",
     "route_actions",
     "seat_anonymous",
-    "seat_user",
     "session_gate_failure",
 ]

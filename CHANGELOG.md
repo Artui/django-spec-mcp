@@ -242,6 +242,52 @@ carries; releases up to 0.54.0 are in
   deploy therefore drops every live session, in-flight task, rate-limit window and
   pending elicitation**: clients start a new session, and a pending elicitation is
   asked again.
+- **A prompt's `render` and a completer declaring `request` receive the
+  transport's Django `HttpRequest`**, the one a kernel tool's spec finds in its
+  `call_context`, with the caller's token on it as `request.mcp_token`; they
+  received a DRF `Request` before. A callable reading `request.data` reads the
+  prompt's arguments by name instead, and a completer reads what was typed from
+  `value` and the client's resolved siblings from `arguments`. `request.GET` is
+  the MCP endpoint's own query string, and there is no `request.query_params`.
+  `request.user` is the token's principal, as before, and never a session
+  cookie's user: `AnonymousUser` when the token names no one. Declare `user` or
+  read `request.user`, either works: a `user` seed is that same principal, so
+  for a token naming no one it is now `AnonymousUser` rather than `None`, and a
+  render testing `user is None` reads `user.is_authenticated` instead. The same holds for a kernel tool's and a
+  kernel resource's `call_context["request"].user`, and for the request a
+  resource read routed through drf-services builds on. A pool seed declaring
+  `request` is handed the same `HttpRequest` on `resources/read` of a resource
+  that needs nothing from drf-services: no output serializer, no `kwargs`
+  provider, no `DRFPermissionAdapter` and a selector taking nothing, which
+  every view registered with `register_ui_resource` is unless it holds a
+  `DRFPermissionAdapter`. Such a read's answer is otherwise unchanged.
+- **An in-process call never writes its user to a request it is handed, and
+  shares everything of the body with it.** `call_tool` and `acall_tool` work
+  on a copy of `request=` whose `user` is the `user=` the call runs as, so a
+  view handing its own request keeps serving as its user after the call, and
+  concurrent calls sharing one request each see their own. The copy's body,
+  its stream and whatever has been parsed from them (`POST` and `FILES`, the
+  upload handlers they are parsed with, and the encoding they and `GET` are
+  decoded with) are read and written on the handed request itself, so a spec
+  reading `request.body` caches it for the caller, a spec draining the stream
+  drains it for the caller, and a body no spec reads is left unread, exactly as
+  if the request had been handed over. Upload handlers Django initialises
+  during a call are bound to the handed request, so a handler reading
+  `self.request.user` reads the caller's. Every other attribute starts as the
+  very object the handed request holds: one a spec sets or deletes is rebound
+  on the copy alone, and one the caller sets afterwards is not seen by it, but
+  an object a spec mutates through one, such as `META` or the session, is the
+  caller's. The copy is an instance of a
+  subclass of the handed request's class under the same name, so `isinstance`
+  holds where `type(request) is WSGIRequest` does not, and it does not pickle.
+  A DRF `Request` is copied with the `HttpRequest` it wraps, whose `user` its
+  setter would otherwise write through to, and shares its parse cache with the
+  handed one, so `request.data` parsed by a spec is the caller's `data` rather
+  than a consumed stream to parse again. `acall_tool` used to hand the request
+  itself through, and sync `call_tool` handed a kernel tool's spec a request
+  whose `user` could name someone other than `user=`, or `None` when no request
+  was handed, where it now synthesises one bearing `user=` as `acall_tool`
+  does.
 
 ### Removed
 

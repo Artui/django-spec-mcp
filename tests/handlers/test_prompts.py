@@ -17,7 +17,8 @@ from typing import Any
 
 import pytest
 from asgiref.sync import sync_to_async
-from django.http import HttpRequest
+from django.contrib.auth.models import AnonymousUser
+from django.http import HttpRequest, QueryDict
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
@@ -381,3 +382,88 @@ async def test_a_prompt_permission_is_judged_on_the_request_and_token_alone(
     assert isinstance(out, JsonRpcError) and out.code == JsonRpcErrorCode.FORBIDDEN
     assert out.data is None
     assert permission.seen == [(context.http_request, context.token)]
+
+
+@pytest.mark.parametrize("is_async", [False, True])
+async def test_a_render_declaring_request_receives_the_transports_http_request(
+    is_async: bool,
+) -> None:
+    # The plain ``HttpRequest`` the kernel tool path hands a spec, with the
+    # resolved token on it as ``mcp_token``; no DRF ``Request`` is built. Its
+    # ``user`` is the token's principal, as the ``user`` seed is, and never the
+    # one the endpoint's session resolved.
+    seen: dict[str, Any] = {}
+
+    def render(request: Any, user: Any) -> str:
+        seen.update(request=request, user=user)
+        return "hello"
+
+    server = _server()
+    server.register_prompt(name="p", render=render)
+    http_request = HttpRequest()
+    session_user = object()
+    http_request.user = session_user
+    context = MCPCallContext(
+        http_request=http_request,
+        token=TokenInfo(user=object()),
+        tools=server.tools,
+        resources=server.resources,
+        prompts=server.prompts,
+        protocol_version="2025-11-25",
+    )
+
+    params: dict[str, Any] = {"name": "p"}
+    if is_async:
+        out = await handle_prompts_get_async(params, context)
+    else:
+        out = await sync_to_async(handle_prompts_get)(params, context)
+
+    assert not isinstance(out, JsonRpcError), out
+    assert seen["request"] is http_request
+    assert seen["request"].mcp_token is context.token
+    assert seen["user"] is context.token.user
+    assert seen["request"].user is context.token.user
+
+
+def test_render_reads_the_endpoints_query_string_and_no_drf_attributes() -> None:
+    """``request.GET`` is the MCP endpoint's own query string, and the request
+    is a Django one: no ``data`` or ``query_params`` to read arguments from."""
+    seen: dict[str, Any] = {}
+    server = _server()
+
+    def render(*, request: Any) -> str:
+        seen.update(
+            get=dict(request.GET.items()),
+            drf=[name for name in ("data", "query_params") if hasattr(request, name)],
+        )
+        return "ok"
+
+    server.register_prompt(name="p", description="d", render=render)
+    context = _ctx(server)
+    context.http_request.GET = QueryDict("on=endpoint")
+
+    handle_prompts_get({"name": "p", "arguments": {}}, context)
+
+    assert seen == {"get": {"on": "endpoint"}, "drf": []}
+
+
+async def test_user_and_request_user_agree_for_a_token_naming_no_one() -> None:
+    """A token naming no one seeds ``user`` as the anonymous principal
+    ``request.user`` is, on both dispatchers, so declaring ``user`` and reading
+    ``request.user`` answer alike."""
+    seen: list[tuple[Any, Any]] = []
+    server = _server()
+
+    def render(*, request: Any, user: Any) -> str:
+        seen.append((user, request.user))
+        return "ok"
+
+    server.register_prompt(name="p", description="d", render=render)
+
+    handle_prompts_get({"name": "p", "arguments": {}}, _ctx(server))
+    await handle_prompts_get_async({"name": "p", "arguments": {}}, _ctx(server))
+
+    assert len(seen) == 2
+    for user, request_user in seen:
+        assert isinstance(user, AnonymousUser)
+        assert user is request_user

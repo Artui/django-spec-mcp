@@ -16,8 +16,9 @@ whichever caller survives:
 - a presenter refusing a shape the URI carried, and a missing row, are answered
   as on a ``JSON`` resource.
 
-The drf-services read's own questions of the same step stay in
-``test_build_resource_contents_drfs.py``.
+The non-kernel read's questions of the same step are in
+``test_build_resource_contents.py``, and its rendering's in
+``test_render_drfs_resource_output_drfs.py``.
 """
 
 from __future__ import annotations
