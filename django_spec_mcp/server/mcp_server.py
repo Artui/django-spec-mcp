@@ -22,6 +22,7 @@ from django_service_specs import (
     SpecRegistry,
     UnknownArguments,
     UnsetType,
+    check_seeds,
     kernel_spec,
     server_owned_keys,
 )
@@ -705,6 +706,13 @@ class MCPServer:
         projected (two labels, say) is refused naming the tool, rather than
         failing every ``tools/list`` of the server.
 
+        A declaration no call on this server can run as written is refused
+        naming the tool, by the kernel's ``check_seeds`` with the server's
+        ``pool_seeds``: a parameter named like a registered seed or the call's
+        own ``request`` or ``view``, a positional-only parameter with no
+        default, a keyword the callable requires that nothing fills, and an
+        optional read over a keyword the callable requires.
+
         ``display_name`` and ``display_description`` are labels for in-process
         consumers, read off the binding and never sent on the wire.
 
@@ -837,6 +845,18 @@ class MCPServer:
         # (``test_a_presenter_whose_markings_cannot_project_is_refused_at_registration``).
         try:
             _ = binding.audience_projection
+        except ImproperlyConfigured as exc:
+            raise ImproperlyConfigured(f"MCP tool {binding.name!r}: {exc}") from exc
+        # A declaration this server's calls cannot run as written is refused
+        # here, rather than listed and failed on every call: a parameter a
+        # registered seed or the call's own ``request`` / ``view`` meets, a
+        # positional-only one, a keyword nothing fills, and an optional read over
+        # a keyword that requires it. The kernel's reader, handed this server's
+        # seeds, so the refusal is the one ``dispatch`` would make
+        # (``test_a_read_a_seed_occupies_is_refused_at_registration``,
+        # ``test_a_required_parameter_nothing_fills_is_refused_at_registration``).
+        try:
+            check_seeds(binding.spec, pool_seeds=self._pool_seeds)
         except ImproperlyConfigured as exc:
             raise ImproperlyConfigured(f"MCP tool {binding.name!r}: {exc}") from exc
         # The spec's own permissions are the tool's guard; the scope gate on

@@ -12,14 +12,17 @@ here so a refusal of the unfilled cases cannot reach them.
 
 A required parameter none of them fills was refused at registration on the
 drf-services path, because every call to such a tool raises ``TypeError`` out of
-dispatch. The kernel route registers it, lists it, and raises on every call.
-The strict xfail below holds the cases until registration refuses them. The
-registered pool is not known when a spec is built (``lambda *, tenant: tenant``
-is valid on a server whose pool registers ``tenant``), so the ask is a kernel
-reader taking ``pool_seeds``, called at registration. The same holds for a
-Validator field the callable has no way to receive, which is advertised,
-accepted and silently dropped; the second xfail holds that, and the drf-services
-twin that refused it is ``test_input_serializer_validation_drfs.py``.
+dispatch, and it is refused at registration here too: ``register_tool`` asks the
+kernel's ``check_seeds`` with the server's ``pool_seeds``, since the registered
+pool is not known when a spec is built (``lambda *, tenant: tenant`` is valid on
+a server whose pool registers ``tenant``). A Validator field the callable has
+no way to receive is advertised, accepted and silently dropped; the strict
+xfail below holds that. The kernel answers it with ``unreceived_fields`` and
+does not refuse it, because such a spec runs and may mean to (a Validator
+checking that two fields agree passes one of them on), so whether this
+package refuses, warns or advertises it anyway is a decision still to be
+made. The drf-services twin that refused it is
+``test_input_serializer_validation_drfs.py``.
 
 The drf-services original asked this of trust mode, ``ArgumentBinding``,
 ``UrlKwarg`` sources and an ``input_serializer``'s fields under each binding;
@@ -151,22 +154,12 @@ def test_a_selector_requiring_the_view_registers_and_is_handed_it() -> None:
     assert seen == [None]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    # "DID NOT RAISE" only, so no other error can keep the test quietly xfailed.
-    raises=pytest.fail.Exception,
-    reason=(
-        "register_tool accepts a callable whose required parameter nothing in the pool "
-        "fills, and every call raises TypeError out of dispatch. Fix: a kernel reader "
-        "taking pool_seeds, called at registration, because the registered pool is not "
-        "known when a spec is built."
-    ),
-)
 @pytest.mark.parametrize(
     "build",
     [
-        # Factories, built inside the block: a spec refused when it is built
-        # must neither fail collection nor stay xfailed for the wrong reason.
+        # Factories, built inside the block, so a spec refused when it is built
+        # cannot fail collection; the match on the tool's name says the
+        # registration refused it, not the spec's construction.
         pytest.param(lambda: _service(lambda *, other: other), id="service"),
         pytest.param(lambda: _retrieve(lambda *, pk: pk), id="selector"),
         pytest.param(
@@ -181,7 +174,7 @@ def test_a_selector_requiring_the_view_registers_and_is_handed_it() -> None:
 def test_a_required_parameter_nothing_fills_is_refused_at_registration(
     build: Callable[[], Any],
 ) -> None:
-    with pytest.raises(ImproperlyConfigured):
+    with pytest.raises(ImproperlyConfigured, match=r"MCP tool 't': "):
         _server(build())
 
 
@@ -191,10 +184,9 @@ def test_a_required_parameter_nothing_fills_is_refused_at_registration(
     raises=pytest.fail.Exception,
     reason=(
         "register_tool accepts a Validator field the callable cannot receive, which is "
-        "advertised in inputSchema, accepted, and dropped without an error. Fix: the "
-        "kernel refuses a Validator field the callable takes neither by name nor through "
-        "data or **kwargs, as the drf-services path did "
-        "(test_input_serializer_validation_drfs.py)."
+        "advertised in inputSchema, accepted, and dropped without an error. The kernel "
+        "answers it with unreceived_fields and does not refuse it; whether registration "
+        "refuses it, warns or advertises it anyway waits on the owner's decision."
     ),
 )
 def test_a_validator_field_the_callable_cannot_receive_is_refused_at_registration() -> None:

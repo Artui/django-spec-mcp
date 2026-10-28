@@ -144,8 +144,20 @@ def test_a_lookup_declared_required_is_required_beside_the_validators_fields() -
     assert set(schema["required"]) == {"pk", "number"}
 
 
+def _invoice_by_pk_or_none(*, pk: int | None = None) -> Any:
+    return Invoice.objects.filter(pk=pk)
+
+
 def test_a_lookup_declared_optional_adds_nothing_to_required() -> None:
-    schema = _schema(_rename_spec(instance_selector_spec=_by_pk(Parameter("pk", "integer"))))
+    # The lookup's selector defaults ``pk``: an optional read over a keyword
+    # with no default is refused at registration, since a call leaving it out
+    # would be refused as missing.
+    lookup = SelectorSpec(
+        kind=SelectorKind.RETRIEVE,
+        selector=_invoice_by_pk_or_none,
+        reads=Parameters([Parameter("pk", "integer")]),
+    )
+    schema = _schema(_rename_spec(instance_selector_spec=lookup))
 
     assert schema["required"] == ["number"]
 

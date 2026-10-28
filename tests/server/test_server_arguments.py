@@ -72,13 +72,13 @@ def _card(*, project: int, draw: int = 0) -> _Card:
     return _Card(project=project, draw=draw)
 
 
-def _selector(*, project_required: bool = True) -> SelectorSpec:
+def _selector() -> SelectorSpec:
     return SelectorSpec(
         kind=SelectorKind.RETRIEVE,
         selector=_card,
         reads=Parameters(
             [
-                Parameter("project", "integer", required=project_required),
+                Parameter("project", "integer", required=True),
                 Parameter("draw", "integer", required=False),
             ]
         ),
@@ -188,7 +188,7 @@ def test_a_registered_seed_is_refused_with_the_servers_own_seeds() -> None:
 
 def test_no_binding_leaves_the_tool_as_it_was() -> None:
     server = _server()
-    server.register_tool(_selector(project_required=False), name="card", description="d")
+    server.register_tool(_selector(), name="card", description="d")
     assert set(_schema(server, "card")["properties"]) == {"project", "draw"}
     result = server.call_tool("card", {"project": 3}, user=None)
     assert result.structured_content == {"project": 3, "draw": 0}
