@@ -17,7 +17,7 @@ from typing import Any
 
 import pytest
 from asgiref.sync import sync_to_async
-from django.http import HttpRequest
+from django.http import HttpRequest, QueryDict
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
@@ -422,3 +422,25 @@ async def test_a_render_declaring_request_receives_the_transports_http_request(
     assert seen["request"].mcp_token is context.token
     assert seen["user"] is context.token.user
     assert seen["request"].user is context.token.user
+
+
+def test_render_reads_the_endpoints_query_string_and_no_drf_attributes() -> None:
+    """``request.GET`` is the MCP endpoint's own query string, and the request
+    is a Django one: no ``data`` or ``query_params`` to read arguments from."""
+    seen: dict[str, Any] = {}
+    server = _server()
+
+    def render(*, request: Any) -> str:
+        seen.update(
+            get=dict(request.GET.items()),
+            drf=[name for name in ("data", "query_params") if hasattr(request, name)],
+        )
+        return "ok"
+
+    server.register_prompt(name="p", description="d", render=render)
+    context = _ctx(server)
+    context.http_request.GET = QueryDict("on=endpoint")
+
+    handle_prompts_get({"name": "p", "arguments": {}}, context)
+
+    assert seen == {"get": {"on": "endpoint"}, "drf": []}

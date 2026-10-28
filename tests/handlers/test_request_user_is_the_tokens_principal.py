@@ -6,23 +6,19 @@ its ``user`` is whatever the project's middleware resolved, a session cookie
 included, and the MCP caller is the bearer token's principal, which can be
 someone else. drf-mcp handed these a DRF ``Request`` whose ``user`` was the
 token's, so a callable authorizing on ``request.user`` was judging the caller;
-the request is held to that here. ``_SessionStandIn`` resolves a session's user
-exactly where ``AuthenticationMiddleware`` would, as ``request.user`` and
-``request.auser``, from a header naming the cookie's user.
+the request is held to that here, behind Django's own session middleware with
+a client logged in as someone the token does not name.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from asgiref.sync import async_to_sync, sync_to_async
+from asgiref.sync import async_to_sync
 from django.contrib.auth import get_user_model
-from django.contrib.auth.models import AnonymousUser
-from django.http import HttpRequest, HttpResponse
 from django.test import Client, override_settings
-from django.utils.functional import SimpleLazyObject
 from django_service_specs import PoolSeeds, SelectorKind, SelectorSpec, Unrestricted
 
 from django_spec_mcp import MCPServer, PromptArgument
@@ -31,30 +27,16 @@ from tests.kernel_client import KernelClient
 from tests.testapp.auth_backend import HeaderAuthBackend
 from tests.testapp.urlconf_for import urlconf_for
 
-_SESSION_USER_HEADER = "X-Session-User"
-
-
-def _session_stand_in(get_response: Callable[[HttpRequest], HttpResponse]) -> Any:
-    """``AuthenticationMiddleware``, with the session's user named by a header."""
-
-    def middleware(request: HttpRequest) -> HttpResponse:
-        username = request.headers.get(_SESSION_USER_HEADER)
-
-        def session_user() -> Any:
-            found = get_user_model().objects.filter(username=username).first()
-            return found if found is not None else AnonymousUser()
-
-        async def auser() -> Any:
-            return await sync_to_async(session_user)()
-
-        request.user = SimpleLazyObject(session_user)
-        request.auser = auser
-        return get_response(request)
-
-    return middleware
-
-
-_MIDDLEWARE = [f"{__name__}._session_stand_in"]
+# Django's own session and authentication middleware, so the user a cookie names
+# is resolved by the producer that resolves it in a project. Signed-cookie
+# sessions need no table, and the suite installs no sessions app.
+_SESSION_SETTINGS: dict[str, Any] = {
+    "MIDDLEWARE": [
+        "django.contrib.sessions.middleware.SessionMiddleware",
+        "django.contrib.auth.middleware.AuthenticationMiddleware",
+    ],
+    "SESSION_ENGINE": "django.contrib.sessions.backends.signed_cookies",
+}
 
 
 def _whoami(request: Any) -> str:
@@ -114,10 +96,10 @@ def _answers(client: Client, *, token_user: str | None, is_async: bool) -> dict[
     seen: list[Any] = []
     server = _server(seen)
     with override_settings(
-        ROOT_URLCONF=urlconf_for(server, is_async=is_async), MIDDLEWARE=_MIDDLEWARE
+        ROOT_URLCONF=urlconf_for(server, is_async=is_async), **_SESSION_SETTINGS
     ):
+        client.force_login(get_user_model().objects.get(username="cookie-owner"))
         caller = KernelClient(client, user=token_user)
-        client.defaults["HTTP_X_SESSION_USER"] = "cookie-owner"
         caller.initialize()
         tool = caller.call("whoami")["result"]["structuredContent"]["user"]
         prompt = caller.post("prompts/get", {"name": "whoami"}).json()["result"]
@@ -155,3 +137,28 @@ def test_a_caller_the_token_names_no_one_is_anonymous_not_the_sessions_user(
     assert answers == dict.fromkeys(
         ("tool", "prompt", "completion", "view_seed"), "anonymous/anonymous"
     )
+
+
+@pytest.mark.django_db(transaction=True)
+async def test_in_process_no_user_is_anonymous_not_none(users: None) -> None:
+    """``acall_tool`` with ``user=None`` builds a request whose ``user`` was
+    ``None``; the spec sees an anonymous user, as on the wire."""
+    caller = await get_user_model().objects.aget(username="token-caller")
+    server = _server([])
+    server.register_tool(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            # ``request.user`` alone, so ``None`` is answered rather than raised on.
+            selector=lambda *, request: {
+                "user": "none" if request.user is None else _whoami(request)
+            },
+            permissions=[Unrestricted()],
+        ),
+        name="who",
+    )
+
+    named = await server.acall_tool("who", user=caller)
+    nobody = await server.acall_tool("who", user=None)
+
+    assert named["structuredContent"] == {"user": "token-caller"}
+    assert nobody["structuredContent"] == {"user": "anonymous"}
