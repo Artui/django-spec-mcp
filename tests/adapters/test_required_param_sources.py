@@ -31,6 +31,7 @@ is kept beside this file as ``test_required_param_sources_drfs.py``.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -192,5 +193,10 @@ def test_a_validator_field_the_callable_cannot_receive_registers_and_is_validate
     assert "note" in listed["tools"][0]["inputSchema"]["properties"]
     assert out.get("isError") is not True, out
     assert out["structuredContent"] == "a"
+    # A refusal naming no missing argument keeps the generic message.
     assert refused.get("isError") is True, refused
-    assert '"note"' in refused["content"][0]["text"]
+    assert json.loads(refused["content"][0]["text"])["error"] == {
+        "type": "validation_error",
+        "message": "Invalid arguments",
+        "detail": {"note": ["Expected a string."]},
+    }

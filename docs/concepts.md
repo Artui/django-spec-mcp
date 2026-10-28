@@ -318,9 +318,13 @@ from the same reflection, so what a call is refused for is what the client was
 told. A service tool's own input serializer still answers for its fields, and a
 `many=True` service declares no target lookup to ask for anything.
 
-A kernel tool never reads `missing_arguments`: an admitted call missing an
-argument answers `"Invalid arguments"` with the kernel's per-field detail, the
-same `detail` shape as above.
+A kernel tool reads `missing_arguments` too: an admitted call the kernel
+refuses for leaving arguments out is worded with every name its
+`InvalidArguments.missing` carries, sorted and in backticks as above, and its
+`detail` is the kernel's per-field detail, the same shape as above. A call that
+left one argument out and sent another wrong names the missing one in the
+message and both in the detail; a refusal naming nothing missing answers
+`"Invalid arguments"`.
 
 The check runs **after the permission and rate-limit answers** (and, on a
 selector tool, after its `input_serializer`), as every other argument check
@@ -1592,7 +1596,7 @@ Each field is one sentence, and lands in exactly these places:
 | `handle_field_description` | The `outputSchema` description of a handle field that declares none of its own ([Hide plumbing from the model](recipes/agent-audience.md)). | The field is left undescribed. |
 | `handle_line` | The line appended to the description of a tool whose output carries a handle. | The line is dropped, with its ``Identify records by `<label>`.`` prefix. |
 | `query_param_on_pages` | The end of a read-shaping query param's description on a paged tool, and the end of the `isError` message when a value it supplied is refused while rendering ([On a paged tool](#query-param-per-item)). | Dropped from both. |
-| `missing_arguments` | The message of a drf-services call refused for leaving out an argument the selectors require, or a `UrlKwarg(required=True)` ([Which selector parameters a client is asked for](#selector-requiredness)). A kernel tool never reads it: a call missing an argument answers `Invalid arguments`, with the kernel's per-field detail. | Refused with `ImproperlyConfigured`, as is an empty or whitespace-only string: it is the result's whole message. |
+| `missing_arguments` | The message of a drf-services call refused for leaving out an argument the selectors require, or a `UrlKwarg(required=True)` ([Which selector parameters a client is asked for](#selector-requiredness)). A kernel tool reads it as well, worded with every name the kernel's `InvalidArguments.missing` carries, beside the kernel's per-field detail. | Refused with `ImproperlyConfigured`, as is an empty or whitespace-only string: it is the result's whole message. |
 
 `AgentConventions()` is the default, and a server given none uses it. Change one
 field and the others keep the package's wording, so a later correction to a
@@ -1603,8 +1607,8 @@ gets no handle line, and an unpaginated tool gets no scope sentence, whatever th
 conventions say. A field changes **what it says**. The wording reaches every
 route a server answers on: both transports in both eras, `call_tool`,
 `acall_tool`, `list_tools`, and a task's worker. `missing_arguments` reaches
-only drf-services tools: a kernel tool answers `Invalid arguments` with the
-kernel's per-field detail.
+kernel tools as well as drf-services tools: a kernel tool words every name the
+kernel's `InvalidArguments.missing` carries.
 
 Every field is a `str.format` template, rendered wherever it lands whether or
 not it has a placeholder, so a literal brace is written twice, `{{` or `}}`, in
