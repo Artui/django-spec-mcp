@@ -18,11 +18,13 @@ argument is read.
 
 Changed on the kernel path, by the kernel's own rules:
 
-- The message is ``"Invalid arguments"``, the words every ``InvalidArguments``
-  is served in, with ``{"pk": ["This field is required."]}`` under ``detail``
-  as before. The drf-services path's own sentence, ``"Missing required
-  argument(s): `pk`."``, and the server's ``AgentConventions.missing_arguments``
-  wording of it reach no kernel call: held as a strict ``xfail`` below.
+- The message is the server's ``AgentConventions.missing_arguments``,
+  ``"Missing required argument(s): `pk`."`` by default, for every name the
+  kernel reads as left out (``InvalidArguments.missing``), with
+  ``{"pk": ["This field is required."]}`` under ``detail`` as before. A
+  Validator field is one of them: the drf-services path kept ``"Invalid
+  arguments"`` for an input serializer's own missing field, because its
+  refusal could not tell that field from a sent and wrong one.
 - A Validator field and a target lookup's read left out together are both
   named, where the drf-services lookup check answered first and alone.
 - A seed's name the client sends anyway is refused as an unknown argument: a
@@ -216,12 +218,12 @@ async def _via(server: MCPServer, route: str, name: str, arguments: dict[str, An
     return await sync_to_async(handle_tools_call)(params, _ctx(server))
 
 
-def _refused(out: Any) -> dict[str, Any]:
-    """The detail of a validation result, asserting it is one in the kernel path's words."""
+def _refused(out: Any, message: str = "Invalid arguments") -> dict[str, Any]:
+    """The detail of a validation result, asserting it is one answered in ``message``."""
     assert not isinstance(out, JsonRpcError), f"answered as a protocol error: {out!r}"
     error = tool_error(out)
     assert error["type"] == "validation_error"
-    assert error["message"] == "Invalid arguments"
+    assert error["message"] == message
     return error["detail"]
 
 
@@ -247,7 +249,8 @@ async def test_a_missing_argument_is_a_validation_error_result(
 ) -> None:
     out = await _via(_server(), route, name, arguments)
 
-    assert _refused(out) == {missing: _REQUIRED}
+    message = f"Missing required argument(s): `{missing}`."
+    assert _refused(out, message) == {missing: _REQUIRED}
 
 
 def test_the_missing_argument_is_one_the_schema_requires() -> None:
@@ -266,7 +269,8 @@ async def test_several_missing_names_are_answered_together(route: str) -> None:
     # path answered one check at a time, the lookup's alone first.
     out = await _via(_server(), route, "rename", {})
 
-    assert _refused(out) == {"pk": _REQUIRED, "number": _REQUIRED}
+    message = "Missing required argument(s): `number`, `pk`."
+    assert _refused(out, message) == {"pk": _REQUIRED, "number": _REQUIRED}
 
 
 # ---------- the wire, in both protocol eras ----------
@@ -317,7 +321,8 @@ def test_the_wire_serves_a_missing_argument_as_a_result(
     assert response.status_code == 200, response.content
     body = response.json()
     assert "error" not in body, body
-    assert _refused(body["result"]) == {"pk": _REQUIRED}
+    message = "Missing required argument(s): `pk`."
+    assert _refused(body["result"], message) == {"pk": _REQUIRED}
 
 
 # ---------- after the permission answer ----------
@@ -344,7 +349,8 @@ async def test_a_caller_the_scope_gate_refuses_is_refused_before_the_argument_is
     assert isinstance(out, JsonRpcError)
     assert out.code == JsonRpcErrorCode.FORBIDDEN
     # The other half: with the scope, the same call is answered for its argument.
-    assert "pk" in _refused(granted)
+    missing = "`pk`" if name == "get" else "`number`, `pk`"
+    assert "pk" in _refused(granted, f"Missing required argument(s): {missing}.")
 
 
 @pytest.mark.parametrize("route", ["handler", "async_handler", "acall_tool"])
@@ -421,7 +427,7 @@ async def test_a_read_the_provider_declines_and_the_caller_leaves_out_is_refused
     # call is refused once it has answered, in the shape check's words.
     out = await _via(_scoped_server(_declines), route, "get", {"pk": 1})
 
-    assert _refused(out) == {"tenant": _REQUIRED}
+    assert _refused(out, "Missing required argument(s): `tenant`.") == {"tenant": _REQUIRED}
 
 
 def _seeded_server() -> MCPServer:
@@ -468,15 +474,6 @@ async def test_a_seeds_name_the_client_sends_anyway_is_refused_as_unknown(route:
 # ---------- in the server's own words ----------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "A kernel InvalidArguments is answered 'Invalid arguments' whatever it refuses, so "
-        "AgentConventions.missing_arguments never words a kernel call. Fixed by handing "
-        "KernelRefusalScene the names the call left out of the spec's required parameters, "
-        "from run_kernel_tool*.py and call_kernel_tool.py, for _invalid_arguments to word."
-    ),
-)
 @pytest.mark.parametrize("route", _ROUTES)
 async def test_a_missing_argument_is_worded_by_the_server(route: str) -> None:
     server = _server(conventions=AgentConventions(missing_arguments="Left out: {names}."))
@@ -486,3 +483,15 @@ async def test_a_missing_argument_is_worded_by_the_server(route: str) -> None:
     error = tool_error(out)
     assert error["message"] == "Left out: `pk`."
     assert error["detail"] == {"pk": _REQUIRED}
+
+
+@pytest.mark.parametrize("route", _ROUTES)
+async def test_a_call_leaving_one_argument_out_and_another_wrong_names_the_missing_one(
+    route: str,
+) -> None:
+    # The message names what was left out; the detail carries every refusal,
+    # the unknown argument's beside it.
+    out = await _via(_server(), route, "get", {"bogus": 1})
+
+    detail = _refused(out, "Missing required argument(s): `pk`.")
+    assert detail == {"pk": _REQUIRED, "bogus": ["Unknown argument."]}

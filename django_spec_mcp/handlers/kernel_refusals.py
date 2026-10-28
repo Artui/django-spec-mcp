@@ -18,6 +18,7 @@ from django_service_specs import (
 from django_spec_mcp.handlers.input_dispatch import ask_for_input
 from django_spec_mcp.handlers.types.kernel_refusal_scene import KernelRefusalScene
 from django_spec_mcp.handlers.utils import (
+    missing_arguments_message,
     service_error_result,
     validation_error_data,
     validation_error_result,
@@ -48,7 +49,18 @@ def _invalid_arguments(exc: InvalidArguments, scene: KernelRefusalScene) -> Tool
     """The validation ``isError``, its ``detail`` the refusal's own per-field map.
 
     The shape ``validation_error_result`` serves a DRF ``ValidationError`` in on
-    the drf-services path: ``Invalid arguments`` and the per-field detail."""
+    the drf-services path. A refusal naming arguments the call left out is
+    worded in the server's ``AgentConventions.missing_arguments``, from the
+    kernel's own reading of the refusal (``InvalidArguments.missing``), as the
+    drf-services path words its missing-argument check
+    (``test_a_missing_argument_is_worded_by_the_server``); any other refusal is
+    ``Invalid arguments``. The detail is the same either way, every refused
+    argument in it, so a call that left one argument out and sent another wrong
+    names the missing one in the message and both in the detail."""
+    missing = exc.missing
+    if missing:
+        message = missing_arguments_message(missing, scene.conventions)
+        return _validation_result(exc.detail, scene, message=message)
     return _validation_result(exc.detail, scene)
 
 
@@ -69,9 +81,11 @@ def _service_validation(exc: ServiceValidationError, scene: KernelRefusalScene) 
     )
 
 
-def _validation_result(detail: Any, scene: KernelRefusalScene) -> ToolResult:
+def _validation_result(
+    detail: Any, scene: KernelRefusalScene, *, message: str = "Invalid arguments"
+) -> ToolResult:
     return build_error_tool_result(
-        "Invalid arguments",
+        message,
         error_type="validation_error",
         detail=validation_error_data(
             detail, scene.arguments, include_value=scene.config.include_validation_value

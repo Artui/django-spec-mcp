@@ -878,6 +878,18 @@ def render_convention(template: str | None) -> str | None:
     return None if template is None else template.format()
 
 
+def missing_arguments_message(names: Iterable[str], conventions: AgentConventions) -> str:
+    """The server's ``missing_arguments`` sentence for a call that left ``names`` out.
+
+    Sorted, each in backticks, joined with ", ": the Pydantic-AI toolset's
+    format, so one omission reads the same on both transports and on both
+    paths of this one
+    (``test_several_missing_names_are_sorted_and_joined``).
+    """
+    listed = ", ".join(f"`{name}`" for name in sorted(names))
+    return conventions.missing_arguments.format(names=listed)
+
+
 def validation_error_result(
     exc: drf_serializers.ValidationError | ServiceValidationError,
     arguments: Any,
@@ -922,11 +934,7 @@ def validation_error_result(
     """
     message: str
     if isinstance(exc, _MissingArguments):
-        # Sorted, each in backticks, joined with ", ": the Pydantic-AI toolset's
-        # format, so one omission reads the same on both transports
-        # (``test_several_missing_names_are_sorted_and_joined``).
-        names = ", ".join(f"`{name}`" for name in sorted(exc.names))
-        message = conventions.missing_arguments.format(names=names)
+        message = missing_arguments_message(exc.names, conventions)
     elif isinstance(exc, ServiceValidationError):
         message = exc.message
     else:
@@ -1180,6 +1188,7 @@ __all__ = [
     "effective_rate_limits",
     "enforce_result_ceiling",
     "judge_tool_permissions",
+    "missing_arguments_message",
     "permission_verdict",
     "prompt_shape",
     "read_shaping_error_result",
