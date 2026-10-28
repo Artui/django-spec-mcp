@@ -111,8 +111,9 @@ transport what it means on any other:
   resolved token as `request.mcp_token` and the token's principal as
   `request.user`. An in-process call has no HTTP request of its own:
   `acall_tool` puts a token built from its `user=` on the request it works on,
-  and sync `call_tool` puts none there, so a check reading
-  `request.mcp_token` finds nothing under `call_tool`
+  and sync `call_tool` puts none there, even when the request handed to it
+  carried one, so a check reading `request.mcp_token` finds nothing under
+  `call_tool`
   ([Transport-neutral invocation](#transport-neutral-invocation-call_tool)).
 - **The spec's own `permissions` answer the call, before the rate limit is
   charged.** A refused principal is `-32006` "Insufficient permission",
@@ -536,8 +537,8 @@ server.register_resource(
 - **A `uri_template` variable must be a read or shape of the spec that the
   server does not fill.** Registration raises `ImproperlyConfigured` naming the
   resource and the variable when no read or shape declares it, when the read
-  seeds the name itself (a kernel pool seed such as `user`, the call's
-  `request`, or a seed the server registers), and when a reflected read the
+  seeds the name itself (the call's `request`, or a seed the server
+  registers), and when a reflected read the
   server fills or a key a typed `kwargs=` provider always fills makes it the
   server's, since every read would be refused or would serve the
   server's value for any URI.
@@ -554,7 +555,6 @@ other than what was declared:
 | --- | --- |
 | A `LIST` spec | A resource reads one row by URI. Register a `LIST` as a selector tool, which paginates. |
 | `encoding=TEXT` or `BLOB` beside a spec declaring `affordances` or `allow_none` | The kernel adds affordances to a presented object, and under `allow_none` a missing row presents as `None` without the presenter running; neither is a document or bytes. Serve either as JSON. |
-| `selector=` or `output_serializer=` beside a spec | The spec declares its own selector and presenter. |
 | `permissions=` beside a spec | The spec's own `permissions` are the resource's guard. |
 | A URI variable no read or shape declares, or one the server fills | See above: every read would be refused, or would serve the server's value for any URI. |
 
@@ -610,7 +610,7 @@ A spec with no presenter serves its selector's value the same way. A `TEXT`
 resource under the default `application/json` is still served verbatim, since
 the mime type is never checked against the body. A presenter returning the
 wrong type for its encoding, a dict under `TEXT` or a `str` under `BLOB`, is
-answered `-32603` naming the presenter, a well-formed error rather than a 500,
+answered `-32603` naming the resource and the code that produced the value, a well-formed error rather than a 500,
 because only a read can find it out. The result ceiling and the cache hints
 apply to every encoding alike. An HTML view the host renders is
 [`register_ui_resource`](#interactive-views-mcp-apps), which sets both.
@@ -898,12 +898,12 @@ caller sets once the call has its copy is not seen by it, but an object a spec
 mutates through one (`META`, the session, the message storage) is the caller's.
 Upload handlers Django creates during the call are bound to the handed request,
 so a handler reading `request.user` reads the caller's. The copy is an
-instance of the handed request's class, so `isinstance` holds where
-`type(request) is WSGIRequest` does not, and it does not pickle. With no
+instance of a subclass of the handed request's class, so `isinstance` holds
+where `type(request) is WSGIRequest` does not, and it does not pickle. With no
 request handed, a minimal `POST` `HttpRequest`
 bearing `user=` is synthesised. The spec finds the copy, or the synthesised
-request, as `call_context["request"]`, with no `mcp_token` on it: `call_tool`
-has no token.
+request, as `call_context["request"]`, with no `mcp_token` on it, even when
+the handed request carried one: `call_tool` has no token.
 
 ### Full in-process transport: `acall_tool` / `list_tools`
 
@@ -1101,7 +1101,7 @@ one side overrides it.
 | Dispatched via | `tools/call` | `resources/read` |
 | Backed by | a `ServiceSpec` or a `SelectorSpec` | a `RETRIEVE` `SelectorSpec` |
 | Schema advertised | `inputSchema` + optional `outputSchema` | `mimeType` |
-| Body | the presented result | the presented row, as JSON |
+| Body | the presented result | the presented row, encoded per `encoding=` |
 
 Tools are imperative (the client decides when to call them and supplies
 arguments). Resources are read-only and addressable by URI; they have a stable
@@ -2036,7 +2036,7 @@ The MCP package owns its transport and hands each spec to the kernel's
    and the call context, before any rate limit is charged. A refused caller is
    `-32006` "Insufficient permission", uncharged, and is not told which
    argument it left out
-   ([How a kernel tool is called](#how-a-tool-is-called)).
+   ([How a tool is called](#how-a-tool-is-called)).
 6. Charge the tool's rate limits.
 7. `dispatch(spec, principal=..., arguments=..., pool_seeds=..., call_context=...,
    progress=...)`. The kernel runs the spec: its argument check under the
@@ -2154,8 +2154,10 @@ content, and the TypeScript SDK does.
    argument check refuses is `-32602` "Invalid arguments", with the kernel's
    detail under `data.detail`; a lookup that finds no row is answered as a
    missing URI.
-4. Present the row through the spec's presenter and JSON-encode it into the
-   `contents` block. A presenter refusing a shape the URI carried is `-32602`
+4. Present the row through the spec's presenter and encode it into the
+   `contents` block per the resource's `encoding=`: JSON by default, the
+   presented `str` verbatim under `TEXT`, the presented bytes base64-encoded
+   under `BLOB`. A presenter refusing a shape the URI carried is `-32602`
    keyed by the shape ([Read-shaping values](#read-shaping-values-shapes)).
 
 ## Sessions, headers, origins
@@ -2288,7 +2290,7 @@ own authorization server behind.
   backend's `protected_resource_metadata()`.
 - **The spec's own `permissions`.** A tool or a resource is guarded by its
   kernel spec's `PermissionCheck`s, asked of the token's principal
-  ([How a kernel tool is called](#how-a-tool-is-called)). A refusal is
+  ([How a tool is called](#how-a-tool-is-called)). A refusal is
   `-32006` "Insufficient permission".
 - **The scope gate** (`scopes=` on `register_tool` and `register_resource`). A
   transport check against the token's scopes: a token missing one is `-32006`,
