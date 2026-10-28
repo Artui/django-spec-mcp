@@ -64,6 +64,13 @@ def call_kernel_tool(
     # (``test_sync_call_tool_with_no_request_hands_one_carrying_the_acting_user``).
     if request is not None:
         request = copy_request(request, request_classes)
+        # The copy starts with the handed request's attributes, and a token on
+        # it is the outer caller's, a spec handing its own request on included,
+        # so a check reading ``mcp_token`` would judge them rather than
+        # ``user``. ``call_tool`` has no token, so the copy carries none
+        # (``test_sync_call_tool_drops_the_handed_requests_token``); the
+        # handed request keeps its own, as ``mcp_token`` is not shared.
+        vars(request).pop("mcp_token", None)
     else:
         request = HttpRequest()
         request.method = "POST"
