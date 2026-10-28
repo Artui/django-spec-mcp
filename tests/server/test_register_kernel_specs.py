@@ -10,12 +10,13 @@ The original is kept beside this file as ``test_register_kernel_specs_drfs.py``.
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import Any
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import (
+    DataclassPresenter,
     Parameter,
     Parameters,
     RegisteredSpec,
@@ -40,10 +41,16 @@ from django_spec_mcp.types.output_format import OutputFormat
 from django_spec_mcp.types.resource_encoding import ResourceEncoding
 from django_spec_mcp.types.task_policy import TaskPolicy
 from django_spec_mcp.types.tool_content_kind import ToolContentKind
+from tests.testapp.affordances import CANCEL_ORDER
 from tests.testapp.auth_backend import HeaderAuthBackend
 from tests.testapp.services import invoice_by_pk, list_invoices, record_invoice
 
 OPEN = [Unrestricted()]
+
+
+@dataclass
+class _Row:
+    pk: int
 
 
 def _server(**config: Any) -> MCPServer:
@@ -299,6 +306,57 @@ def test_the_kernel_form_takes_a_mime_type_and_an_encoding() -> None:
         encoding=ResourceEncoding.TEXT,
     )
     assert (binding.mime_type, binding.encoding) == ("text/markdown", ResourceEncoding.TEXT)
+
+
+def _retrieve(**fields: Any) -> SelectorSpec:
+    return replace(_selector(SelectorKind.RETRIEVE), **fields)
+
+
+_NOT_JSON = pytest.mark.parametrize(
+    "encoding", [ResourceEncoding.TEXT, ResourceEncoding.BLOB], ids=["text", "blob"]
+)
+
+
+@_NOT_JSON
+def test_a_non_json_encoding_beside_affordances_is_refused(encoding: ResourceEncoding) -> None:
+    # The kernel projects each affordance into the presented object, so a
+    # presenter answering a document or bytes would fail every read.
+    with pytest.raises(
+        ImproperlyConfigured, match=f"encoding={encoding.name} cannot sit beside affordances"
+    ):
+        _server().register_resource(
+            _retrieve(presenter=DataclassPresenter(_Row), affordances={"cancel": CANCEL_ORDER}),
+            name="r",
+            uri_template="r://{pk}",
+            encoding=encoding,
+        )
+
+
+@_NOT_JSON
+def test_a_non_json_encoding_beside_allow_none_is_refused(encoding: ResourceEncoding) -> None:
+    # A missing row presents as ``None`` without running the presenter, so it
+    # could be neither a document nor bytes.
+    with pytest.raises(
+        ImproperlyConfigured, match=f"encoding={encoding.name} cannot sit beside allow_none"
+    ):
+        _server().register_resource(
+            _retrieve(allow_none=True), name="r", uri_template="r://{pk}", encoding=encoding
+        )
+
+
+def test_a_json_resource_keeps_affordances_and_allow_none() -> None:
+    # The control for both refusals: under JSON, a presented object with its
+    # affordances and a ``null`` for a missing row are both bodies.
+    binding = _server().register_resource(
+        _retrieve(
+            presenter=DataclassPresenter(_Row),
+            affordances={"cancel": CANCEL_ORDER},
+            allow_none=True,
+        ),
+        name="r",
+        uri_template="r://{pk}",
+    )
+    assert binding.encoding is ResourceEncoding.JSON
 
 
 def test_a_kernel_resource_defaults_to_json() -> None:

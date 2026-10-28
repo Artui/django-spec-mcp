@@ -5,10 +5,10 @@ Asked here of kernel specs: the tools are kernel ``ServiceSpec`` and
 through the kernel's ``dispatch``. The vocabulary questions name no spec and are
 asked as the original asks them.
 
-The original's binary-resource questions have no kernel counterpart: a kernel
-resource presents a row, so the registrar refuses ``encoding=BLOB`` and a
-``mime_type`` beside it, and a base64 body and a non-bytes return under it are
-asked only of the drf-services read. The original is kept beside this file as
+The original's binary-resource questions, a base64 body and a non-bytes return
+under ``encoding=BLOB`` with its ``mime_type``, are asked of a kernel resource in
+``tests/output/test_encode_resource_contents.py``, since both reads encode
+through ``encode_resource_contents``. The original is kept beside this file as
 ``test_content_blocks_drfs.py``.
 """
 

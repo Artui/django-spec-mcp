@@ -15,6 +15,11 @@ class ResourceEncoding(str, Enum):
     ``mimeType`` rather than sniffed from it — sniffing would silently change
     behaviour for anyone already advertising a non-JSON type.
 
+    On the kernel form, ``TEXT`` and ``BLOB`` are refused at registration
+    beside a spec declaring ``affordances`` or ``allow_none``: the first makes
+    the presented value an object and the second makes a missing row ``None``,
+    and neither is a document or bytes.
+
     Attributes:
         JSON: Pretty-print the value as JSON. The default, and what every
             data resource wants.

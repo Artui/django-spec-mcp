@@ -170,11 +170,14 @@ carries; releases up to 0.54.0 are in
   `ResourceEncoding.TEXT` serves a presented `str` verbatim, so a presenter
   rendering the row as Markdown pairs with `mime_type="text/markdown"`, and
   `ResourceEncoding.BLOB` base64-encodes presented `bytes`, `bytearray` or
-  `memoryview` into the `contents` entry's `blob`, with no `text`. The mime type
-  is advertised as given in `resources/read`, `resources/list` and
-  `resources/templates/list`, and never inferred from or checked against the
-  encoding, so `TEXT` under the default `application/json` serves a `str` that
-  is already JSON as it is, as on the `selector=` form. A presented value of the
+  `memoryview`, a strided one included, into the `contents` entry's `blob`, with
+  no `text`. The mime type is advertised as given in `resources/read`,
+  `resources/list` and `resources/templates/list`, and never inferred from or
+  checked against the encoding, so `TEXT` under the default `application/json` serves a `str` that
+  is already JSON as it is, as on the `selector=` form. `TEXT` and `BLOB` are
+  refused at registration, naming both, beside a spec declaring `affordances` or
+  `allow_none`, since neither an object carrying affordances nor the `None` a
+  missing row presents as is a document or bytes. A presented value of the
   wrong type is a `-32603` naming the presenter, the result ceiling and the cache
   hints apply as they do to JSON, and a presenter refusing a shape the URI
   carried, or a missing row, are answered as on a JSON resource. A

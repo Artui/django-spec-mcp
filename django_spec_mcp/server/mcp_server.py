@@ -1515,7 +1515,11 @@ class MCPServer:
         them and its presenter renders the row. ``scopes`` gate it as they gate
         ``register_tool``. ``mime_type`` and ``encoding`` work as above, on
         what the presenter returns: a presenter rendering the row as Markdown
-        pairs with ``encoding=TEXT`` and ``mime_type="text/markdown"``. The
+        pairs with ``encoding=TEXT`` and ``mime_type="text/markdown"``. A
+        ``TEXT`` or ``BLOB`` resource is refused, naming both, beside a spec
+        declaring ``affordances``, which the kernel adds to a presented object,
+        or ``allow_none``, under which a missing row presents as ``None``
+        without the presenter running: neither is a document or bytes. The
         knobs of the ``selector=`` form that the spec declares for itself
         (``selector``, ``output_serializer`` and ``permissions``) are refused
         beside a positional spec, as ``scopes`` is beside ``selector=``. A spec no read can run as written is refused
@@ -1634,6 +1638,7 @@ class MCPServer:
                 "register_resource; a kernel SelectorSpec declares its own selector, "
                 "presenter and permissions."
             )
+        _check_kernel_resource_encoding(name, spec, encoding)
         binding = kernel_selector_to_resource(
             spec,
             name=name,
@@ -2680,6 +2685,42 @@ def _refuse_retired_unknown_arguments(name: str, unknown_arguments: UnknownArgum
             "input. Pass UnknownArguments.REJECT to refuse an undeclared argument, or "
             "UnknownArguments.IGNORE to drop it. Where the callable needs the value, "
             "declare it: a reads entry, a serializer field or a parameter."
+        )
+
+
+def _check_kernel_resource_encoding(
+    name: str, spec: KernelSelectorSpec, encoding: ResourceEncoding
+) -> None:
+    """Refuse a non-JSON ``encoding`` beside what only a JSON body can carry.
+
+    ``TEXT`` and ``BLOB`` serve what the presenter returns as a document or as
+    bytes, and two declarations make that value something else on some read:
+
+    - ``affordances``, which the kernel's ``present`` adds to each presented
+      object, refusing a ``str`` or bytes on every read
+      (``test_a_non_json_encoding_beside_affordances_is_refused``);
+    - ``allow_none``, under which a missing row presents as ``None`` without
+      the presenter running, so the read would blame a presenter that never
+      ran (``test_a_non_json_encoding_beside_allow_none_is_refused``).
+
+    Under ``JSON`` both are bodies, an object carrying its affordances and a
+    ``null``, so both register (``test_a_json_resource_keeps_affordances_and_allow_none``).
+    """
+    if encoding is ResourceEncoding.JSON:
+        return
+    if spec.affordances is not None:
+        raise ImproperlyConfigured(
+            f"Resource {name!r}: encoding={encoding.name} cannot sit beside affordances. "
+            "The kernel adds each affordance to the presented object, and a "
+            f"{encoding.name} body is not an object; serve it as JSON, or drop the "
+            "affordances."
+        )
+    if spec.allow_none:
+        raise ImproperlyConfigured(
+            f"Resource {name!r}: encoding={encoding.name} cannot sit beside allow_none. "
+            "A missing row presents as None without the presenter running, which a "
+            f"{encoding.name} body cannot be; drop allow_none so a missing row is "
+            "resource-not-found, or serve it as JSON."
         )
 
 

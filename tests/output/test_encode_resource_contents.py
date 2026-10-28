@@ -211,6 +211,16 @@ class TestBlob:
             "blob": base64.b64encode(PNG).decode("ascii"),
         }
 
+    def test_a_non_contiguous_memoryview_is_encoded_as_its_bytes(self, is_async: bool) -> None:
+        # A strided view is bytes-like but not a buffer base64 can read in place.
+        server = _server(
+            _Answers(memoryview(b"abcdef")[::2]),
+            mime_type="application/octet-stream",
+            encoding=ResourceEncoding.BLOB,
+        )
+        block = _block(server, "notes://1", is_async=is_async)
+        assert base64.b64decode(block["blob"]) == b"ace"
+
 
 class TestWrongType:
     @pytest.mark.parametrize(
@@ -257,14 +267,19 @@ class TestEnvelope:
         assert "byte ceiling" in error.message
         assert "Resource 'notes://1'" in error.message
 
-    def test_the_cache_hints_and_meta_ride_beside_a_text_body(self, is_async: bool) -> None:
-        server = _server(
-            _MarkdownPresenter(),
-            mime_type="text/markdown",
-            encoding=ResourceEncoding.TEXT,
-            cache_ttl_ms=60_000,
-            meta={"x": 1},
-        )
+    # Each encoding builds its own block, so each is held to carrying the meta.
+    @pytest.mark.parametrize(
+        ("presenter", "encoding"),
+        [
+            (_MarkdownPresenter(), ResourceEncoding.TEXT),
+            (_Answers(PNG), ResourceEncoding.BLOB),
+        ],
+        ids=["text", "blob"],
+    )
+    def test_the_cache_hints_and_meta_ride_beside_the_body(
+        self, presenter: Presenter, encoding: ResourceEncoding, is_async: bool
+    ) -> None:
+        server = _server(presenter, encoding=encoding, cache_ttl_ms=60_000, meta={"x": 1})
         answer = _read(server, "notes://2", is_async=is_async)
         assert (answer["ttlMs"], answer["contents"][0]["_meta"]) == (60_000, {"x": 1})
 

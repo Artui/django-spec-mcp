@@ -54,7 +54,10 @@ def encode_resource_contents(
         return ResourceContents(
             uri=uri,
             mime_type=binding.mime_type,
-            blob=base64.b64encode(payload).decode("ascii"),
+            # ``bytes()`` first: a strided ``memoryview`` is bytes-like but not
+            # a buffer ``b64encode`` can read in place
+            # (test_a_non_contiguous_memoryview_is_encoded_as_its_bytes).
+            blob=base64.b64encode(bytes(payload)).decode("ascii"),
             meta=dict(binding.meta) or None,
         )
 
