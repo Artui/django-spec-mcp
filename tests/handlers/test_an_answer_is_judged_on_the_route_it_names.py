@@ -10,20 +10,13 @@ class-level ``has_permission`` before anything is looked up, and
 sends A and answers B is refused, and a class-level refusal reads the same
 whether B exists or not.
 
-The drf-services original asked this of ``UrlKwarg`` route captures: a
-per-binding ``DRFPermissionAdapter`` and a spec's ``permission_classes``
-judged on ``view.kwargs`` before the merge and again on the route it
-produced, ``same_arguments`` deciding whether it moved. None of those exists
-on a kernel tool: there is no route apart from the arguments, and nothing is
-judged before the merge for an answer to slip past. Its invalidation question
-is asked as it was: ``invalidates=`` is rendered from the merged arguments, so
-the notice names the row the service ran on. It is kept beside this file as
-``test_an_answer_is_judged_on_the_route_it_names_drfs.py``.
+A kernel tool has no route apart from its arguments, and nothing is judged
+before the merge for an answer to slip past. ``invalidates=`` is rendered from
+the merged arguments, so the notice names the row the service ran on.
 
-Its charge questions are asked as they were: a caller admitted is charged
-once, and a caller the spec refuses is not charged, since the shell asks a
-kernel spec's checks before the charge (``admit_kernel_call``), as drfs judged
-them in the binding's stack.
+A caller admitted is charged once, and a caller the spec refuses is not
+charged, since the shell asks a kernel spec's checks before the charge
+(``admit_kernel_call``).
 """
 
 from __future__ import annotations

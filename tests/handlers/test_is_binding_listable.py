@@ -1,26 +1,19 @@
 """Whether a kernel binding is listed to a caller, under ``FILTER_LISTINGS_BY_PERMISSIONS``.
 
-The kernel version of the drf-services original, kept beside it as
-``test_is_binding_listable_drfs.py``. The original asked the helper of
-hand-built drfs bindings whose ``permissions`` are the transport's own checks:
-every check admitting lists the binding, any refusal hides it, the first refusal
-decides, ``always_listed`` opts back in, a check's ``is_listable(token)`` answers
-in place of ``has_permission``, and the selector-tool and resource bindings are
-judged the same way.
-
-Here the bindings are kernel ones, registered with ``register_tool`` and
-``register_resource``. Their ``permissions`` field holds only the scope gate
+The helper is asked of kernel bindings, registered with ``register_tool`` and
+``register_resource``: every check admitting lists the binding, any refusal
+hides it, the first refusal decides, ``always_listed`` opts back in, and the
+selector-tool and resource bindings are judged the same way. Their ``permissions`` field holds only the scope gate
 (``scopes=``); the spec's own ``PermissionCheck``s are the kernel's, and the
 listing asks them through the kernel's ``authorize`` with what a call asks them
 with: the caller as principal, the server's pool seeds, and a call context whose
 request carries the token. So a tool is hidden from exactly the callers its call
-would refuse before resolving anything, as the drfs path hides one whose
-permission classes refuse.
+would refuse before resolving anything.
 
-Not carried: ``is_listable(token)``. A kernel ``PermissionCheck`` has no
-list-time method, and a listing hands it no arguments (``None``, the kernel's
-word for "none to hand"), so a check that decides by the call's arguments
-decides on none; ``always_listed`` is the way back, as it is for the drfs path.
+A kernel ``PermissionCheck`` has no list-time method, and a listing hands it no
+arguments (``None``, the kernel's word for "none to hand"), so a check that
+decides by the call's arguments decides on none; ``always_listed`` is the way
+back.
 """
 
 from __future__ import annotations

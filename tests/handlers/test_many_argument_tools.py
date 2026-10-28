@@ -9,15 +9,10 @@ it with item refusals at their indexes. These tests hold each route to that,
 the listing to advertising what dispatch enforces, and the wire to carrying
 the index a client needs to find the item it sent.
 
-The drf-services original asked this of an ``input_serializer`` and a binding
-built by hand, beside ``UrlKwarg`` and ``QueryParam`` values riding next to the
-list and a ``metadata["json_schema"]`` fragment replacing the properties; none
-of the three exists on a kernel spec, whose arguments are its parameters. It
-is kept beside this file as ``test_many_argument_tools_drfs.py``. Changed on
-the kernel path: drfs closed the arguments whatever the policy, while the
-kernel's ``unknown_arguments`` decides, so an argument beside the list is
-refused under ``REJECT`` and dropped under ``IGNORE``, and the top level of the
-schema is closed exactly when it is refused.
+A kernel spec's arguments are its parameters, and its ``unknown_arguments``
+decides what sits beside the list: an argument beside it is refused under
+``REJECT`` and dropped under ``IGNORE``, and the top level of the schema is
+closed exactly when it is refused.
 """
 
 from __future__ import annotations

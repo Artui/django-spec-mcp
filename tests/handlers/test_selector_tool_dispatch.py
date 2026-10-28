@@ -1,6 +1,6 @@
 """End-to-end kernel selector-tool dispatch: filter, then paginate, then present.
 
-The original's pipeline questions, asked of kernel ``SelectorSpec`` tools
+Asked of kernel ``SelectorSpec`` tools
 registered with ``register_tool`` and called through ``handle_tools_call``
 and ``handle_tools_call_async`` alike: a ``filter_set`` advertises its filters
 and narrows the rows, ``paginate=True`` lays one page out through the kernel's
@@ -8,20 +8,13 @@ and narrows the rows, ``paginate=True`` lays one page out through the kernel's
 declared read is shape-checked, a list return pages in memory, ``None`` under
 ``allow_none`` is the empty list and without it an internal error, and the spec's permissions, the rate limits,
 a ``ServiceValidationError`` and a ``ServiceError`` are each answered on the
-tool result or the JSON-RPC error the drf-services path answers with. The
-async-only questions are in ``test_selector_tool_dispatch_async.py``.
+tool result or the JSON-RPC error. The async-only questions are in
+``test_selector_tool_dispatch_async.py``.
 
-Not carried, each for want of a kernel counterpart:
-
-- a spec with ``selector=None`` refused at registration: a kernel
-  ``SelectorSpec`` cannot be built without one;
-- the ``selector_tool`` decorator, which builds a drf-services spec;
-- an ``input_serializer`` validating a selector's arguments: a kernel selector
-  takes the ``reads`` it declares, and their shape check is asked here;
-- the object-level check on the resolved row, asked of every route in
-  ``test_a_denied_caller_learns_nothing_of_the_target.py``.
-
-The original is kept beside this file as ``test_selector_tool_dispatch_drfs.py``.
+A kernel selector takes the ``reads`` it declares, and their shape check is
+asked here. A kernel ``SelectorSpec`` cannot be built without a selector. The
+object-level check on the resolved row is asked of every route in
+``test_a_denied_caller_learns_nothing_of_the_target.py``.
 """
 
 from __future__ import annotations
@@ -180,8 +173,7 @@ async def test_a_filter_narrows_the_rows(is_async: bool) -> None:
 
 @routes
 async def test_with_no_filter_set_an_argument_is_refused_not_ignored(is_async: bool) -> None:
-    # Changed by design: a drf-services selector without a filter set ignored a
-    # filter-shaped argument. A kernel spec's argument set is closed, so one it
+    # A kernel spec's argument set is closed, so a filter-shaped argument it
     # does not declare is refused rather than silently dropped.
     await _seed(2)
 
@@ -314,9 +306,7 @@ async def test_a_declared_read_is_shape_checked(is_async: bool) -> None:
 
 @routes
 async def test_none_under_allow_none_is_the_empty_list(is_async: bool) -> None:
-    # Changed by design: a drf-services ``LIST`` returning ``None`` was served
-    # as ``{}`` with nothing declared. A kernel spec says ``None`` is an answer
-    # by declaring ``allow_none=True``; without it the kernel's ``present``
+    # A kernel spec says ``None`` is an answer by declaring ``allow_none=True``; without it the kernel's ``present``
     # raises ``TypeError`` and the call is an internal error
     # (test_none_without_allow_none_is_an_internal_error).
     out = await _call(_server(_invoices(lambda: None, allow_none=True)), {}, is_async=is_async)

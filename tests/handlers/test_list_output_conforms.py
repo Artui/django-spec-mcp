@@ -1,31 +1,28 @@
 """A kernel tool whose result presents as a list advertises, and serves, a list.
 
-The original asked it of drf-services specs: a service tool whose
-``output_selector_spec`` re-fetches a ``LIST`` advertised the bare item schema
-while serving an array. Here every case registers a kernel spec with
+A service tool whose ``output_selector_spec`` re-fetches a ``LIST`` must not
+advertise the bare item schema while serving an array. Every case registers a
+kernel spec with
 ``include_output_schema=True``, calls it, and runs the served payload through
 ``assert_tool_result_conforms``, which is what a client holding the schema
 would check, with each ``RETRIEVE`` twin riding along so a fix answering every
 tool with an array fails too.
 
-The original's cases, in their kernel form:
+The cases:
 
 - a selector tool, and a service tool re-fetching through an output selector,
   of either kind;
 - a service declaring ``returns_many``, the kernel's form of a ``LIST`` output
   declaration with no selector: it presents the service's own return as the
   set;
-- a ``many`` service, whose rows are its result. Changed by design: the
-  original held that such a service never runs its output selector, and the
-  kernel's re-reads, so the selector's kind decides what is served.
+- a ``many`` service, whose rows are its result. Its output selector re-reads
+  what the bulk write produced, so the selector's kind decides what is served.
 
-Not carried: that a ``LIST`` declaration with no selector refuses a return that
-is no set, naming the type the service returned. The kernel's ``returns_many``
-iterates whatever the service returns, so a mapping is presented as its keys
-and fails in the presenter, and an ``int`` as not iterable; whether the kernel
-should refuse it by name is the kernel's question, not this transport's.
-
-The original is kept beside this file as ``test_list_output_conforms_drfs.py``.
+A ``LIST`` declaration with no selector is not asked to refuse, by name, a
+return that is no set: the kernel's ``returns_many`` iterates whatever the
+service returns, so a mapping is presented as its keys and fails in the
+presenter, and an ``int`` as not iterable. Refusing it by name is the kernel's
+question, not this transport's.
 """
 
 from __future__ import annotations
@@ -160,10 +157,9 @@ _RE_FETCHED: dict[str, Any] = {"number": "Z-9"}
 async def test_a_many_services_output_selector_re_reads_and_its_kind_decides(
     kind: SelectorKind, served: Any
 ) -> None:
-    # Changed by design: drf-services never ran a ``many`` spec's output
-    # selector. The kernel's re-reads what the bulk write produced, and its
-    # kind decides what is presented, so the schema follows the kind and the
-    # served payload conforms to it either way.
+    # The output selector re-reads what the bulk write produced, and its kind
+    # decides what is presented, so the schema follows the kind and the served
+    # payload conforms to it either way.
     spec = ServiceSpec(
         service=_placed,
         atomic=False,

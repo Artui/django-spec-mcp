@@ -1,22 +1,17 @@
 """``completion/complete`` for prompts and for kernel resource templates.
 
-The prompt half asks what the original asked, since a prompt is not a spec.
-The resource half registers kernel ``RETRIEVE`` specs through
+The prompt half is not about a spec, since a prompt is not one. The resource half registers kernel ``RETRIEVE`` specs through
 ``register_resource(spec, uri_template=..., name=...)``, whose ``reads`` are the
 template's variables. A completion is a read of what it completes, so a kernel
 resource's spec permissions answer it as they answer ``resources/read``: the
 class-level checks, judged as the listing judges the spec, on no arguments,
 since a completion names a template rather than a URI, and before the rate
 limit, as the read asks them. A check reading ``arguments`` is handed ``None``
-there and refuses, whether it guards against ``None`` or raises on it, which is
-the kernel form of the original's route-scoped template completing for nobody;
-a ``ServiceError`` it raises refuses the completion as it hides the template,
+there and refuses, whether it guards against ``None`` or raises on it, so a
+template whose check is scoped to a route completes for nobody; a ``ServiceError`` it raises refuses the completion as it hides the template,
 and a configuration error fails the completion as it fails the read.
 
-Not carried: that a ``DRFPermissionAdapter`` on a prompt sees ``{}`` as
-``request.data`` and ``None`` as ``view.action`` at completion. A DRF class has
-no kernel counterpart, and an ``MCPPermission`` is handed the request and token
-alone. The original is kept beside this file as ``test_completion_complete_drfs.py``.
+An ``MCPPermission`` on a prompt is handed the request and token alone.
 """
 
 from __future__ import annotations
@@ -735,9 +730,8 @@ def test_a_sibling_named_after_a_newer_kernel_seed_does_not_reach_the_completer(
 def test_a_completer_declaring_request_receives_the_transports_http_request() -> None:
     """The plain ``HttpRequest`` the kernel tool path hands a spec, the token on it.
 
-    Not a DRF ``Request``: nothing reads one here, and the package ships without
-    DRF. Its ``user`` is the token's principal, as the ``user`` seed is, and
-    never the one the endpoint's session resolved.
+    Its ``user`` is the token's principal, as the ``user`` seed is, and never the
+    one the endpoint's session resolved.
     """
     seen: dict[str, Any] = {}
 

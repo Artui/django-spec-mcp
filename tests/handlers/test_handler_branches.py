@@ -1,24 +1,21 @@
 """The kernel branches of ``handle_tools_call`` and its async sibling, called directly.
 
 Asks of tools and resources registered with ``register_tool`` /
-``register_resource`` what the original, kept beside this file as
-``test_handler_branches_drfs.py``, asks of hand-built drf-services bindings, and
-asks it of both handlers through the ``handle`` fixture: a validated dataclass
+``register_resource``, of both handlers through the ``handle`` fixture: a validated dataclass
 input reaches the service, a service returning ``None`` still serves an object,
 a validation refusal keeps its detail, a scope gate or a spec permission denies
 with ``-32006``, an output selector reshapes the result, the structured-content
 and output-schema knobs answer per binding and server-wide, and the request-shape
 guards name a malformed ``arguments`` or ``outputFormat`` before the tool runs.
 
-Where the kernel answers differently from the original:
+Two of the questions are asked in a particular way:
 
-- ``ArgumentBinding.SPREAD_AUTHOR_WINS`` has no kernel counterpart, because a
-  kernel spec always spreads its declared reads into the service's keywords.
-  The question it carried, whether a caller can name a reserved pool seed, is
-  asked of ``user`` under both ``unknown_arguments`` policies.
-- ``check_permissions`` is asked directly, as the original asks it: it judges a
-  binding's transport permissions on every path, the kernel scope gate's
-  included, and names no spec.
+- A kernel spec always spreads its declared reads into the service's keywords,
+  so whether a caller can name a reserved pool seed is asked of ``user`` under
+  both ``unknown_arguments`` policies.
+- ``check_permissions`` is asked directly: it judges a binding's transport
+  permissions on every path, the kernel scope gate's included, and names no
+  spec.
 """
 
 from __future__ import annotations

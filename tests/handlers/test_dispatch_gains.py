@@ -1,11 +1,9 @@
 """A kernel service tool's bulk write and object-level permission, over ``tools/call``.
 
-Asks of kernel specs registered with ``register_tool`` what the original, kept
-beside this file as ``test_dispatch_gains_drfs.py``, asks of drf-services ones:
-a ``collection_selector_spec`` narrowed by a FilterSet hands the service the
-whole collection to write, and a permission's ``has_object_permission`` judges
-the row an ``instance_selector_spec`` resolved, refusing the call before the
-service runs. The kernel's ``dispatch`` owns both, so these hold that the
+Asks of kernel specs registered with ``register_tool``: a collection selector
+narrowed by a FilterSet hands the service the whole collection to write, and a
+permission's ``has_object_permission`` judges the row an instance selector
+resolved, refusing the call before the service runs. The kernel's ``dispatch`` owns both, so these hold that the
 transport hands it the arguments they read and maps its refusal to ``-32006``.
 """
 

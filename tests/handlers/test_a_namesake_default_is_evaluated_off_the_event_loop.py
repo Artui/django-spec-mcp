@@ -1,14 +1,8 @@
 """A value a kernel spec computes by a query for a read the call left out is computed off the loop.
 
-Asks of a kernel tool what the original, kept beside this file as
-``test_a_namesake_default_is_evaluated_off_the_event_loop_drfs.py``, asks of a
-drf-services selector tool. There, an ``input_serializer`` field named for a URL
-kwarg supplied that kwarg's value when the call left it out, and the async
-selector path called a default that queries on the event loop, so it raised
-``SynchronousOnlyOperation`` where the sync path served.
-
-A kernel spec has no URL kwarg and no namesake field. What fills a read the call
-leaves out, by a query, is the spec's ``kwargs`` provider, so this asks that the
+What fills a read the call leaves out, by a query, is the spec's ``kwargs``
+provider. A provider that queries on the event loop raises
+``SynchronousOnlyOperation`` where the sync path serves, so this asks that the
 provider is called off the loop on every route a kernel tool is called by: the
 sync handler, the async handler and ``acall_tool``.
 """

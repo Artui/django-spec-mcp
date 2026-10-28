@@ -1,8 +1,8 @@
 """The ``tools/call`` shell's knobs, taking effect on a kernel binding.
 
 The shell around the dispatch (rate limits, the deadline, the result ceiling and
-the invalidation) is shared with the drf-services path and covered by its tests.
-These hold that a kernel binding reaches each step, which the coverage gate
+the invalidation) is covered by its own tests. These hold that a kernel binding
+reaches each step, which the coverage gate
 cannot show: the lines run either way.
 """
 

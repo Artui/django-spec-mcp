@@ -1,23 +1,17 @@
 """``page`` and ``limit`` reach a kernel spec alike on every route.
 
-The original asked that ``call_tool``, ``acall_tool`` and both wire handlers
-hand a selector the same arguments, ``page`` and ``limit`` taken by the
-pagination on a ``LIST`` and left alone elsewhere. On the kernel path the
-pagination is ``paginate=True`` on ``register_tool``, and the split is
-``page_request``'s on every route, so the questions are: a paginated ``LIST``
-never hands either name to its selector; an unpaginated one, a ``RETRIEVE``
-and a service tool take them as their own reads, a filter set's filter named
-``limit`` included.
-
-Not carried, for want of a kernel counterpart: the two cases where an
-``input_serializer`` laid ``page`` back or validated it away. A kernel spec
-declares its reads, and there is no serializer between the wire and them.
+``call_tool``, ``acall_tool`` and both wire handlers hand a selector the same
+arguments, ``page`` and ``limit`` taken by the pagination on a ``LIST`` and left
+alone elsewhere. The pagination is ``paginate=True`` on ``register_tool``, and
+the split is ``page_request``'s on every route, so the questions are: a
+paginated ``LIST`` never hands either name to its selector; an unpaginated one,
+a ``RETRIEVE`` and a service tool take them as their own reads, a filter set's
+filter named ``limit`` included. A kernel spec declares its reads, and nothing
+sits between the wire and them.
 
 A paginated ``LIST`` whose spec declares a read named ``page`` or ``limit`` is
 refused at registration, because the pagination would take the value the read
 advertises and the selector would never receive it.
-
-The original is kept beside this file as ``test_every_route_strips_pagination_keys_drfs.py``.
 """
 
 from __future__ import annotations

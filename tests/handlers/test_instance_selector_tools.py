@@ -1,22 +1,17 @@
 """A kernel service tool's target selector resolves the row its service acts on.
 
-The original asked it of drf-services' ``instance_selector_spec``, ``partial``
-and the ``serializer`` seed. A kernel ``ServiceSpec`` carries the first two:
-its ``instance_selector_spec`` is a ``RETRIEVE`` ``SelectorSpec`` whose
+A kernel ``ServiceSpec`` carries an ``instance_selector_spec`` and ``partial``:
+the first is a ``RETRIEVE`` ``SelectorSpec`` whose
 ``reads`` name the lookup, and dispatch hands the resolved row to the
 ``Validator``'s context and to the service as ``instance``. Asked here, on both
-handlers where the original asked both: the service receives the row, a
+handlers: the service receives the row, a
 missing one (``None``, an empty queryset, ``DoesNotExist``) is a tool-level
 ``not_found``, a non-queryset return is used as it is, the lookup's own
 ``annotations`` and ``kwargs`` provider shape it, a caller cannot stand in for
 a seed, and ``partial`` relaxes what the Validator requires.
 
-Not carried: a service declaring ``serializer`` receiving the bound DRF
-serializer. A kernel Validator hands the service its validated values, and
-there is no serializer to bind. The lookup key declared again by the body is
-asked in its kernel form: refused when the tool is registered.
-
-The original is kept beside this file as ``test_instance_selector_tools_drfs.py``.
+A kernel Validator hands the service its validated values. The lookup key
+declared again by the body is refused when the tool is registered.
 """
 
 from __future__ import annotations

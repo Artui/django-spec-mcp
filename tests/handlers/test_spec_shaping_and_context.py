@@ -1,8 +1,7 @@
 """A kernel ``LIST`` tool's queryset shaping, and the call's ``request`` its callables are handed.
 
-Asks of kernel specs registered with ``register_tool`` what the original, kept
-beside this file as ``test_spec_shaping_and_context_drfs.py``, asks of
-drf-services selector tools, against the real SQLite model: empty shaping is a
+Asks of kernel specs registered with ``register_tool``, against the real SQLite
+model: empty shaping is a
 no-op, ``annotations`` attach to each row, ``prefetch_related`` and
 ``select_related`` land on the queryset before ``extend_queryset``, which runs
 last and may narrow it, shaping a selector that returns no queryset fails
@@ -11,14 +10,8 @@ loudly, and a paginated page is read once.
 The kernel hands every callable that declares it the call's ``request`` and
 ``view`` (``CALL_SEEDS``): here the ``HttpRequest`` carrying the caller's token
 as ``mcp_token``, and ``None`` for the view, since this transport has none.
-That is what the original's "render has the request" cases asked of a
-serializer's context, and they are asked here of ``extend_queryset`` and the
-selector.
-
-The serializer-context providers (``input_serializer_context``,
-``output_serializer_context`` and the ``result``, ``instance`` and ``page``
-extras they are handed) are drf-services knobs with no kernel counterpart: a
-kernel Presenter takes no per-call context. Those cases stay in the original.
+That is asked here of ``extend_queryset`` and the selector. A kernel Presenter
+takes no per-call context.
 """
 
 from __future__ import annotations

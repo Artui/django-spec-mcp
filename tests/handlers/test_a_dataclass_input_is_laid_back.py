@@ -1,21 +1,15 @@
 """What a kernel tool's input declaration validates is what its callable reads.
 
-The drf-services original asked this of a selector tool's MCP-only
-``input_serializer`` shaped as a ``@dataclass`` or a ``DataclassSerializer``,
-whose validated values were not laid back over the selector's arguments, so it
-coerced and defaulted for nothing, and of registration and the schema, which
-each counted a different set of names as filled. A kernel selector has no such
-serializer: its arguments are its declared ``reads``, each with its own type,
-and a service's are its Validator's fields. So the question is asked of those
-two: the value the callable reads is the coerced one, or the default where the
-call left the argument out, and the schema requires exactly the names nothing
+A selector's arguments are its declared ``reads``, each with its own type, and
+a service's are its Validator's fields. So the question is asked of those two:
+the value the callable reads is the coerced one, or the default where the call
+left the argument out, and the schema requires exactly the names nothing
 defaults. A read's declared ``default`` is reported in the schema, not applied,
 so the default a selector reads is its own signature's, declared beside it.
 A read declared optional over a selector with no default of its own is where
 the two would come apart, the schema offering it as optional and the call
 leaving it out refused as missing, so registration refuses that declaration,
-naming the tool, and no client is shown the schema. The original is kept beside this file as
-``test_a_dataclass_input_is_laid_back_drfs.py``.
+naming the tool, and no client is shown the schema.
 """
 
 from __future__ import annotations

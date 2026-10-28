@@ -1,12 +1,10 @@
 """``server/discover`` plus the cacheability fields every result now carries, on kernel specs.
 
-The kernel version of the drf-services original, kept beside it as
-``test_server_discover_drfs.py``. It asks the same questions of a server whose
-tool is registered with ``register_tool`` and whose data resource is
-registered with ``register_resource``, both on kernel specs: discovery reports
-capabilities rather than bindings, a filtered catalog is private, and a read is
-private and uncached unless a static view opts into a TTL. The UI-view case was
-never a drfs one and is kept as it is.
+It asks of a server whose tool is registered with ``register_tool`` and whose
+data resource is registered with ``register_resource``, both on kernel specs:
+discovery reports capabilities rather than bindings, a filtered catalog is
+private, and a read is private and uncached unless a static view opts into a
+TTL.
 """
 
 from __future__ import annotations

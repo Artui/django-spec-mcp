@@ -183,7 +183,7 @@ async def test_a_pool_seed_resolved_on_a_view_read_is_handed_the_transports_requ
 ) -> None:
     # The server's seeds are resolved into every read's pool, a view's too, and
     # one declaring ``request`` is handed the transport's ``HttpRequest`` with
-    # the token on it, as on a kernel tool call, rather than a DRF ``Request``.
+    # the token on it, as on a kernel tool call.
     seen: list[Any] = []
 
     def tenant(request: Any) -> str:

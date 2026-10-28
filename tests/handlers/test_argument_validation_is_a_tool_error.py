@@ -11,13 +11,9 @@ On the kernel path every refusal of the arguments is the kernel's own
 a Validator rejecting a field, and a read whose value its declared type
 refuses. Each is served as the ``validation_error`` result with the refusal's
 per-field ``detail`` and the message ``"Invalid arguments"``, on both tool
-kinds, every entry point and both protocol eras. The drf-services original
-asked this of an ``input_serializer``, a selector tool's MCP-only serializer
-and a ``FilterSet``; a kernel selector's filters are declared ``reads``, so a
-refused filter value is the refused read here. The unexpected argument's
-answer changed shape with the kernel: it is keyed by its own name, ``Unknown
-argument.``, where drf-services put a sentence under ``non_field_errors``. The
-original is kept beside this file as ``test_argument_validation_is_a_tool_error_drfs.py``.
+kinds, every entry point and both protocol eras. A kernel selector's filters are
+declared ``reads``, so a refused filter value is the refused read. The
+unexpected argument's answer is keyed by its own name, ``Unknown argument.``.
 """
 
 from __future__ import annotations

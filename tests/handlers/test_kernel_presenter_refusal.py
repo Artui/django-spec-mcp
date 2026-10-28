@@ -3,12 +3,10 @@
 A kernel spec's ``shapes`` are the one caller input read while the result is
 presented rather than while the spec is dispatched, so a presenter refusing one
 fails after ``dispatch`` has returned, outside every arm that decides whether a
-failure is the caller's to fix. It escaped as a ``-32603`` on the wire and as a
-raised ``ServiceValidationError`` from ``call_tool``. The drf-services path
-answers the same failure of a read-shaping ``QueryParam`` with an ``isError``
-``validation_error`` (``read_shaping_error_result``), and a kernel tool now
-answers it alike, on every path a kernel tool is presented on: the wire, sync
-and async, and the in-process ``call_tool``.
+failure is the caller's to fix. Left there it would be a ``-32603`` on the wire
+and a raised ``ServiceValidationError`` from ``call_tool``; instead it is an
+``isError`` ``validation_error`` on every path a kernel tool is presented on:
+the wire, sync and async, and the in-process ``call_tool``.
 
 Only when the caller shaped the render: with no shape supplied, nothing the
 model sends can change the outcome, so the refusal is a server bug and is raised

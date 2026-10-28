@@ -1,19 +1,17 @@
 """A kernel refusal's ``code`` reaches the caller, on every route a kernel tool is called by.
 
-Asks of tools registered with ``register_tool`` what the original, kept beside
-this file as ``test_service_error_code_drfs.py``, asks of drf-services bindings:
+Asks of tools registered with ``register_tool``:
 ``ActionUnavailable(reason, code=...)`` serves its ``code`` beside the reason,
 because the reason is a sentence that gets reworded and the code is the name a
 client switches on, while a plain ``ServiceConflict`` serves no ``code`` key at
 all, not a null one.
 
-The original held one test per arm, six of them, because each drf-services path
-built its own result. A kernel tool has three: ``run_kernel_tool`` on the sync
+A kernel tool has three arms: ``run_kernel_tool`` on the sync
 wire, ``run_kernel_tool_async`` on the async one and ``call_kernel_tool`` in
 process, and a service and a selector take the same arm, so each arm's test is
 parametrised over the two. A kernel selector's ``affordances`` name the operations
 on its row rather than refusing the read, so a precondition raising the refusal is
-how one reaches a selector tool, as in the original.
+how one reaches a selector tool.
 """
 
 from __future__ import annotations
