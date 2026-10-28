@@ -2248,7 +2248,7 @@ class MCPServer:
         handlers.
         """
         view = StreamableHttpViewSet.as_view(
-            STREAMABLE_HTTP_ACTION_MAP,  # ty: ignore[invalid-argument-type]
+            STREAMABLE_HTTP_ACTION_MAP,
             tools=self._tools,
             resources=self._resources,
             prompts=self._prompts,
