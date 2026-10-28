@@ -1,4 +1,9 @@
-"""``django-filter`` declarations driving ``invoices.list``."""
+"""``django-filter`` declarations driving ``invoices.list``.
+
+The spec names the FilterSet as its ``filter_set``, and the kernel reads each
+filter as an optional read, so the tool's ``inputSchema`` describes it and
+the closed argument set admits it.
+"""
 
 from __future__ import annotations
 
@@ -13,10 +18,11 @@ class InvoiceFilterSet(django_filters.FilterSet):
     max_amount = django_filters.NumberFilter(field_name="amount_cents", lookup_expr="lte")
     created_after = django_filters.DateTimeFilter(field_name="created_at", lookup_expr="gte")
     number = django_filters.CharFilter(lookup_expr="icontains")
-    # Ordering is a filter like any other. ``OrderingFilter`` subclasses
-    # ``ChoiceFilter``, so it reflects into the tool's ``inputSchema`` as a
-    # labelled choice over the public names on the right — never the ORM paths
-    # on the left — and one declaration serves the HTTP transport and MCP.
+    # Ordering is a filter like any other. ``OrderingFilter`` reads one key
+    # holding several names, so the kernel reads it as an array whose items
+    # choose among the public names on the right, each optionally prefixed
+    # with ``-``, and never the ORM paths on the left. One declaration serves
+    # every transport mounting the spec.
     ordering = django_filters.OrderingFilter(
         fields=(("created_at", "created"), ("amount_cents", "amount")),
     )

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from django.db.models import QuerySet
-from django_service_specs import ServiceError
 
 from jobs.models import Job
 
@@ -10,8 +9,10 @@ def list_jobs() -> QuerySet[Job]:
     return Job.objects.all()
 
 
-def get_job(*, job_id: str) -> Job:
-    try:
-        return Job.objects.get(pk=job_id)
-    except Job.DoesNotExist as exc:
-        raise ServiceError(f"Job {job_id} not found") from exc
+def get_job(*, job_id: str) -> QuerySet[Job]:
+    """The job ``jobs://{job_id}`` names: a RETRIEVE the kernel resolves to one row.
+
+    Returned as a queryset, so a job that does not exist is the kernel's
+    not-found rather than an exception of this selector's own.
+    """
+    return Job.objects.filter(pk=job_id)
