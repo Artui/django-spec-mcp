@@ -1,4 +1,4 @@
-"""An async read routed through drf-services touches the ORM off the event loop."""
+"""An async read of a view touches the ORM off the event loop."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ from typing import Any
 import pytest
 from django.contrib.auth import get_user_model
 from django.http import HttpRequest
-from django_service_specs import SelectorKind
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
@@ -23,20 +22,10 @@ def _usernames(**_: Any) -> Any:
     return get_user_model().objects.values("username")
 
 
-@pytest.mark.parametrize(
-    ("selector", "kwargs_provider"),
-    [
-        pytest.param(lambda request: _usernames(), None, id="selector-taking-request"),
-        pytest.param(lambda: _usernames(), lambda: {}, id="kwargs-provider"),
-    ],
-)
 @pytest.mark.django_db(transaction=True)
-async def test_an_async_drfs_read_of_a_lazy_queryset_encodes_off_the_loop(
-    selector: Any, kwargs_provider: Any
-) -> None:
-    """With no output serializer the render hands the queryset on unevaluated,
-    so the encoder is what queries; on the loop that raised
-    ``SynchronousOnlyOperation``."""
+async def test_an_async_view_read_of_a_lazy_queryset_encodes_off_the_loop() -> None:
+    """A view hands its selector's queryset on unevaluated, so the encoder is
+    what queries; on the loop that raised ``SynchronousOnlyOperation``."""
     await get_user_model().objects.acreate(username="u1")
     server = MCPServer(
         name="t", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore()
@@ -46,10 +35,8 @@ async def test_an_async_drfs_read_of_a_lazy_queryset_encodes_off_the_loop(
             name="r",
             uri_template="r://users",
             description=None,
-            selector=selector,
-            kind=SelectorKind.LIST,
+            selector=lambda request: _usernames(),
             permissions=(),
-            kwargs_provider=kwargs_provider,
         )
     )
     context = MCPCallContext(

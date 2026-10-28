@@ -189,7 +189,6 @@ class TestText:
                 uri_template="hand://",
                 description=None,
                 selector=spec.selector,
-                kind=spec.kind,
                 spec=spec,
                 mime_type="text/plain",
                 encoding=ResourceEncoding.TEXT,

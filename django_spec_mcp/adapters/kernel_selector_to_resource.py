@@ -43,8 +43,7 @@ def kernel_selector_to_resource(
     if not isinstance(spec, SelectorSpec):
         raise TypeError(
             f"Resource {name!r}: register_resource takes a django_service_specs "
-            f"SelectorSpec, not {type(spec).__module__}.{type(spec).__qualname__}. A "
-            "drf-services selector registers through register_resource(selector=...)."
+            f"SelectorSpec, not {type(spec).__module__}.{type(spec).__qualname__}."
         )
     if spec.kind is not SelectorKind.RETRIEVE:
         raise ImproperlyConfigured(
@@ -56,7 +55,6 @@ def kernel_selector_to_resource(
         uri_template=uri_template,
         description=description,
         selector=spec.selector,
-        kind=spec.kind,
         spec=spec,
         # Read as the field holds them; the binding builds its gate from them, and
         # refuses ``()``, whoever constructs it.

@@ -36,14 +36,11 @@ class KernelToolBinding:
     tool takes are the spec's parameters, spread at the top level of
     ``arguments`` rather than nested under a ``data`` key.
 
-    Every other field is a fact of the MCP binding rather than of the operation,
-    and carries the meaning the same-named field has on ``ToolBinding`` /
-    ``SelectorToolBinding``. The names the shared ``tools/call`` shell reads off
-    any binding (``permissions``, ``rate_limits``, ``server_arguments``,
-    ``task_policy``, ``invalidates``, ``dispatch_timeout``, ``max_result_bytes``,
-    ``url_kwargs`` and ``query_params``) are kept, so the permission check, the
-    rate limits, the deadline, the result ceiling and the invalidation run for a
-    kernel binding exactly as for the others, and only the dispatch differs.
+    Every other field is a fact of the MCP binding rather than of the operation:
+    the scope gate (``permissions``), ``rate_limits``, ``server_arguments``,
+    ``task_policy``, ``invalidates``, ``dispatch_timeout`` and
+    ``max_result_bytes`` are read by the ``tools/call`` shell around the
+    dispatch, never by the spec.
     """
 
     name: str
@@ -60,6 +57,11 @@ class KernelToolBinding:
 
     icons: tuple[Icon, ...] = ()
     annotations: dict[str, Any] = field(default_factory=dict)
+    # A free-form dict rather than a dataclass because ``_meta`` is MCP's open
+    # extension namespace: each extension owns a top-level key, so the valid
+    # key set is unbounded by design. Typed helpers belong *above* this field —
+    # a caller builds a typed object and merges its ``to_dict()`` in via
+    # ``merge_meta`` — not in place of it.
     meta: dict[str, Any] = field(default_factory=dict)
     output_format: OutputFormat = OutputFormat.JSON
     content_kind: ToolContentKind = ToolContentKind.TEXT
@@ -144,18 +146,6 @@ class KernelToolBinding:
     def kind(self) -> SelectorKind | None:
         """A selector tool's ``RETRIEVE`` / ``LIST``; ``None`` for a service tool."""
         return self.spec.kind if isinstance(self.spec, SelectorSpec) else None
-
-    @property
-    def url_kwargs(self) -> tuple[()]:
-        """Always empty: a kernel spec declares its own reads, so no argument is
-        routed to a view's ``kwargs``. Read by the shared shell's
-        ``dispatch_shape``."""
-        return ()
-
-    @property
-    def query_params(self) -> tuple[()]:
-        """Always empty, for the reason ``url_kwargs`` is."""
-        return ()
 
     @cached_property
     def audience_projection(self) -> AudienceProjection:

@@ -74,11 +74,9 @@ def _dispatch_refused(exc: DispatchError, scene: KernelRefusalScene) -> ToolResu
 
 
 def _service_validation(exc: ServiceValidationError, scene: KernelRefusalScene) -> ToolResult:
-    """The validation ``isError`` the drf-services path serves this refusal as,
-    its message the service's own."""
-    return validation_error_result(
-        exc, scene.arguments, config=scene.config, conventions=scene.conventions
-    )
+    """The validation ``isError`` a service's own refusal is served as, its
+    message the service's own."""
+    return validation_error_result(exc, scene.arguments, config=scene.config)
 
 
 def _validation_result(

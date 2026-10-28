@@ -134,7 +134,6 @@ def _binding(**overrides: Any) -> ResourceBinding:
         "uri_template": "things://x",
         "description": None,
         "selector": lambda: None,
-        "kind": SelectorKind.RETRIEVE,
     }
     return ResourceBinding(**{**defaults, **overrides})
 

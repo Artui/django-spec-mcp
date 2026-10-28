@@ -5,7 +5,7 @@ from collections.abc import Callable
 from typing import Any
 
 from django.template.loader import render_to_string
-from django_service_specs import UNSET, SelectorKind, UnsetType
+from django_service_specs import UNSET, UnsetType
 
 from django_spec_mcp.adapters.utils import merge_meta
 from django_spec_mcp.protocol.types.icon import Icon
@@ -131,9 +131,6 @@ def ui_view_to_resource(
         icons=icons,
         cache_ttl_ms=cache_ttl_ms,
         selector=resolved,
-        # A view has no output serializer, so ``kind`` never reaches one; it is
-        # RETRIEVE because a view is one document, not a collection.
-        kind=SelectorKind.RETRIEVE,
         mime_type=mime_type,
         encoding=ResourceEncoding.TEXT,
         permissions=permissions,

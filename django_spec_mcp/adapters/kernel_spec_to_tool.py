@@ -58,8 +58,7 @@ def kernel_spec_to_tool(
     Refuses, before anything is built, what the binding cannot mean:
 
     - ``spec`` that is not a kernel ``ServiceSpec`` or ``SelectorSpec``, a
-      ``TypeError``. A drf-services spec is not one, and goes to
-      ``register_service_tool`` / ``register_selector_tool``.
+      ``TypeError``.
     - a knob of the other kind of tool: ``paginate`` / ``max_page_size`` on a
       service tool or a ``RETRIEVE``, ``invalidates`` on a selector tool.
     - ``scopes=()``, which reads as a gate and admits everyone. A bare string
@@ -71,17 +70,14 @@ def kernel_spec_to_tool(
     describe fails here rather than taking every later ``tools/list`` down
     with it.
 
-    The MCP hints are derived as for the drf-services tools
-    (``merge_tool_annotations``): a selector tool is read-only, a service tool
+    The MCP hints are derived by ``merge_tool_annotations``: a selector tool is read-only, a service tool
     destructive with its declared ``idempotent`` as ``idempotentHint``, and a
     hint passed in ``annotations`` wins.
     """
     if not isinstance(spec, ServiceSpec | SelectorSpec):
         raise TypeError(
             f"Tool {name!r}: register_tool takes a django_service_specs ServiceSpec or "
-            f"SelectorSpec, not {type(spec).__module__}.{type(spec).__qualname__}. A "
-            "drf-services spec registers through register_service_tool or "
-            "register_selector_tool."
+            f"SelectorSpec, not {type(spec).__module__}.{type(spec).__qualname__}."
         )
     _refuse_other_kinds_knobs(name, spec, invalidates, paginate, max_page_size)
     if unknown_arguments is UnknownArguments.PASSTHROUGH:

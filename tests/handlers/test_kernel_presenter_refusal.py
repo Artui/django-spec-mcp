@@ -131,6 +131,28 @@ def test_a_refused_shape_is_a_validation_error_keyed_by_it(path: str) -> None:
 
 
 @_PATHS
+@pytest.mark.parametrize(
+    ("detail", "readable"),
+    [
+        ({"total": ["Not a field."]}, "`total`: Not a field."),
+        (["Not a field.", "Nor this."], "Not a field. Nor this."),
+    ],
+    ids=["dict", "list"],
+)
+def test_a_structured_refusal_is_worded_as_sentences(path: str, detail: Any, readable: str) -> None:
+    # The message is read by a model, so a mapping or a list of errors is
+    # spelled out rather than shown as its ``repr``; the ``detail`` keeps the
+    # structure as raised.
+    server = _server(spec=_selector(error=ServiceValidationError(detail)))
+    error = tool_error(_call(server, {"fields": ["total"]}, path))
+    assert error == {
+        "type": "validation_error",
+        "message": f"`fields` was rejected while rendering the result: {readable}",
+        "detail": {"fields": detail},
+    }
+
+
+@_PATHS
 def test_on_a_paged_tool_the_refusal_says_what_the_shape_applies_to(path: str) -> None:
     server = _server(paginate=True)
     error = tool_error(_call(server, {"fields": ["total"]}, path))

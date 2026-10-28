@@ -355,7 +355,6 @@ async def test_a_handbuilt_unguarded_kernel_resource_fails_the_watch_as_the_read
             uri_template="bare://{pk}",
             description=None,
             selector=_thing,
-            kind=SelectorKind.RETRIEVE,
             spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_thing, reads=_PK),
         )
     )

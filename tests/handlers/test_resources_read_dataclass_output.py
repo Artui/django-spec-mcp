@@ -131,17 +131,6 @@ def test_a_presenter_no_read_could_render_through_is_refused_when_the_spec_is_bu
         )
 
 
-def test_an_output_serializer_beside_a_kernel_spec_is_refused() -> None:
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend())
-    with pytest.raises(TypeError, match="output_serializer"):
-        server.register_resource(
-            SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda: {}, permissions=OPEN),
-            name="bad",
-            uri_template="bad://x",
-            output_serializer=Invoice,
-        )
-
-
 def test_a_template_variable_no_read_declares_is_refused_at_registration() -> None:
     server = MCPServer(name="t", auth_backend=AllowAnyBackend())
     with pytest.raises(ImproperlyConfigured, match="pk"):

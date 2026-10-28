@@ -178,22 +178,6 @@ async def _read(reader: str, ctx: MCPCallContext) -> Any:
 
 
 @pytest.mark.parametrize("reader", ["sync", "async"])
-async def test_a_view_reads_without_an_offline_request_or_view(
-    reader: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A view's read builds nothing of drf-services: no offline request and view."""
-
-    def _refuse(*_: Any, **__: Any) -> Any:
-        raise AssertionError("a view's read built an offline request and view")
-
-    monkeypatch.setattr("django_spec_mcp.auth.permissions.utils.DispatchShape.build", _refuse)
-
-    out = await _read(reader, _ctx(_server()))
-
-    assert _contents(out)["text"] == VIEW
-
-
-@pytest.mark.parametrize("reader", ["sync", "async"])
 async def test_a_pool_seed_resolved_on_a_view_read_is_handed_the_transports_request(
     reader: str,
 ) -> None:

@@ -211,7 +211,6 @@ def _handbuilt_notes() -> ResourceRegistry:
             uri_template="notes://{user}/{pk}",
             description=None,
             selector=spec.selector,
-            kind=spec.kind,
             spec=spec,
         )
     )

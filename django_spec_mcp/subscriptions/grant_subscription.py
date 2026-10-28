@@ -12,7 +12,7 @@ from django_spec_mcp.handlers.kernel_utils import (
 )
 from django_spec_mcp.handlers.runs_on_kernel import runs_on_kernel
 from django_spec_mcp.handlers.types.context import MCPCallContext
-from django_spec_mcp.handlers.utils import check_permissions, resource_shape
+from django_spec_mcp.handlers.utils import check_permissions
 from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
 from django_spec_mcp.subscriptions.types.subscription_filter import SubscriptionFilter
 from django_spec_mcp.subscriptions.utils import (
@@ -108,18 +108,8 @@ def _may_watch_resource(uri: str, context: MCPCallContext) -> bool:
     if resolved is None:
         return False
     binding, vars_ = resolved
-    # Judged on the request the read of it is, from the same shape, so a
-    # permission scoping by ``view.kwargs["project_pk"]`` grants a watch on
-    # exactly the URIs it would let this caller read
-    # (``test_a_subscription_is_granted_the_uris_the_read_would_admit``), and
-    # one reading ``view.action`` or the query string grants what the read
-    # admits (``test_a_subscription_reads_the_request_the_read_does``).
-    allowed, _ = check_permissions(
-        binding.permissions,
-        context.http_request,
-        context.token,
-        shape=resource_shape(binding, vars_),
-    )
+    # The binding's scope gate first, as the read asks it.
+    allowed, _ = check_permissions(binding.permissions, context.http_request, context.token)
     if not allowed:
         return False
     # A kernel binding's ``permissions`` are only its scope gate: the spec's own
@@ -149,9 +139,8 @@ def _kernel_read_admits(
     So a deactivated principal
     (``test_a_deactivated_principal_cannot_watch_what_it_cannot_read``) and a
     spec permission refusing the caller are refused here as the read refuses
-    them. Nothing is looked up, so a check on the row itself is not asked, as
-    the drf-services arm asks none either: the watch is judged on the request,
-    not on a row it would have to fetch.
+    them. Nothing is looked up, so a check on the row itself is not asked: the
+    watch is judged on the request, not on a row it would have to fetch.
 
     Only ``DispatchError`` is a refusal. ``ImproperlyConfigured`` is how the
     kernel answers a hand-built binding over an unguarded spec, whose read

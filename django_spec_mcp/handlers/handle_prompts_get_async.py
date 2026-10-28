@@ -13,7 +13,7 @@ from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import (
     check_permissions,
     consume_rate_limits,
-    prompt_shape,
+    forbidden,
 )
 from django_spec_mcp.output.enforce_result_bytes import enforce_result_bytes
 from django_spec_mcp.protocol.types.get_prompt_result import GetPromptResult
@@ -67,20 +67,15 @@ async def handle_prompts_get_async(
         )
 
     with span("mcp.prompts.get", attributes=_span_attrs(binding.name, context)):
-        # See the sync sibling: judged on the prompt's arguments.
+        # See the sync sibling. Off the loop, since a permission may query.
         allowed, required_scopes = await acall(
             check_permissions,
             binding.permissions,
             context.http_request,
             context.token,
-            shape=prompt_shape(binding, arguments_raw),
         )
         if not allowed:
-            return JsonRpcError(
-                JsonRpcErrorCode.FORBIDDEN,
-                "Insufficient permission",
-                data={"requiredScopes": required_scopes} if required_scopes else None,
-            )
+            return forbidden(required_scopes)
 
         retry_after: int | None = await acall(
             consume_rate_limits, binding.rate_limits, context.http_request, context.token

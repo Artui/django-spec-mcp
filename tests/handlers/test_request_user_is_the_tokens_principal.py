@@ -57,7 +57,7 @@ def _async_name(request: Any) -> str:
     return _name(async_to_sync(request.auser)())
 
 
-def _server(seen: list[Any], drfs_read: list[Any] | None = None) -> MCPServer:
+def _server(seen: list[Any], view_read: list[Any] | None = None) -> MCPServer:
     server = MCPServer(
         name="t",
         auth_backend=HeaderAuthBackend(),
@@ -90,16 +90,15 @@ def _server(seen: list[Any], drfs_read: list[Any] | None = None) -> MCPServer:
         name="kernel_read",
         uri_template="k://who",
     )
-    # A selector taking ``request`` routes the read through drf-services, whose
-    # DRF ``Request`` wraps a copy of the request it is built over.
-    kept = drfs_read if drfs_read is not None else []
+    # A view whose selector takes ``request`` reads it from the pool, where the
+    # transport lays the request carrying the token.
+    kept = view_read if view_read is not None else []
     server.resources.register(
         ResourceBinding(
-            name="drfs_read",
-            uri_template="d://who",
+            name="view_read",
+            uri_template="v://who",
             description=None,
             selector=lambda request: kept.append(request) or "ok",
-            kind=SelectorKind.RETRIEVE,
             permissions=(),
             encoding=ResourceEncoding.TEXT,
         )
@@ -123,8 +122,8 @@ def is_async(request: pytest.FixtureRequest) -> bool:
 def _answers(client: Client, *, token_user: str | None, is_async: bool) -> dict[str, Any]:
     """What each path saw as ``request.user``, as ``<user>/<auser>``."""
     seen: list[Any] = []
-    drfs_read: list[Any] = []
-    server = _server(seen, drfs_read)
+    view_read: list[Any] = []
+    server = _server(seen, view_read)
     with override_settings(
         ROOT_URLCONF=urlconf_for(server, is_async=is_async), **_SESSION_SETTINGS
     ):
@@ -139,14 +138,14 @@ def _answers(client: Client, *, token_user: str | None, is_async: bool) -> dict[
         ).json()["result"]
         seen.clear()
         caller.post("resources/read", {"uri": "ui://board.html"})
-        caller.post("resources/read", {"uri": "d://who"})
+        caller.post("resources/read", {"uri": "v://who"})
         kernel_read = caller.post("resources/read", {"uri": "k://who"}).json()["result"]
     return {
         "tool": tool,
         "prompt": prompt["messages"][0]["content"]["text"],
         "completion": completion["completion"]["values"][0],
         "view_seed": f"{_whoami(seen[0])}/{_async_name(seen[0])}",
-        "drfs_read": f"{_whoami(drfs_read[0])}/{_async_name(drfs_read[0])}",
+        "view_read": f"{_whoami(view_read[0])}/{_async_name(view_read[0])}",
         "kernel_read": json.loads(kernel_read["contents"][0]["text"])["user"],
     }
 
@@ -158,7 +157,7 @@ def test_every_path_sees_the_tokens_principal_not_the_sessions(
     answers = _answers(client, token_user="token-caller", is_async=is_async)
 
     assert answers == dict.fromkeys(
-        ("tool", "prompt", "completion", "view_seed", "drfs_read", "kernel_read"),
+        ("tool", "prompt", "completion", "view_seed", "view_read", "kernel_read"),
         "token-caller/token-caller",
     )
 
@@ -170,7 +169,7 @@ def test_a_caller_the_token_names_no_one_is_anonymous_not_the_sessions_user(
     answers = _answers(client, token_user=None, is_async=is_async)
 
     assert answers == dict.fromkeys(
-        ("tool", "prompt", "completion", "view_seed", "drfs_read", "kernel_read"),
+        ("tool", "prompt", "completion", "view_seed", "view_read", "kernel_read"),
         "anonymous/anonymous",
     )
 

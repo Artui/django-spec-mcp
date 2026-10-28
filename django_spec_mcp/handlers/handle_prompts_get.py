@@ -12,7 +12,7 @@ from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import (
     check_permissions,
     consume_rate_limits,
-    prompt_shape,
+    forbidden,
 )
 from django_spec_mcp.output.enforce_result_bytes import enforce_result_bytes
 from django_spec_mcp.protocol.types.get_prompt_result import GetPromptResult
@@ -75,22 +75,14 @@ def handle_prompts_get(
         )
 
     with span("mcp.prompts.get", attributes=_span_attrs(binding.name, context)):
-        # On the prompt's arguments as ``request.data``, its name as
-        # ``view.action`` and no query string: judged against ``{}``, a
-        # permission refusing on an argument admitted every call
-        # (``test_a_prompt_permission_reads_the_prompts_arguments``).
+        # The prompt's ``permissions``, judged on the request and the token.
         allowed, required_scopes = check_permissions(
             binding.permissions,
             context.http_request,
             context.token,
-            shape=prompt_shape(binding, arguments_raw),
         )
         if not allowed:
-            return JsonRpcError(
-                JsonRpcErrorCode.FORBIDDEN,
-                "Insufficient permission",
-                data={"requiredScopes": required_scopes} if required_scopes else None,
-            )
+            return forbidden(required_scopes)
 
         retry_after: int | None = consume_rate_limits(
             binding.rate_limits, context.http_request, context.token

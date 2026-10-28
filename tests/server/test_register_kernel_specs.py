@@ -281,22 +281,6 @@ def test_register_resource_refuses_an_empty_scope_tuple() -> None:
         )
 
 
-# ``selector=`` is refused the same way, held by the ``_drfs`` original of this
-# file: it is the drf-services form's own argument, which goes with that form.
-# ``mime_type`` and ``encoding`` are not refused: a presenter can render the row
-# as a document or as bytes, so the kernel form takes both
-# (``test_the_kernel_form_takes_a_mime_type_and_an_encoding``).
-@pytest.mark.parametrize(
-    ("knob", "value"),
-    [("output_serializer", object), ("permissions", [])],
-)
-def test_the_kernel_form_refuses_each_knob_of_the_selector_form(knob: str, value: Any) -> None:
-    with pytest.raises(TypeError, match=f"{knob} belong to the selector= form"):
-        _server().register_resource(
-            _selector(SelectorKind.RETRIEVE), name="r", uri_template="r://{pk}", **{knob: value}
-        )
-
-
 def test_the_kernel_form_takes_a_mime_type_and_an_encoding() -> None:
     binding = _server().register_resource(
         _selector(SelectorKind.RETRIEVE),
@@ -411,11 +395,6 @@ def test_both_listings_report_a_kernel_resources_mime_type() -> None:
     assert [(t["uriTemplate"], t["mimeType"]) for t in templates["resourceTemplates"]] == [
         ("invoices://{pk}", "text/markdown")
     ]
-
-
-def test_register_resource_needs_a_spec_or_a_selector() -> None:
-    with pytest.raises(TypeError, match="it was given neither"):
-        _server().register_resource(name="r", uri_template="r://{pk}")
 
 
 def test_a_kernel_resource_carries_its_scope_gate() -> None:

@@ -2,56 +2,30 @@ from __future__ import annotations
 
 from typing import Any
 
-from django_service_specs import AdditionalInputRequired, ServiceError, ServiceValidationError
-from rest_framework import serializers as drf_serializers
-from rest_framework.exceptions import PermissionDenied
-from rest_framework_services import (
-    dispatch_spec,
-    enforce_permissions,
-    render_for_audience,
-)
-
 from django_spec_mcp._compat.tracing import span
 from django_spec_mcp.elicitation.types.resolved_input import ResolvedInput
 from django_spec_mcp.handlers.input_dispatch import (
-    ask_for_input,
     refusal_result,
 )
 from django_spec_mcp.handlers.invalidation_dispatch import announce_invalidations
-from django_spec_mcp.handlers.kernel_utils import KernelAdmission, admit_kernel_tool_call
+from django_spec_mcp.handlers.kernel_utils import admit_kernel_tool_call
 from django_spec_mcp.handlers.resolve_call_input import resolve_call_input
 from django_spec_mcp.handlers.run_kernel_tool import run_kernel_tool
-from django_spec_mcp.handlers.runs_on_kernel import runs_on_kernel
-from django_spec_mcp.handlers.selector_tool_dispatch import (
-    dispatch_selector_tool,
-    enforce_object_permissions,
-)
 from django_spec_mcp.handlers.task_dispatch import maybe_create_task
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import (
     apply_tool_server_arguments,
     consume_rate_limits,
-    dispatch_shape,
     effective_rate_limits,
     enforce_result_ceiling,
+    forbidden,
     judge_tool_permissions,
-    read_shaping_error_result,
-    refuse_missing_arguments,
     resolve_bound,
-    same_arguments,
-    service_error_result,
-    services_dispatch_policies,
-    split_url_kwargs,
     validate_output_format,
-    validation_error_result,
 )
-from django_spec_mcp.output.error_tool_result import build_error_tool_result
-from django_spec_mcp.output.resolve_structured_output import resolve_structured_output
-from django_spec_mcp.output.tool_result import build_tool_result
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
-from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
+from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
-from django_spec_mcp.types.output_format import OutputFormat
 
 
 def handle_tools_call(
@@ -60,13 +34,11 @@ def handle_tools_call(
 ) -> dict[str, Any] | JsonRpcError:
     """Invoke a registered tool by name.
 
-    Service tools dispatch through drf-services' transport-neutral
-    ``dispatch_spec``: it owns instance resolution,
-    ``input_serializer`` validation, the kwarg pool (per the binding's
-    ``argument_binding`` / ``unknown_arguments`` policies), the service run, and
-    the output-selector re-fetch. This layer keeps only the transport shell —
-    MCP permissions / rate limits, the ``enforce_permissions`` object-permission
-    hook, output format, and ``structuredContent``.
+    The kernel owns the run: the spec's argument check, its permissions, the
+    service or selector and the presenter (``run_kernel_tool``). This layer
+    keeps the transport shell: the binding's scope gate and rate limits, a
+    retry's answers, the output format, the result ceiling and
+    ``structuredContent``.
     """
     if not isinstance(params, dict):
         return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, "tools/call params must be an object")
@@ -136,21 +108,20 @@ def handle_tools_call(
 
 
 def _dispatch_tool_call(
-    binding: Any,
+    binding: KernelToolBinding,
     params: dict[str, Any],
     arguments_raw: dict[str, Any],
     context: MCPCallContext,
 ) -> tuple[dict[str, Any] | JsonRpcError, dict[str, Any]]:
-    """Route a resolved binding to its dispatch path; return the raw result and its arguments.
+    """Dispatch a resolved binding; return the raw result and its arguments.
 
     Split out of ``handle_tools_call`` so the size ceiling wraps every
-    return — including the ones the selector helpers make — at a
-    single point. The async sibling splits the same way, plus the deadline.
+    return at a single point. The async sibling splits the same way, plus the
+    deadline.
 
-    The arguments returned are the ones the tool ran with, which on a service
-    tool's retry carry the answers merged over the arguments as sent, for the
-    invalidation the caller announces. The selector path merges no answers, so
-    its are the arguments as sent.
+    The arguments returned are the ones the tool ran with, which on a retry
+    carry the answers merged over the arguments as sent, for the invalidation
+    the caller announces.
     """
     # Scoped to the dispatch portion, after binding resolution, so cheap
     # validation rejections don't generate noise. A no-op without
@@ -159,32 +130,11 @@ def _dispatch_tool_call(
         "mcp.tools.call",
         attributes=_span_attrs(binding.name, context),
     ) as otel_span:
-        # Selector tools have their own dispatch helpers; service tools fall
-        # through to the mutation-shaped path below. A selector merges no
-        # retry's answers, so it ran with the arguments as sent.
-        if isinstance(binding, SelectorToolBinding):
-            return (
-                dispatch_selector_tool(binding, params, arguments_raw, context, otel_span),
-                arguments_raw,
-            )
-
-        # The spec's permission classes judge the call as its dispatch view
-        # will carry it: the route in ``view.kwargs``, the routed query values
-        # in ``request.query_params``, the rest of the arguments in
-        # ``request.data`` and the tool's name in ``view.action``
-        # (``test_the_stand_in_sees_what_the_dispatch_view_sees``). A
-        # permission scoping by ``view.kwargs["project_pk"]`` was judged against
-        # ``{}`` and denied a caller it admits
-        # (``test_a_spec_permission_sees_the_url_kwargs_the_call_delivers``),
-        # and one reading ``request.data`` raised and made the call a 500. The
-        # permission answers before a missing argument does
-        # (``test_a_permission_denying_the_delivered_route_answers_before_the_missing_argument``),
-        # and the strict split in ``_run_service_tool`` still refuses it after.
-        # The arguments as sent, before a retry's answers are merged in below,
-        # since a denied caller is told so before its answers are read.
-        allowed, required_scopes = judge_tool_permissions(binding, arguments_raw, context)
+        # The binding's ``permissions``, its scope gate, before a retry's
+        # answers are read, since a denied caller is told so first.
+        allowed, required_scopes = judge_tool_permissions(binding, context)
         if not allowed:
-            return _forbidden(required_scopes), arguments_raw
+            return forbidden(required_scopes), arguments_raw
 
         # On a retry of a call that asked the user something, the answer arrives
         # as ``inputResponses`` and becomes an ordinary argument here — the
@@ -196,74 +146,24 @@ def _dispatch_tool_call(
         # Applied again over what the answers produced, since the merge takes
         # any key: an answer naming a bound argument would otherwise replace the
         # server's value (``test_an_answer_cannot_replace_a_bound_value``).
-        answered = apply_tool_server_arguments(binding, prior.arguments)
+        arguments_raw = apply_tool_server_arguments(binding, prior.arguments)
 
-        # An answer is merged over the arguments with no limit on its keys, so
-        # it can change any value the stand-in above was built from: the route
-        # in ``view.kwargs``, a ``QueryParam`` value or ``request.data``. So the
-        # arguments the answers produced are judged again, before the target
-        # is looked up. A per-binding adapter is judged by nothing else: one
-        # admitting only project 7 ran the service on project 8 sent as 7 and
-        # answered as 8
-        # (``test_an_answer_changing_a_value_the_permission_reads_is_refused``),
-        # or answered with another ``project_pk``
-        # (``test_an_answer_naming_another_route_is_refused_by_a_per_binding_permission``).
-        # A spec class judged again only by the dispatch view or the target
-        # guard told an existing target from a missing one
-        # (``test_an_answer_cannot_tell_an_existing_target_from_a_missing_one``),
-        # after the rate limit had charged the call.
-        # Only when the answers changed the arguments, so a retry answering
-        # what the call already sent is judged once
-        # (``test_an_answer_leaving_the_arguments_unchanged_is_not_judged_again``),
-        # while one adding any key is judged again
-        # (``test_an_answer_adding_an_argument_is_judged_again``). Changed means
-        # not ``same_arguments``, which ``==`` is not: an answer of ``True`` or
-        # ``1.0`` for ``1`` is equal and names another row
-        # (``test_an_answer_equal_to_the_route_but_naming_another_row_is_judged_again``).
-        # Since the stand-in is built from the arguments and the context alone,
-        # and the context is the one judged above, arguments ``same_arguments``
-        # calls unchanged build the request judged above. An answer filling a
-        # route kwarg the call left out is a change
-        # (``test_an_answer_filling_a_route_kwarg_left_out_is_judged_on_the_filled_route``),
-        # as is one clearing a kwarg it sent
-        # (``test_an_answer_clearing_a_route_kwarg_is_judged_on_the_route_it_leaves``).
-        # Not refusing a missing kwarg, as the stand-in above does not, since
-        # the strict split in ``_run_service_tool`` is where that is answered
-        # (``test_an_answer_leaving_a_required_route_kwarg_missing_is_told_which``).
-        if not same_arguments(answered, arguments_raw):
-            allowed, required_scopes = judge_tool_permissions(binding, answered, context)
-            if not allowed:
-                return _forbidden(required_scopes), answered
-        arguments_raw = answered
-
-        # A kernel spec's own checks, which the binding's ``permissions`` above
-        # do not hold, asked here on the arguments the tool will run with: after
-        # the answers are merged, so a route an answer names is the one judged,
-        # and before the charge and the shape check inside dispatch, so a
-        # caller they refuse is neither charged
+        # The spec's own checks, asked here on the arguments the tool will run
+        # with: after the answers are merged, so a route an answer names is the
+        # one judged, and before the charge and the shape check inside
+        # dispatch, so a caller they refuse is neither charged
         # (``test_a_caller_the_spec_refuses_is_not_charged``) nor told which
         # argument it left out
-        # (``test_a_caller_the_spec_denies_is_refused_before_the_argument_is_checked``),
-        # as the drf-services spec classes judged above refuse it.
+        # (``test_a_caller_the_spec_denies_is_refused_before_the_argument_is_checked``).
         # ``admit_kernel_call`` says what the checks are shown and how often
         # they are asked: the grant it returns is what dispatch runs under, so
         # when the arguments pass the shape check dispatch does not ask them
         # again, and a streamed call's pre-flight asks them once more.
-        admission: KernelAdmission | None = None
-        if runs_on_kernel(binding):
-            admitted = admit_kernel_tool_call(binding, arguments_raw, context)
-            if isinstance(admitted, JsonRpcError):
-                return admitted, arguments_raw
-            admission = admitted
+        admission = admit_kernel_tool_call(binding, arguments_raw, context)
+        if isinstance(admission, JsonRpcError):
+            return admission, arguments_raw
 
-        # After every check, so a caller one denies is never charged:
-        # charged between them, a caller refused on the route its answer names
-        # had spent a unit, and against a spent quota was told ``RATE_LIMITED``
-        # rather than that the route is not its to name
-        # (``test_a_caller_refused_on_the_route_an_answer_names_is_not_charged``),
-        # and one answering a value only a spec class reads was refused by the
-        # dispatch view after the charge
-        # (``test_a_caller_refused_on_an_answered_value_is_not_charged``).
+        # After every check, so a caller one denies is never charged.
         retry_after: int | None = consume_rate_limits(
             effective_rate_limits(binding, context), context.http_request, context.token
         )
@@ -282,199 +182,10 @@ def _dispatch_tool_call(
         if prior.refused_with is not None:
             return refusal_result(prior.refused_with), arguments_raw
 
-        if admission is not None:
-            return (
-                run_kernel_tool(
-                    binding, params, arguments_raw, admission, prior, context, otel_span
-                ),
-                arguments_raw,
-            )
-        result = _run_service_tool(binding, params, arguments_raw, prior, context, otel_span)
-        return result, arguments_raw
-
-
-def _forbidden(required_scopes: list[str]) -> JsonRpcError:
-    """The answer to a caller the binding's permissions deny, on either route.
-
-    Shared by the check on the route as sent and the one on the route a retry's
-    answers produce, which answer alike; the async sibling uses it too.
-    """
-    return JsonRpcError(
-        JsonRpcErrorCode.FORBIDDEN,
-        "Insufficient permission",
-        data={"requiredScopes": required_scopes} if required_scopes else None,
-    )
-
-
-def _run_service_tool(
-    binding: Any,
-    params: dict[str, Any],
-    arguments_raw: dict[str, Any],
-    prior: ResolvedInput,
-    context: MCPCallContext,
-    otel_span: Any,
-) -> dict[str, Any] | JsonRpcError:
-    """Dispatch an admitted service-tool call and render its result.
-
-    Split out of ``_dispatch_tool_call`` once both permission checks and the
-    rate limit have answered, so that function can return the arguments the
-    tool ran with beside every result. ``arguments_raw`` carries a retry's
-    answers; ``prior`` is what ``ask_for_input`` needs to carry them into a
-    further round.
-
-    A kernel binding never reaches here: ``_dispatch_tool_call`` hands it to
-    ``run_kernel_tool`` with the admission its spec's checks gave, a kernel
-    selector tool included, since it is not a ``SelectorToolBinding``.
-    """
-    argument_binding, unknown_arguments = services_dispatch_policies(binding)
-    # Inside the ``try``: the strict ``split_url_kwargs`` raises DRF's
-    # ``ValidationError`` for an omitted ``required=True`` kwarg, and that
-    # must reach the same ``isError`` mapping as any other dispatch-time
-    # validation failure rather than escaping as a 500, while the spec's
-    # ``PermissionDenied`` reaches the ``FORBIDDEN`` arm. Still after the
-    # permission and rate-limit answers ``_dispatch_tool_call`` gave.
-    try:
-        # Built from the same shape the binding's stand-in was, so the two
-        # checks judge one request. Not refusing a missing kwarg yet: the spec
-        # judges the route first.
-        shape = dispatch_shape(binding, arguments_raw)
-        spec_params, url_kwarg_values = shape.data, shape.kwargs
-        offline = shape.build(
-            user=context.token.user, auth=context.token.raw, http_request=context.http_request
+        return (
+            run_kernel_tool(binding, params, arguments_raw, admission, prior, context, otel_span),
+            arguments_raw,
         )
-        # The spec's class-level check, against the request and view the call
-        # runs with, before the target is looked up and before a missing
-        # argument is named, as ``call_spec_tool`` judges it. Kept beside the
-        # stand-in's, which judges the same shape: a ``has_permission`` whose
-        # answer changes between the two is still answered before the lookup,
-        # not by the target guard after it, which told a denied caller
-        # ``-32006`` for a row that exists and ``not_found`` for one that does
-        # not
-        # (``test_the_dispatch_view_judges_before_the_lookup_when_the_stand_in_admits``),
-        # and the name of an argument left out
-        # (``test_a_denied_caller_is_not_told_which_argument_it_left_out``).
-        enforce_permissions(binding.spec, offline)
-        # Only for its refusal of a missing ``required=True`` kwarg: the values
-        # are the ones split above.
-        split_url_kwargs(arguments_raw, binding.url_kwargs)
-        refuse_missing_arguments(
-            binding, (*spec_params, *url_kwarg_values), pool_seeds=context.pool_seeds
-        )
-        result = dispatch_spec(
-            binding.spec,
-            user=context.token.user,
-            params=spec_params,
-            request=offline.request,
-            view=offline.view,
-            argument_binding=argument_binding,
-            unknown_arguments=unknown_arguments,
-            # Object-level only: the class-level half ran above, against the
-            # same request and view.
-            on_target_resolved=enforce_object_permissions,
-            # Not dead on the sync path despite there being no stream: a
-            # task worker runs *this* function and its reporter writes to
-            # the task record. ``None`` for an ordinary sync request.
-            progress=context.progress,
-            # The server's ``pool_seeds=``, resolved into the pool and
-            # reserved against client input, as ``dispatch_spec`` defines.
-            pool_seeds=context.pool_seeds,
-            # ``arguments`` is always an object, so a ``many=True`` spec's list
-            # travels under ``spec.many_argument``; a no-op for any other spec.
-            many_as_argument=True,
-        )
-    except PermissionDenied:
-        return JsonRpcError(JsonRpcErrorCode.FORBIDDEN, "Insufficient permission")
-    except (drf_serializers.ValidationError, ServiceValidationError) as exc:
-        # Refused input -- an unexpected argument, a serializer rejection, a
-        # service's own validation -- is a *tool-level* failure per the MCP
-        # spec: an ``isError`` result the model can correct from, not a
-        # protocol error. Before the ``ServiceError`` arm, which would
-        # otherwise take ``ServiceValidationError`` as a plain failure.
-        return validation_error_result(
-            exc, arguments_raw, config=context.config, conventions=context.conventions
-        ).to_dict()
-    except AdditionalInputRequired as exc:
-        # **Must precede the ``ServiceError`` arm below** — this is a
-        # subclass of it, so the generic handler would otherwise swallow the
-        # request for input and report it as a plain failure.
-        return ask_for_input(exc, prior, context)
-    except ServiceError as exc:
-        # The real-failure channel, recorded on the span when the consumer
-        # opted in. ``ServiceValidationError`` deliberately is not — that is
-        # input-shape feedback, not a server fault.
-        if context.config.record_service_exceptions:
-            otel_span.record_exception(exc)
-        return service_error_result(exc).to_dict()
-
-    if result.kind == "not_found":
-        return build_error_tool_result(
-            f"{binding.name}: no matching instance found", error_type="not_found"
-        ).to_dict()
-
-    # Outside the ``try`` above on purpose: its ``ValidationError`` arm
-    # treats every refusal as the caller's to fix, and a render-time
-    # refusal is the caller's only when they supplied a value that shaped
-    # the render. A read-shaping ``QueryParam`` is read here, by the
-    # output serializer, so a bad value fails after dispatch succeeded;
-    # ``read_shaping_error_result`` makes that the caller's ``isError`` when
-    # they supplied one and re-raises it otherwise. The async handler shares
-    # ``_render`` and wraps it the same way, and a task worker reaches this
-    # line through ``handle_tools_call``, so a task stores the result.
-    try:
-        payload = _render(binding, result, offline)
-    except (drf_serializers.ValidationError, ServiceValidationError) as exc:
-        # A service tool's result is never a page, so no envelope to explain.
-        return read_shaping_error_result(
-            exc,
-            query_params=binding.query_params,
-            arguments=arguments_raw,
-            paginated=False,
-            config=context.config,
-            conventions=context.conventions,
-        ).to_dict()
-    output_format: OutputFormat = OutputFormat.coerce(
-        params.get("outputFormat") or binding.output_format
-    )
-    _emit_output_schema, emit_structured_content = resolve_structured_output(
-        include_output_schema_override=binding.include_output_schema,
-        include_structured_content_override=binding.include_structured_content,
-        binding_name=binding.name,
-        default_output_schema=context.config.include_output_schema,
-        default_structured_content=context.config.include_structured_content,
-    )
-    return build_tool_result(
-        payload,
-        output_format=output_format,
-        include_structured_content=emit_structured_content,
-        content_kind=binding.content_kind,
-        content_mime_type=binding.content_mime_type,
-        binding_name=binding.name,
-    ).to_dict()
-
-
-def _render(binding: Any, result: Any, offline: Any) -> Any:
-    """Render a service ``DispatchResult`` through the spec's output serializer.
-
-    ``render_for_audience`` reads the output serializer off
-    ``spec.output_selector_spec`` and resolves its ``output_serializer_context``
-    provider with the extras it declares (``page`` for a list result,
-    ``instance`` / ``result`` for a single one).
-    """
-    many: bool = result.kind == "list"
-    extras: dict[str, Any] = (
-        {"page": result.value} if many else {"instance": result.value, "result": result.value}
-    )
-    # ``render_for_audience`` passes a ``None`` result through; MCP's object
-    # requirement is met where every tool kind meets it, in ``build_tool_result``.
-    return render_for_audience(
-        binding.spec,
-        result.value,
-        projection=binding.audience_projection,
-        many=many,
-        view=offline.view,
-        request=offline.request,
-        extras=extras,
-    )
 
 
 def _span_attrs(binding_name: str, context: MCPCallContext) -> dict[str, Any]:

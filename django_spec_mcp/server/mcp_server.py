@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 import re
 import sys
-import warnings
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 from typing import Any, cast
@@ -14,9 +13,9 @@ from django.http import HttpRequest
 from django.urls import URLPattern, path
 from django_service_specs import (
     DEFAULT_POOL_SEEDS,
+    RESERVED_POOL_SEEDS,
     UNSET,
     Affordance,
-    FieldMarking,
     Parameters,
     PoolSeeds,
     SelectorKind,
@@ -25,25 +24,16 @@ from django_service_specs import (
     UnknownArguments,
     UnsetType,
     check_seeds,
-    kernel_spec,
     server_owned_keys,
 )
 from django_service_specs import SelectorSpec as KernelSelectorSpec
 from django_service_specs import ServiceSpec as KernelServiceSpec
-from rest_framework.serializers import Serializer
-from rest_framework_services import ArgumentBinding, OfflineContract, PolymorphicServiceSpec
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
-from rest_framework_services.types.validate_channel_names import validate_channel_names
 
 from django_spec_mcp.adapters.check_kernel_spec_guarded import check_kernel_spec_guarded
 from django_spec_mcp.adapters.kernel_selector_to_resource import kernel_selector_to_resource
 from django_spec_mcp.adapters.kernel_spec_to_tool import kernel_spec_to_tool
-from django_spec_mcp.adapters.selector_to_resource import selector_to_resource
-from django_spec_mcp.adapters.selector_to_tool import selector_spec_to_tool
-from django_spec_mcp.adapters.service_to_tool import service_spec_to_tool
 from django_spec_mcp.adapters.ui_to_resource import ui_view_to_resource
-from django_spec_mcp.adapters.utils import merge_meta, validate_selector_parameter_names
+from django_spec_mcp.adapters.utils import merge_meta
 from django_spec_mcp.auth.backends.django_oauth_toolkit_backend import (
     DjangoOAuthToolkitBackend,
 )
@@ -53,7 +43,7 @@ from django_spec_mcp.auth.types.self_checking import SelfChecking
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.config.types.mcp_config import MCPConfig
-from django_spec_mcp.handlers.call_spec_tool import call_spec_tool
+from django_spec_mcp.handlers.call_kernel_tool import call_kernel_tool
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
 from django_spec_mcp.handlers.kernel_utils import copy_request
@@ -63,6 +53,7 @@ from django_spec_mcp.handlers.offered_tools import (
     unavailable_tools,
 )
 from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.handlers.utils import apply_tool_server_arguments
 from django_spec_mcp.output.resolve_structured_output import resolve_structured_output
 from django_spec_mcp.protocol.build_server_info import build_server_info
 from django_spec_mcp.protocol.types.icon import Icon
@@ -76,13 +67,9 @@ from django_spec_mcp.registry.tool_registry import ToolRegistry
 from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from django_spec_mcp.registry.types.prompt_binding import PromptBinding
-from django_spec_mcp.registry.types.query_param import QueryParam
 from django_spec_mcp.registry.types.resource_binding import ResourceBinding
-from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
-from django_spec_mcp.registry.types.tool_binding import ToolBinding
 from django_spec_mcp.registry.types.ui_resource_meta import UIResourceMeta
 from django_spec_mcp.registry.types.ui_tool_meta import UIToolMeta
-from django_spec_mcp.registry.types.url_kwarg import UrlKwarg
 from django_spec_mcp.schema.types.agent_conventions import AgentConventions
 from django_spec_mcp.server.utils import (
     build_ui_tool_meta,
@@ -129,32 +116,30 @@ from django_spec_mcp.types.ui_resource_mime_type import UI_RESOURCE_MIME_TYPE
 
 
 class MCPServer:
-    """A pluggable MCP server backed by ``ServiceSpec`` registrations.
+    """A pluggable MCP server serving kernel specs.
 
-    The server owns its tool and resource registries, an auth backend, and a
-    session store — all instance state, no module-level singletons. Two
-    parallel registration shapes are supported:
+    The server owns its tool, resource and prompt registries, an auth backend,
+    and a session store — all instance state, no module-level singletons. A
+    tool or a resource is a ``django_service_specs`` spec, registered by
+    passing it in:
 
-    Imperative:
+        from django_service_specs import SelectorKind, SelectorSpec, ServiceSpec
 
         server = MCPServer(name="my-app")
-        server.register_service_tool(
+        server.register_tool(
+            ServiceSpec(service=create_invoice, permissions=[IsBilling()]),
             name="invoices.create",
-            spec=ServiceSpec(service=create_invoice, input_serializer=InvoiceInput),
         )
         server.register_resource(
+            SelectorSpec(
+                kind=SelectorKind.RETRIEVE, selector=get_invoice, permissions=[IsBilling()]
+            ),
             name="invoice",
             uri_template="invoices://{pk}",
-            selector=SelectorSpec(selector=get_invoice, output_serializer=InvoiceOutput),
         )
 
-    Declarative:
-
-        @server.service_tool(name="invoices.create", input_serializer=InvoiceInput)
-        def create_invoice(*, data): ...
-
-        @server.resource(uri_template="invoices://{pk}", output_serializer=InvoiceOutput)
-        def get_invoice(*, pk): ...
+    A ``SpecRegistry`` registers in one call, ``register_tools``, with the MCP
+    knobs per tool in ``overrides``.
 
     Mount the URLs in your URL conf the ``admin.site.urls`` way — ``.urls`` is a
     namespaced ``(patterns, app_name, namespace)`` triple ``path()`` mounts
@@ -164,8 +149,8 @@ class MCPServer:
         # reverse("mcp:endpoint") · reverse("mcp:protected-resource-metadata")
 
     What every spec on the mount may read -- a tenant, a locale, a clock -- is
-    registered once as ``pool_seeds=``, a drf-services
-    [`PoolSeeds`][rest_framework_services.types.pool_seeds.PoolSeeds]:
+    registered once as ``pool_seeds=``, a kernel
+    [`PoolSeeds`][django_service_specs.PoolSeeds]:
 
         server = MCPServer(
             pool_seeds=DEFAULT_POOL_SEEDS.extend(tenant=lambda *, user: user.tenant),
@@ -175,8 +160,8 @@ class MCPServer:
     transport, ``call_tool`` / ``acall_tool``, task workers and resource
     reads), every operation condition it asks is asked with them,
     ``tools/list`` availability included, and a registered name is reserved: a
-    client argument cannot occupy it, and a ``UrlKwarg``, ``QueryParam`` or
-    URI-template variable naming it is refused at registration.
+    client argument cannot occupy it, and a spec read or a URI-template
+    variable naming it is refused at registration.
 
     What the server tells a model in its own words -- the handle description and
     line, a paged tool's scope sentence, the missing-argument message -- is
@@ -312,353 +297,6 @@ class MCPServer:
 
     # ----- imperative registration -----
 
-    def register_service_tool(
-        self,
-        *,
-        name: str,
-        spec: ServiceSpec,
-        description: str | None = None,
-        title: str | None = None,
-        icons: tuple[Icon, ...] = (),
-        display_name: str | None = None,
-        display_description: str | None = None,
-        output_format: OutputFormat | str = OutputFormat.JSON,
-        content_kind: ToolContentKind = ToolContentKind.TEXT,
-        invalidates: tuple[str, ...] | list[str] = (),
-        task_policy: TaskPolicy = TaskPolicy.FORBIDDEN,
-        content_mime_type: str | None = None,
-        permissions: list[Any] | None = None,
-        rate_limits: list[Any] | None = None,
-        annotations: dict[str, Any] | None = None,
-        meta: dict[str, Any] | None = None,
-        agent_contract: OfflineContract | None = None,
-        ui: UIToolMeta | None = None,
-        include_structured_content: bool | None = None,
-        include_output_schema: bool | None = None,
-        argument_binding: ArgumentBinding = ArgumentBinding.BUNDLE,
-        unknown_arguments: UnknownArguments = UnknownArguments.REJECT,
-        always_listed: bool = False,
-        spec_kwargs_provides: tuple[str, ...] = (),
-        url_kwargs: tuple[UrlKwarg, ...] = (),
-        query_params: tuple[QueryParam, ...] = (),
-        max_result_bytes: int | None | UnsetType = UNSET,
-        dispatch_timeout: float | None | UnsetType = UNSET,
-        server_arguments: ServerArguments | None = None,
-    ) -> ToolBinding:
-        """Register a ``ServiceSpec`` as an MCP **mutation** tool.
-
-        The dispatch pipeline runs ``input_serializer → run_service(atomic) →
-        output_selector? → output_serializer``, so this is the surface for
-        side-effecting operations. For read-shaped ones (list/retrieve with
-        optional filtering / ordering / pagination) use
-        ``register_selector_tool`` instead.
-
-        ``meta`` is the base protocol's generic ``_meta`` bundle, emitted
-        verbatim under the ``"_meta"`` key of this tool's ``tools/list`` entry
-        and omitted when empty. It is *not* the ``annotations`` hint bundle —
-        those are a closed, spec-defined set of client hints, while ``_meta``
-        is where protocol extensions put their own keys. Passed through as
-        given: no key is validated or reserved here.
-
-        ``ui`` links this tool to an interactive view registered with
-        ``register_ui_resource``, so a host renders the result inline
-        instead of raw JSON. The view must already be registered on this
-        server, and the tool must emit ``structuredContent`` — what the view
-        renders from — or the link is refused at registration rather than
-        shipping a view that comes up blank.
-
-        The route captures and query values a caller with **no HTTP request**
-        has to send come from the spec's own ``reads``, and the output fields an
-        agent sees from its ``field_audiences``: the declaration is made once, on
-        the spec, and this registrar, the decorator and ``register_specs`` all
-        read it, so one spec is the same tool however it is mounted.
-
-        ``server_arguments`` names declared parameters the server answers for,
-        so no caller does: a
-        ``ServerArguments``
-        from ``django_service_specs``, whose ``values`` are fixed for the life of
-        the binding and whose ``withheld`` names leave the callable to its own
-        default. Both are dropped from the advertised schema and from
-        ``required``; a caller's value for one is dropped before dispatch and
-        logged by name. It is checked at registration, so an undeclared name, a
-        value the declared type refuses or a withheld name with no default
-        raises ``ImproperlyConfigured`` naming the tool. A value computed per
-        request is not something this argument carries.
-
-        ``url_kwargs``, ``query_params`` and ``agent_contract`` are
-        **deprecated**: each declares beside the spec what the spec declares
-        itself, and each warns, naming its replacement. An explicit
-        ``url_kwargs`` / ``query_params`` replaces the spec's reads of that kind
-        in what the tool advertises and routes; ``agent_contract`` replaces all
-        of them and the field audiences. Neither takes a channel away from the
-        dispatch, which still reads the spec's declaration; only
-        ``server_arguments``' ``withheld`` does.
-        """
-        _refuse_retired_argument_binding(name, argument_binding)
-        _refuse_retired_unknown_arguments(name, unknown_arguments)
-        ui_meta = build_ui_tool_meta(
-            name=name,
-            ui=ui,
-            meta=meta,
-            resources=self._resources,
-            include_structured_content=include_structured_content,
-            default_structured_content=self._config.include_structured_content,
-        )
-        channel_url_kwargs, channel_query_params, read_query_params, field_audiences = (
-            _tool_channels(
-                name,
-                spec,
-                agent_contract=agent_contract,
-                url_kwargs=url_kwargs,
-                query_params=query_params,
-            )
-        )
-        binding = service_spec_to_tool(
-            name=name,
-            field_audiences=field_audiences,
-            spec=spec,
-            description=description,
-            title=title,
-            icons=icons,
-            display_name=display_name,
-            display_description=display_description,
-            output_format=OutputFormat.coerce(output_format),
-            content_kind=content_kind,
-            task_policy=task_policy,
-            invalidates=tuple(invalidates),
-            content_mime_type=content_mime_type,
-            permissions=check_permissions_shape(f"MCP binding {name!r}", permissions),
-            rate_limits=tuple(rate_limits or ()),
-            annotations=annotations,
-            meta=merge_meta(ui_meta, meta),
-            include_structured_content=include_structured_content,
-            include_output_schema=include_output_schema,
-            argument_binding=argument_binding,
-            unknown_arguments=unknown_arguments,
-            always_listed=always_listed,
-            spec_kwargs_provides=spec_kwargs_provides,
-            url_kwargs=channel_url_kwargs,
-            # A service has no reflected parameters to answer a read's name, so
-            # the spec's own query values are channels like the mount's: one
-            # named like a service input is refused as a shadow.
-            query_params=(*channel_query_params, *read_query_params),
-            max_result_bytes=max_result_bytes,
-            dispatch_timeout=dispatch_timeout,
-            pool_seeds=self._pool_seeds,
-            server_arguments=server_arguments,
-        )
-        check_tool_permissions_declared(
-            binding.name, binding.permissions, require=self._config.require_tool_permissions
-        )
-        check_tool_description_present(
-            binding.name, binding.description, require=self._config.require_tool_descriptions
-        )
-        # Per binding, and eagerly, so a spec-violating pair fails at import
-        # time rather than on the first ``tools/call``. A server-wide "schema
-        # on, content off" is legal when every binding overrides it back on,
-        # so checking the globals alone would be wrong.
-        resolve_structured_output(
-            include_output_schema_override=binding.include_output_schema,
-            include_structured_content_override=binding.include_structured_content,
-            binding_name=binding.name,
-            default_output_schema=self._config.include_output_schema,
-            default_structured_content=self._config.include_structured_content,
-        )
-        _compile_specs(binding.name, (binding.spec,))
-        self._tools.register(binding)
-        return binding
-
-    def register_selector_tool(
-        self,
-        *,
-        name: str,
-        spec: SelectorSpec,
-        description: str | None = None,
-        title: str | None = None,
-        icons: tuple[Icon, ...] = (),
-        display_name: str | None = None,
-        display_description: str | None = None,
-        input_serializer: type | None = None,
-        output_format: OutputFormat | str = OutputFormat.JSON,
-        content_kind: ToolContentKind = ToolContentKind.TEXT,
-        task_policy: TaskPolicy = TaskPolicy.FORBIDDEN,
-        content_mime_type: str | None = None,
-        permissions: list[Any] | None = None,
-        rate_limits: list[Any] | None = None,
-        annotations: dict[str, Any] | None = None,
-        meta: dict[str, Any] | None = None,
-        agent_contract: OfflineContract | None = None,
-        ui: UIToolMeta | None = None,
-        paginate: bool = False,
-        include_structured_content: bool | None = None,
-        include_output_schema: bool | None = None,
-        argument_binding: ArgumentBinding = ArgumentBinding.SPREAD_AUTHOR_WINS,
-        unknown_arguments: UnknownArguments = UnknownArguments.REJECT,
-        always_listed: bool = False,
-        spec_kwargs_provides: tuple[str, ...] = (),
-        url_kwargs: tuple[UrlKwarg, ...] = (),
-        query_params: tuple[QueryParam, ...] = (),
-        max_result_bytes: int | None | UnsetType = UNSET,
-        dispatch_timeout: float | None | UnsetType = UNSET,
-        max_page_size: int | None | UnsetType = UNSET,
-        server_arguments: ServerArguments | None = None,
-    ) -> SelectorToolBinding:
-        """Register a ``SelectorSpec`` as an MCP **read** tool.
-
-        Read-shaped sibling of ``register_service_tool``. The selector
-        returns a raw, unscoped queryset; the tool layer owns the post-fetch
-        pipeline:
-
-        ```text
-        arguments → validate(merged inputSchema)
-                  → run_selector
-                  → FilterSet(data=...).qs    (if spec.filter_set set; it
-                                               orders too when it declares an
-                                               OrderingFilter)
-                  → paginate                  (if paginate=True)
-                  → output_serializer(many=True)
-                  → ToolResult
-        ```
-
-        Each knob is optional; with none of them set the tool is a plain RPC
-        read against the selector.
-
-        Filtering **and ordering** are declared on the spec, not here: set
-        ``SelectorSpec.filter_set`` and both the HTTP and MCP transports honour
-        it, ordering included via an ``OrderingFilter``. It requires
-        ``django-filter``, which drf-services installs as its
-        ``[filter]`` extra, and schema generation raises a
-        clear ``ImportError`` without it. ``paginate`` stays here, being an MCP
-        pipeline mechanic with no spec analogue.
-
-        The shape comes from ``spec.kind``: ``LIST`` runs the full post-fetch
-        pipeline and renders with ``many=True``; ``RETRIEVE`` rejects
-        ``paginate`` at registration and renders with ``many=False``.
-
-        ``meta`` is the generic ``_meta`` bundle for this tool's
-        ``tools/list`` entry, and ``ui`` links it to an interactive view —
-        both as on ``register_service_tool``.
-
-        The route captures and query values a caller with **no HTTP request**
-        has to send come from the spec's own ``reads``, and the output fields an
-        agent sees from its ``field_audiences``: the declaration is made once, on
-        the spec, and this registrar, the decorator and ``register_specs`` all
-        read it, so one spec is the same tool however it is mounted.
-
-        ``server_arguments`` names declared parameters the server answers for,
-        so no caller does: a
-        ``ServerArguments``
-        from ``django_service_specs``, whose ``values`` are fixed for the life of
-        the binding and whose ``withheld`` names leave the callable to its own
-        default. Both are dropped from the advertised schema and from
-        ``required``; a caller's value for one is dropped before dispatch and
-        logged by name. It is checked at registration, so an undeclared name, a
-        value the declared type refuses or a withheld name with no default
-        raises ``ImproperlyConfigured`` naming the tool. A value computed per
-        request is not something this argument carries.
-
-        ``url_kwargs``, ``query_params`` and ``agent_contract`` are
-        **deprecated**: each declares beside the spec what the spec declares
-        itself, and each warns, naming its replacement. An explicit
-        ``url_kwargs`` / ``query_params`` replaces the spec's reads of that kind
-        in what the tool advertises and routes; ``agent_contract`` replaces all
-        of them and the field audiences. Neither takes a channel away from the
-        dispatch, which still reads the spec's declaration; only
-        ``server_arguments``' ``withheld`` does.
-        """
-        _refuse_retired_argument_binding(name, argument_binding)
-        _refuse_retired_unknown_arguments(name, unknown_arguments)
-        ui_meta = build_ui_tool_meta(
-            name=name,
-            ui=ui,
-            meta=meta,
-            resources=self._resources,
-            include_structured_content=include_structured_content,
-            default_structured_content=self._config.include_structured_content,
-        )
-        channel_url_kwargs, channel_query_params, read_query_params, field_audiences = (
-            _tool_channels(
-                name,
-                spec,
-                agent_contract=agent_contract,
-                url_kwargs=url_kwargs,
-                query_params=query_params,
-            )
-        )
-        binding = selector_spec_to_tool(
-            name=name,
-            field_audiences=field_audiences,
-            spec=spec,
-            description=description,
-            title=title,
-            icons=icons,
-            display_name=display_name,
-            display_description=display_description,
-            input_serializer=input_serializer,
-            output_format=OutputFormat.coerce(output_format),
-            content_kind=content_kind,
-            task_policy=task_policy,
-            content_mime_type=content_mime_type,
-            permissions=check_permissions_shape(f"MCP binding {name!r}", permissions),
-            rate_limits=tuple(rate_limits or ()),
-            annotations=annotations,
-            meta=merge_meta(ui_meta, meta),
-            paginate=paginate,
-            include_structured_content=include_structured_content,
-            include_output_schema=include_output_schema,
-            argument_binding=argument_binding,
-            unknown_arguments=unknown_arguments,
-            always_listed=always_listed,
-            spec_kwargs_provides=spec_kwargs_provides,
-            url_kwargs=channel_url_kwargs,
-            query_params=channel_query_params,
-            # Apart from the mount's, so the adapter can tell the spec's own
-            # reads, which may name a selector parameter, from a shadow.
-            read_query_params=read_query_params,
-            max_result_bytes=max_result_bytes,
-            dispatch_timeout=dispatch_timeout,
-            max_page_size=max_page_size,
-            pool_seeds=self._pool_seeds,
-            server_arguments=server_arguments,
-        )
-        # A ``QueryParam`` named like an input the tool offers is refused by
-        # the adapter that builds the binding, for both tool kinds
-        # (``validate_query_param_inputs``).
-        validate_selector_parameter_names(
-            label=f"selector tool {binding.name!r}",
-            selector=binding.selector,
-            input_serializer=binding.input_serializer,
-            kind=binding.kind,
-        )
-        check_tool_permissions_declared(
-            binding.name, binding.permissions, require=self._config.require_tool_permissions
-        )
-        check_tool_description_present(
-            binding.name, binding.description, require=self._config.require_tool_descriptions
-        )
-        # Per binding, and eagerly, so a spec-violating pair fails at import
-        # time rather than on the first ``tools/call``. A server-wide "schema
-        # on, content off" is legal when every binding overrides it back on,
-        # so checking the globals alone would be wrong.
-        resolve_structured_output(
-            include_output_schema_override=binding.include_output_schema,
-            include_structured_content_override=binding.include_structured_content,
-            binding_name=binding.name,
-            default_output_schema=self._config.include_output_schema,
-            default_structured_content=self._config.include_structured_content,
-        )
-        # LIST only: a RETRIEVE selector returns one instance, which is bounded
-        # by construction and has no ``limit`` to advertise.
-        if binding.kind is SelectorKind.LIST:
-            check_list_pagination_declared(
-                binding.name,
-                paginate=binding.paginate,
-                require=self._config.require_list_pagination,
-            )
-        _compile_specs(binding.name, (binding.spec,))
-        self._tools.register(binding)
-        return binding
-
     def register_tool(
         self,
         spec: KernelServiceSpec | KernelSelectorSpec,
@@ -699,9 +337,8 @@ class MCPServer:
         / ``adispatch``, which asks the spec's own ``permissions`` of the
         principal the auth backend resolved for the request.
 
-        Anything that is not a kernel spec is refused with a ``TypeError``,
-        including a drf-services spec, which ``register_service_tool`` and
-        ``register_selector_tool`` take. A knob of the other kind of tool is
+        Anything that is not a kernel spec is refused with a ``TypeError``. A
+        knob of the other kind of tool is
         refused: ``paginate`` / ``max_page_size`` on a service tool,
         ``invalidates`` on a selector tool.
 
@@ -734,18 +371,16 @@ class MCPServer:
         for ``REQUIRE_TOOL_PERMISSIONS``, which reads the spec's own
         ``permissions``.
 
-        ``task_policy`` means what it means on ``register_service_tool`` /
-        ``register_selector_tool``, for a service tool and a selector tool
-        alike: ``OPTIONAL`` answers a client that declared the tasks extension
+        ``task_policy`` means the same for a service tool and a selector tool:
+        ``OPTIONAL`` answers a client that declared the tasks extension
         with a task handle and runs inline for one that did not, and
         ``REQUIRED`` refuses the latter with ``-32021``. The spec's own checks
         are asked before the task is created, and the worker runs the call,
-        under either policy, through the same ``dispatch`` a direct call takes, under the server's
-        ``pool_seeds`` and ``conventions``. Every other knob means what it means
-        there too.
+        under either policy, through the same ``dispatch`` a direct call takes,
+        under the server's ``pool_seeds`` and ``conventions``.
 
-        A refusal from ``dispatch`` is answered as the drf-services path answers
-        its counterpart: ``NotPermitted`` and ``PrincipalUnavailable`` as
+        A refusal from ``dispatch`` is answered on the wire as
+        ``kernel_refusals`` words it: ``NotPermitted`` and ``PrincipalUnavailable`` as
         ``-32006``, ``InvalidArguments``, ``ServiceValidationError`` and a bare
         ``DispatchError`` as the ``validation_error`` result, an
         ``AdditionalInputRequired`` as MRTR's ``input_required``, and any other
@@ -903,9 +538,8 @@ class MCPServer:
             default_output_schema=self._config.include_output_schema,
             default_structured_content=self._config.include_structured_content,
         )
-        # LIST only, as on the drf-services path: a RETRIEVE selector returns
-        # one instance and a service has no kind, so neither has a page to
-        # bound (``test_retrieve_selector_is_exempt``,
+        # LIST only: a RETRIEVE selector returns one instance and a service has
+        # no kind, so neither has a page to bound (``test_retrieve_selector_is_exempt``,
         # ``test_a_service_tool_is_exempt``).
         if binding.kind is SelectorKind.LIST:
             _refuse_pagination_named_reads(binding)
@@ -933,10 +567,6 @@ class MCPServer:
         ``ServiceSpec`` or ``SelectorSpec`` (a ``SpecSource`` among them) is
         refused as ``register_tool`` refuses it. A refusal of any entry
         registers none of them: every entry is built and checked first.
-
-        Not to be confused with the module function
-        ``django_spec_mcp.registry.register_tools.register_tools``, which takes
-        ``ToolDefinition`` entries of drf-services specs.
 
         Returns the bindings in registration order.
         """
@@ -971,101 +601,6 @@ class MCPServer:
             self._tools.register(binding)
         return bindings
 
-    def register_specs(
-        self,
-        registry: SpecRegistry,
-        *,
-        overrides: Mapping[str, Mapping[str, Any]] | None = None,
-    ) -> tuple[ToolBinding | SelectorToolBinding, ...]:
-        """Register every spec in a ``SpecRegistry`` as a tool, in order.
-
-        A project exposing the same operations over more than one transport
-        keeps its spec set in a
-        ``SpecRegistry``
-        so each transport reads one source. This walks it and calls
-        ``register_service_tool`` / ``register_selector_tool`` per
-        entry, discriminating on the spec type.
-
-        It is a **source for** this server's own ``ToolRegistry``, not a
-        replacement — every tool lands as a normal binding sharing the one
-        tool namespace (a collision raises, as always). The registry carries
-        only what is invariant across transports; every MCP knob stays here,
-        per tool, via ``overrides``:
-
-            server.register_specs(
-                registry.by_tag("public"),
-                overrides={
-                    "list_orders": {"paginate": True, "max_page_size": 25},
-                    "refund_order": {"annotations": {"destructiveHint": True}},
-                },
-            )
-
-
-        Each spec's own ``reads`` and ``field_audiences`` are read by the
-        registrar, as on a direct registration. ``server_arguments`` is an
-        override like any other, and the one to reach for when this mount
-        answers an argument itself:
-
-            server.register_specs(
-                registry,
-                overrides={
-                    "list_documents": {
-                        "server_arguments": ServerArguments(values={"project_pk": 7}),
-                    },
-                },
-            )
-
-        A ``url_kwargs``, ``query_params`` or ``agent_contract`` override is
-        deprecated and warns, as the registrar arguments do.
-
-        Keys are checked against the target method's own signature, so a knob
-        used on the wrong spec kind (``paginate`` on a ``ServiceSpec``) raises
-        ``TypeError`` from there. An ``overrides`` key naming a spec the
-        registry doesn't hold raises ``ValueError`` here — that is a typo,
-        not an intentional no-op.
-
-        Registration is not transactional: a failure partway leaves the earlier
-        entries registered, which is harmless at configuration time because a
-        raise aborts startup anyway.
-
-        Returns the bindings in registration order.
-        """
-        override_map = dict(overrides or {})
-        unknown = sorted(name for name in override_map if name not in registry)
-        if unknown:
-            raise ValueError(
-                f"overrides name specs not in this SpecRegistry: {unknown}. "
-                f"Registered names: {sorted(entry.name for entry in registry.all())}."
-            )
-
-        bindings: list[ToolBinding | SelectorToolBinding] = []
-        for entry in registry.all():
-            # The registry types ``entry.spec`` as anything the kernel can
-            # compile (a ``SpecSource``), wider than the DRF-bound specs this
-            # server dispatches through drf-services' ``dispatch_spec``. Checked
-            # before anything else is read off the entry, so a kernel-native spec
-            # or another library's declaration is refused by name rather than
-            # failing inside a registrar on an attribute it does not have.
-            _refuse_spec_this_server_cannot_dispatch(entry.name, entry.spec)
-            # The registrars read each spec's own ``reads`` and
-            # ``field_audiences``, so nothing about the entry's channels is
-            # passed here: a registry entry and a direct registration of the
-            # same spec are the same tool.
-            knobs = dict(override_map.get(entry.name, {}))
-            if isinstance(entry.spec, ServiceSpec):
-                bindings.append(
-                    self.register_service_tool(name=entry.name, spec=entry.spec, **knobs)
-                )
-            else:
-                # A drf-services ``SelectorSpec``: the refusal above let nothing
-                # else through. The cast states that for the type checker.
-                bindings.append(
-                    self.register_selector_tool(
-                        name=entry.name, spec=cast(SelectorSpec, entry.spec), **knobs
-                    )
-                )
-        return tuple(bindings)
-
     # ----- transport-neutral invocation -----
 
     def call_tool(
@@ -1076,36 +611,37 @@ class MCPServer:
         user: Any,
         request: Any = None,
     ) -> ToolResult:
-        """Invoke a registered spec-backed tool off the HTTP / JSON-RPC path.
+        """Invoke a registered tool off the HTTP / JSON-RPC path.
 
-        The transport-neutral entry point: hand a tool ``name``, a flat ``arguments``
-        dict (the role ``request.data`` / query params play on HTTP) and the acting
-        ``user``, and get back the same
+        The transport-neutral entry point: hand a tool ``name``, a flat
+        ``arguments`` dict and the acting ``user``, and get back the same
         [`ToolResult`][django_spec_mcp.protocol.types.tool_result.ToolResult] the
         wire handlers build. An in-process consumer calls this instead of
         re-implementing dispatch.
 
-        This is the **spec core only** — instance resolution, input validation,
-        the service / selector run, the output-selector re-fetch, queryset
-        shaping including ``filter_set``, and the retrieve nullability
-        contract, shared with every other transport rather than reproduced. It
-        honours the binding's ``argument_binding`` / ``unknown_arguments``
-        policies and the spec's ``permission_classes`` (object-level checks
-        included), but not the
-        read-shaped transport extras — pagination, a selector binding's
-        MCP-only ``input_serializer`` — nor the transport-level MCP permissions
-        and rate limits. A ``FilterSet``'s ordering is not one of those extras:
-        it is applied here with the rest of the filtering. For those, and for tool listing, use
-        ``acall_tool`` / ``list_tools``.
+        The call runs through the kernel's ``dispatch`` as on the wire: the
+        binding's ``server_arguments`` in place, the spec's own ``permissions``
+        asked of ``user``, then the spec run and presented, a paged tool's
+        pagination included. The transport-level checks are not consulted: the
+        ``scopes=`` gate and rate limits read a token, and there is none in
+        process. For those, and for tool listing, use ``acall_tool`` /
+        ``list_tools``.
+
+        A refusal the wire answers ``-32006`` (``NotPermitted``,
+        ``PrincipalUnavailable``) is raised for the caller to map to its own
+        wire; every other refusal comes back as the ``isError`` result the wire
+        serves.
 
         Raises ``KeyError`` when no tool is registered under ``name``.
         """
         binding = self._tools.get(name)
         if binding is None:
             raise KeyError(f"No tool registered under {name!r}.")
-        return call_spec_tool(
+        return call_kernel_tool(
             binding,
-            arguments or {},
+            # The binding's ``server_arguments`` in place before anything reads
+            # the arguments, as on the wire.
+            apply_tool_server_arguments(binding, arguments or {}),
             user=user,
             request=request,
             config=self._config,
@@ -1453,19 +989,16 @@ class MCPServer:
 
     def register_resource(
         self,
-        spec: KernelSelectorSpec | None = None,
+        spec: KernelSelectorSpec,
         /,
         *,
         name: str,
         uri_template: str,
-        selector: SelectorSpec | None = None,
         description: str | None = None,
         title: str | None = None,
         icons: tuple[Icon, ...] = (),
-        output_serializer: type | None = None,
         mime_type: str = "application/json",
         encoding: ResourceEncoding = ResourceEncoding.JSON,
-        permissions: list[Any] | None = None,
         rate_limits: list[Any] | None = None,
         annotations: dict[str, Any] | None = None,
         meta: dict[str, Any] | None = None,
@@ -1473,184 +1006,57 @@ class MCPServer:
         cache_ttl_ms: int | UnsetType = UNSET,
         completions: dict[str, Callable[..., Any]] | None = None,
         scopes: str | Sequence[str] | None = None,
-    ) -> ResourceBinding:
-        """Register a ``SelectorSpec`` as an MCP resource.
+    ) -> KernelResourceBinding:
+        """Register a kernel ``RETRIEVE`` ``SelectorSpec`` as an MCP resource.
 
-        ``selector.selector`` is the callable dispatched at ``resources/read``
-        time; ``selector.output_serializer`` fills in when the explicit
-        ``output_serializer=`` kwarg is absent (that kwarg wins);
-        ``selector.kwargs`` becomes the binding's per-request kwargs provider.
+        ``register_resource(spec, uri_template=..., name=...)`` takes a
+        ``django_service_specs`` spec positionally. The read runs it through the
+        kernel's ``dispatch`` / ``adispatch``, with the URI-template variables
+        as its arguments, so the spec's ``reads`` name them and its presenter
+        renders the row. Anything that is not a kernel ``RETRIEVE``
+        ``SelectorSpec`` is refused with a ``TypeError``. ``scopes`` gate the
+        read as they gate ``register_tool``.
 
-        A bare callable is not accepted here — wrap it in
-        ``SelectorSpec(selector=fn)``, or use the decorator form
-        ``resource``, which wraps it automatically.
+        ``meta`` is the generic ``_meta`` bundle for this resource's listing
+        entry — ``resources/list`` for a concrete URI,
+        ``resources/templates/list`` for a template — and for the ``contents``
+        block ``resources/read`` returns.
 
-        The shape comes from ``selector.kind`` and drives the ``many=`` flag on
-        ``output_serializer`` at dispatch; ``RETRIEVE`` is the typical case for
-        a URI-template lookup.
-
-        ``meta`` is the generic ``_meta`` bundle (see
-        ``register_service_tool``) for this resource's listing entry —
-        ``resources/list`` for a concrete URI, ``resources/templates/list``
-        for a template — and for the ``contents`` block ``resources/read``
-        returns.
-
-        ``encoding`` decides how the rendered value becomes the read body, in
-        both forms: the selector's value after any ``output_serializer`` here,
-        and what the spec's presenter returns in the kernel form below. ``JSON``
-        pretty-prints it; ``TEXT`` returns it verbatim, and it must be a
-        ``str``; ``BLOB`` base64-encodes it into the ``contents`` entry's
-        ``blob`` instead of ``text``, and it must be ``bytes``, ``bytearray`` or
-        ``memoryview``. A value of the wrong type is answered at read time as an
-        ``INTERNAL_ERROR`` naming what produced it. Anything whose ``mime_type``
-        is not JSON — Markdown, CSV, plain text — wants ``TEXT``, or the
-        document comes back wrapped in a quoted string literal, and an image
-        wants ``BLOB``. ``mime_type`` is advertised as given and never inferred
-        from or checked against the encoding, so ``TEXT`` left at the default
-        ``application/json`` serves a ``str`` that is already a JSON document
-        as it is. The result ceiling and the cache hints apply to every
-        encoding. For an HTML view use ``register_ui_resource``, which sets both.
-
-        A ``uri_template`` variable is a caller-controlled name that reaches the
-        selector's kwarg pool, so one named after a dispatcher seed (``user``,
-        ``request``, ``data`` …) or declared twice raises here rather than
-        letting a URI segment stand in for the authenticated identity.
-
-        A resource with no permissions at all is refused for the same reason a
-        tool is — see ``REQUIRE_TOOL_PERMISSIONS``. The same selector exposed
-        as a resource is as reachable as it is exposed as a tool.
-
-        **A kernel spec, passed positionally**, takes the other form:
-        ``register_resource(spec, uri_template=..., name=...)`` with a
-        ``django_service_specs`` ``RETRIEVE`` ``SelectorSpec``. The read runs it
-        through the kernel's ``dispatch`` / ``adispatch``, with the
-        URI-template variables as its arguments, so the spec's ``reads`` name
-        them and its presenter renders the row. ``scopes`` gate it as they gate
-        ``register_tool``. ``mime_type`` and ``encoding`` work as above, on
-        what the presenter returns: a presenter rendering the row as Markdown
-        pairs with ``encoding=TEXT`` and ``mime_type="text/markdown"``. A
-        ``TEXT`` or ``BLOB`` resource is refused, naming both, beside a spec
+        ``encoding`` decides how what the presenter returns becomes the read
+        body. ``JSON`` pretty-prints it; ``TEXT`` returns it verbatim, and it
+        must be a ``str``; ``BLOB`` base64-encodes it into the ``contents``
+        entry's ``blob`` instead of ``text``, and it must be ``bytes``,
+        ``bytearray`` or ``memoryview``. A value of the wrong type is answered
+        at read time as an ``INTERNAL_ERROR`` naming what produced it. Anything
+        whose ``mime_type`` is not JSON — Markdown, CSV, plain text — wants
+        ``TEXT``, or the document comes back wrapped in a quoted string literal,
+        and an image wants ``BLOB``: a presenter rendering the row as Markdown
+        pairs with ``encoding=TEXT`` and ``mime_type="text/markdown"``.
+        ``mime_type`` is advertised as given and never inferred from or checked
+        against the encoding, so ``TEXT`` left at the default
+        ``application/json`` serves a ``str`` that is already a JSON document as
+        it is. The result ceiling and the cache hints apply to every encoding.
+        A ``TEXT`` or ``BLOB`` resource is refused, naming both, beside a spec
         declaring ``affordances``, which the kernel adds to a presented object,
         or ``allow_none``, under which a missing row presents as ``None``
-        without the presenter running: neither is a document or bytes. The
-        knobs of the ``selector=`` form that the spec declares for itself
-        (``selector``, ``output_serializer`` and ``permissions``) are refused
-        beside a positional spec, as ``scopes`` is beside ``selector=``. A spec no read can run as written is refused
-        naming the resource, as ``register_tool`` refuses one. A read the URI
-        template names is filled on every read, as a value ``server_arguments``
-        binds is on every call, so it is never refused as optional.
-        """
-        if spec is not None:
-            return self._register_kernel_resource(
-                spec,
-                name=name,
-                uri_template=uri_template,
-                description=description,
-                title=title,
-                icons=icons,
-                rate_limits=rate_limits,
-                annotations=annotations,
-                meta=meta,
-                always_listed=always_listed,
-                cache_ttl_ms=cache_ttl_ms,
-                completions=completions,
-                scopes=scopes,
-                mime_type=mime_type,
-                encoding=encoding,
-                drf_services_knobs={
-                    "selector": selector is not None,
-                    "output_serializer": output_serializer is not None,
-                    "permissions": permissions is not None,
-                },
-            )
-        if selector is None:
-            raise TypeError(
-                f"Resource {name!r}: register_resource takes a kernel SelectorSpec "
-                "positionally or a drf-services one as selector=; it was given neither."
-            )
-        if scopes is not None:
-            raise TypeError(
-                f"Resource {name!r}: scopes= belongs to the kernel form, "
-                "register_resource(spec, ...); the selector= form takes permissions=."
-            )
-        binding = selector_to_resource(
-            name=name,
-            uri_template=uri_template,
-            selector=selector,
-            description=description,
-            title=title,
-            icons=icons,
-            output_serializer=output_serializer,
-            mime_type=mime_type,
-            encoding=encoding,
-            permissions=check_permissions_shape(f"MCP binding {name!r}", permissions),
-            rate_limits=tuple(rate_limits or ()),
-            annotations=annotations,
-            meta=meta,
-            always_listed=always_listed,
-            cache_ttl_ms=cache_ttl_ms,
-            completions=completions,
-        )
-        template_variables: tuple[str, ...] = _template_variables(uri_template)
-        # A URI-template variable is a caller-controlled name routed into the
-        # selector's kwarg pool, exactly like a tool's ``UrlKwarg`` — so it goes
-        # through the same shared check, which owns the reserved-seed set and
-        # catches a name declared twice. The transport's own post-fetch names
-        # (``page`` / ``limit`` / ``ordering``) are deliberately *not* reserved
-        # here: a resource has no post-fetch pipeline, so ``docs://{page}`` is a
-        # legitimate locator. The server's own ``pool_seeds`` are, and so is
-        # the ``request`` the read seeds itself (``RESOURCE_EDGE_SEEDS``): the
-        # read lays both over the template variables, so a variable named after
-        # one would never reach the selector.
-        validate_channel_names(
-            label=f"Resource {name!r}",
-            kind="uri_template variable",
-            declarations=tuple(UrlKwarg(name=variable) for variable in template_variables),
-            reserved=self._pool_seeds.names | RESOURCE_EDGE_SEEDS,
-        )
-        # Template variables are the only completable arguments a resource has.
-        check_completions_declared(f"Resource {name!r}", binding.completions, template_variables)
-        check_tool_permissions_declared(
-            binding.name,
-            binding.permissions,
-            require=self._config.require_tool_permissions,
-            kind="resource",
-        )
-        self._resources.register(binding)
-        return binding
+        without the presenter running: neither is a document or bytes. For an
+        HTML view use ``register_ui_resource``, which sets both.
 
-    def _register_kernel_resource(
-        self,
-        spec: KernelSelectorSpec,
-        *,
-        name: str,
-        uri_template: str,
-        description: str | None,
-        title: str | None,
-        icons: tuple[Icon, ...],
-        rate_limits: list[Any] | None,
-        annotations: dict[str, Any] | None,
-        meta: dict[str, Any] | None,
-        always_listed: bool,
-        cache_ttl_ms: int | UnsetType,
-        completions: dict[str, Callable[..., Any]] | None,
-        scopes: str | Sequence[str] | None,
-        mime_type: str,
-        encoding: ResourceEncoding,
-        drf_services_knobs: Mapping[str, bool],
-    ) -> KernelResourceBinding:
-        """``register_resource``'s kernel form, past the split on its first argument.
+        A ``uri_template`` variable is a caller-controlled name that reaches the
+        read's arguments, so one named after a pool seed (``user``,
+        ``request``, ``data`` …) or declared twice raises here rather than
+        letting a URI segment stand in for the authenticated identity. So does
+        a variable no read of the spec declares, and one the server fills for
+        the call. A spec no read can run as written is refused naming the
+        resource, as ``register_tool`` refuses one. A read the URI template
+        names is filled on every read, as a value ``server_arguments`` binds is
+        on every call, so it is never refused as optional.
 
-        ``drf_services_knobs`` says, per knob of the ``selector=`` form, whether
-        the call passed it, and each one passed is named in the refusal.
+        A resource whose spec declares no ``permissions`` is refused for the
+        same reason a tool is — see ``REQUIRE_TOOL_PERMISSIONS``. The same
+        selector exposed as a resource is as reachable as it is exposed as a
+        tool.
         """
-        passed = sorted(knob for knob, given in drf_services_knobs.items() if given)
-        if passed:
-            raise TypeError(
-                f"Resource {name!r}: {', '.join(passed)} belong to the selector= form of "
-                "register_resource; a kernel SelectorSpec declares its own selector, "
-                "presenter and permissions."
-            )
         binding = kernel_selector_to_resource(
             spec,
             name=name,
@@ -1672,11 +1078,16 @@ class MCPServer:
         # (test_the_spec_is_checked_for_a_resource_before_its_encoding).
         _check_kernel_resource_encoding(name, binding.spec, encoding)
         template_variables: tuple[str, ...] = _template_variables(uri_template)
-        validate_channel_names(
-            label=f"Resource {name!r}",
-            kind="uri_template variable",
-            declarations=tuple(UrlKwarg(name=variable) for variable in template_variables),
-            reserved=self._pool_seeds.names | RESOURCE_EDGE_SEEDS,
+        # A URI-template variable is a caller-controlled name laid into the
+        # read's arguments, so one the server's own seeds or the read's
+        # ``request`` would occupy, or one declared twice, is refused here
+        # (``test_a_template_variable_named_after_a_pool_seed_is_refused``,
+        # ``test_a_uri_template_variable_named_after_a_seed_is_refused``,
+        # ``test_a_duplicated_template_variable_is_refused``). A tool's
+        # pagination names are deliberately not reserved: a resource has no
+        # page, so ``docs://{page}`` is a legitimate locator.
+        _refuse_reserved_template_variables(
+            name, template_variables, reserved=self._pool_seeds.names | RESOURCE_EDGE_SEEDS
         )
         check_completions_declared(f"Resource {name!r}", binding.completions, template_variables)
         # Two ways a variable can never carry the URI's value into a read, each
@@ -1909,261 +1320,6 @@ class MCPServer:
 
     # ----- declarative (decorator) registration -----
 
-    def service_tool(
-        self,
-        *,
-        name: str,
-        spec: ServiceSpec | None = None,
-        input_serializer: type | None = None,
-        output_serializer: type[Serializer] | None = None,
-        output_selector: Callable[..., Any] | None = None,
-        atomic: bool = True,
-        success_status: int | None = None,
-        description: str | None = None,
-        title: str | None = None,
-        icons: tuple[Icon, ...] = (),
-        output_format: OutputFormat | str = OutputFormat.JSON,
-        content_kind: ToolContentKind = ToolContentKind.TEXT,
-        invalidates: tuple[str, ...] | list[str] = (),
-        task_policy: TaskPolicy = TaskPolicy.FORBIDDEN,
-        content_mime_type: str | None = None,
-        permissions: list[Any] | None = None,
-        rate_limits: list[Any] | None = None,
-        annotations: dict[str, Any] | None = None,
-        meta: dict[str, Any] | None = None,
-        agent_contract: OfflineContract | None = None,
-        ui: UIToolMeta | None = None,
-        include_structured_content: bool | None = None,
-        include_output_schema: bool | None = None,
-        argument_binding: ArgumentBinding = ArgumentBinding.BUNDLE,
-        unknown_arguments: UnknownArguments = UnknownArguments.REJECT,
-        always_listed: bool = False,
-        spec_kwargs_provides: tuple[str, ...] = (),
-        url_kwargs: tuple[UrlKwarg, ...] = (),
-        query_params: tuple[QueryParam, ...] = (),
-        server_arguments: ServerArguments | None = None,
-    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-        """Decorator form of ``register_service_tool``.
-
-        If ``spec`` is supplied it is used verbatim; otherwise a
-        ``ServiceSpec`` is constructed from the keyword arguments. The
-        original function is returned unchanged, so it stays callable from
-        Python without going through the MCP transport. Every keyword means
-        what it does on ``register_service_tool``, ``server_arguments`` included,
-        and is checked by the same registration.
-        """
-
-        def wrap(fn: Callable[..., Any]) -> Callable[..., Any]:
-            # Built only when there is something to put in it, so a decorator
-            # with no output-side declarations carries no empty envelope.
-            output_selector_spec: SelectorSpec | None = None
-            if output_serializer is not None or output_selector is not None:
-                output_selector_spec = SelectorSpec(
-                    kind=SelectorKind.RETRIEVE,
-                    selector=output_selector,
-                    output_serializer=output_serializer,
-                )
-            effective_spec: ServiceSpec = spec or ServiceSpec(
-                service=fn,
-                input_serializer=input_serializer,
-                output_selector_spec=output_selector_spec,
-                atomic=atomic,
-                success_status=success_status,
-            )
-            self.register_service_tool(
-                name=name,
-                spec=effective_spec,
-                description=description or fn.__doc__,
-                title=title,
-                icons=icons,
-                output_format=output_format,
-                content_kind=content_kind,
-                task_policy=task_policy,
-                invalidates=tuple(invalidates),
-                content_mime_type=content_mime_type,
-                permissions=permissions,
-                rate_limits=rate_limits,
-                annotations=annotations,
-                meta=meta,
-                agent_contract=agent_contract,
-                ui=ui,
-                include_structured_content=include_structured_content,
-                include_output_schema=include_output_schema,
-                argument_binding=argument_binding,
-                unknown_arguments=unknown_arguments,
-                always_listed=always_listed,
-                spec_kwargs_provides=spec_kwargs_provides,
-                url_kwargs=url_kwargs,
-                query_params=query_params,
-                server_arguments=server_arguments,
-            )
-            return fn
-
-        return wrap
-
-    def selector_tool(
-        self,
-        *,
-        name: str,
-        kind: SelectorKind | None = None,
-        spec: SelectorSpec | None = None,
-        input_serializer: type | None = None,
-        output_serializer: type[Serializer] | None = None,
-        description: str | None = None,
-        title: str | None = None,
-        icons: tuple[Icon, ...] = (),
-        output_format: OutputFormat | str = OutputFormat.JSON,
-        content_kind: ToolContentKind = ToolContentKind.TEXT,
-        task_policy: TaskPolicy = TaskPolicy.FORBIDDEN,
-        content_mime_type: str | None = None,
-        permissions: list[Any] | None = None,
-        rate_limits: list[Any] | None = None,
-        annotations: dict[str, Any] | None = None,
-        meta: dict[str, Any] | None = None,
-        agent_contract: OfflineContract | None = None,
-        ui: UIToolMeta | None = None,
-        paginate: bool = False,
-        include_structured_content: bool | None = None,
-        include_output_schema: bool | None = None,
-        argument_binding: ArgumentBinding = ArgumentBinding.SPREAD_AUTHOR_WINS,
-        unknown_arguments: UnknownArguments = UnknownArguments.REJECT,
-        always_listed: bool = False,
-        spec_kwargs_provides: tuple[str, ...] = (),
-        url_kwargs: tuple[UrlKwarg, ...] = (),
-        query_params: tuple[QueryParam, ...] = (),
-        server_arguments: ServerArguments | None = None,
-    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-        """Decorator form of ``register_selector_tool``.
-
-        If ``spec`` is supplied it is used verbatim; otherwise a
-        ``SelectorSpec`` is constructed from the wrapped function and the
-        keyword arguments. The original function is returned unchanged, so it
-        stays callable from Python without going through the MCP transport.
-
-        ``kind`` is required when ``spec`` is omitted; otherwise it comes from
-        ``spec.kind`` and any value passed here is ignored. Every other keyword
-        means what it does on ``register_selector_tool``, ``server_arguments``
-        included, and is checked by the same registration.
-        """
-
-        def wrap(fn: Callable[..., Any]) -> Callable[..., Any]:
-            if spec is None:
-                if kind is None:
-                    raise TypeError(
-                        f"@selector_tool {name!r}: ``kind`` is required when "
-                        "``spec`` is omitted — the decorator auto-constructs a "
-                        "SelectorSpec and the spec's own ``kind`` field is "
-                        "mandatory. Pass kind=SelectorKind.LIST | RETRIEVE."
-                    )
-                effective_spec: SelectorSpec = SelectorSpec(
-                    kind=kind,
-                    selector=fn,
-                    output_serializer=output_serializer,
-                )
-            else:
-                effective_spec = spec
-            self.register_selector_tool(
-                name=name,
-                spec=effective_spec,
-                description=description or fn.__doc__,
-                title=title,
-                icons=icons,
-                input_serializer=input_serializer,
-                output_format=output_format,
-                content_kind=content_kind,
-                task_policy=task_policy,
-                content_mime_type=content_mime_type,
-                permissions=permissions,
-                rate_limits=rate_limits,
-                annotations=annotations,
-                meta=meta,
-                agent_contract=agent_contract,
-                ui=ui,
-                paginate=paginate,
-                include_structured_content=include_structured_content,
-                include_output_schema=include_output_schema,
-                argument_binding=argument_binding,
-                unknown_arguments=unknown_arguments,
-                always_listed=always_listed,
-                spec_kwargs_provides=spec_kwargs_provides,
-                url_kwargs=url_kwargs,
-                query_params=query_params,
-                server_arguments=server_arguments,
-            )
-            return fn
-
-        return wrap
-
-    def resource(
-        self,
-        *,
-        uri_template: str,
-        kind: SelectorKind | None = None,
-        name: str | None = None,
-        spec: SelectorSpec | None = None,
-        description: str | None = None,
-        title: str | None = None,
-        icons: tuple[Icon, ...] = (),
-        output_serializer: type[Serializer] | None = None,
-        mime_type: str = "application/json",
-        encoding: ResourceEncoding = ResourceEncoding.JSON,
-        permissions: list[Any] | None = None,
-        rate_limits: list[Any] | None = None,
-        annotations: dict[str, Any] | None = None,
-        meta: dict[str, Any] | None = None,
-        always_listed: bool = False,
-        cache_ttl_ms: int | UnsetType = UNSET,
-        completions: dict[str, Callable[..., Any]] | None = None,
-    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-        """Decorator form: register the wrapped callable as a resource.
-
-        If ``spec`` is supplied it is used verbatim; otherwise a
-        ``SelectorSpec`` is constructed from the wrapped function and the
-        keyword arguments. The original function is returned unchanged, so it
-        stays callable from Python without going through the MCP transport.
-
-        ``kind`` is required when ``spec`` is omitted; otherwise it comes from
-        ``spec.kind`` and any value passed here is ignored.
-        """
-
-        def wrap(fn: Callable[..., Any]) -> Callable[..., Any]:
-            if spec is None:
-                if kind is None:
-                    raise TypeError(
-                        f"@resource {(name or getattr(fn, '__name__', 'resource'))!r}: "
-                        "``kind`` is required when ``spec`` is omitted — the "
-                        "decorator auto-constructs a SelectorSpec and the spec's "
-                        "own ``kind`` field is mandatory. Pass "
-                        "kind=SelectorKind.RETRIEVE (typical for URI templates) or "
-                        "kind=SelectorKind.LIST."
-                    )
-                effective_spec: SelectorSpec = SelectorSpec(
-                    kind=kind, selector=fn, output_serializer=output_serializer
-                )
-            else:
-                effective_spec = spec
-            self.register_resource(
-                name=name or getattr(fn, "__name__", "resource"),
-                uri_template=uri_template,
-                selector=effective_spec,
-                description=description or fn.__doc__,
-                title=title,
-                icons=icons,
-                output_serializer=output_serializer,
-                mime_type=mime_type,
-                encoding=encoding,
-                permissions=permissions,
-                rate_limits=rate_limits,
-                annotations=annotations,
-                meta=meta,
-                always_listed=always_listed,
-                cache_ttl_ms=cache_ttl_ms,
-                completions=completions,
-            )
-            return fn
-
-        return wrap
-
     def prompt(
         self,
         *,
@@ -2362,190 +1518,6 @@ class MCPServer:
         return patterns, self._url_namespace, self._url_namespace
 
 
-def _compile_specs(name: str, specs: tuple[ServiceSpec | SelectorSpec, ...]) -> None:
-    """Compile each spec as drf-services will, so its refusal is a startup error.
-
-    drf-services compiles a spec to the kernel's on first read, through the
-    kernel's ``kernel_spec``, which caches the compiled spec on the object, and
-    refuses some declarations there: an output selector declaring
-    ``preconditions``, a ``reads`` entry named after a seed. Nothing compiled at
-    registration, so the first read did, and on ``tools/list`` that read is the
-    operation-condition pass (``operation_affordances``) over every service
-    tool's spec: one such spec took the listing down for
-    every tool on the server. The kernel's own ``SpecRegistry.register``
-    compiles at registration for the same reason.
-
-    Each registrar calls this last, just before the binding is stored, so this
-    package's own refusals run first and keep their wording where both would
-    refuse: a selector tool with no selector, a serializer handed as an
-    instance, a ``QueryParam`` named like a lookup parameter. Compiled first,
-    drf-services' wording answered each of those. ``test_a_service_tool_drf_services_cannot_compile_is_refused_at_registration``
-    and ``test_a_selector_tool_drf_services_cannot_compile_is_refused_at_registration``
-    each fail without their call.
-
-    This compiles the variant ``kernel_spec`` answers, which is the one the
-    listing reads. drf-services' dispatch may compile a variant of its own for
-    a call (a spreading binding's, a partial update's), and a refusal only that
-    variant raises still arrives with the call.
-
-    drf-services' message names the spec's kind and callable, never the tool,
-    so the refusal is raised again prefixed ``Tool {name!r}:``, which is what a
-    server registering many tools needs to find the one at fault. Each of the
-    two tests above asserts the prefix.
-    """
-    for spec in specs:
-        try:
-            kernel_spec(spec)
-        except ImproperlyConfigured as exc:
-            raise ImproperlyConfigured(f"Tool {name!r}: {exc}") from exc
-
-
-def _refuse_spec_this_server_cannot_dispatch(name: str, spec: object) -> None:
-    """Refuse a ``SpecRegistry`` entry that is not a drf-services spec, naming the tool.
-
-    A ``SpecRegistry`` is the kernel's and holds anything it can compile: its
-    own ``ServiceSpec`` and ``SelectorSpec``, or another library's declaration
-    with ``as_kernel_spec()``. This server's tools dispatch through
-    drf-services' ``dispatch_spec``, which runs the DRF-bound spec it declares
-    (serializers, permission classes, a view), so only those two types become
-    tools here. Anything else would reach ``register_selector_tool`` and fail
-    there on a missing attribute
-    (``test_a_spec_that_is_not_drf_services_is_refused_naming_the_tool``).
-
-    The remedy depends on what was found. Only a spec of the kernel's own is
-    pointed at the kernel's ``dispatch``, which runs it with no transport; a
-    ``PolymorphicServiceSpec`` is pointed at its variants, which the kernel's
-    ``register`` refuses it for already, so only a registry assembled by hand
-    reaches that branch; anything else is told which two types are accepted
-    (``test_the_remedy_follows_the_type_found`` holds each of the three).
-
-    The ``isinstance`` tuple is one branch arc, so coverage cannot see either
-    member go: ``test_discriminates_service_from_selector_by_spec_type`` fails
-    without each, since it registers one spec of both kinds.
-    """
-    if isinstance(spec, (ServiceSpec, SelectorSpec)):
-        return
-    kind = type(spec)
-    if kind.__module__.partition(".")[0] == "django_service_specs":
-        remedy = (
-            "It is a django-service-specs spec, which runs with no transport through "
-            "django_service_specs.dispatch; to serve it as a tool here, declare the "
-            "operation with `from rest_framework_services import ServiceSpec, "
-            "SelectorSpec` (ServiceSpec for a write, SelectorSpec for a read), with "
-            "permission_classes and serializers in place of the kernel spec's "
-            "permissions, validator and presenter."
-        )
-    elif isinstance(spec, PolymorphicServiceSpec):
-        remedy = (
-            "A tool is one operation: register each variant in its `.specs` mapping "
-            "under its own name."
-        )
-    else:
-        remedy = (
-            "Declare the operation with `from rest_framework_services import "
-            "ServiceSpec, SelectorSpec` (ServiceSpec for a write, SelectorSpec for a read)."
-        )
-    raise TypeError(
-        f"Tool {name!r}: the SpecRegistry holds a {kind.__module__}.{kind.__qualname__} "
-        "under this name, which is not a rest_framework_services.ServiceSpec or "
-        f"SelectorSpec, the two types register_specs makes a tool from. {remedy}"
-    )
-
-
-def _tool_channels(
-    name: str,
-    spec: ServiceSpec | SelectorSpec,
-    *,
-    agent_contract: OfflineContract | None,
-    url_kwargs: Sequence[UrlKwarg],
-    query_params: Sequence[QueryParam],
-) -> tuple[
-    tuple[UrlKwarg, ...],
-    tuple[QueryParam, ...],
-    tuple[QueryParam, ...],
-    Mapping[str, FieldMarking] | None,
-]:
-    """The channels and field audiences a tool registered from ``spec`` carries.
-
-    Answers ``(url_kwargs, query_params, read_query_params, field_audiences)``:
-    the mount's query params apart from the spec's own, because a selector
-    tool exempts a read naming one of its own parameters from the shadow
-    refusal and a mount declaration it does not.
-
-    With no deprecated knob, all of it is the spec's own declaration (its
-    ``reads`` and ``field_audiences``, as ``spec.agent_contract()`` answers
-    them), which is what makes a direct registration and a ``register_specs``
-    entry of one spec the same tool
-    (``test_every_registrar_advertises_the_specs_reads``). An
-    ``agent_contract`` replaces the spec's declaration outright, as it did
-    when ``register_specs`` passed the entry's own, and its query params are
-    the mount's. An explicit ``url_kwargs`` / ``query_params`` replaces
-    whichever declaration is in force for its kind, and an empty tuple says
-    nothing rather than "none".
-    """
-    _warn_mount_channels(
-        name, agent_contract=agent_contract, url_kwargs=url_kwargs, query_params=query_params
-    )
-    if agent_contract is not None:
-        return (
-            tuple(url_kwargs) or agent_contract.url_kwargs,
-            tuple(query_params) or agent_contract.query_params,
-            (),
-            agent_contract.field_audiences,
-        )
-    declared = spec.agent_contract() or OfflineContract()
-    return (
-        tuple(url_kwargs) or declared.url_kwargs,
-        tuple(query_params),
-        # A mount's ``query_params`` replaces the spec's reads of that kind.
-        () if query_params else declared.query_params,
-        declared.field_audiences,
-    )
-
-
-def _warn_mount_channels(
-    name: str,
-    *,
-    agent_contract: OfflineContract | None,
-    url_kwargs: Sequence[UrlKwarg],
-    query_params: Sequence[QueryParam],
-) -> None:
-    """Warn once per deprecated channel knob ``name`` was registered with, naming its replacement.
-
-    Only a knob actually passed warns, so the decorators and
-    ``register_specs``, which forward the defaults, are silent for a spec
-    declaring its own reads (``test_no_registrar_warns_for_a_spec_declaring_its_own_reads``).
-    """
-    replacements = (
-        (
-            "url_kwargs",
-            bool(url_kwargs),
-            "declare the route capture on the spec as reads=[UrlKwarg(...)]",
-        ),
-        (
-            "query_params",
-            bool(query_params),
-            "declare the query value on the spec as reads=[QueryParam(...)]",
-        ),
-        (
-            "agent_contract",
-            agent_contract is not None,
-            "declare the channels on the spec as reads=[...] and the audiences as "
-            "field_audiences=, and keep an argument from callers with "
-            "server_arguments=ServerArguments(withheld={...})",
-        ),
-    )
-    for knob, passed, replacement in replacements:
-        if passed:
-            warnings.warn(
-                f"MCP tool {name!r}: {knob}= is deprecated and will be removed in a "
-                f"future release; {replacement}. Every registrar and transport reads "
-                "the spec's own declaration.",
-                DeprecationWarning,
-                stacklevel=_caller_stacklevel(),
-            )
-
-
 def _caller_stacklevel() -> int:
     """The ``stacklevel`` that points a warning at the first frame outside this package.
 
@@ -2647,62 +1619,6 @@ def _demanding(
     )
 
 
-def _refuse_retired_argument_binding(name: str, argument_binding: ArgumentBinding) -> None:
-    """Refuse ``ArgumentBinding.SPREAD_CALLER_WINS`` before a tool is built from it.
-
-    drf-services 0.58.0 retired the member and kept it importable: its
-    ``dispatch_spec`` raises ``ValueError`` for it on every call, because a call
-    has one pool in which an author's value for an argument always outranks the
-    caller's. Registering it anyway would ship a tool that lists and then fails
-    each call, so the refusal is here, ahead of the binding, where startup
-    reads it. Both spec registrars call it, and every route through this server
-    (the decorators, ``register_specs`` overrides, ``register_tools`` with its
-    defaults) reaches one of them; ``test_register_service_tool_refuses_it`` and
-    ``test_register_selector_tool_refuses_it`` each fail without their call. A
-    binding built by hand and handed to ``tools.register`` skips the
-    registrars, and so this check: drf-services still refuses it on each call.
-    """
-    if argument_binding is ArgumentBinding.SPREAD_CALLER_WINS:
-        raise ImproperlyConfigured(
-            f"Tool {name!r}: ArgumentBinding.SPREAD_CALLER_WINS is retired, because a "
-            "caller cannot override what the server's spec declares: an author's value "
-            "for an argument (the spec's kwargs provider, a declared read) always "
-            "outranks the caller's. Pass ArgumentBinding.SPREAD_AUTHOR_WINS for a "
-            "service whose own parameters are the caller's input, or "
-            "ArgumentBinding.BUNDLE for one validated data payload. Where the caller's "
-            "value should win for a key, leave that key out of the kwargs provider."
-        )
-
-
-def _refuse_retired_unknown_arguments(name: str, unknown_arguments: UnknownArguments) -> None:
-    """Refuse ``UnknownArguments.PASSTHROUGH`` before a tool is built from it.
-
-    The sibling of ``_refuse_retired_argument_binding``. drf-services 0.58.0
-    retired the member and kept it importable: an argument the spec does not
-    declare never reaches the callable, so its ``dispatch_spec`` raises
-    ``ValueError`` for it on every call, and a selector's own validation raises
-    the same words (``handlers.utils.validate_input_against_serializer``).
-    Registering it
-    anyway would ship a tool that lists and then fails each call, so the refusal
-    is here, ahead of the binding, where startup reads it. Both tool
-    registrars call it, and every route through this server (the decorators,
-    ``register_specs`` overrides, ``register_tools`` with its defaults) reaches
-    one of them; ``test_register_service_tool_refuses_it`` and
-    ``test_register_selector_tool_refuses_it`` each fail without their call. A
-    binding built by hand and handed to ``tools.register`` skips the
-    registrars, and so this check: the per-call refusals still answer it.
-    """
-    if unknown_arguments is UnknownArguments.PASSTHROUGH:
-        raise ImproperlyConfigured(
-            f"Tool {name!r}: UnknownArguments.PASSTHROUGH is retired, because an "
-            "argument the spec does not declare never reaches the callable: a tool "
-            "call has no channel that carries such a name past the spec's declared "
-            "input. Pass UnknownArguments.REJECT to refuse an undeclared argument, or "
-            "UnknownArguments.IGNORE to drop it. Where the callable needs the value, "
-            "declare it: a reads entry, a serializer field or a parameter."
-        )
-
-
 def _check_kernel_resource_encoding(
     name: str, spec: KernelSelectorSpec, encoding: ResourceEncoding
 ) -> None:
@@ -2736,6 +1652,31 @@ def _check_kernel_resource_encoding(
             "A missing row presents as None without the presenter running, which a "
             f"{encoding.name} body cannot be; drop allow_none so a missing row is "
             "resource-not-found, or serve it as JSON."
+        )
+
+
+def _refuse_reserved_template_variables(
+    name: str, variables: tuple[str, ...], *, reserved: frozenset[str]
+) -> None:
+    """Refuse a URI-template variable a seed occupies, or one declared twice.
+
+    ``reserved`` is the server's own seeds and the read's edge seeds; the
+    kernel's ``RESERVED_POOL_SEEDS`` are always added, since they are the
+    dispatcher's authoritative names, and a URI segment routed onto one would
+    stand in for the caller's identity. A name declared twice would have the
+    later segment silently replace the earlier.
+    """
+    taken = RESERVED_POOL_SEEDS | reserved
+    collisions = sorted(set(variables) & taken)
+    if collisions:
+        raise ImproperlyConfigured(
+            f"Resource {name!r}: uri_template variable name(s) {collisions} collide with "
+            f"reserved transport keys {sorted(taken)}. Rename them."
+        )
+    duplicates = sorted({variable for variable in variables if variables.count(variable) > 1})
+    if duplicates:
+        raise ImproperlyConfigured(
+            f"Resource {name!r}: duplicate uri_template variable name(s) {duplicates}."
         )
 
 

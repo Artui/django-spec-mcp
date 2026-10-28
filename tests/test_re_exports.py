@@ -6,13 +6,6 @@ the dataclass Validator and Presenter, ``PoolSeeds``. Each is importable from th
 kernel's own root, and a re-export from here would pin this package's public API
 to that layout, so a move there would break an import from here. No fresh spec
 package re-exports a kernel name from its root.
-
-The drf-services original asked the same of the nine drf-services names this
-package once re-exported, and asserted each is importable from drf-services'
-own root; it is kept beside this file as
-``test_re_exports_drfs.py``. ``UnknownArguments`` is the one kernel name the
-root still re-exports, and it drops with the drfs surface, which the strict
-xfail below holds.
 """
 
 from __future__ import annotations
@@ -52,13 +45,6 @@ def test_it_is_importable_from_the_kernels_root(name: str) -> None:
     assert name in django_service_specs.__all__
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "The root re-exports the kernel's UnknownArguments. It drops with ArgumentBinding, "
-        "UrlKwarg and QueryParam when the drf-services registrars are deleted."
-    ),
-)
 def test_no_kernel_name_is_re_exported_from_the_root() -> None:
     shared = set(django_spec_mcp.__all__) & set(django_service_specs.__all__)
 

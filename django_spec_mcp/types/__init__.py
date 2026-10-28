@@ -42,7 +42,6 @@ from django_spec_mcp.types.task_status_method import TASK_STATUS_METHOD
 from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
 from django_spec_mcp.types.tool_content_kind import ToolContentKind
 from django_spec_mcp.types.tool_edge_seeds import TOOL_EDGE_SEEDS
-from django_spec_mcp.types.tool_kind import ToolKind
 from django_spec_mcp.types.ui_extension_id import UI_EXTENSION_ID
 from django_spec_mcp.types.ui_meta_key import UI_META_KEY
 from django_spec_mcp.types.ui_permission import UIPermission
@@ -90,7 +89,6 @@ __all__ = [
     "TaskPolicy",
     "TaskStatus",
     "ToolContentKind",
-    "ToolKind",
     "UIPermission",
     "UIVisibility",
     "UI_EXTENSION_ID",
