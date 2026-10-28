@@ -187,23 +187,54 @@ def carry_token(request: Any, token: Any) -> Any:
     (``test_a_caller_the_token_names_no_one_is_anonymous_not_the_sessions_user``).
     drf-mcp's DRF ``Request`` carried the token's user, and this keeps that.
 
-    The inbound request is written to rather than copied, because a spec
+    The wire's inbound request is written to rather than copied, because a spec
     reading ``call_context["request"]`` is handed the very request the
     transport received
     (``test_a_resource_permission_reads_the_request_the_read_arrived_on``).
     Every call on one request carries the one token the transport resolved for
     it, a batch's and a stream's included, so a second write sets what the
-    first did.
+    first did. An in-process call's is a copy already, made where its context
+    is (``copy_request``).
     """
-    principal = principal_of(token.user)
+    request.mcp_token = token
+    return seat(request, principal_of(token.user))
+
+
+def seat(request: Any, principal: Any) -> Any:
+    """Set ``principal`` as ``request``'s user, for its sync and async readers both.
+
+    ``AuthenticationMiddleware`` sets ``request.auser`` beside ``request.user``,
+    and a request keeping the middleware's would answer an async reader with the
+    session's user while the sync one names the caller, so both are written.
+    """
 
     async def auser() -> Any:
         return principal
 
-    request.mcp_token = token
     request.user = principal
     request.auser = auser
     return request
+
+
+def copy_request(request: Any) -> Any:
+    """A shallow copy of ``request`` for one in-process call to write to.
+
+    A request an in-process caller hands ``call_tool`` / ``acall_tool`` is the
+    caller's own, often the very request a view is serving, so nothing here
+    writes to it: writing the call's user onto it would leave the view serving
+    as someone else after the call
+    (``test_an_in_process_call_leaves_the_handed_request_as_it_was``), and two
+    concurrent calls sharing it would each see the other's
+    (``test_concurrent_in_process_calls_on_one_request_keep_their_own_users``).
+
+    drf-services' recipe: the ``__dict__`` is transplanted onto an instance made
+    with ``object.__new__`` rather than through ``copy.copy``, whose route
+    through ``HttpRequest.__getstate__`` drops ``environ`` and ``_stream``.
+    ``META``, the session and the body stay the same objects, as they do there.
+    """
+    clone: Any = object.__new__(type(request))
+    clone.__dict__.update(request.__dict__)
+    return clone
 
 
 def admits_without_arguments(
@@ -812,6 +843,7 @@ __all__ = [
     "bound_unpaginated_rows",
     "call_context",
     "carry_token",
+    "copy_request",
     "not_found_result",
     "on_the_wire",
     "page_request",
@@ -819,6 +851,7 @@ __all__ = [
     "present_tool_result",
     "resource_read_result",
     "resource_refusal",
+    "seat",
     "tool_result",
     "unguarded_grant",
 ]

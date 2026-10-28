@@ -10,6 +10,7 @@ from django_spec_mcp._compat.acall import acall
 from django_spec_mcp._compat.utils import arun_selector_sync_safe
 from django_spec_mcp.auth.permissions.utils import DispatchShape
 from django_spec_mcp.handlers.guard_resource_object import guard_resource_object
+from django_spec_mcp.handlers.kernel_utils import carry_token
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.output.build_resource_contents import build_resource_contents
 from django_spec_mcp.output.render_drfs_resource_output import render_drfs_resource_output
@@ -37,8 +38,14 @@ async def read_drfs_resource_async(
     """
     # See the sync sibling: URI-template variables ride on ``view.kwargs``,
     # and ``auth`` beside ``user`` keeps the caller.
+    # Built over the request ``carry_token`` seats the token's principal on:
+    # ``shape.build`` copies its ``__dict__``, so the middleware's ``auser``
+    # would otherwise answer an async reader with the session's user
+    # (``test_every_path_sees_the_tokens_principal_not_the_sessions``).
     offline = shape.build(
-        user=context.token.user, auth=context.token.raw, http_request=context.http_request
+        user=context.token.user,
+        auth=context.token.raw,
+        http_request=carry_token(context.http_request, context.token),
     )
     drf_request = offline.request
     view = offline.view
@@ -77,7 +84,10 @@ async def read_drfs_resource_async(
     payload: Any = await acall(
         render_drfs_resource_output, binding, raw, view=view, request=drf_request
     )
-    return build_resource_contents(binding=binding, uri=uri, raw=payload)
+    # Encoding iterates what the render returned, a lazy queryset when there
+    # is no output serializer to evaluate it, so it runs off the loop too
+    # (``test_an_async_drfs_read_of_a_lazy_queryset_encodes_off_the_loop``).
+    return await acall(build_resource_contents, binding=binding, uri=uri, raw=payload)
 
 
 __all__ = ["read_drfs_resource_async"]

@@ -8,6 +8,7 @@ from rest_framework_services import resolve_callable_kwargs
 
 from django_spec_mcp.auth.permissions.utils import DispatchShape
 from django_spec_mcp.handlers.guard_resource_object import guard_resource_object
+from django_spec_mcp.handlers.kernel_utils import carry_token
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.output.build_resource_contents import build_resource_contents
 from django_spec_mcp.output.render_drfs_resource_output import render_drfs_resource_output
@@ -49,8 +50,14 @@ def read_drfs_resource(
     # ``request.auth`` on a view without it reset the caller to
     # ``AnonymousUser``, so a ``TokenHasScope``-style permission the check
     # admitted refused every caller at the guard.
+    # Built over the request ``carry_token`` seats the token's principal on:
+    # ``shape.build`` copies its ``__dict__``, so the middleware's ``auser``
+    # would otherwise answer an async reader with the session's user
+    # (``test_every_path_sees_the_tokens_principal_not_the_sessions``).
     offline = shape.build(
-        user=context.token.user, auth=context.token.raw, http_request=context.http_request
+        user=context.token.user,
+        auth=context.token.raw,
+        http_request=carry_token(context.http_request, context.token),
     )
     drf_request = offline.request
     view = offline.view

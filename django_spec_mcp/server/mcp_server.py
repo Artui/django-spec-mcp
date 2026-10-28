@@ -56,6 +56,7 @@ from django_spec_mcp.config.types.mcp_config import MCPConfig
 from django_spec_mcp.handlers.call_spec_tool import call_spec_tool
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
+from django_spec_mcp.handlers.kernel_utils import copy_request
 from django_spec_mcp.handlers.listable_tool_bindings import listable_tool_bindings
 from django_spec_mcp.handlers.offered_tools import (
     declares_operation_conditions,
@@ -1265,10 +1266,13 @@ class MCPServer:
         When ``request`` is ``None`` a minimal
         ``HttpRequest`` is synthesised bearing the user, so
         permission classes reading ``request.user`` behave as they would on
-        HTTP. The protocol version is the server's first (most preferred)
-        supported version, not a hardcoded literal.
+        HTTP. A handed request is the caller's own and is never written to:
+        the call works on a shallow copy (``copy_request``), which the
+        handlers then seat the token's principal on. The protocol version is
+        the server's first (most preferred) supported version, not a
+        hardcoded literal.
         """
-        http_request: HttpRequest = request if request is not None else HttpRequest()
+        http_request: HttpRequest = copy_request(request) if request is not None else HttpRequest()
         if request is None:
             http_request.user = user
             http_request.method = "POST"

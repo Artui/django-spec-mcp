@@ -9,9 +9,12 @@ from django_spec_mcp.handlers.answer_kernel_refusal import answer_kernel_refusal
 from django_spec_mcp.handlers.kernel_utils import (
     admit_kernel_call,
     bound_unpaginated_rows,
+    copy_request,
     not_found_result,
     page_request,
     present_tool_result,
+    principal_of,
+    seat,
     tool_result,
 )
 from django_spec_mcp.handlers.types.kernel_refusal_scene import KernelRefusalScene
@@ -48,6 +51,11 @@ def call_kernel_tool(
     the wire serves. ``AdditionalInputRequired`` is a service error here, since
     there is no further round to ask in.
     """
+    # A handed request is the caller's own, so the spec is handed a copy whose
+    # ``user`` is the one the call runs as, as ``acall_tool``'s is
+    # (``test_sync_call_tool_hands_a_copy_carrying_the_acting_user``).
+    if request is not None:
+        request = seat(copy_request(request), principal_of(user))
     dispatched, page = page_request(binding, arguments, config)
     try:
         # Inside the ``try``, so the one thing it raises, a denial, meets the
