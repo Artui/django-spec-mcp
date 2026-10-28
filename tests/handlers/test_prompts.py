@@ -1,14 +1,9 @@
-"""``prompts/list`` and ``prompts/get``, with nothing of drf-services in the subject.
+"""``prompts/list`` and ``prompts/get``.
 
 A prompt is not a spec: ``register_prompt`` takes a ``render`` callable and
-``permissions`` that judge the transport's request and token, so the kernel
-cut changes nothing it asks. This file is the original with one question
-left out: a ``DRFPermissionAdapter`` wrapping a DRF permission class reading the
-prompt's arguments off ``request.data`` and its name off ``view.action``. A
-DRF class has no kernel counterpart, and a prompt's permission on the kernel
-path is an ``MCPPermission`` (or the scope gate), which is handed the request
-and the token and never the arguments; the last test here holds that. The
-original is kept beside this file as ``test_prompts_drfs.py``.
+``permissions`` that judge the transport's request and token. A prompt's
+permission is an ``MCPPermission`` (or the scope gate), which is handed the
+request and the token and never the arguments; the last test here holds that.
 """
 
 from __future__ import annotations
@@ -365,7 +360,7 @@ class _Recording:
 async def test_a_prompt_permission_is_judged_on_the_request_and_token_alone(
     is_async: bool,
 ) -> None:
-    # The whole of what a non-DRF prompt permission sees: the transport's own
+    # The whole of what a prompt permission sees: the transport's own
     # request and the resolved token, once per get, and nothing of the
     # arguments, which reach ``render`` and no check.
     permission = _Recording()
@@ -389,7 +384,7 @@ async def test_a_render_declaring_request_receives_the_transports_http_request(
     is_async: bool,
 ) -> None:
     # The plain ``HttpRequest`` the kernel tool path hands a spec, with the
-    # resolved token on it as ``mcp_token``; no DRF ``Request`` is built. Its
+    # resolved token on it as ``mcp_token``. Its
     # ``user`` is the token's principal, as the ``user`` seed is, and never the
     # one the endpoint's session resolved.
     seen: dict[str, Any] = {}

@@ -1,19 +1,17 @@
 """``tools/list`` advertises the ``affordances`` object a tool's results carry.
 
-drf-services renders declared ``affordances`` into every item as an
-``affordances`` key that no serializer declares, so a schema derived from the
-serializer alone never names it. Nothing failed: the schema does not forbid extra
+A tool renders declared ``affordances`` into every item as an
+``affordances`` key that no presenter declares, so a schema derived from the
+presenter alone would never name it. Nothing failed: the schema does not forbid extra
 keys, so every result still conformed, and a client reading the schema could not
 learn the key or the codes it switches on.
 
 Each test reads the listing through ``MCPServer.list_tools``, the public surface,
 so it runs unchanged against a tree without the fix.
 
-The kernel version of the drf-services original, kept beside it as
-``test_tools_list_affordances_drfs.py``. The same questions, of kernel specs
-registered with ``register_tool``: a ``DataclassPresenter`` stands where the
-original's ``OrderSerializer`` stood, and the order spec and its ``cancel``
-affordance are the kernel twins in ``tests/testapp/affordances.py``.
+The questions are asked of kernel specs registered with ``register_tool``: a
+``DataclassPresenter`` renders the order, and the order spec and its ``cancel``
+affordance are the ones in ``tests/testapp/affordances.py``.
 """
 
 from __future__ import annotations

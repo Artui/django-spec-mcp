@@ -1,4 +1,4 @@
-"""The kernel path's refusal map: total, ordered, and each row answering as drf-services does.
+"""The kernel path's refusal map: total, ordered, and each row answering with its own wire body.
 
 Every row has a test asserting its own answer and asserting that it is not the
 answer of the row the refusal falls to with that row deleted, so mutating a row
@@ -21,14 +21,11 @@ out fails a named test even where the map stays total:
 - ``ServiceError`` (unanswered without it): ``test_a_service_error_is_a_service_result``
   and the totality test.
 
-Each row with a drf-services counterpart is also held to the answer a drf-services
-tool serves for it, written out here as the literal that tool served:
-``test_a_denial_is_answered_as_the_drf_services_path_answers_it``,
-``test_invalid_arguments_carry_the_drf_services_detail_in_the_servers_own_wording`` and
-``test_a_service_refusal_is_answered_as_the_drf_services_path_answers_it``. A bare
-``DispatchError`` and a deactivated principal have none: drf-services raises neither.
-The comparison against a live drf-services tool is kept in
-``test_kernel_refusals_drfs.py`` until the drfs path is deleted.
+The wire body a client reads for a denial, a missing field and a service refusal
+is also written out here as a literal:
+``test_a_denial_is_answered_with_insufficient_permission``,
+``test_a_missing_field_carries_the_validators_detail_in_the_servers_own_wording`` and
+``test_a_service_refusal_is_answered_with_its_wire_body``.
 """
 
 from __future__ import annotations
@@ -339,15 +336,15 @@ def _refused(error: dict[str, Any]) -> dict[str, Any]:
         ),
     ],
 )
-def test_a_service_refusal_is_answered_as_the_drf_services_path_answers_it(
+def test_a_service_refusal_is_answered_with_its_wire_body(
     client: Client, exc: ServiceError, name: str, drfs_served: dict[str, Any]
 ) -> None:
-    """``drfs_served`` is what a drf-services tool whose service raises ``exc`` served."""
+    """``drfs_served`` is what a tool whose service raises ``exc`` serves."""
     assert _served(client, _build(), name) == drfs_served
 
 
-def test_a_denial_is_answered_as_the_drf_services_path_answers_it(client: Client) -> None:
-    """A drf-services tool whose permission class denies served this body."""
+def test_a_denial_is_answered_with_insufficient_permission(client: Client) -> None:
+    """A tool whose permission check denies serves this body."""
     assert _served(client, _build(), "denied") == {
         "jsonrpc": "2.0",
         "id": 1,
@@ -355,14 +352,12 @@ def test_a_denial_is_answered_as_the_drf_services_path_answers_it(client: Client
     }
 
 
-def test_invalid_arguments_carry_the_drf_services_detail_in_the_servers_own_wording(
+def test_a_missing_field_carries_the_validators_detail_in_the_servers_own_wording(
     client: Client,
 ) -> None:
-    """The same missing field, refused by a serializer on the drf-services path and the
-    kernel's validator here, answers the same per-field detail, which is what a
-    drf-services tool served for it. The wording differs by design: the kernel reads
-    the field as left out, so it is named in the server's ``missing_arguments``, where
-    the drf-services path keeps ``Invalid arguments`` for a serializer's own field."""
+    """A field the call left out is refused by the kernel's validator with its
+    per-field detail. The kernel reads the field as left out, so the message names
+    it in the server's ``missing_arguments`` wording rather than ``Invalid arguments``."""
     by_kernel = _error(_served(client, _build(), "validated", {}))
     assert by_kernel["detail"] == {"number": ["This field is required."]}
     assert by_kernel["type"] == "validation_error"

@@ -1,13 +1,10 @@
 """What only the async route asks of a kernel selector tool.
 
-The original was the async twin of a subset of the sync pipeline tests; on the
-kernel path every one of those runs on both handlers in
+The sync pipeline tests run on both handlers in
 ``test_selector_tool_dispatch.py``, so this file asks what is particular to an
 async caller: an ``async def`` selector is awaited by ``adispatch`` and still
 answers the sync handler, and a paginated call's presenter is handed the page
-and not the whole set, which is the kernel form of the original's
-output-context provider receiving the resolved page. The original is kept
-beside this file as ``test_selector_tool_dispatch_async_drfs.py``.
+and not the whole set.
 """
 
 from __future__ import annotations

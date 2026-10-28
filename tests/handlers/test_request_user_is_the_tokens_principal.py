@@ -4,9 +4,8 @@ A kernel tool's spec, a prompt's ``render``, a completer and a pool seed resolve
 on a view's read are each handed the transport's ``HttpRequest``. Over the wire
 its ``user`` is whatever the project's middleware resolved, a session cookie
 included, and the MCP caller is the bearer token's principal, which can be
-someone else. drf-mcp handed these a DRF ``Request`` whose ``user`` was the
-token's, so a callable authorizing on ``request.user`` was judging the caller;
-the request is held to that here, behind Django's own session middleware with
+someone else. A callable authorizing on ``request.user`` must be judging the
+caller, so the request's ``user`` is held to the token's here, behind Django's own session middleware with
 a client logged in as someone the token does not name.
 """
 
@@ -317,7 +316,7 @@ def test_sync_call_tool_drops_the_handed_requests_token(users: None) -> None:
 @pytest.mark.django_db
 def test_sync_call_tool_with_no_request_hands_one_carrying_the_acting_user(users: None) -> None:
     """With no request handed, sync ``call_tool`` synthesises one bearing the
-    user, as ``acall_tool`` and the drf-services path do, rather than handing
+    user, as ``acall_tool`` does, rather than handing
     a spec that reads ``request`` a ``None``."""
     caller = get_user_model().objects.get(username="token-caller")
     server = _server([])

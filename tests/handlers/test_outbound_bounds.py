@@ -1,16 +1,14 @@
 """Outbound bounds on kernel tools and resources: page-size clamp, row and byte ceilings, deadline.
 
-Asks of specs registered with ``register_tool`` / ``register_resource`` what the
-original, kept beside this file as ``test_outbound_bounds_drfs.py``, asks of
-drf-services bindings. ``max_page_size``, ``max_result_bytes`` and
+Asks of specs registered with ``register_tool`` / ``register_resource``.
+``max_page_size``, ``max_result_bytes`` and
 ``dispatch_timeout`` are per-tool knobs on ``register_tool``, each deferring to
 the server's value when left ``UNSET`` and disabled by ``None``; the clamps and
 the page envelope are the kernel's ``paginate_output``, handed the bound the
 binding and the server resolve.
 
 The prompt cases, ``run_with_deadline``, ``resolve_bound`` and
-``build_mcp_config`` name no spec, and are asked here as the original asks them
-so they outlive it. Registration-time coverage for the unpaginated-list warning
+``build_mcp_config`` name no spec. Registration-time coverage for the unpaginated-list warning
 lives in ``tests/server/test_unbounded_list_warning.py``.
 """
 

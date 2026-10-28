@@ -5,9 +5,8 @@ kernel's ``dispatch`` checks a call's arguments before it asks the spec's
 checks. So the transport asks them itself first, through the kernel's own
 prelude (``admit_kernel_call``): a caller they refuse is told so before the
 rate limit is charged, before a task is created and before it learns which
-arguments the tool takes, as the drf-services path refused it, whose spec
-permissions sat in the binding's own stack. ``dispatch`` is then handed the
-grant, so the checks are asked once.
+arguments the tool takes. ``dispatch`` is then handed the grant, so the
+checks are asked once.
 
 Asked here of every kernel route that charges or creates work: ``tools/call``
 on both handlers and in process, a task-shaped tool, ``resources/read`` on both
@@ -233,7 +232,7 @@ async def test_an_admitted_caller_missing_an_argument_is_charged_and_told_which(
     is_async: bool,
 ) -> None:
     # The other half: the spec admitting the caller, the shape check still
-    # answers, after the charge, as drfs answered a missing argument.
+    # answers, after the charge.
     limit = _CountingLimit()
 
     out = await _call(_server(_Counted(admits=True), limiter=limit), {}, is_async=is_async)
@@ -338,7 +337,7 @@ async def test_a_check_raising_a_refusal_that_is_no_denial_is_answered_as_before
 ) -> None:
     # A ``ServiceError`` a check looking a tenant up raises, or a bare
     # ``DispatchError``: no denial, so each is left to dispatch, which raises it
-    # again and answers it through its own arm, after the charge, as before.
+    # again and answers it through its own arm, after the charge.
     limit = _CountingLimit()
 
     out = await _call(_server(_Raises(refusal), limiter=limit), {"pk": 1}, is_async=is_async)
@@ -1144,7 +1143,7 @@ def test_a_reader_told_its_arguments_are_invalid_gets_the_detail_as_json_would_w
 
 def test_a_refusal_that_is_no_invalid_argument_is_still_raised_on_by_a_read() -> None:
     # The arm is ``InvalidArguments`` alone: a bare ``DispatchError`` stays the
-    # transport's internal error, as before.
+    # transport's internal error.
     scene = KernelRefusalScene(
         arguments={}, config=build_mcp_config(), conventions=AgentConventions()
     )

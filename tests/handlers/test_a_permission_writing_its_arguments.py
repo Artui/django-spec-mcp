@@ -1,11 +1,9 @@
 """A permission writing into its ``arguments`` reaches neither the next check, the service nor the caller.
 
-The kernel's answer to ``test_a_permission_writing_request_data_drfs.py``, kept
-beside it. The original asked it of ``request.data``: a drf-services permission
-stamping a value into it could carry that value into the dispatch view's check
-and into the caller's own mapping. The kernel has no request mapping to write
-into. A check that declares ``arguments`` is handed the call's shape-checked
-arguments as a read-only mapping, a copy of the top level behind a proxy, so:
+A check that declares ``arguments`` is handed the call's shape-checked
+arguments as a read-only mapping, a copy of the top level behind a proxy, so a
+check cannot carry a value into the next check or into the caller's own
+mapping:
 
 - a write raises ``TypeError`` at the check, which is a fault of the check and
   not a refusal: the next check and the service never run, and the handler
@@ -17,9 +15,9 @@ arguments as a read-only mapping, a copy of the top level behind a proxy, so:
 - the way to supply a value the service takes is a ``kwargs`` provider, whose
   return reaches the service as keywords.
 
-The original asked a service tool and a selector tool; so does this, each kind
-parametrised over the fault and the swallowed write. The ``kwargs`` provider
-case is asked of the service alone.
+A service tool and a selector tool are both asked, each kind parametrised over
+the fault and the swallowed write. The ``kwargs`` provider case is asked of the
+service alone.
 """
 
 from __future__ import annotations

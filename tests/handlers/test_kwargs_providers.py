@@ -1,8 +1,7 @@
 """A kernel spec's ``kwargs`` provider, on kernel tools and resources over both handlers.
 
-Asks of specs registered with ``register_tool`` / ``register_resource`` what the
-original, kept beside this file as ``test_kwargs_providers_drfs.py``, asks of
-drf-services bindings: the provider's return reaches the callable as keywords,
+Asks of specs registered with ``register_tool`` / ``register_resource``: the
+provider's return reaches the callable as keywords,
 on every call, beside a resource's URI-template variables; a provider declaring
 ``request`` is handed the call's request by name; a provider may query on the
 async route; and a provider returning ``UNSET`` for a key declines it rather than
@@ -10,15 +9,12 @@ overriding the value the call carried, while one returning a value wins.
 
 The kernel hands a provider what it declares from the pool, and the call's
 ``request`` and ``view`` (``CALL_SEEDS``) by name: the ``HttpRequest`` carrying
-the caller's token as ``mcp_token``, and ``None`` for the view, where the
-original handed a synthesised drf-services view and a DRF ``Request``.
+the caller's token as ``mcp_token``, and ``None`` for the view.
 
-Three questions of the original have no kernel counterpart. ``register_resource``
-on a kernel spec takes no ``output_serializer``, since the presenter is the
-spec's, so neither "the spec's serializer fills in" nor "the caller's wins"
-applies; a kernel ``SelectorSpec`` refuses a missing selector when it is built,
-before any registrar sees it; and the "render has the request" cases asked of a
-serializer's context, which a kernel Presenter does not take.
+``register_resource`` on a kernel spec takes no output declaration, since the
+presenter is the spec's. A kernel ``SelectorSpec`` refuses a missing selector
+when it is built, before any registrar sees it, and a kernel Presenter takes no
+per-call context.
 """
 
 from __future__ import annotations
@@ -57,7 +53,7 @@ OPEN = [Unrestricted()]
 
 
 class _IdentifiedUser(str):
-    """A principal that is both a value and an identity, as the original's is."""
+    """A principal that is both a value and an identity."""
 
     pk = "alice"
     is_authenticated = True

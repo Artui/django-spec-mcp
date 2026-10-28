@@ -1,21 +1,17 @@
 """``FILTER_LISTINGS_BY_PERMISSIONS`` across the four list handlers, on kernel specs.
 
-The kernel version of the drf-services original, kept beside it as
-``test_listings_filter_drfs.py``. It asks what the original asked, of tools and
-resources registered with ``register_tool`` and ``register_resource`` and guarded
-by their specs' own ``PermissionCheck``s: every list handler (``tools/list``,
+It asks of tools and resources registered with ``register_tool`` and
+``register_resource`` and guarded by their specs' own ``PermissionCheck``s: every list handler (``tools/list``,
 ``resources/list``, ``resources/templates/list``, ``prompts/list``) with the
 setting on and off, the ``always_listed`` opt-back-in, the filter running before
 pagination, and a check scoped by what a call names being judged on nothing.
 
-The original's route-scoped case asked a DRF permission reading a URL kwarg,
-which the kernel has no counterpart for: a kernel call's route is in its
-arguments. So here it is a check reading ``arguments``, which a listing hands as
-``None``. Prompts are not specs on either path, so their two cases are the
-original's. The async mount is new here: it runs the listing off the event loop,
-so a check reading the database answers there too.
+A kernel call's route is in its arguments, so a route-scoped check is one
+reading ``arguments``, which a listing hands as ``None``. Prompts are not specs.
+The async mount runs the listing off the event loop, so a check reading the
+database answers there too.
 
-Two further questions of a kernel binding are new here. A check that reads
+Two further questions are asked of a kernel binding. A check that reads
 ``arguments`` without guarding for a listing's ``None`` raises, which hides its
 binding alone, on every list handler and both mounts, and ``always_listed`` keeps
 it visible. And a create-shaped service spec, one with no target selector, is

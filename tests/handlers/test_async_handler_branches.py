@@ -1,20 +1,16 @@
 """The async handlers' own branches, on kernel tools and resources.
 
-Asks of specs registered with ``register_tool`` / ``register_resource`` what the
-original, kept beside this file as ``test_async_handler_branches_drfs.py``, asks
-of hand-built drf-services bindings through ``handle_tools_call_async``,
-``handle_resources_read_async`` and ``adispatch``: the guards name a malformed
+Asks of specs registered with ``register_tool`` / ``register_resource``,
+through ``handle_tools_call_async``, ``handle_resources_read_async`` and
+``adispatch``: the guards name a malformed
 call, a refusal keeps its shape, an ``async def`` service, output selector and
 resource selector are awaited on the loop rather than sent to a thread, and the
 sync handler table is sent off the loop while its answer still reaches the wire.
 The branches the async handler shares with the sync one are asked of both in
 ``test_handler_branches.py``.
 
-Three questions of the original have no kernel counterpart. The serializer-context
-providers (``input_serializer_context``, ``output_serializer_context`` and the
-``result`` extra they are handed) are drf-services knobs: a kernel Validator
-reads the call's context off its ``ValidationContext``, asked here, and a kernel
-Presenter takes no per-call context. They stay in the original.
+A kernel Validator reads the call's context off its ``ValidationContext``,
+asked here, and a kernel Presenter takes no per-call context.
 """
 
 from __future__ import annotations
@@ -202,8 +198,8 @@ async def test_an_async_output_selector_reshapes_the_result() -> None:
 
 
 async def test_a_validator_reads_the_calls_context() -> None:
-    """The kernel counterpart of ``input_serializer_context``: the Validator is
-    handed the call's context, carrying the request and the tool's name."""
+    """The Validator is handed the call's context, carrying the request and the
+    tool's name."""
     validator = _ContextSeen()
     server = _one(
         ServiceSpec(

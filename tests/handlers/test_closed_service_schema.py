@@ -8,16 +8,11 @@ a target selector's ``reads`` or nothing at all. The ``inputSchema`` lists
 where dispatch refuses an undeclared name; under ``IGNORE`` it carries no
 ``additionalProperties`` at all, which JSON Schema reads as open.
 
-The drf-services original asked this per ``ArgumentBinding`` and of a
-precondition hiding a lookup key behind ``NotClientInput``; a kernel spec has
-one binding, and its arguments are what it declares, so neither has a kernel
-counterpart. Three answers changed by design: the refusal names the key in the
-detail (``{"rogue": ["Unknown argument."]}``) where drf-services filed it under
-``non_field_errors``; a service's bare ``**kwargs`` no longer opens the set,
-since an argument the spec does not declare never reaches a kernel callable; and
-under ``IGNORE`` the schema omits ``additionalProperties`` where drf-services
-stamped ``additionalProperties: true``. It is kept beside this file as
-``test_closed_service_schema_drfs.py``.
+A kernel spec's arguments are what it declares. The refusal names the key in
+the detail (``{"rogue": ["Unknown argument."]}``); a service's bare ``**kwargs``
+does not open the set, since an argument the spec does not declare never
+reaches a kernel callable; and under ``IGNORE`` the schema omits
+``additionalProperties`` rather than stamping it ``true``.
 """
 
 from __future__ import annotations
@@ -111,8 +106,7 @@ def _call(server: MCPServer, arguments: dict[str, Any]) -> dict[str, Any]:
 
 
 def test_a_target_lookup_service_refuses_an_undeclared_argument() -> None:
-    # The drf-services issue's reproduction, on the kernel: ``archive_task``
-    # behind a ``pk`` lookup, under the default ``REJECT``. The lookup's ``pk``
+    # ``archive_task`` behind a ``pk`` lookup, under the default ``REJECT``. The lookup's ``pk``
     # and the service's ``reason`` are listed, and nothing else is admitted.
     server = _server(_SPECS["target-lookup"](), policy=UnknownArguments.REJECT)
 
@@ -171,9 +165,8 @@ def test_ignore_keeps_serving_an_undeclared_argument() -> None:
 
 
 def test_a_bare_var_keyword_service_stays_closed_and_receives_no_undeclared_argument() -> None:
-    # Changed by design: drf-services read a spread service's ``**kwargs`` as
-    # an open set. An argument the spec does not declare never reaches a
-    # kernel callable, so its ``**kwargs`` opens nothing: the undeclared key
+    # An argument the spec does not declare never reaches a kernel callable, so
+    # a service's ``**kwargs`` opens nothing: the undeclared key
     # is refused, and a call without it reaches the service with the
     # Validator's fields beside the pool's seeds, as any catch-all receives them.
     server = _server(_SPECS["var-keyword"](), policy=UnknownArguments.REJECT)

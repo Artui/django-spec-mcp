@@ -1,15 +1,12 @@
 """``MCPServer.call_tool`` on kernel specs: the in-process, spec-core invocation surface.
 
-Asks of tools registered with ``register_tool`` what the drf-services original,
-kept beside this file as ``test_call_spec_tool_drfs.py``, asks of
-``register_service_tool`` / ``register_selector_tool``: a call through the
+Asks of tools registered with ``register_tool``: a call through the
 kernel's ``dispatch`` off the HTTP path returns a :class:`ToolResult`, a
 business failure or a missing instance comes back as an ``isError`` result, and
 a permission fault or an unknown name propagates for the caller to map.
 
-The kernel's refusal is its own: a denied call raises ``NotPermitted`` where the
-original raised DRF's ``PermissionDenied``. A kernel retrieve declares the read
-it takes, ``pk`` here, where a drf-services selector took any keyword.
+A denied call raises the kernel's ``NotPermitted``. A kernel retrieve declares
+the read it takes, ``pk`` here.
 """
 
 from __future__ import annotations
@@ -216,9 +213,9 @@ def test_a_service_validation_error_becomes_a_tool_error() -> None:
 
 
 def test_an_undeclared_argument_is_a_validation_error_not_a_fault() -> None:
-    """The original sent ``{"x": 1}`` to a spec taking any keyword; a kernel
-    spec declares its reads, so an argument it does not declare is refused
-    under ``REJECT`` as the wire refuses it, in the result rather than raised."""
+    """A kernel spec declares its reads, so an argument it does not declare
+    (``{"x": 1}`` here) is refused under ``REJECT`` as the wire refuses it, in
+    the result rather than raised."""
     server = _server()
     server.register_tool(
         ServiceSpec(service=lambda: None, permissions=OPEN, atomic=False), name="t.create"
@@ -243,9 +240,8 @@ def test_a_service_error_becomes_a_tool_error() -> None:
 
 
 def test_a_spec_permission_denial_propagates() -> None:
-    # Changed by design: the original raised DRF's ``PermissionDenied``; a kernel
-    # check refuses with the kernel's ``NotPermitted``, which the wire maps to its
-    # own code. Both are a fault the caller maps, and neither is a tool result.
+    # A kernel check refuses with the kernel's ``NotPermitted``, which the wire
+    # maps to its own code. It is a fault the caller maps, not a tool result.
     server = _server()
     server.register_tool(
         ServiceSpec(service=lambda: {}, permissions=[_DenyAll()], atomic=False), name="t.create"
