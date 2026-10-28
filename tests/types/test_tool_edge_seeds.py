@@ -104,10 +104,19 @@ def _reading(name: str) -> ServiceSpec:
     )
 
 
-@pytest.mark.parametrize("name", [*sorted(CALL_SEEDS), "tenant"])
-def test_a_read_named_after_a_seed_is_refused_at_registration(name: str) -> None:
+@pytest.mark.parametrize("name", sorted(CALL_SEEDS))
+def test_a_read_named_after_a_call_seed_is_refused_when_the_spec_is_built(name: str) -> None:
+    # The kernel's own refusal: no registrar of this package is reached.
     with pytest.raises(ImproperlyConfigured, match=rf"\['{name}'\]"):
-        _server(_reading(name))
+        _reading(name)
+
+
+def test_a_read_named_after_a_seed_the_server_registers_is_refused_at_registration() -> None:
+    # The spec builds, since the kernel cannot know this server's seeds; the
+    # registrar asks ``check_seeds`` with them and refuses it naming the tool.
+    spec = _reading("tenant")
+    with pytest.raises(ImproperlyConfigured, match=r"MCP tool 'echo': .*\['tenant'\]"):
+        _server(spec)
 
 
 @pytest.mark.parametrize("name", ["call_context", "user"])

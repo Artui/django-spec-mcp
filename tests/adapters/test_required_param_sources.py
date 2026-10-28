@@ -155,27 +155,39 @@ def test_a_selector_requiring_the_view_registers_and_is_handed_it() -> None:
     assert seen == [None]
 
 
+# The kernel's wording for a keyword no read, seed or default fills.
+_UNFILLED = "which nothing fills"
+
+
 @pytest.mark.parametrize(
-    "build",
+    ("build", "wording"),
     [
         # Factories, built inside the block, so a spec refused when it is built
         # cannot fail collection; the match on the tool's name says the
         # registration refused it, not the spec's construction.
-        pytest.param(lambda: _service(lambda *, other: other), id="service"),
-        pytest.param(lambda: _retrieve(lambda *, pk: pk), id="selector"),
+        pytest.param(lambda: _service(lambda *, other: other), _UNFILLED, id="service"),
+        pytest.param(lambda: _retrieve(lambda *, pk: pk), _UNFILLED, id="selector"),
         pytest.param(
-            lambda: _service(lambda *, instance: instance), id="instance-without-a-lookup"
+            lambda: _service(lambda *, instance: instance),
+            _UNFILLED,
+            id="instance-without-a-lookup",
         ),
-        pytest.param(lambda: _retrieve(lambda pk, /: pk, reads=_PK), id="positional-only"),
+        pytest.param(
+            lambda: _retrieve(lambda pk, /: pk, reads=_PK),
+            "positional-only parameter",
+            id="positional-only",
+        ),
         # The kernel seeds ``data`` for a service only, so a selector requiring it
         # is as unfilled as ``other``.
-        pytest.param(lambda: _retrieve(lambda *, data: data), id="selector-requiring-data"),
+        pytest.param(
+            lambda: _retrieve(lambda *, data: data), _UNFILLED, id="selector-requiring-data"
+        ),
     ],
 )
 def test_a_required_parameter_nothing_fills_is_refused_at_registration(
-    build: Callable[[], Any],
+    build: Callable[[], Any], wording: str
 ) -> None:
-    with pytest.raises(ImproperlyConfigured, match=r"MCP tool 't': "):
+    with pytest.raises(ImproperlyConfigured, match=rf"MCP tool 't': .*{wording}"):
         _server(build())
 
 

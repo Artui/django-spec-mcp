@@ -23,7 +23,7 @@ out fails a named test even where the map stays total:
 
 Each row with a drf-services counterpart is also compared with what a drf-services
 tool serves for it: ``test_a_denial_is_answered_as_the_drf_services_path_answers_it``,
-``test_invalid_arguments_are_answered_as_the_drf_services_path_answers_them`` and
+``test_invalid_arguments_carry_the_drf_services_detail_in_the_servers_own_wording`` and
 ``test_a_service_refusal_is_answered_as_the_drf_services_path_answers_it``. A bare
 ``DispatchError`` and a deactivated principal have none: drf-services raises neither.
 """
@@ -326,7 +326,7 @@ def test_a_denial_is_answered_as_the_drf_services_path_answers_it(client: Client
     assert _served(client, _build(), "denied") == _served(client, drfs, "denied")
 
 
-def test_invalid_arguments_are_answered_as_the_drf_services_path_answers_them(
+def test_invalid_arguments_carry_the_drf_services_detail_in_the_servers_own_wording(
     client: Client,
 ) -> None:
     """The same missing field, refused by a serializer there and the kernel's
