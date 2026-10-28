@@ -31,8 +31,13 @@ from django_service_specs import (
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.permissions.scope_required import ScopeRequired
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
+from django_spec_mcp.handlers.handle_resources_list import handle_resources_list
+from django_spec_mcp.handlers.handle_resources_templates_list import (
+    handle_resources_templates_list,
+)
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from django_spec_mcp.types.output_format import OutputFormat
+from django_spec_mcp.types.resource_encoding import ResourceEncoding
 from django_spec_mcp.types.task_policy import TaskPolicy
 from django_spec_mcp.types.tool_content_kind import ToolContentKind
 from tests.testapp.auth_backend import HeaderAuthBackend
@@ -271,20 +276,63 @@ def test_register_resource_refuses_an_empty_scope_tuple() -> None:
 
 # ``selector=`` is refused the same way, held by the ``_drfs`` original of this
 # file: it is the drf-services form's own argument, which goes with that form.
+# ``mime_type`` and ``encoding`` are not refused: a presenter can render the row
+# as a document or as bytes, so the kernel form takes both
+# (``test_the_kernel_form_takes_a_mime_type_and_an_encoding``).
 @pytest.mark.parametrize(
     ("knob", "value"),
-    [
-        ("output_serializer", object),
-        ("permissions", []),
-        ("mime_type", "text/csv"),
-        ("encoding", __import__("django_spec_mcp").types.ResourceEncoding.TEXT),
-    ],
+    [("output_serializer", object), ("permissions", [])],
 )
 def test_the_kernel_form_refuses_each_knob_of_the_selector_form(knob: str, value: Any) -> None:
     with pytest.raises(TypeError, match=f"{knob} belong to the selector= form"):
         _server().register_resource(
             _selector(SelectorKind.RETRIEVE), name="r", uri_template="r://{pk}", **{knob: value}
         )
+
+
+def test_the_kernel_form_takes_a_mime_type_and_an_encoding() -> None:
+    binding = _server().register_resource(
+        _selector(SelectorKind.RETRIEVE),
+        name="r",
+        uri_template="r://{pk}",
+        mime_type="text/markdown",
+        encoding=ResourceEncoding.TEXT,
+    )
+    assert (binding.mime_type, binding.encoding) == ("text/markdown", ResourceEncoding.TEXT)
+
+
+def test_a_kernel_resource_defaults_to_json() -> None:
+    binding = _server().register_resource(
+        _selector(SelectorKind.RETRIEVE), name="r", uri_template="r://{pk}"
+    )
+    assert (binding.mime_type, binding.encoding) == ("application/json", ResourceEncoding.JSON)
+
+
+def test_both_listings_report_a_kernel_resources_mime_type() -> None:
+    server = _server()
+    server.register_resource(
+        SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda: b"", permissions=OPEN),
+        name="logo",
+        uri_template="brand://logo",
+        mime_type="image/png",
+        encoding=ResourceEncoding.BLOB,
+    )
+    server.register_resource(
+        _selector(SelectorKind.RETRIEVE),
+        name="invoice",
+        uri_template="invoices://{pk}",
+        mime_type="text/markdown",
+        encoding=ResourceEncoding.TEXT,
+    )
+    context = server._call_context(user=None)
+    listed = handle_resources_list(None, context)
+    templates = handle_resources_templates_list(None, context)
+    assert [(r["uri"], r["mimeType"]) for r in listed["resources"]] == [
+        ("brand://logo", "image/png")
+    ]
+    assert [(t["uriTemplate"], t["mimeType"]) for t in templates["resourceTemplates"]] == [
+        ("invoices://{pk}", "text/markdown")
+    ]
 
 
 def test_register_resource_needs_a_spec_or_a_selector() -> None:

@@ -163,6 +163,24 @@ carries; releases up to 0.54.0 are in
   the call, under either policy, through the kernel's `dispatch`, under the server's `pool_seeds` and
   `conventions`, asking the spec's permissions again and handing a service that
   declares `progress` the task's reporter, so its reports reach `tasks/get`.
+- **A kernel resource can serve a document or bytes.** The kernel form of
+  `register_resource` takes `encoding=` and `mime_type=`, which it refused before,
+  and applies them to what the spec's presenter returns, or its selector's value
+  when it declares none. `ResourceEncoding.JSON` stays the default.
+  `ResourceEncoding.TEXT` serves a presented `str` verbatim, so a presenter
+  rendering the row as Markdown pairs with `mime_type="text/markdown"`, and
+  `ResourceEncoding.BLOB` base64-encodes presented `bytes`, `bytearray` or
+  `memoryview` into the `contents` entry's `blob`, with no `text`. The mime type
+  is advertised as given in `resources/read`, `resources/list` and
+  `resources/templates/list`, and never inferred from or checked against the
+  encoding, so `TEXT` under the default `application/json` serves a `str` that
+  is already JSON as it is, as on the `selector=` form. A presented value of the
+  wrong type is a `-32603` naming the presenter, the result ceiling and the cache
+  hints apply as they do to JSON, and a presenter refusing a shape the URI
+  carried, or a missing row, are answered as on a JSON resource. A
+  `KernelResourceBinding` built by hand is encoded by its own `encoding` and
+  `mime_type`, which a read ignored before. Both forms encode through one step,
+  so the two cannot drift.
 
 ### Changed
 

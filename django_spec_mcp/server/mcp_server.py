@@ -1482,11 +1482,21 @@ class MCPServer:
         for a template — and for the ``contents`` block ``resources/read``
         returns.
 
-        ``encoding`` decides how the selector's value becomes the read body:
-        ``JSON`` pretty-prints it, ``TEXT`` returns it verbatim. Anything whose
-        ``mime_type`` is not JSON — Markdown, CSV, plain text — wants ``TEXT``,
-        or the document comes back wrapped in a quoted string literal. For an
-        HTML view use ``register_ui_resource``, which sets both.
+        ``encoding`` decides how the rendered value becomes the read body, in
+        both forms: the selector's value after any ``output_serializer`` here,
+        and what the spec's presenter returns in the kernel form below. ``JSON``
+        pretty-prints it; ``TEXT`` returns it verbatim, and it must be a
+        ``str``; ``BLOB`` base64-encodes it into the ``contents`` entry's
+        ``blob`` instead of ``text``, and it must be ``bytes``, ``bytearray`` or
+        ``memoryview``. A value of the wrong type is answered at read time as an
+        ``INTERNAL_ERROR`` naming what produced it. Anything whose ``mime_type``
+        is not JSON — Markdown, CSV, plain text — wants ``TEXT``, or the
+        document comes back wrapped in a quoted string literal, and an image
+        wants ``BLOB``. ``mime_type`` is advertised as given and never inferred
+        from or checked against the encoding, so ``TEXT`` left at the default
+        ``application/json`` serves a ``str`` that is already a JSON document
+        as it is. The result ceiling and the cache hints apply to every
+        encoding. For an HTML view use ``register_ui_resource``, which sets both.
 
         A ``uri_template`` variable is a caller-controlled name that reaches the
         selector's kwarg pool, so one named after a dispatcher seed (``user``,
@@ -1503,11 +1513,12 @@ class MCPServer:
         through the kernel's ``dispatch`` / ``adispatch``, with the
         URI-template variables as its arguments, so the spec's ``reads`` name
         them and its presenter renders the row. ``scopes`` gate it as they gate
-        ``register_tool``. The knobs of the ``selector=`` form that the spec
-        declares for itself, or that a presented row fixes (``selector``,
-        ``output_serializer``, ``permissions``, ``mime_type`` and
-        ``encoding``), are refused beside a positional spec, as ``scopes`` is
-        beside ``selector=``. A spec no read can run as written is refused
+        ``register_tool``. ``mime_type`` and ``encoding`` work as above, on
+        what the presenter returns: a presenter rendering the row as Markdown
+        pairs with ``encoding=TEXT`` and ``mime_type="text/markdown"``. The
+        knobs of the ``selector=`` form that the spec declares for itself
+        (``selector``, ``output_serializer`` and ``permissions``) are refused
+        beside a positional spec, as ``scopes`` is beside ``selector=``. A spec no read can run as written is refused
         naming the resource, as ``register_tool`` refuses one. A read the URI
         template names is filled on every read, as a value ``server_arguments``
         binds is on every call, so it is never refused as optional.
@@ -1527,12 +1538,12 @@ class MCPServer:
                 cache_ttl_ms=cache_ttl_ms,
                 completions=completions,
                 scopes=scopes,
+                mime_type=mime_type,
+                encoding=encoding,
                 drf_services_knobs={
                     "selector": selector is not None,
                     "output_serializer": output_serializer is not None,
                     "permissions": permissions is not None,
-                    "mime_type": mime_type != "application/json",
-                    "encoding": encoding is not ResourceEncoding.JSON,
                 },
             )
         if selector is None:
@@ -1607,6 +1618,8 @@ class MCPServer:
         cache_ttl_ms: int | UnsetType,
         completions: dict[str, Callable[..., Any]] | None,
         scopes: str | Sequence[str] | None,
+        mime_type: str,
+        encoding: ResourceEncoding,
         drf_services_knobs: Mapping[str, bool],
     ) -> KernelResourceBinding:
         """``register_resource``'s kernel form, past the split on its first argument.
@@ -1635,6 +1648,8 @@ class MCPServer:
             cache_ttl_ms=cache_ttl_ms,
             completions=completions,
             scopes=scopes,
+            mime_type=mime_type,
+            encoding=encoding,
         )
         template_variables: tuple[str, ...] = _template_variables(uri_template)
         validate_channel_names(

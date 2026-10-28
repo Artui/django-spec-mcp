@@ -7,17 +7,18 @@ drf-services read's alone: both read handlers call it only past the
 ``resources/read`` on a registered kernel resource, which is the answer a client
 gets:
 
-- the presented row is pretty-printed JSON;
+- the presented row is pretty-printed JSON, by default;
 - the block echoes the URI asked for, with the binding's ``mimeType``;
 - the binding's ``_meta`` is carried, and omitted when empty.
 
-Three of the original's questions have no kernel counterpart, because the
-registrar refuses the knob each one turns: ``encoding=TEXT`` and
-``encoding=BLOB`` (a kernel resource presents a row, so its body is JSON), a
-``mime_type`` other than JSON, and an ``output_serializer`` rendering a
-``RETRIEVE`` or a ``LIST`` (the spec's presenter renders the row, and a kernel
-resource is a ``RETRIEVE``). Nor is whether the block's ``_meta`` is a copy
-of the binding's: the original asks it of the returned dataclass, and a kernel
+The original's questions of ``encoding=TEXT`` and ``encoding=BLOB`` and of a
+``mime_type`` other than JSON are asked of a kernel resource in
+``test_encode_resource_contents.py``, since both reads encode through
+``encode_resource_contents``. Two have no kernel counterpart: an
+``output_serializer`` rendering a ``RETRIEVE`` or a ``LIST``, because the
+registrar refuses that knob (the spec's presenter renders the row, and a kernel
+resource is a ``RETRIEVE``), and whether the block's ``_meta`` is a copy of the
+binding's, which the original asks of the returned dataclass, where a kernel
 read hands a client only the encoded body, which holds no reference to share.
 The original is kept beside this file as
 ``test_build_resource_contents_drfs.py``.
