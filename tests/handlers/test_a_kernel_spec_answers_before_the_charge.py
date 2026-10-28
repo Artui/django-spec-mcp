@@ -527,6 +527,38 @@ class _TenantOne(PermissionCheck):
         return arguments["tenant"] == 1
 
 
+class _Recording(PermissionCheck):
+    """Admits everyone, recording the ``arguments`` it is handed."""
+
+    def __init__(self) -> None:
+        self.seen: list[Any] = []
+
+    def has_permission(self, principal: Any, spec: Any, *, arguments: Any) -> bool:
+        self.seen.append(arguments)
+        return True
+
+
+@pytest.mark.parametrize("arguments", [None, [1], "x"], ids=["null", "list", "string"])
+def test_a_streamed_call_with_no_arguments_object_is_judged_on_none_sent(
+    arguments: Any,
+) -> None:
+    # The pre-flight runs before the handler validates ``arguments``, so it
+    # meets one that is ``null`` or not an object. It judges those as
+    # delivering nothing, as the handler reads an absent one, rather than
+    # handing the check what no check can index, and leaves the handler to
+    # name the fault.
+    check = _Recording()
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server.register_tool(
+        SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda: {}, permissions=[check]),
+        name="get",
+    )
+
+    params = {"name": "get", "arguments": arguments}
+    assert preflight_permissions("tools/call", params, _ctx(server)) is None
+    assert check.seen == [{}]
+
+
 def _tenant_bulk(check: PermissionCheck) -> ServiceSpec:
     return ServiceSpec(
         service=lambda *, data, tenant: data,

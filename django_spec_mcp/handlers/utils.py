@@ -42,8 +42,9 @@ def apply_tool_server_arguments(binding: Any, arguments: dict[str, Any]) -> dict
     before a task is created, the in-process ``MCPServer.call_tool`` before it
     runs the tool. So everything after reads the server's value - the kernel's
     admission and its required-argument check - and a bound value fills a
-    required read rather than being refused as missing before it arrives
-    (``test_a_binding_fills_a_required_read_over_the_wire``).
+    required read rather than being refused as missing before it arrives. A
+    task is recorded with the arguments this returns, so it runs with the
+    bound value (``test_a_kernel_task_is_recorded_and_run_with_the_bound_value``).
 
     The rule is the kernel's ``apply_server_arguments``: the caller's value for
     every bound or withheld name is dropped before anything reads it, so a
@@ -58,7 +59,7 @@ def apply_tool_server_arguments(binding: Any, arguments: dict[str, Any]) -> dict
     second time. One arc to coverage: without the withheld condition a withheld
     ``"null"`` goes unlogged
     (``test_the_bound_value_wins_and_the_withheld_one_is_dropped``), and without the comparison a caller restating the bound value is
-    logged (``test_a_caller_restating_the_bound_value_is_not_logged`` and
+    logged (``test_the_server_arguments_are_laid_without_a_second_warning`` and
     ``test_a_caller_restating_a_bound_value_with_another_is_logged_once``).
 
     A binding that binds nothing gets its arguments back untouched, the same
@@ -284,12 +285,12 @@ def render_convention(template: str | None) -> str | None:
 def missing_arguments_message(names: Iterable[str], conventions: AgentConventions) -> str:
     """The server's ``missing_arguments`` sentence for a call that left ``names`` out.
 
-    Sorted, each in backticks, joined with ", ": the Pydantic-AI toolset's
-    format, so one omission reads the same on both transports and on both
-    paths of this one
+    Each in backticks, joined with ", ", in the sorted order the kernel's
+    ``InvalidArguments.missing`` gives them: the Pydantic-AI toolset's format,
+    so one omission reads the same on both transports
     (``test_several_missing_names_are_sorted_and_joined``).
     """
-    listed = ", ".join(f"`{name}`" for name in sorted(names))
+    listed = ", ".join(f"`{name}`" for name in names)
     return conventions.missing_arguments.format(names=listed)
 
 
@@ -380,7 +381,7 @@ def rendering_refusal_result(
         f"{_readable_detail(detail)}"
     )
     # One branch arc for two conditions, so each is named by the test that fails
-    # without it: ``test_an_unpaged_selector_tool_gets_no_page_sentence``
+    # without it: ``test_a_refused_shape_is_a_validation_error_keyed_by_it``, on an unpaged tool
     # (``paginated``) and
     # ``test_none_drops_the_handle_wording_and_the_scope_sentence`` (the
     # ``None`` check, which would otherwise append the text "None").

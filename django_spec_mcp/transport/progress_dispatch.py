@@ -87,7 +87,7 @@ def preflight_permissions(method: str, params: Any, context: MCPCallContext) -> 
     # uses, then the spec's checks. This runs before the handler validates
     # ``arguments``, so one that is not an object delivers nothing here, as an
     # absent one does there, and the handler is left to name the fault
-    # (``test_a_call_with_no_arguments_object_is_judged_on_the_route_defaults``).
+    # (``test_a_streamed_call_with_no_arguments_object_is_judged_on_none_sent``).
     allowed, required_scopes = judge_tool_permissions(binding, context)
     if not allowed:
         return forbidden(required_scopes)

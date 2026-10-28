@@ -101,8 +101,8 @@ def handle_tools_call(
     # After the ceiling, so a result too large to return does not announce a
     # change the client cannot then read back. With the arguments the tool ran
     # with, a retry's answers merged in: announced with the arguments as sent,
-    # an answer moving the route named the route it moved from
-    # (``test_the_invalidation_names_the_route_an_answer_moved_to``).
+    # an answer moving the row named the row it moved from
+    # (``test_the_invalidation_names_the_row_an_answer_moved_to``).
     announce_invalidations(binding, result, ran_with, context)
     return result
 
@@ -178,7 +178,7 @@ def _dispatch_tool_call(
             )
 
         # Charged, as before: a declined answer is a call the client made
-        # (``test_a_caller_admitted_on_the_answered_route_is_charged_once``).
+        # (``test_a_caller_declining_the_question_is_charged_once``).
         if prior.refused_with is not None:
             return refusal_result(prior.refused_with), arguments_raw
 

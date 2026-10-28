@@ -67,20 +67,11 @@ def _refuse_server_arguments_that_cannot_hold(
     The kernel's ``check_server_arguments`` decides, and names the spec's kind
     and callable; this adds the tool's name, which is what a server binding
     many tools needs to find the one at fault.
-
-    A binding that binds nothing is not asked, because the kernel's check
-    assembles the spec's parameters, and the assembly refuses declarations the
-    registration does not: without the guard, a target lookup's filter named
-    like an ``input_serializer`` field is refused here as two sources of one
-    parameter, where it registers and fails each call
-    (``test_a_lookup_filter_named_like_a_field_is_left_to_the_kernel``).
     """
-    if not binding.server_arguments.names():
-        return
     try:
         check_server_arguments(binding.spec, binding.server_arguments, pool_seeds=pool_seeds)
     except ImproperlyConfigured as exc:
         raise ImproperlyConfigured(f"MCP tool {binding.name!r}: {exc}") from exc
 
 
-__all__ = ["KernelToolBinding", "ToolRegistry"]
+__all__ = ["ToolRegistry"]

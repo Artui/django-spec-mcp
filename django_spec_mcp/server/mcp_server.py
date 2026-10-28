@@ -1521,13 +1521,11 @@ class MCPServer:
 def _caller_stacklevel() -> int:
     """The ``stacklevel`` that points a warning at the first frame outside this package.
 
-    A knob reaches ``_warn_mount_channels`` through a registrar, a decorator,
-    ``register_specs`` or ``register_tools``, each a different depth, so a fixed
-    level would blame this package for some of them. Counted from the frame
-    that calls ``warnings.warn``, which is level 1
-    (``test_each_mount_level_knob_warns_naming_its_replacement`` asserts the
-    caller's file). The kernel registrars' description and pagination warnings
-    count the same way, one level further for the check's own frame
+    A registration reaches its warning through ``register_tool`` or
+    ``register_tools``, each a different depth, so a fixed level would blame
+    this package for one of them. Counted from the frame that calls
+    ``warnings.warn``, which is level 1, and the description and pagination
+    checks add one for their own frame
     (``test_the_warning_points_at_the_registering_line_not_this_package`` in the
     undescribed and unbounded-list suites).
     """

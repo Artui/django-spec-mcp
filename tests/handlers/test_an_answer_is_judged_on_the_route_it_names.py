@@ -159,11 +159,13 @@ async def _answer(
     *,
     is_async: bool,
     subscriptions: Any = None,
+    response: dict[str, Any] | None = None,
 ) -> Any:
+    """``answer`` accepted, or ``response`` as the client's whole response."""
     params: dict[str, Any] = {
         "name": "annotate",
         "arguments": sent,
-        "inputResponses": {ELICITATION_KEY: {"action": "accept", "content": answer}},
+        "inputResponses": {ELICITATION_KEY: response or {"action": "accept", "content": answer}},
     }
     if is_async:
         return await handle_tools_call_async(params, _ctx(server, subscriptions))
@@ -349,6 +351,29 @@ async def test_a_caller_admitted_on_the_answered_row_is_charged_once(
 
     assert "isError" not in out, out
     assert limit.consumed == 1
+
+
+@pytest.mark.parametrize("action", ["decline", "cancel"])
+@_ASYNC
+async def test_a_caller_declining_the_question_is_charged_once(
+    rows: tuple[Invoice, Invoice], is_async: bool, action: str
+) -> None:
+    # A declined or cancelled answer is a call the client made: charged as one,
+    # and answered after the charge, with nothing run.
+    acme, _beta = rows
+    limit = _CountingRateLimit()
+    ran: list[int] = []
+
+    await _answer(
+        _server(_NotBeta(), ran, limiter=limit),
+        {"pk": acme.pk, "note": "x"},
+        {},
+        is_async=is_async,
+        response={"action": action},
+    )
+
+    assert limit.consumed == 1
+    assert ran == []
 
 
 @_ASYNC

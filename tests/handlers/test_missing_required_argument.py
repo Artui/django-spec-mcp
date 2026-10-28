@@ -265,12 +265,34 @@ def test_the_missing_argument_is_one_the_schema_requires() -> None:
 
 @pytest.mark.parametrize("route", _ROUTES)
 async def test_several_missing_names_are_answered_together(route: str) -> None:
-    # The lookup's read and the Validator's field, which the drf-services
-    # path answered one check at a time, the lookup's alone first.
+    # The lookup's read and the Validator's field, answered in one result
+    # rather than one check at a time.
     out = await _via(_server(), route, "rename", {})
 
     message = "Missing required argument(s): `number`, `pk`."
     assert _refused(out, message) == {"pk": _REQUIRED, "number": _REQUIRED}
+
+
+@pytest.mark.parametrize("route", _ROUTES)
+async def test_several_missing_names_are_sorted_and_joined(route: str) -> None:
+    # Declared ``tenant`` before ``pk``, so the check finds them in that order;
+    # the sentence sorts them, as the Pydantic-AI toolset does, so one omission
+    # reads the same on every call and on both transports.
+    server = _server()
+    server.register_tool(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=_scoped,
+            reads=Parameters([Parameter("tenant", "string", required=True), _PK]),
+            permissions=OPEN,
+        ),
+        name="scoped",
+    )
+
+    out = await _via(server, route, "scoped", {})
+
+    message = "Missing required argument(s): `pk`, `tenant`."
+    assert _refused(out, message) == {"pk": _REQUIRED, "tenant": _REQUIRED}
 
 
 # ---------- the wire, in both protocol eras ----------
