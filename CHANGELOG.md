@@ -292,8 +292,8 @@ carries; releases up to 0.54.0 are in
   does.
 - **Only Django's `PermissionDenied` is a denial.** A
   `django.core.exceptions.PermissionDenied` raised from inside a permission
-  check is answered `-32006` under a `403` with its challenge, as before. DRF's `rest_framework.exceptions.PermissionDenied`,
-  which is not a subclass of it, is no longer recognised: it reaches the
+  check is answered `-32006` under a `403` with its challenge, as before. DRF's
+  `rest_framework.exceptions.PermissionDenied`, which is not a subclass of it, is no longer recognised: it reaches the
   transport's backstop as any other exception does, and is answered as a server
   error, `-32603`, logged at `ERROR`, where it was a `403` and `-32006`. A check
   that raised DRF's class returns `False` or raises Django's instead.
