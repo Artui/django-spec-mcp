@@ -7,12 +7,14 @@ the two paths share only the helpers they call by name.
 from __future__ import annotations
 
 import json
+from contextlib import suppress
 from dataclasses import dataclass, replace
+from io import BytesIO
 from itertools import islice
 from typing import Any
 
 from django.contrib.auth.models import AnonymousUser
-from django.core.exceptions import ImproperlyConfigured
+from django.core.exceptions import ImproperlyConfigured, RequestDataTooBig
 from django_service_specs import (
     DEFAULT_PAGE_SIZE,
     DispatchError,
@@ -229,13 +231,43 @@ def copy_request(request: Any) -> Any:
     concurrent calls sharing it would each see the other's
     (``test_concurrent_in_process_calls_on_one_request_keep_their_own_users``).
 
-    drf-services' recipe: the ``__dict__`` is transplanted onto an instance made
-    with ``object.__new__`` rather than through ``copy.copy``, whose route
-    through ``HttpRequest.__getstate__`` drops ``environ`` and ``_stream``.
-    ``META``, the session and the body stay the same objects, as they do there.
+    The ``__dict__`` is transplanted onto an instance made with
+    ``object.__new__``, drf-services' recipe for the same copy, which skips
+    ``__init__`` and the ``__reduce_ex__`` route ``copy.copy`` takes. The clone
+    shares ``META``, the session, ``GET`` and the cookies with the original,
+    and gets its own of the two things a call can consume or write through:
+
+    - **The body.** An unread body is read on the original first and the clone
+      reads a stream of its own over it, since reading through a shared
+      ``_stream`` drained a WSGI original and closed an ASGI one
+      (``test_a_spec_reading_the_body_leaves_the_handed_requests_body_intact``,
+      ``test_a_spec_draining_the_stream_leaves_the_originals_stream_whole``).
+      A body over ``DATA_UPLOAD_MAX_MEMORY_SIZE`` is left unread and shared,
+      so a call that never reads it is not refused for it
+      (``test_an_oversized_unread_body_does_not_refuse_the_call``).
+    - **A wrapped request.** A DRF ``Request`` keeps its ``HttpRequest`` as
+      ``_request`` and its ``user`` setter writes through to it, so the
+      wrapped request is copied too, and a stream DRF opened over it is
+      re-pointed at the copy (``test_a_handed_drf_request_keeps_its_user``,
+      ``test_a_drf_request_whose_stream_is_open_reads_through_its_copy``).
     """
+    own = request.__dict__
     clone: Any = object.__new__(type(request))
-    clone.__dict__.update(request.__dict__)
+    if "_request" in own:
+        clone.__dict__.update(own)
+        clone._request = copy_request(request._request)
+        if own.get("_stream") is request._request:
+            clone._stream = clone._request
+        return clone
+    # ``_read_started`` is set by a request that has a stream at all, and is
+    # true once anything has read it, the body included; a bare
+    # ``HttpRequest()`` has none and no body to read.
+    if own.get("_read_started") is False:
+        with suppress(RequestDataTooBig):
+            request.body  # noqa: B018 - reading caches ``_body`` on the original
+    clone.__dict__.update(own)
+    if "_body" in own:
+        clone._stream = BytesIO(request._body)
     return clone
 
 

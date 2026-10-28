@@ -184,11 +184,17 @@ carries; releases up to 0.54.0 are in
   provider, no `DRFPermissionAdapter` and a selector taking nothing, which
   every view registered with `register_ui_resource` is unless it holds a
   `DRFPermissionAdapter`. Such a read's answer is otherwise unchanged.
-- **An in-process call never writes to a request it is handed.** `call_tool`
-  and `acall_tool` work on a shallow copy of `request=`, whose `user` is the
-  `user=` the call runs as, so a view handing its own request keeps serving as
-  its user after the call, and concurrent calls sharing one request each see
-  their own. `acall_tool` used to hand the request itself through, and sync
+- **An in-process call leaves a request it is handed as it found it.**
+  `call_tool` and `acall_tool` work on a shallow copy of `request=`, whose
+  `user` is the `user=` the call runs as, so a view handing its own request
+  keeps serving as its user after the call, and concurrent calls sharing one
+  request each see their own. A DRF `Request` is copied with the `HttpRequest`
+  it wraps, whose `user` its setter would otherwise write through to. An unread
+  body is read once on the original, which caches it as any first read does,
+  and each copy reads a stream of its own, so a spec reading `request.body`
+  leaves the caller's body readable, from WSGI or ASGI; a body over
+  `DATA_UPLOAD_MAX_MEMORY_SIZE` is left unread and shared rather than refusing
+  the call. `acall_tool` used to hand the request itself through, and sync
   `call_tool` handed a kernel tool's spec a request whose `user` could name
   someone other than `user=`, or `None` when no request was handed, where it
   now synthesises one bearing `user=` as `acall_tool` does.
