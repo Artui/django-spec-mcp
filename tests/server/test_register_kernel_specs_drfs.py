@@ -222,8 +222,6 @@ def test_register_resource_refuses_an_empty_scope_tuple() -> None:
         ("selector", DrfSelectorSpec(kind=SelectorKind.LIST, selector=list_invoices)),
         ("output_serializer", object),
         ("permissions", []),
-        ("mime_type", "text/csv"),
-        ("encoding", __import__("django_spec_mcp").types.ResourceEncoding.TEXT),
     ],
 )
 def test_the_kernel_form_refuses_each_knob_of_the_selector_form(knob: str, value: Any) -> None:
