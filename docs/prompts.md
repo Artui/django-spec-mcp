@@ -70,7 +70,12 @@ PromptArgument(name="topic", description="What to brainstorm", required=True)
 
 The arguments dict is threaded into `render` as kwargs. `request` and `user`
 are automatically supplied if the callable declares them — same kwarg-pool
-pattern as services and selectors.
+pattern as services and selectors. `request` is the transport's Django
+`HttpRequest`, with the caller's token at `request.mcp_token`; `request.user`
+is the token's principal, the same one `user` is, never a session cookie's
+user, and `AnonymousUser` when the token names no one. Read the arguments from
+the keyword arguments rather than the request: there is no `request.data`, and
+`request.GET` is the MCP endpoint's own query string.
 
 ## Permissions and rate limits
 

@@ -166,9 +166,12 @@ them from:
 - `resolve_unknown_arguments` (in `registry/types/tool_binding.py`): the check
   registration asks to refuse a `REJECT` it cannot enforce.
 - `DROPPED_EDGE_SEEDS` (`request`, `serializer`): the names the DRF edge drops from
-  a caller's arguments because it fills them itself. The completion seeding, the
-  unknown-argument check, trust-mode registration and both schema builders' supplied
-  sets read it, so nothing is advertised or counted that the call then drops.
+  a caller's arguments because it fills them itself. The unknown-argument check,
+  trust-mode registration and both schema builders' supplied sets read it, so
+  nothing is advertised or counted that the call then drops. The completion seeding
+  reads `COMPLETION_EDGE_SEEDS` (`types/completion_edge_seeds.py`) instead, written
+  out so that path imports nothing from drf-services, and a test pins it equal to
+  `DROPPED_EDGE_SEEDS`.
 
 A local copy of any of them is the drift this section exists to prevent, so the
 internal import is the lesser cost. Move each to the root import when drf-services
@@ -200,7 +203,12 @@ covered.
 The direct paths are direct for structural reasons, not by neglect:
 
 - **`resources/read`.** A `ResourceBinding` holds a bare selector callable, not the
-  spec it was lifted from, so there is no spec to dispatch. It composes
+  spec it was lifted from, so there is no spec to dispatch. One that needs nothing
+  from drf-services (`reads_through_drfs` is false: no output serializer, no
+  `kwargs` provider, no `DRFPermissionAdapter`, and no selector parameter a keyword
+  could fill, which every UI view is) reads on the kernel alone: `carry_token`,
+  `base_pool`, `run_selector`, then `build_resource_contents` to encode. Every other
+  one reads through `read_drfs_resource`, which composes
   `base_serializer_context` for rendering and resolves the output declaration
   through `renderable_serializer_class` before instantiating it (the two things
   `render_spec_output` would have done), applies the reserved seeds over the
@@ -210,8 +218,10 @@ The direct paths are direct for structural reasons, not by neglect:
   shaping and `preconditions` are **not** reproduced — the adapter drops them at
   registration, so there is nothing to run.
 - **`prompts/get` and `completion/complete`.** Neither target is a spec: a prompt's
-  `render` and a completer are bare callables. They dispatch through
-  `resolve_callable_kwargs` and seed the pool in the same precedence
+  `render` and a completer are bare callables. They dispatch through the kernel's
+  `resolve_callable_kwargs`, with `request` the Django `HttpRequest` `carry_token`
+  returns (the token at `request.mcp_token`, its principal as `request.user`), and
+  seed the pool in the same precedence
   `RESERVED_POOL_SEEDS` gives it on the dispatch path — transport seeds outrank
   client-supplied names, always.
 

@@ -67,8 +67,8 @@ def validate_serializer_shapes(
 
     **Output** must be ``None``, a DRF ``BaseSerializer`` subclass or a dataclass
     type. It is deliberately wider than input, because output is only rendered.
-    Every render site — ``render_spec_output`` for tools, ``build_resource_contents``
-    for resources — resolves the declaration through drf-services'
+    Every render site — ``render_spec_output`` for tools,
+    ``render_drfs_resource_output`` for resources — resolves the declaration through drf-services'
     ``renderable_serializer_class`` and calls what comes back as
     ``serializer(value, many=..., context=...).data``. A read-only
     ``BaseSerializer`` subclass, which DRF documents for exactly that job, answers

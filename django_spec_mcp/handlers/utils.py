@@ -458,8 +458,9 @@ def check_permissions(
     ``request.data``, the routed ``QueryParam`` values in
     ``request.query_params``, the URL kwargs in ``view.kwargs`` and the tool's
     name in ``view.action``. ``resources/read`` and a subscription pass
-    ``resource_shape``, the one the read's own view is built from, and
-    ``prompts/get`` passes ``prompt_shape``. A spec permission scoping by a
+    ``resource_shape``, the one the read's own view is built from, except a
+    read that needs nothing from drf-services, which holds no adapter to judge
+    and passes ``None``; ``prompts/get`` passes ``prompt_shape``. A spec permission scoping by a
     route capture reads ``view.kwargs["project_pk"]``, as it would over HTTP,
     and judged against ``{}`` it denied a caller it admits. Any other
     permission is judged as it is, since an ``MCPPermission`` judges the
