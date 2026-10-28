@@ -12,19 +12,18 @@ pip install "django-spec-mcp[toon]"
 Pick the format per binding:
 
 ```python
-from django_spec_mcp import OutputFormat
-from django_service_specs import SelectorKind
-from rest_framework_services import SelectorSpec
+from django_service_specs import DataclassPresenter, SelectorKind, SelectorSpec, Unrestricted
 
-server.register_service_tool(
-    name="invoices.list",
-    spec=ServiceSpec(
-        service=list_invoices,
-        output_selector_spec=SelectorSpec(
-            kind=SelectorKind.LIST,
-            output_serializer=InvoiceOutputSerializer,
-        ),
+from django_spec_mcp import OutputFormat
+
+server.register_tool(
+    SelectorSpec(
+        kind=SelectorKind.LIST,
+        selector=search_invoices,  # returns the fifty best matches
+        presenter=DataclassPresenter(InvoiceOutput),
+        permissions=[Unrestricted()],
     ),
+    name="invoices.search",
     output_format=OutputFormat.AUTO,  # picks TOON when the payload is uniform
 )
 ```
@@ -33,6 +32,11 @@ server.register_service_tool(
 elements all share the same key set, and JSON otherwise. Force it explicitly
 with `OutputFormat.TOON` if you always want TOON, accepting the JSON fallback
 warning when the extra is missing.
+
+`AUTO` looks at the payload as a whole. A tool registered with `paginate=True`
+answers with the pagination envelope, an object whose `items` hold the rows, so
+`AUTO` renders it as JSON; pass `OutputFormat.TOON` on such a tool to have the
+envelope encoded as TOON.
 
 `structuredContent` is always JSON — only the human-readable `content[0]` text
 block changes shape. Clients that don't understand TOON natively still see a

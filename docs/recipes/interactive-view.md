@@ -1,7 +1,7 @@
-# Render a DRF list as an interactive table
+# Render a list as an interactive table
 
-Your list endpoint already projects a queryset with filtering, ordering and
-pagination. This turns it into a table an MCP host draws inline in the chat,
+Your `LIST` selector tool already projects a queryset with filtering, ordering
+and pagination. This turns it into a table an MCP host draws inline in the chat,
 instead of the model reading raw JSON aloud.
 
 Two registrations: the view, then the tool that points at it.
@@ -34,7 +34,7 @@ what you take on by skipping it.
   mcpApp.onToolResult = function (structuredContent) {
     // What `list_invoices` already emits — the selector tool's pagination
     // envelope, unchanged.
-    var rows = (structuredContent && structuredContent.results) || [];
+    var rows = (structuredContent && structuredContent.items) || [];
     document.getElementById("root").innerHTML = rows.length
       ? "<table><thead><tr><th>Number</th><th>Customer</th><th>Total</th></tr></thead><tbody>" +
         rows.map(function (r) {
@@ -71,15 +71,20 @@ on [`build_app_document`][django_spec_mcp.ui.build_app_document.build_app_docume
 ## 2. The tool
 
 ```python
-server.register_selector_tool(
-    name="list_invoices",
-    spec=SelectorSpec(
+from django_service_specs import DataclassPresenter, SelectorKind, SelectorSpec
+
+from django_spec_mcp import UIToolMeta
+
+server.register_tool(
+    SelectorSpec(
         kind=SelectorKind.LIST,
         selector=list_invoices,
-        output_serializer=InvoiceOutputSerializer,
+        presenter=DataclassPresenter(InvoiceOutput),
         filter_set=InvoiceFilterSet,
-        permission_classes=[IsAuthenticated],
+        permissions=[IsInvoiceReader()],
     ),
+    name="list_invoices",
+    description="List invoices, filtered and ordered.",
     paginate=True,
     ui=UIToolMeta(resource_uri="ui://invoices/table.html"),
 )
@@ -98,8 +103,8 @@ rather than reaching the host as a dangling reference.
   `structuredContent`, which selector tools already emit — the pagination
   envelope included.
 - **Auth for the view's own calls.** A `tools/call` the view makes arrives at
-  the ordinary endpoint, so `permission_classes`, per-binding `MCPPermission`s
-  and rate limits all apply unchanged.
+  the ordinary endpoint, so the spec's permissions, the `scopes=` gate and
+  rate limits all apply unchanged.
 - **The view half of the `ui/*` bridge**, as long as you use
   `body_template_name=`. The *host* half — the iframe, CSP enforcement, and the
   host's end of the protocol — is the host's and is not implemented here.
@@ -184,7 +189,7 @@ digest = hashlib.sha256(document.encode()).hexdigest()[:8]
 uri = f"ui://invoices/table.{digest}.html"
 
 server.register_ui_resource(name="invoices_table", uri=uri, body_template_name=...)
-server.register_selector_tool(name="list_invoices", spec=..., ui=UIToolMeta(resource_uri=uri))
+server.register_tool(spec, name="list_invoices", paginate=True, ui=UIToolMeta(resource_uri=uri))
 ```
 
 Both registrations have to name the same URI, which is the reason this is a

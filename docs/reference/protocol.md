@@ -72,6 +72,11 @@ The `io.modelcontextprotocol/tasks` extension. See
 [Long-running work](../concepts.md#long-running-work-tasks) for how to wire it
 up; these are the types.
 
+A kernel tool opts in with `task_policy=` on
+[`register_tool`][django_spec_mcp.server.mcp_server.MCPServer.register_tool]
+or as a `register_tools` override; a `REQUIRED` tool called by a client that
+declared the extension gets a task handle, and the task runs the spec.
+
 ::: django_spec_mcp.protocol.types.task.Task
 ::: django_spec_mcp.types.TaskStatus
 ::: django_spec_mcp.types.TaskPolicy

@@ -175,8 +175,7 @@ which pages it.
 ### "permissions belong to the selector= form"
 
 A kernel spec declares its own presenter and permissions, so `permissions=`,
-`output_serializer=`, `mime_type=` and `encoding=` beside a spec passed
-positionally are refused with a `TypeError`. Declare the checks on the spec,
+`mime_type=` and `encoding=` beside a spec passed positionally are refused with a `TypeError`. Declare the checks on the spec,
 and add a `scopes=` gate at registration if the resource needs one.
 
 ## OAuth discovery returns 404s
