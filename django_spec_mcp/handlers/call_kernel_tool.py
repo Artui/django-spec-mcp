@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.http import HttpRequest
 from django_service_specs import DispatchError, PoolSeeds, ServiceError, dispatch
 
 from django_spec_mcp.config.types.mcp_config import MCPConfig
@@ -53,9 +54,16 @@ def call_kernel_tool(
     """
     # A handed request is the caller's own, so the spec is handed a copy whose
     # ``user`` is the one the call runs as, as ``acall_tool``'s is
-    # (``test_sync_call_tool_hands_a_copy_carrying_the_acting_user``).
+    # (``test_sync_call_tool_hands_a_copy_carrying_the_acting_user``); with
+    # none handed, a minimal one bearing that user is synthesised, as
+    # ``acall_tool`` and the drf-services path do
+    # (``test_sync_call_tool_with_no_request_hands_one_carrying_the_acting_user``).
     if request is not None:
-        request = seat(copy_request(request), principal_of(user))
+        request = copy_request(request)
+    else:
+        request = HttpRequest()
+        request.method = "POST"
+    request = seat(request, principal_of(user))
     dispatched, page = page_request(binding, arguments, config)
     try:
         # Inside the ``try``, so the one thing it raises, a denial, meets the

@@ -287,3 +287,32 @@ def test_sync_call_tool_hands_a_copy_carrying_the_acting_user(users: None) -> No
         "user": "token-caller",
     }
     assert handed.user is owner
+
+
+@pytest.mark.django_db
+def test_sync_call_tool_with_no_request_hands_one_carrying_the_acting_user(users: None) -> None:
+    """With no request handed, sync ``call_tool`` synthesises one bearing the
+    user, as ``acall_tool`` and the drf-services path do, rather than handing
+    a spec that reads ``request`` a ``None``."""
+    caller = get_user_model().objects.get(username="token-caller")
+    server = _server([])
+    server.register_tool(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=lambda *, request: {
+                "request": _whoami(request),
+                "auser": _async_name(request),
+                "method": request.method,
+            },
+            permissions=[Unrestricted()],
+        ),
+        name="sync_who",
+    )
+
+    result = server.call_tool("sync_who", user=caller)
+
+    assert result.structured_content == {
+        "request": "token-caller",
+        "auser": "token-caller",
+        "method": "POST",
+    }

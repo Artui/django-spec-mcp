@@ -190,7 +190,8 @@ carries; releases up to 0.54.0 are in
   its user after the call, and concurrent calls sharing one request each see
   their own. `acall_tool` used to hand the request itself through, and sync
   `call_tool` handed a kernel tool's spec a request whose `user` could name
-  someone other than `user=`.
+  someone other than `user=`, or `None` when no request was handed, where it
+  now synthesises one bearing `user=` as `acall_tool` does.
 
 ### Removed
 
