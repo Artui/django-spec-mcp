@@ -7,11 +7,8 @@ when it declares ``idempotent``, ``idempotentHint``. A hint passed in
 ``tools/list`` entry, the wire a client reads, beside ``binding.annotations``,
 which ``tests/server/test_register_kernel_specs.py`` asks of the binding alone.
 
-The drf-services original asked the same of ``register_service_tool`` and
-``register_selector_tool``, and of a per-spec override through
-``register_specs``; the kernel route's per-tool knob is ``annotations=`` on
-``register_tool`` and ``register_tools(overrides=)``, both asked here. It is
-kept beside this file as ``test_tool_annotations_drfs.py``.
+The per-tool knob is ``annotations=`` on ``register_tool`` and
+``register_tools(overrides=)``, both asked here.
 """
 
 from __future__ import annotations
@@ -144,7 +141,7 @@ def test_a_read_only_tool_never_derives_the_idempotent_hint() -> None:
 
 
 def test_a_registry_override_flips_the_hints_of_one_tool() -> None:
-    # The per-spec override of the drf-services original, on the kernel route.
+    # A per-spec override through the registry reaches the one tool it names.
     registry = SpecRegistry()
     registry.register("things.create", _service())
     registry.register("things.archive", _service())

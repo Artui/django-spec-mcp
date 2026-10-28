@@ -1,12 +1,9 @@
 """A kernel tool's two schemas, by what the spec declares.
 
-The input side is ``kernel_tool_input_schema`` over the kernel's
-``spec_input_schema``, the output side ``kernel_tool_output_schema`` over its
-``spec_output_schema``; both are read here as the listing serves them. The
-drf-services original asked the same of ``build_input_schema`` and
-``build_output_schema`` over serializers and dataclasses, and is kept beside
-this file as ``test_input_output_schema_drfs.py``; what a spec that may present
-nothing advertises is ``test_kernel_output_presents_nothing.py``'s.
+The input side is ``kernel_tool_input_schema`` over the kernel's ``spec_input_schema``,
+the output side ``kernel_tool_output_schema`` over its ``spec_output_schema``; both are
+read here as the listing serves them. What a spec that may present nothing advertises is
+``test_kernel_output_presents_nothing.py``'s.
 """
 
 from __future__ import annotations
@@ -69,9 +66,8 @@ def _selector(kind: SelectorKind, **declared: Any) -> SelectorSpec:
 
 
 def test_a_spec_declaring_no_arguments_is_a_closed_empty_object() -> None:
-    # Changed by design: the drf-services ``build_input_schema(None)`` answered
-    # an open ``{"type": "object"}``. The kernel's argument set is closed, so a
-    # spec declaring none takes no argument at all.
+    # The kernel's argument set is closed, so a spec declaring none takes no
+    # argument at all, rather than an open ``{"type": "object"}``.
     assert _tool(_service())["inputSchema"] == {
         "type": "object",
         "properties": {},
@@ -88,9 +84,8 @@ def test_a_dataclass_validators_fields_are_the_arguments() -> None:
 
 
 def test_a_validator_that_is_not_a_dataclass_is_refused_when_built() -> None:
-    # The original passed the drf-services builder's refusal through at
-    # ``tools/list``. The kernel's Validator refuses the shape when it is
-    # constructed, before any spec holds it.
+    # The Validator refuses the shape when it is constructed, before any spec
+    # holds it, so ``tools/list`` never meets it.
     class NotADataclass:
         pass
 

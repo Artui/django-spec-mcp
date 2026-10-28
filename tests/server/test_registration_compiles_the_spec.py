@@ -6,20 +6,14 @@ the listing derives it for every tool: such a tool registered, and then
 ``tools/list`` raised for every tool on the server and each call failed.
 Registration derives the projection, so the refusal names the tool at startup.
 
-A kernel spec is checked as it is constructed, so most of what drf-services
-refused only when it compiled a spec on first read (an output selector
-declaring ``preconditions``, a ``reads`` entry the dispatcher seeds, such as
-``user``) never reaches a registrar. What depends on the server is checked at
-registration: a read named after a seed this server's calls carry, the call's
-own ``request`` and ``view`` or a seed registered on ``pool_seeds=``, which
-the kernel's ``dispatch`` refuses on every call. Registration asks the
-kernel's ``check_seeds`` with the server's seeds, so the refusal names the tool
-at startup, in the words dispatch would refuse it in.
-
-The drf-services original is kept beside this file as
-``test_registration_compiles_the_spec_drfs.py``; its ``QueryParam`` and
-``field_audiences`` cases have no kernel counterpart, because a kernel spec
-declares reads with ``Parameter`` and carries its markings on its presenter.
+A kernel spec is checked as it is constructed, so most of what could go wrong with it
+(an output selector declaring ``preconditions``, a ``reads`` entry the dispatcher seeds,
+such as ``user``) never reaches a registrar. What depends on the server is checked at
+registration: a read named after a seed this server's calls carry, the call's own
+``request`` and ``view`` or a seed registered on ``pool_seeds=``, which the kernel's
+``dispatch`` refuses on every call. Registration asks the kernel's ``check_seeds`` with
+the server's seeds, so the refusal names the tool at startup, in the words dispatch
+would refuse it in.
 """
 
 from __future__ import annotations

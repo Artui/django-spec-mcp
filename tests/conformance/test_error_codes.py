@@ -1,15 +1,13 @@
 """The JSON-RPC error codes the MCP spec names, pinned on the wire of a kernel mount.
 
-Asks of the kernel-twin server what the original, kept beside this file as
-``test_error_codes_drfs.py``, asks of the drf-services conformance server: the
-only error codes the spec dictates for a server of this shape, each with a
-client behaviour attached to it. A client may special-case ``-32002`` to mean
-"that resource is gone" and ``-32602`` to mean "the request itself was wrong,
-don't retry it unchanged". They are asserted through the live transport, on
+Asks of the kernel conformance server the only error codes the spec dictates
+for a server of this shape, each with a client behaviour attached to it. A
+client may special-case ``-32002`` to mean "that resource is gone" and
+``-32602`` to mean "the request itself was wrong, don't retry it unchanged".
+They are asserted through the live transport, on
 both views, because the number a client sees is the contract.
 
-The denial is a kernel ``PermissionCheck`` refusing the anonymous caller, where
-the original's was DRF's ``IsAuthenticated`` on a drf-services spec; the
+The denial is a kernel ``PermissionCheck`` refusing the anonymous caller; the
 kernel's ``NotPermitted`` is what ``KERNEL_REFUSALS`` maps to ``-32006``.
 """
 
@@ -33,9 +31,8 @@ pytestmark = pytest.mark.django_db(transaction=True)
 @pytest.fixture(params=[False, True], ids=["sync", "async"])
 def mount(request: pytest.FixtureRequest) -> Iterator[None]:
     server = build_kernel_server()
-    # Changed by design: the original's denial was DRF's ``IsAuthenticated`` on a
-    # drf-services spec, asserted only as "not -32002" with an HTTP 403; this is a
-    # kernel ``PermissionCheck``, whose ``NotPermitted`` the wire maps to -32006.
+    # A kernel ``PermissionCheck`` denial: its ``NotPermitted`` is what the wire
+    # maps to -32006, with an HTTP 403.
     server.register_tool(
         ServiceSpec(service=lambda: {"ok": "true"}, permissions=[IsAuthenticated()]),
         name="gated",

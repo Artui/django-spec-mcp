@@ -8,10 +8,7 @@ two validation refusals, and prompts/get's missing required arguments.
 
 A kernel tool's two refusals are the kernel's ``InvalidArguments``, from the
 shape check before its Validator runs, and a ``ServiceValidationError`` the
-service raises; the drf-services original drove a DRF ``ValidationError`` and the
-latter, through hand-built ``ToolBinding`` entries. The prompt cases build no
-spec and are carried unchanged. The original is kept beside this file as
-``test_validation_value_echo_drfs.py``.
+service raises. The prompt cases build no spec.
 """
 
 from __future__ import annotations

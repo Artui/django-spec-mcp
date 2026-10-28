@@ -7,8 +7,7 @@ requirement these tests hold.
 
 Asked of kernel tools: a kernel service declares ``progress`` as it declares
 ``user``, and ``dispatch`` hands it the task's reporter in the worker and the
-kernel's ``null_progress`` inline. The original is kept beside this file as
-``test_task_progress_drfs.py``.
+kernel's ``null_progress`` inline.
 """
 
 from __future__ import annotations

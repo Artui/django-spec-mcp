@@ -5,10 +5,7 @@ tool to be usable by a model (something must gate the call, something must say
 what it does), and an undescribed tool otherwise ships to ``tools/list``
 indistinguishable from a documented one.
 
-Asked here of kernel specs through ``register_tool`` and ``register_tools``. The
-drf-services original asked it of ``register_service_tool`` and
-``register_selector_tool`` and is kept beside this file as
-``test_undescribed_warning_drfs.py``.
+Asked here of kernel specs through ``register_tool`` and ``register_tools``.
 """
 
 from __future__ import annotations

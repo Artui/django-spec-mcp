@@ -1,24 +1,22 @@
 """How a kernel resource's presented value becomes its ``resources/read`` body.
 
-``encode_resource_contents`` is the one encode step both reads share: the
-drf-services read calls it after its serializer step, and a kernel read after
-the spec's presenter. Its questions are asked here of ``resources/read`` on a
-registered kernel resource, which is the answer a client gets, so they hold
-whichever caller survives:
+``encode_resource_contents`` is the one encode step both reads share: a
+view's read calls it on its body, and a kernel read after the spec's
+presenter. Its questions are asked here of ``resources/read`` on a registered
+kernel resource, which is the answer a client gets, so they hold for any
+caller of the step:
 
 - ``TEXT`` serves the presented ``str`` verbatim, under the mime type
   registered, including the default ``application/json``, on a binding built
   by hand as on a registered one;
 - ``BLOB`` base64-encodes presented bytes into ``blob`` and sets no ``text``;
 - a value of the wrong type is a well-formed ``INTERNAL_ERROR`` naming the
-  presenter, never the drf-services path's ``output_serializer``;
+  presenter, never a serializer knob the form lacks;
 - the result ceiling and the cache hints apply as they do to ``JSON``;
 - a presenter refusing a shape the URI carried, and a missing row, are answered
   as on a ``JSON`` resource.
 
-The non-kernel read's questions of the same step are in
-``test_build_resource_contents.py``, and its rendering's in
-``test_render_drfs_resource_output_drfs.py``.
+A view's questions of the same step are in ``test_build_resource_contents.py``.
 """
 
 from __future__ import annotations
@@ -243,7 +241,7 @@ class TestWrongType:
         assert error.code == JsonRpcErrorCode.INTERNAL_ERROR
         assert error.message.startswith(f"Resource 'note' declares {says}.")
         assert "the spec's presenter" in error.message
-        # The drf-services wording would send its reader to a knob this form lacks.
+        # The message must not send its reader to a knob this form lacks.
         assert "output_serializer" not in error.message
 
 

@@ -9,11 +9,6 @@ the detail; and the declarations that would stop the list reaching dispatch are
 refused by the kernel, a read taking the name ``many_argument`` declares (and
 not the default ``items`` when it declares another) and a target lookup beside
 the list.
-
-The drf-services original also refused a ``UrlKwarg`` or ``QueryParam`` taking
-the argument's name and a spreading ``ArgumentBinding``; a kernel spec has
-neither, so those have no counterpart. It is kept beside this file as
-``test_service_to_tool_drfs.py``.
 """
 
 from __future__ import annotations
@@ -99,8 +94,7 @@ def test_a_payload_that_is_not_a_list_is_a_validation_error() -> None:
 
 def test_a_row_that_fails_validation_is_named_by_its_index_in_the_detail() -> None:
     # The kernel keys the detail by the failing row's index under the argument
-    # that carries the list, whichever DRF is installed; the drf-services answer
-    # took its shape from the DRF version.
+    # that carries the list, whatever validation library produced the errors.
     server = _registered(_many())
 
     out = server.call_tool(

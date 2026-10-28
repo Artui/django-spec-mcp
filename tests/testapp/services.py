@@ -28,8 +28,8 @@ def list_invoices() -> list[Invoice]:
 def record_invoice(*, number: str = "", amount_cents: int = 0) -> Invoice:
     """Create an invoice from the validated values the kernel passes by name.
 
-    The kernel twin of ``create_invoice``: a kernel service receives each
-    validated value as its own keyword rather than one ``data`` mapping.
+    A kernel service receives each validated value as its own keyword rather
+    than one ``data`` mapping.
     ``number`` has a default because many specs register this service bare,
     to ask a registration knob with no Validator or read declaring the
     keyword, and registration refuses a keyword nothing fills
@@ -39,8 +39,5 @@ def record_invoice(*, number: str = "", amount_cents: int = 0) -> Invoice:
 
 
 def invoice_by_pk(*, pk: int) -> Invoice | None:
-    """Return the invoice ``pk`` names, or ``None``, which the kernel reports as not found.
-
-    The kernel twin of ``get_invoice``, which raises a ``ServiceError`` instead.
-    """
+    """Return the invoice ``pk`` names, or ``None``, which is reported as not found."""
     return Invoice.objects.filter(pk=pk).first()

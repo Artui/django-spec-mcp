@@ -13,18 +13,13 @@ its call somewhere else:
 - registration, which counts a seed as the source of a reflected read and
   refuses a URI variable a seed occupies.
 
-Asked of kernel specs registered with ``register_tool`` and ``register_resource``,
-where the drf-services original registered drf-services specs. Its task-worker
-case is asked of a kernel tool beside the other worker questions, as
+Asked of kernel specs registered with ``register_tool`` and ``register_resource``.
+The task-worker case is asked of a kernel tool beside the other worker
+questions, as
 ``tests/tasks/test_task_lifecycle.py::test_a_task_worker_hands_the_seeds_to_the_tool_it_runs``.
-Two of its questions have no kernel counterpart. A
-``UrlKwarg`` or ``QueryParam`` named after a seed: neither knob exists on the
-kernel, where an argument is a ``Parameter`` in ``reads`` and the kernel refuses
-one a seed occupies. An ``input_serializer`` beside a selector: a kernel selector
-declares its reads, and a reflected one a seed fills is the server's. A client
-argument named after a seed is refused as unknown by the kernel, where the
-drf-services path dropped it. The original is kept beside this file as
-``test_pool_seeds_endtoend_drfs.py``.
+An argument is a ``Parameter`` in ``reads``, and the kernel refuses one a seed
+occupies; a kernel selector declares its reads, and a reflected one a seed fills
+is the server's. A client argument named after a seed is refused as unknown.
 """
 
 from __future__ import annotations
@@ -256,9 +251,8 @@ def test_acall_tool_hands_the_seeds_to_a_service_and_a_selector() -> None:
 )
 @pytest.mark.django_db(transaction=True)
 def test_a_client_argument_named_after_a_seed_is_refused(in_process: bool, spec: Any) -> None:
-    # Changed by design: the drfs path let the seed win over a client argument of
-    # its name and answered 200; the kernel refuses the argument as unknown, so no
-    # client value ever competes with a seed.
+    # The kernel refuses the argument as unknown, so no client value ever
+    # competes with a seed.
     # No validator stands in front of a selector, so this is the path where an
     # unreserved name would be client-controlled. Whether the selector reads the
     # seed undeclared or declares it ``reflected``, the caller's key is not one

@@ -130,8 +130,8 @@ def test_the_bound_value_wins_and_the_withheld_one_is_dropped(
     server.register_tool(_selector(), name="card", description="d", server_arguments=_SCOPED)
     with caplog.at_level(logging.WARNING, logger="django_spec_mcp"):
         result = server.call_tool("card", {"project": 99, "draw": 3}, user=None)
-    # Both are dropped rather than refused, as the original's bound project
-    # wins and its withheld sibling is dropped.
+    # Both are dropped rather than refused: the bound project wins over the
+    # caller's value and the withheld sibling is dropped.
     assert result.is_error is False
     assert result.structured_content == {"project": 7, "draw": 0}
     # Held by the withheld conjunct of ``apply_tool_server_arguments``: a

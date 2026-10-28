@@ -4,11 +4,9 @@ Tests use an in-memory ``InMemorySpanExporter`` so they verify the wire shape
 (span names, attributes) without needing a real OTel collector.
 
 The tool and the resource are kernel specs registered with ``register_tool`` and
-``register_resource``, where the drf-services original registered drf-services
-specs or built a ``ToolBinding`` by hand; the service raising ``ServiceError`` is
-registered the same way, since a kernel binding is built by the registrar. The
-prompt, rejection and no-OTel cases build no spec and are carried unchanged. The
-original is kept beside this file as ``test_tracing_drfs.py``.
+``register_resource``; the service raising ``ServiceError`` is registered the
+same way, since a kernel binding is built by the registrar. The prompt,
+rejection and no-OTel cases build no spec.
 """
 
 from __future__ import annotations

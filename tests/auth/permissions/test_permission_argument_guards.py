@@ -13,12 +13,9 @@ spec's own ``permissions=`` is the kernel's, and the kernel refuses a string,
 an entry that is not a ``PermissionCheck`` and an empty list when the spec is
 built, so this server never holds one. ``ScopeRequired``, ``DjangoPermRequired``
 and the ``permissions=`` of a prompt or a resource are still this package's and
-are asked as before.
+are asked here too.
 
-The drf-services original asked the tool half of this of
-``register_service_tool(permissions=...)``, which a kernel tool does not take.
-It is kept beside this file as ``test_permission_argument_guards_drfs.py``. How
-``scopes=`` is stored is the registration suite's question
+How ``scopes=`` is stored is the registration suite's question
 (``test_a_bare_string_scope_is_one_scope``, ``test_an_empty_scope_tuple_is_refused``);
 this file asks what it gates.
 """
@@ -131,7 +128,7 @@ def test_an_empty_requirement_is_refused(factory: Any) -> None:
     ids=["a-string", "not-a-check", "empty"],
 )
 def test_a_kernel_spec_refuses_permissions_that_cannot_gate(permissions: Any, match: str) -> None:
-    """The kernel's answer to the original's three registration cases.
+    """The three permission lists that read as guarded and gate nothing.
 
     A string would spread into one entry per character, an entry that is not
     a check gates nothing, and an empty list admits every caller; each reads

@@ -7,8 +7,7 @@ retry is what the spec says it is: **a second, independent request**, with its
 own id, on a server holding nothing in between.
 
 Asked of the kernel ``rows.delete``, whose answers come back as spread
-arguments. The drf-services original is kept beside this file as
-``test_elicitation_endtoend_drfs.py``.
+arguments.
 """
 
 from __future__ import annotations

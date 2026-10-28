@@ -1,7 +1,6 @@
 """End-to-end prompts coverage through the live transport + capability advertisement.
 
-Asked of the default mount, the kernel test server; the drf-services original is
-kept beside this file as ``test_prompts_endtoend_drfs.py``.
+Asked of the default mount, the kernel test server.
 """
 
 from __future__ import annotations

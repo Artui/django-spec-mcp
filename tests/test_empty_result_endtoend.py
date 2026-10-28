@@ -16,11 +16,8 @@ driven as well, sync and async in both eras, because what a client validates is
 the schema and the result read off the wire. ``tests/schema/`` asks the schema of
 every declaration; this asks what each route serves against it.
 
-The tools are kernel specs presenting through ``InvoiceOutput``, the kernel twin
-of the ``InvoiceOutputSerializer`` the drf-services original read. A drfs output
-spec naming only a serializer has no kernel counterpart: a kernel service
-presents its own return through its ``presenter``. The original is kept beside
-this file as ``test_empty_result_endtoend_drfs.py``.
+The tools are kernel specs presenting through ``InvoiceOutput``: a kernel
+service presents its own return through its ``presenter``.
 """
 
 from __future__ import annotations

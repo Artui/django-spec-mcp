@@ -7,10 +7,8 @@ provenance stays obvious.
 
 The two that registered a tool or a resource now ask it of kernel specs
 registered with ``register_tool`` and ``register_resource``. A kernel resource
-has two gates where the drf-services one had a ``permissions=`` list: its
-``scopes=`` and its spec's own checks, so the denied read is asked of each. The
-drf-services original is kept beside this file as
-``test_review_findings_drfs.py``.
+has two gates: its ``scopes=`` and its spec's own checks, so the denied read is
+asked of each.
 """
 
 from __future__ import annotations

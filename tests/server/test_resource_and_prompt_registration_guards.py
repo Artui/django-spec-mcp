@@ -3,16 +3,13 @@
 The URI-template channel is the one caller-controlled name channel in the
 package: each variable lands in the selector's pool, so ``notes://{user}`` would
 let a URI segment stand in for the authenticated principal. A kernel resource's
-template is held to the same reserved names as the drf-services form's, and a
+template is held to the same reserved names as a tool's, and a
 duplicated variable, whose later capture shadows the earlier, is refused too.
 
-The unguarded-resource questions the drf-services original asked first (a
-resource with no permissions warns, ``REQUIRE_TOOL_PERMISSIONS`` refuses it, a
-guarded spec is silent) are asked of a kernel resource in
-``tests/handlers/test_kernel_unguarded.py`` and not restated here. The prompt
-and view questions build no spec, so they are carried as the original asked
-them. The original is kept beside this file as
-``test_resource_and_prompt_registration_guards_drfs.py``.
+The unguarded-resource questions (a resource with no permissions warns,
+``REQUIRE_TOOL_PERMISSIONS`` refuses it, a guarded spec is silent) are asked of
+a kernel resource in ``tests/handlers/test_kernel_unguarded.py`` and not
+restated here. The prompt and view questions build no spec.
 """
 
 from __future__ import annotations

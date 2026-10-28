@@ -5,12 +5,9 @@ through a marked-up dataclass must actually *return* a projected payload and
 advertise a schema that matches it: a round trip through the handlers, not
 through the projection helpers directly.
 
-The markings are ``FieldMarking`` extras on ``AgentInvoiceOutput``, the kernel
-twin of the ``AgentInvoiceSerializer`` the drf-services original read. Two
-answers differ by design: a hidden field is left out of the schema and the row
-alike, and a ``Literal`` presents its value (``PENDING_REVIEW``) where the
-serializer's choice field presented its label. The original is kept beside this
-file as ``test_agent_audience_endtoend_drfs.py``.
+The markings are ``FieldMarking`` extras on ``AgentInvoiceOutput``. A hidden
+field is left out of the schema and the row alike, and a ``Literal`` presents
+its value (``PENDING_REVIEW``), not a label.
 """
 
 from __future__ import annotations

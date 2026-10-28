@@ -14,11 +14,10 @@ def test_reserved_pool_seeds_shape() -> None:
     # Re-exported from django-service-specs, which owns the set. The local copy
     # this once replaced had fallen a key behind it (``collection``) — pinning the
     # shape here is what would have caught that, so keep asserting the full set
-    # rather than deferring to the import. drf-services 0.58.0 ("Breaking: pool
-    # seeds") swapped ``request`` and ``serializer`` for ``result`` and
-    # ``queryset``: the DRF edge seeds ``request`` itself, which is why
-    # ``RESOURCE_EDGE_SEEDS`` exists. The kernel's 0.14.0 reserves
-    # ``call_context``, the one dict a call hands to every stage naming it, and
+    # rather than deferring to the import. ``request`` is not in the set: the
+    # kernel leaves it to an HTTP adapter to seed, and ``resources/read`` seeds it
+    # itself, which is why ``RESOURCE_EDGE_SEEDS`` exists. The kernel's 0.14.0
+    # reserves ``call_context``, the one dict a call hands to every stage naming it, and
     # its 0.16.0 reserves ``shapes``, the arguments a call sends for the spec's
     # declared shapes.
     assert (

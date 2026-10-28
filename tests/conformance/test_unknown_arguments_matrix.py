@@ -7,10 +7,7 @@ error. ``PASSTHROUGH`` has no wire shape: ``register_tool`` refuses it, since
 the kernel never hands an undeclared argument to a callable, so a server
 carrying it never starts.
 
-The drf-services original asked the same of the conformance server's
-drf-services selector tool, whose refusal sits under ``non_field_errors``; the
-kernel's names the key instead. It is kept beside this file as
-``test_unknown_arguments_matrix_drfs.py``.
+The refusal names the unknown key in its detail.
 """
 
 from __future__ import annotations

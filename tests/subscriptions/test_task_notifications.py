@@ -6,8 +6,7 @@ on ``subscriptions/listen`` and stops polling.
 Asked of a kernel tool: transitions reaching a watcher, cancelling, answering
 an input request, a worker's outcome, the acknowledgement listing task ids, a
 brokerless server transitioning silently, and the capability rule at the
-transport. The original is kept beside this file as
-``test_task_notifications_drfs.py``.
+transport.
 """
 
 from __future__ import annotations

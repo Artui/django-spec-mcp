@@ -1,9 +1,6 @@
 """Linking a kernel tool to an interactive view: ``register_tool(ui=...)``.
 
-Asked of kernel specs. The drf-services original asked it of
-``register_selector_tool`` / ``register_service_tool`` and of the
-``selector_tool`` decorator, which goes with drf-services; it is kept beside
-this file as ``test_ui_tool_linkage_drfs.py``.
+Asked of kernel specs registered with ``register_tool``.
 """
 
 from __future__ import annotations
@@ -68,7 +65,7 @@ def _service_spec() -> ServiceSpec:
 
 
 def _register(server: MCPServer, *, name: str, spec: Any, **knobs: Any) -> Any:
-    """The original's ``register_*_tool(name=, spec=, ...)`` call, on ``register_tool``."""
+    """``register_tool`` with a description and pagination on, plus the knobs a test asks."""
     return server.register_tool(spec, name=name, description="d", paginate=True, **knobs)
 
 

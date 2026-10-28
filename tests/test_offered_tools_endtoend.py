@@ -5,10 +5,7 @@ transports are parallel implementations and the async one reaches the list
 handler through an executor hop the sync one does not make.
 
 Asked of kernel service specs declaring an ``Affordance``, registered with
-``register_tool``, where the drf-services original registered drf-services specs
-with ``register_service_tool``. The refusal is the kernel's ``ServiceError``
-answered as the drfs path answers it. The original is kept beside this file as
-``test_offered_tools_endtoend_drfs.py``.
+``register_tool``. The refusal is the kernel's ``ServiceError``.
 """
 
 from __future__ import annotations

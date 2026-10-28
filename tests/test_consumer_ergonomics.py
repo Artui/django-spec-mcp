@@ -4,15 +4,12 @@ Every case here was reported by a first-party integration that lost debugging
 hours to it. None was a broken guarantee: each was a convention the package
 depended on and enforced nowhere, or a decision it made and never wrote down.
 
-The registration cases ask ``register_tool`` with kernel specs what the
-drf-services original asked ``register_service_tool``: the structured-output pair
-is refused at registration, and an unguarded spec is refused by default. On the
-kernel the guard is the spec's own ``permissions``, a ``PermissionCheck`` list,
-where the original read a DRF ``permission_classes``; and the scope gate, the
-kernel tool's ``scopes=``, does not count as one, where the original passed an
-``MCPPermission`` in ``permissions=``. The authorization-server and observability
-cases build no spec and are carried unchanged. The original is kept beside this
-file as ``test_consumer_ergonomics_drfs.py``.
+The registration cases ask ``register_tool`` with kernel specs: the
+structured-output pair is refused at registration, and an unguarded spec is
+refused by default. The guard is the spec's own ``permissions``, a
+``PermissionCheck`` list; the scope gate, the kernel tool's ``scopes=``, does
+not count as one. The authorization-server and observability cases build no
+spec.
 """
 
 from __future__ import annotations

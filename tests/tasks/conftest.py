@@ -3,10 +3,8 @@
 The executors here are the point of the seam: neither imports a queue, and the
 package never learns which one it got.
 
-``policy_server`` is the kernel twin of the drf-services ``server`` fixture in
-``fixtures_drfs.py``: one kernel tool per ``TaskPolicy``. Nothing here imports
-that module, so deleting the ``*_drfs.py`` files leaves this conftest
-collectable; a test using it imports it from that module itself.
+``policy_server`` carries one kernel tool per ``TaskPolicy``; ``server``,
+below, carries none.
 """
 
 from __future__ import annotations
@@ -66,10 +64,8 @@ def executor(store: InMemoryTaskStore) -> RecordingExecutor:
 @pytest.fixture
 def server(store: InMemoryTaskStore, executor: RecordingExecutor) -> MCPServer:
     """A task-running server with no tool: a task created by name, or run when it
-    names no live tool, asks nothing of a spec.
-
-    The drf-services server, whose tools carry a ``task_policy``, is
-    ``fixtures_drfs``' ``server``; a test importing it overrides this one.
+    names no live tool, asks nothing of a spec. A test that needs tools asks for
+    ``policy_server`` instead.
     """
     return MCPServer(
         name="tasks-kernel",

@@ -5,11 +5,6 @@ and answer ``tools/call`` exactly as a ``register_tool`` call of the same spec
 would; ``tests/server/test_register_kernel_specs.py`` pins the bindings field for
 field, and this file proves the wire shape lands too. The spec's own
 permissions, not a binding's, are what gate a bulk-registered tool.
-
-The drf-services original asked this of the conformance mount's
-``ToolDefinition`` entries and is kept beside this file as
-``test_register_tools_parity_drfs.py``. This version mounts its own server,
-because the conformance mount registers drf-services specs.
 """
 
 from __future__ import annotations

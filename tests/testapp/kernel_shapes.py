@@ -1,4 +1,4 @@
-"""The dataclasses the kernel twins validate and present through."""
+"""The dataclasses the kernel specs validate and present through."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from django_service_specs import FieldMarking
 
 @dataclass
 class InvoiceInput:
-    """The kernel twin of ``InvoiceInputSerializer``."""
+    """An invoice as the caller sends it."""
 
     number: str
     amount_cents: int = 0
@@ -18,7 +18,7 @@ class InvoiceInput:
 
 @dataclass
 class InvoiceOutput:
-    """The kernel twin of ``InvoiceOutputSerializer``."""
+    """An invoice as the service presents it."""
 
     id: int
     number: str
@@ -28,7 +28,7 @@ class InvoiceOutput:
 
 @dataclass
 class AgentInvoiceOutput:
-    """The kernel twin of ``AgentInvoiceSerializer``: markings in ``Annotated`` extras."""
+    """An invoice presented with audience markings in ``Annotated`` extras."""
 
     id: Annotated[int, FieldMarking.handle("Invoice handle.")]
     number: Annotated[str, FieldMarking.label()]

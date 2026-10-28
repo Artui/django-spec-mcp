@@ -5,9 +5,6 @@ one needs no query of its own. A kernel selector carries the answers on model
 instances and mappings, and ``DataclassPresenter`` reads by attribute, so the
 order a selector returns is an ``Invoice`` row: a test that calls a tool needs
 one in the database, and a test that only lists the tools needs none.
-
-The drf-services declaration is kept in ``affordances_drfs.py`` until the drfs
-path is deleted.
 """
 
 from __future__ import annotations

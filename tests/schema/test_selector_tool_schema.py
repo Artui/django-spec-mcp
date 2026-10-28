@@ -1,12 +1,8 @@
 """A kernel selector tool's ``inputSchema``: its reads and shapes, as declared.
 
-The drf-services original reflected a selector's signature, an
-``**extras: Unpack[TypedDict]`` included, and merged in an
-``input_serializer``, ``UrlKwarg`` and ``QueryParam`` knobs beside it. A kernel
-selector declares what it takes: ``reads`` for what selects the rows and
-``shapes`` for what shapes how each is presented, the arguments a
-``QueryParam`` such as a django-restql ``query`` stood for. The original is
-kept beside this file as ``test_selector_tool_schema_drfs.py``.
+A kernel selector declares what it takes: ``reads`` for what selects the rows
+and ``shapes`` for what shapes how each is presented, such as a django-restql
+``query``.
 """
 
 from __future__ import annotations
@@ -59,7 +55,7 @@ def _selector(kind: SelectorKind, **declared: Any) -> SelectorSpec:
 
 
 def test_a_retrieves_reads_are_its_arguments() -> None:
-    # Changed by design: nothing is read off the selector's signature, so a
+    # Nothing is read off the selector's signature, so a
     # selector taking ``user`` and ``pk`` asks for what its reads declare.
     spec = _selector(
         SelectorKind.RETRIEVE, reads=Parameters([Parameter("pk", "integer", required=True)])

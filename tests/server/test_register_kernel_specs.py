@@ -1,11 +1,7 @@
 """``register_tool``, ``register_tools`` and the kernel form of ``register_resource``.
 
-The spine's file, asked of kernel specs throughout. Its one drf-services question,
-whether ``register_tool`` refuses a drf-services spec, becomes whether it refuses
-anything that is not a kernel spec, which is what holds once drf-services is gone.
-Its check that ``scopes=`` is refused on the drf-services ``selector=`` form of
-``register_resource`` is not carried, because that form goes with drf-services.
-The original is kept beside this file as ``test_register_kernel_specs_drfs.py``.
+The spine's file, asked of kernel specs throughout, including that
+``register_tool`` refuses anything that is not a kernel spec.
 """
 
 from __future__ import annotations
@@ -114,9 +110,8 @@ def test_a_list_tool_takes_the_page_knobs() -> None:
 @pytest.mark.parametrize("policy", [TaskPolicy.OPTIONAL, TaskPolicy.REQUIRED])
 @pytest.mark.parametrize("kind", ["service", "selector"])
 def test_a_task_policy_is_kept_on_the_binding(policy: TaskPolicy, kind: str) -> None:
-    # The binding is what ``maybe_create_task`` reads, so the policy has to
-    # reach it from either kind of tool, as it does from either drf-services
-    # registrar. What each policy does with a call is ``tests/tasks/``'.
+    # The binding is what ``maybe_create_task`` reads, so the policy has to reach it
+    # from either kind of tool. What each policy does with a call is ``tests/tasks/``'.
     spec = _service() if kind == "service" else _selector(SelectorKind.RETRIEVE)
     binding = _server().register_tool(spec, name="t", task_policy=policy)
     assert binding.task_policy is policy
@@ -217,8 +212,7 @@ def test_register_tools_registers_every_entry_with_its_overrides() -> None:
 
 
 def test_a_registry_entry_and_a_direct_registration_are_the_same_tool() -> None:
-    """What ``tests/registry/test_register_tools_drfs.py`` asked of ``ToolDefinition``:
-    bulk registration is less boilerplate, never a different binding."""
+    """Bulk registration is less boilerplate, never a different binding."""
     knobs: dict[str, Any] = {"paginate": True, "title": "Invoices", "description": "All."}
     registry = SpecRegistry([RegisteredSpec(name="invoices.list", spec=_selector())])
     (bulk,) = _server().register_tools(registry, overrides={"invoices.list": knobs})
