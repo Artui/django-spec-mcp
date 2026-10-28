@@ -84,7 +84,9 @@ def test_the_benchmark_times_three_paths_that_answer_the_call() -> None:
     assert result.returncode == 0, result.stderr
     rows = [line.split("  ")[0] for line in result.stdout.splitlines()[2:]]
     assert rows == ["direct call", "dispatch", "HTTP round-trip"]
-    assert "Warning" not in result.stderr, result.stderr
+    # The package's own registration warnings (an undescribed or unguarded
+    # tool) say the benchmark's server is not the one it means to time.
+    assert "ToolWarning" not in result.stderr, result.stderr
 
 
 # Imports the probe's module, which configures Django and mounts its server as

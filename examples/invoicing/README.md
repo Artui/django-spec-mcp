@@ -31,10 +31,7 @@ and selectors are split into their own modules so each piece is small.
 
 **Field selection is an array of field names.** The `fields` shape declares
 the names an invoice has as its `choices`, so the shape check refuses any
-other before the selector runs, keyed by its position in the list. A
-comma-separated string the presenter parses and refuses itself is not
-available on a kernel spec today: a presenter's `ServiceValidationError` is
-not answered as a `validation_error` result.
+other before the selector runs, keyed by its position in the list.
 
 ## Layout
 
