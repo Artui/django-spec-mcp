@@ -1,8 +1,8 @@
 """The drf-services twins of the conftest's kernel tools, kept until the deletion.
 
-``conftest.py`` re-exports every name here, so the ``_drfs`` originals and
-``urls_drfs.py`` keep importing them from where they were written against. The
-deletion takes this file and those re-export lines together.
+The ``_drfs`` tests and ``urls_drfs.py`` import them from here; ``conftest.py``
+imports nothing from this module, so the deletion takes this file and leaves the
+conftest collectable.
 """
 
 from __future__ import annotations
@@ -59,8 +59,8 @@ def server() -> MCPServer:
         auth_backend=AllowAnyBackend(),
         session_store=InMemorySessionStore(),
     )
-    # ``rows.delete`` is the conftest's ``TOOL``, written out because this
-    # module cannot import the conftest that imports it.
+    # ``rows.delete`` is the conftest's ``TOOL``, written out so this module
+    # imports nothing from a conftest.
     built.register_service_tool(
         name="rows.delete",
         description="Delete rows.",

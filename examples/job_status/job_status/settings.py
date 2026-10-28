@@ -13,7 +13,6 @@ ALLOWED_HOSTS: list[str] = ["*"]
 INSTALLED_APPS: list[str] = [
     "django.contrib.contenttypes",
     "django.contrib.auth",
-    "rest_framework",
     "jobs.apps.JobsConfig",
 ]
 

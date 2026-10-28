@@ -43,7 +43,6 @@ from django_spec_mcp import MCPServer, NotificationKind, SubscriptionFilter
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
-from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
 from django_spec_mcp.subscriptions.grant_subscription import grant_subscription
 from django_spec_mcp.subscriptions.in_memory_subscription_broker import (
@@ -56,9 +55,9 @@ from django_spec_mcp.subscriptions.utils import (
 )
 from django_spec_mcp.tasks.create_task import create_task
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
-from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
 from tests.tasks.conftest import RecordingExecutor
 from tests.testapp.urlconf_for import urlconf_for
+from tests.utils import call_context
 
 # ----- SubscriptionFilter -----
 
@@ -270,30 +269,10 @@ async def _listen(uris: list[str]) -> Any:
     )
 
 
-def _context(server: MCPServer, **overrides: Any) -> MCPCallContext:
-    request = HttpRequest()
-    request.method = "POST"
-    request.user = None
-    base: dict[str, Any] = {
-        "http_request": request,
-        "token": TokenInfo(user=None),
-        "tools": server._tools,
-        "resources": server._resources,
-        "prompts": server._prompts,
-        "protocol_version": "2026-07-28",
-        "client_capabilities": {"extensions": {TASKS_EXTENSION_ID: {}}},
-        "tasks": server.task_store,
-        "subscriptions": server.subscription_broker,
-        "config": server._config,
-    }
-    base.update(overrides)
-    return MCPCallContext(**base)
-
-
 def test_a_readable_resource_is_granted() -> None:
     server = _server()
     granted, topics = grant_subscription(
-        SubscriptionFilter(resource_uris=("open://1",)), _context(server)
+        SubscriptionFilter(resource_uris=("open://1",)), call_context(server)
     )
     assert granted.resource_uris == ("open://1",)
     assert topics == frozenset({topic_for_resource("open://1")})
@@ -305,7 +284,7 @@ def test_a_resource_the_caller_cannot_read_is_not_watchable() -> None:
     something changes is often the more sensitive signal."""
     server = _server()
     granted, topics = grant_subscription(
-        SubscriptionFilter(resource_uris=("gated://1",)), _context(server)
+        SubscriptionFilter(resource_uris=("gated://1",)), call_context(server)
     )
     assert granted.resource_uris == ()
     assert topics == frozenset()
@@ -316,7 +295,7 @@ def test_an_unregistered_uri_is_refused_the_same_way_as_a_forbidden_one() -> Non
     make the endpoint an oracle for which resources exist."""
     server = _server()
     granted, _ = grant_subscription(
-        SubscriptionFilter(resource_uris=("nope://thing",)), _context(server)
+        SubscriptionFilter(resource_uris=("nope://thing",)), call_context(server)
     )
     assert granted.resource_uris == ()
 
@@ -324,7 +303,7 @@ def test_an_unregistered_uri_is_refused_the_same_way_as_a_forbidden_one() -> Non
 def test_a_refused_entry_does_not_take_the_rest_of_the_subscription_with_it() -> None:
     server = _server()
     granted, _ = grant_subscription(
-        SubscriptionFilter(resource_uris=("gated://1", "open://1")), _context(server)
+        SubscriptionFilter(resource_uris=("gated://1", "open://1")), call_context(server)
     )
     assert granted.resource_uris == ("open://1",)
 
@@ -333,7 +312,7 @@ def test_a_resource_outside_the_callers_scopes_is_not_watchable() -> None:
     """The binding's own gate, judged before the spec's: a token without
     ``things:read`` is refused the read, so it is refused the watch."""
     granted, _ = grant_subscription(
-        SubscriptionFilter(resource_uris=("scoped://1",)), _context(_server())
+        SubscriptionFilter(resource_uris=("scoped://1",)), call_context(_server())
     )
     assert granted.resource_uris == ()
 
@@ -341,7 +320,7 @@ def test_a_resource_outside_the_callers_scopes_is_not_watchable() -> None:
 def test_a_resource_inside_the_callers_scopes_is_watchable() -> None:
     granted, _ = grant_subscription(
         SubscriptionFilter(resource_uris=("scoped://1",)),
-        _context(_server(), token=TokenInfo(user=AnonymousUser(), scopes=("things:read",))),
+        call_context(_server(), token=TokenInfo(user=AnonymousUser(), scopes=("things:read",))),
     )
     assert granted.resource_uris == ("scoped://1",)
 
@@ -355,7 +334,7 @@ def test_a_deactivated_principal_cannot_watch_what_it_cannot_read() -> None:
     request.user = principal
     granted, _ = grant_subscription(
         SubscriptionFilter(resource_uris=("open://1",)),
-        _context(_server(), http_request=request, token=TokenInfo(user=principal)),
+        call_context(_server(), http_request=request, token=TokenInfo(user=principal)),
     )
     assert granted.resource_uris == ()
 
@@ -401,7 +380,7 @@ def test_a_registered_unguarded_kernel_resource_is_watchable_with_the_setting_of
             uri_template="bare://{pk}",
         )
     granted, _ = grant_subscription(
-        SubscriptionFilter(resource_uris=("bare://1",)), _context(server, config=config)
+        SubscriptionFilter(resource_uris=("bare://1",)), call_context(server, config=config)
     )
     assert granted.resource_uris == ("bare://1",)
 
@@ -410,7 +389,7 @@ def test_a_uri_whose_variable_the_spec_cannot_read_is_dropped() -> None:
     """``abc`` is no integer ``pk``, so the read would refuse it; the watch drops
     that one entry rather than failing the stream on it."""
     granted, _ = grant_subscription(
-        SubscriptionFilter(resource_uris=("open://abc", "open://1")), _context(_server())
+        SubscriptionFilter(resource_uris=("open://abc", "open://1")), call_context(_server())
     )
     assert granted.resource_uris == ("open://1",)
 
@@ -446,7 +425,7 @@ def test_a_subscription_resolves_the_servers_pool_seeds() -> None:
     )
     granted, _ = grant_subscription(
         SubscriptionFilter(resource_uris=("tenanted://1",)),
-        _context(server, pool_seeds=server.pool_seeds),
+        call_context(server, pool_seeds=server.pool_seeds),
     )
     assert granted.resource_uris == ("tenanted://1",)
     other = _server(pool_seeds=DEFAULT_POOL_SEEDS.extend(tenant=lambda: "globex"))
@@ -455,7 +434,7 @@ def test_a_subscription_resolves_the_servers_pool_seeds() -> None:
     )
     refused, _ = grant_subscription(
         SubscriptionFilter(resource_uris=("tenanted://1",)),
-        _context(other, pool_seeds=other.pool_seeds),
+        call_context(other, pool_seeds=other.pool_seeds),
     )
     assert refused.resource_uris == ()
 
@@ -473,11 +452,12 @@ def test_a_subscription_hands_the_check_the_call_context_the_read_does() -> None
     request.user = None
     request.marked = True  # ty: ignore[unresolved-attribute]
     granted, _ = grant_subscription(
-        SubscriptionFilter(resource_uris=("marked://1",)), _context(server, http_request=request)
+        SubscriptionFilter(resource_uris=("marked://1",)),
+        call_context(server, http_request=request),
     )
     assert granted.resource_uris == ("marked://1",)
     unmarked, _ = grant_subscription(
-        SubscriptionFilter(resource_uris=("marked://1",)), _context(server)
+        SubscriptionFilter(resource_uris=("marked://1",)), call_context(server)
     )
     assert unmarked.resource_uris == ()
 
@@ -498,7 +478,7 @@ def test_a_uri_variable_is_coerced_to_the_type_the_spec_declares() -> None:
         uri_template="flag://{v}",
     )
     granted, _ = grant_subscription(
-        SubscriptionFilter(resource_uris=("flag://true",)), _context(server)
+        SubscriptionFilter(resource_uris=("flag://true",)), call_context(server)
     )
     assert granted.resource_uris == ("flag://true",)
 
@@ -513,7 +493,7 @@ def test_a_list_changed_kind_needs_a_registry_behind_it() -> None:
                 {NotificationKind.RESOURCES_LIST_CHANGED, NotificationKind.PROMPTS_LIST_CHANGED}
             )
         ),
-        _context(server),
+        call_context(server),
     )
     assert granted.kinds == frozenset({NotificationKind.RESOURCES_LIST_CHANGED})
 
@@ -523,7 +503,7 @@ def test_tools_list_changed_is_granted_when_tools_exist() -> None:
     server.register_tool(_tool(), name="t", description="x")
     granted, _ = grant_subscription(
         SubscriptionFilter(kinds=frozenset({NotificationKind.TOOLS_LIST_CHANGED})),
-        _context(server),
+        call_context(server),
     )
     assert granted.kinds == frozenset({NotificationKind.TOOLS_LIST_CHANGED})
 
@@ -547,11 +527,11 @@ def test_a_task_is_watchable_only_by_the_principal_that_created_it() -> None:
         pk = 99
 
     mine, topics = grant_subscription(
-        SubscriptionFilter(task_ids=(task.task_id,)), _context(server)
+        SubscriptionFilter(task_ids=(task.task_id,)), call_context(server)
     )
     theirs, _ = grant_subscription(
         SubscriptionFilter(task_ids=(task.task_id,)),
-        _context(server, token=TokenInfo(user=_Other())),
+        call_context(server, token=TokenInfo(user=_Other())),
     )
     assert mine.task_ids == (task.task_id,)
     assert topics == frozenset({topic_for_task(task.task_id)})
@@ -561,12 +541,12 @@ def test_a_task_is_watchable_only_by_the_principal_that_created_it() -> None:
 def test_an_unknown_task_is_not_watchable() -> None:
     store = InMemoryTaskStore()
     server = _server(task_store=store, task_executor=RecordingExecutor(store))
-    granted, _ = grant_subscription(SubscriptionFilter(task_ids=("nope",)), _context(server))
+    granted, _ = grant_subscription(SubscriptionFilter(task_ids=("nope",)), call_context(server))
     assert granted.task_ids == ()
 
 
 def test_a_server_running_no_tasks_grants_no_task_subscriptions() -> None:
-    granted, _ = grant_subscription(SubscriptionFilter(task_ids=("t",)), _context(_server()))
+    granted, _ = grant_subscription(SubscriptionFilter(task_ids=("t",)), call_context(_server()))
     assert granted.task_ids == ()
 
 
@@ -581,7 +561,7 @@ def test_granted_and_topics_cannot_disagree() -> None:
             kinds=frozenset({NotificationKind.TOOLS_LIST_CHANGED}),
             resource_uris=("open://1", "gated://1"),
         ),
-        _context(server),
+        call_context(server),
     )
     expected = {topic_for_kind(k) for k in granted.kinds} | {
         topic_for_resource(u) for u in granted.resource_uris

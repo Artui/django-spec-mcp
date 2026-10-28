@@ -24,7 +24,8 @@ from django_spec_mcp.protocol.types.task import Task
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from django_spec_mcp.types.task_status import TaskStatus
-from tests.tasks.conftest import RecordingExecutor, context, slow_service
+from tests.tasks.conftest import RecordingExecutor, context
+from tests.tasks.fixtures_drfs import slow_service
 
 
 def _task(**kwargs: Any) -> Task:

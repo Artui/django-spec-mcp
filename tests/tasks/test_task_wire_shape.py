@@ -4,13 +4,14 @@ The remaining corners: the status-specific field ``Task.to_dict`` emits, the
 ``OPTIONAL`` fallbacks that quietly run a tool inline, the ``REQUIRED`` denial,
 the async path's task branch, and settings whose ``None`` is meaningful.
 
-Only the questions that name no tool are asked here: the wire type and the
-two config scalars. Each policy branch registers a drf-services tool with a
-``task_policy``: the ``OPTIONAL`` fallbacks to inline, the denial before a task
-is created, a binding predating tasks, the async path's handle and the three
-rate-limit charges. A kernel spec does not take one yet (``register_tool``
-refuses it with ``ImproperlyConfigured``), so they are owed until it does. The original is kept beside this
-file as ``test_task_wire_shape_drfs.py``.
+Asked of kernel tools registered with a ``task_policy``. The drf-services
+original's permission denial, a permission class refusing with its required
+scopes, is the ``scopes=`` gate here, which answers with the scopes it declares;
+a kernel spec's own refusal before a task exists is
+``tests/handlers/test_a_kernel_spec_answers_before_the_charge.py``'s. The
+``REQUIRED`` refusals, which the original asked over HTTP, are asked here at the
+decision as well. The original is kept beside this file as
+``test_task_wire_shape_drfs.py``.
 """
 
 from __future__ import annotations
@@ -20,9 +21,18 @@ from typing import Any
 import pytest
 from django.test import override_settings
 
+from django_spec_mcp import MCPServer, TaskPolicy
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
+from django_spec_mcp.handlers.task_dispatch import maybe_create_task
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.protocol.types.task import Task
+from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
+from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from django_spec_mcp.types.task_status import TaskStatus
+from tests.tasks.conftest import RecordingExecutor, context, done, register_kernel_tool
 
 
 def _task(**kwargs: Any) -> Task:
@@ -99,7 +109,114 @@ def test_terminal_statuses_are_exactly_the_three() -> None:
 # ----- the policy branches -----
 
 
+def _server(**kwargs: Any) -> MCPServer:
+    server = MCPServer(name="policy", auth_backend=AllowAnyBackend(), **kwargs)
+    for name, policy in (
+        ("p.optional", TaskPolicy.OPTIONAL),
+        ("p.required", TaskPolicy.REQUIRED),
+    ):
+        register_kernel_tool(server, name, done, task_policy=policy)
+    return server
+
+
+def _running(**kwargs: Any) -> MCPServer:
+    store = InMemoryTaskStore()
+    return _server(task_store=store, task_executor=RecordingExecutor(store), **kwargs)
+
+
+def test_an_optional_tool_runs_inline_when_the_server_cannot_run_tasks() -> None:
+    """Falling back is the whole point of ``OPTIONAL`` — a server without a
+    queue still serves the tool."""
+    server = _server()
+    assert maybe_create_task(server._tools.get("p.optional"), {}, context(server)) is None
+
+
+def test_an_optional_tool_runs_inline_when_the_client_did_not_declare() -> None:
+    server = _running()
+    assert (
+        maybe_create_task(server._tools.get("p.optional"), {}, context(server, declares=False))
+        is None
+    )
+
+
+def test_an_optional_tool_answers_a_declaring_client_with_a_task() -> None:
+    """The control of the two above: the same tool on a server that runs tasks,
+    asked by a client that declared, is answered with a handle and queued."""
+    server = _running()
+    result = maybe_create_task(server._tools.get("p.optional"), {}, context(server))
+    assert isinstance(result, dict) and result["resultType"] == "task"
+    assert server.task_executor.enqueued == [result["taskId"]]
+
+
+def test_a_required_tool_refuses_a_client_that_did_not_declare() -> None:
+    """The case the extension names: a server unable to service the request
+    without returning a task handle the client cannot accept."""
+    server = _running()
+    result = maybe_create_task(server._tools.get("p.required"), {}, context(server, declares=False))
+    assert isinstance(result, JsonRpcError)
+    assert result.code == JsonRpcErrorCode.MISSING_REQUIRED_CLIENT_CAPABILITY
+    assert server.task_executor.enqueued == []
+
+
+def test_a_required_tool_on_a_server_that_cannot_run_tasks_blames_the_server() -> None:
+    """``-32603``, not the capability error. The client's request is fine;
+    the tool was declared un-runnable inline with nothing configured to run it
+    elsewhere. Blaming the client would send a competent one round a loop it
+    cannot win."""
+    server = _server()
+    result = handle_tools_call({"name": "p.required", "arguments": {}}, context(server))
+    assert isinstance(result, JsonRpcError)
+    assert result.code == JsonRpcErrorCode.INTERNAL_ERROR
+    assert "task_store=" in result.message
+
+
+def test_a_scope_denial_stops_the_task_before_it_is_created() -> None:
+    """A task is durable, queued work carrying the caller's authorization.
+    Creating one for a caller who may not run the tool would put a denied call
+    in the queue and let its own check fail in a worker, where the 403 has
+    nowhere to go."""
+    store = InMemoryTaskStore()
+    executor = RecordingExecutor(store)
+    server = MCPServer(
+        name="gated", auth_backend=AllowAnyBackend(), task_store=store, task_executor=executor
+    )
+    register_kernel_tool(
+        server, "p.gated", done, task_policy=TaskPolicy.REQUIRED, scopes=("things:write",)
+    )
+    result = maybe_create_task(server._tools.get("p.gated"), {}, context(server))
+    assert isinstance(result, JsonRpcError)
+    assert result.code == JsonRpcErrorCode.FORBIDDEN
+    assert result.data == {"requiredScopes": ["things:write"]}
+    assert executor.enqueued == []
+    # The control: the scope the gate names admits the same caller to a task.
+    admitted = maybe_create_task(
+        server._tools.get("p.gated"), {}, context(server, scopes=("things:write",))
+    )
+    assert isinstance(admitted, dict) and admitted["resultType"] == "task"
+
+
+def test_a_binding_predating_tasks_entirely_is_untouched() -> None:
+    """``getattr`` default, so a hand-built binding without the field behaves
+    as ``FORBIDDEN`` rather than raising."""
+
+    class _Bare:
+        name = "p.bare"
+
+    server = _running()
+    assert maybe_create_task(_Bare(), {}, context(server)) is None
+
+
 # ----- the async path -----
+
+
+@pytest.mark.django_db(transaction=True)
+async def test_the_async_tool_path_hands_back_a_task_too() -> None:
+    """The two ``tools/call`` handlers are parallel implementations, so the
+    branch has to exist — and be exercised — in both."""
+    server = _running()
+    result = await handle_tools_call_async({"name": "p.optional", "arguments": {}}, context(server))
+    assert result["resultType"] == "task"
+    assert server.task_executor.enqueued == [result["taskId"]]
 
 
 # ----- config -----
@@ -156,3 +273,65 @@ class _CountingLimiter:
         if self._deny_after is not None and self.charges > self._deny_after:
             return 42
         return None
+
+
+def _limited_server(limiter: Any, **kwargs: Any) -> MCPServer:
+    store = kwargs.pop("store", None) or InMemoryTaskStore()
+    server = MCPServer(
+        name="limited",
+        auth_backend=AllowAnyBackend(),
+        task_store=store,
+        task_executor=kwargs.pop("executor", None) or RecordingExecutor(store),
+    )
+    register_kernel_tool(
+        server, "p.limited", done, task_policy=TaskPolicy.OPTIONAL, rate_limits=[limiter]
+    )
+    return server
+
+
+def test_a_task_shaped_call_charges_its_rate_limit() -> None:
+    """The charge has nowhere else to happen.
+
+    ``maybe_create_task`` answers *before* dispatch, which is where the inline
+    charge lives, and the worker replays under ``enforce_rate_limits=False``.
+    Without a charge here a client that declares the tasks extension opts itself
+    out of every quota the tool configures — by declaring a capability — and the
+    enqueue loop is unbounded.
+    """
+    limiter = _CountingLimiter()
+    server = _limited_server(limiter)
+    result = maybe_create_task(server._tools.get("p.limited"), {}, context(server))
+    assert isinstance(result, dict) and result["resultType"] == "task"
+    assert limiter.charges == 1
+
+
+def test_an_exhausted_quota_refuses_before_a_task_exists() -> None:
+    """Refused, and refused *early*: a caller told to retry must not also have
+    left a queued record and an executor job behind."""
+    limiter = _CountingLimiter(deny_after=0)
+    store = InMemoryTaskStore()
+    executor = RecordingExecutor(store)
+    server = _limited_server(limiter, store=store, executor=executor)
+    result = maybe_create_task(server._tools.get("p.limited"), {}, context(server))
+    assert isinstance(result, JsonRpcError)
+    assert result.code == JsonRpcErrorCode.RATE_LIMITED
+    assert result.data == {"retryAfter": 42}
+    assert executor.enqueued == []
+
+
+def test_a_call_that_runs_inline_is_still_charged_exactly_once() -> None:
+    """The fallback path must not double-charge: a client that did not declare
+    the extension runs the tool inline, where the ordinary charge already
+    happens, and this function has to leave that alone."""
+    limiter = _CountingLimiter()
+    server = _limited_server(limiter)
+    assert (
+        maybe_create_task(server._tools.get("p.limited"), {}, context(server, declares=False))
+        is None
+    )
+    assert limiter.charges == 0
+    result = handle_tools_call(
+        {"name": "p.limited", "arguments": {}}, context(server, declares=False)
+    )
+    assert result["structuredContent"] == {"done": "yes"}
+    assert limiter.charges == 1

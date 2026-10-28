@@ -25,13 +25,6 @@ from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
-from tests.elicitation.fixtures_drfs import (
-    DeleteInput,
-    delete_rows,
-    server,
-    unrenderable_service,
-    unspecific_service,
-)
 
 TOOL: str = "rows.delete"
 
@@ -51,7 +44,7 @@ class DeleteRows:
 
 
 def delete_rows_kernel(*, count: int, confirmed: bool = False, reason: str = "") -> dict[str, Any]:
-    """The kernel twin of ``delete_rows``: the same two questions, asked of spread arguments."""
+    """The kernel twin of ``fixtures_drfs.delete_rows``: the same two questions, asked of spread arguments."""
     if count > 100 and not confirmed:
         raise AdditionalInputRequired(
             f"{count} rows match. Confirm to proceed.",
@@ -66,12 +59,12 @@ def delete_rows_kernel(*, count: int, confirmed: bool = False, reason: str = "")
 
 
 def vague_kernel(*, count: int, confirmed: bool = False, reason: str = "") -> dict[str, Any]:  # noqa: ARG001
-    """The kernel twin of ``unspecific_service``."""
+    """The kernel twin of ``fixtures_drfs.unspecific_service``."""
     raise AdditionalInputRequired("This needs something I cannot describe.")
 
 
 def unrenderable_kernel(*, count: int, confirmed: bool = False, reason: str = "") -> dict[str, Any]:  # noqa: ARG001
-    """The kernel twin of ``unrenderable_service``."""
+    """The kernel twin of ``fixtures_drfs.unrenderable_service``."""
     raise AdditionalInputRequired(
         "Tell me about yourself.",
         schema={"profile": {"type": "object", "properties": {"name": {"type": "string"}}}},
@@ -79,7 +72,7 @@ def unrenderable_kernel(*, count: int, confirmed: bool = False, reason: str = ""
 
 
 def build_kernel_server() -> MCPServer:
-    """The kernel twin of the ``server`` fixture: the same three tools, as kernel specs."""
+    """The kernel twin of ``fixtures_drfs``' ``server`` fixture: the same three tools, as kernel specs."""
     built = MCPServer(
         name="elicitation-kernel",
         auth_backend=AllowAnyBackend(),
@@ -131,19 +124,12 @@ def context(
     )
 
 
-# The drf-services twins, re-exported under the names the ``_drfs`` originals
-# import; the deletion drops them with ``fixtures_drfs.py``.
 __all__ = [
     "TOOL",
-    "DeleteInput",
     "DeleteRows",
     "build_kernel_server",
     "context",
-    "delete_rows",
     "delete_rows_kernel",
-    "server",
     "unrenderable_kernel",
-    "unrenderable_service",
-    "unspecific_service",
     "vague_kernel",
 ]

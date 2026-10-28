@@ -18,7 +18,7 @@ from django_spec_mcp.transport.async_streamable_http_viewset import (
     AsyncStreamableHttpViewSet,
 )
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
-from tests.testapp.mcp import build_server
+from tests.testapp.mcp_drfs import build_server
 from tests.testapp.urlconf_for import urlconf_for
 from tests.utils import nested_past_the_decoders_limit_here, on_a_bounded_stack
 
@@ -26,7 +26,7 @@ from tests.utils import nested_past_the_decoders_limit_here, on_a_bounded_stack
 @pytest.fixture
 def async_urlconf():
     """Switch the test app to its async URL conf for the duration of one test."""
-    with override_settings(ROOT_URLCONF="tests.testapp.async_urls"):
+    with override_settings(ROOT_URLCONF="tests.testapp.async_urls_drfs"):
         yield
 
 
@@ -552,42 +552,6 @@ async def test_acall_invokes_sync_function_via_thread() -> None:
         return x * 2
 
     assert await acall(produce, 21) == 42
-
-
-async def test_async_dispatch_routes_exceptions_through_handle_exception() -> None:
-    """An exception inside an action surfaces via DRF's ``handle_exception``.
-
-    The async ``dispatch`` mirrors :meth:`APIView.dispatch`'s ``try/except``
-    so DRF's error handling (e.g. ``exception_handler`` setting) keeps
-    working. Trigger by giving the view a handler that raises.
-    """
-    from rest_framework.exceptions import APIException
-
-    from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-    from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
-
-    class _RaisingViewSet(AsyncStreamableHttpViewSet):
-        async def handle_jsonrpc(self, request):  # noqa: ARG002
-            raise APIException("boom")
-
-    view = _RaisingViewSet.as_view(
-        ASYNC_STREAMABLE_HTTP_ACTION_MAP,
-        tools=ToolRegistry(),
-        resources=ResourceRegistry(),
-        auth_backend=AllowAnyBackend(),
-        session_store=InMemorySessionStore(),
-    )
-    factory = RequestFactory()
-    request = factory.post(
-        "/mcp/",
-        data="{}",
-        content_type="application/json",
-        headers={"Mcp-Protocol-Version": "2025-11-25"},
-    )
-    response = await view(request)
-    # DRF's default ``handle_exception`` maps ``APIException`` to its
-    # configured status (500 for the base class without ``status_code``).
-    assert response.status_code == 500
 
 
 # ----- middleware opt-out flags -----

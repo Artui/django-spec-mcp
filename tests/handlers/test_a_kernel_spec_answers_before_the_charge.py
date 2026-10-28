@@ -912,9 +912,6 @@ def test_call_tool_refuses_a_malformed_call_a_check_refuses_on_no_arguments() ->
 
 
 def _task_server(check: PermissionCheck, limiter: Any) -> tuple[MCPServer, _Recorder]:
-    # A kernel spec takes no ``task_policy`` through ``register_tool`` yet, so
-    # the binding is built by hand, which is how a task-shaped kernel tool
-    # reaches ``maybe_create_task`` today.
     executor = _Recorder()
     server = MCPServer(
         name="t",

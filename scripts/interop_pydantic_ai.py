@@ -31,6 +31,7 @@ import socket
 import sys
 import threading
 import warnings
+from dataclasses import dataclass
 from typing import Any
 from wsgiref.simple_server import WSGIServer, make_server
 
@@ -50,7 +51,6 @@ def configure() -> None:
         INSTALLED_APPS=[
             "django.contrib.contenttypes",
             "django.contrib.auth",
-            "rest_framework",
         ],
         MIDDLEWARE=["django.middleware.common.CommonMiddleware"],
         ROOT_URLCONF=__name__,
@@ -68,32 +68,35 @@ def configure() -> None:
 
 configure()
 
-from rest_framework import serializers as drf_serializers  # noqa: E402
-from rest_framework.permissions import AllowAny  # noqa: E402
-from rest_framework_services.exceptions.additional_input_required import (  # noqa: E402
+from django_service_specs import (  # noqa: E402
     AdditionalInputRequired,
+    DataclassValidator,
+    ServiceSpec,
+    Unrestricted,
 )
-from rest_framework_services.types.service_spec import ServiceSpec  # noqa: E402
 
-from django_spec_mcp import MCPServer  # noqa: E402
+from django_spec_mcp import InMemorySessionStore, MCPServer  # noqa: E402
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend  # noqa: E402
-from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore  # noqa: E402
 
 
-class DeleteInput(drf_serializers.Serializer):
-    count = drf_serializers.IntegerField()
-    confirmed = drf_serializers.BooleanField(required=False, default=False)
+@dataclass
+class DeleteInput:
+    """The tool's arguments. ``confirmed`` is optional, so the retry carrying
+    the answer is an ordinary call with one more argument."""
+
+    count: int
+    confirmed: bool = False
 
 
-def delete_rows(*, data: dict[str, Any]) -> dict[str, Any]:
-    """Cheap above the threshold, and something you would want to be asked about
-    below it -- the whole reason the elicitation exchange exists."""
-    if data["count"] > CONFIRM_ABOVE and not data["confirmed"]:
+def delete_rows(*, count: int, confirmed: bool) -> dict[str, Any]:
+    """Cheap below the threshold, and something you would want to be asked about
+    above it -- the whole reason the elicitation exchange exists."""
+    if count > CONFIRM_ABOVE and not confirmed:
         raise AdditionalInputRequired(
-            f"{data['count']} rows match. Confirm to proceed.",
+            f"{count} rows match. Confirm to proceed.",
             schema={"confirmed": {"type": "boolean"}},
         )
-    return {"deleted": data["count"], "confirmed": data["confirmed"]}
+    return {"deleted": count, "confirmed": confirmed}
 
 
 def build_server() -> MCPServer:
@@ -103,15 +106,15 @@ def build_server() -> MCPServer:
         auth_backend=AllowAnyBackend(),
         session_store=InMemorySessionStore(),
     )
-    server.register_service_tool(
+    server.register_tool(
+        ServiceSpec(
+            service=delete_rows,
+            validator=DataclassValidator(DeleteInput),
+            atomic=False,
+            permissions=[Unrestricted()],
+        ),
         name=TOOL,
         description="Delete rows, asking for confirmation past a threshold.",
-        spec=ServiceSpec(
-            permission_classes=[AllowAny],
-            service=delete_rows,
-            input_serializer=DeleteInput,
-            atomic=False,
-        ),
     )
     return server
 

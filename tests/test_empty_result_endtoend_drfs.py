@@ -42,7 +42,7 @@ from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.testing import assert_tool_result_conforms
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.testapp.models import Invoice
-from tests.testapp.serializers import InvoiceOutputSerializer
+from tests.testapp.serializers_drfs import InvoiceOutputSerializer
 from tests.testapp.urlconf_for import urlconf_for
 
 MODERN = "2026-07-28"

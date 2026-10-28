@@ -26,7 +26,7 @@ from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.types.context import MCPCallContext
-from tests.testapp.affordances import fresh_server
+from tests.testapp.affordances_drfs import fresh_server
 from tests.utils import tool_error
 
 _REFUSED: dict[str, Any] = {

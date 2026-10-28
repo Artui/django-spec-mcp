@@ -13,11 +13,11 @@ from django_spec_mcp.handlers.kernel_utils import (
     copy_request,
     not_found_result,
     page_request,
-    present_tool_result,
     principal_of,
     seat,
     tool_result,
 )
+from django_spec_mcp.handlers.present_kernel_result import present_kernel_result
 from django_spec_mcp.handlers.types.kernel_refusal_scene import KernelRefusalScene
 from django_spec_mcp.protocol.types.tool_result import ToolResult
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
@@ -98,7 +98,11 @@ def call_kernel_tool(
     bounded = bound_unpaginated_rows(binding, result, page, config)
     if isinstance(bounded, ToolResult):
         return bounded
-    payload: Any = present_tool_result(binding, bounded, page)
+    payload: Any = present_kernel_result(
+        binding, bounded, page, arguments=arguments, config=config, conventions=conventions
+    )
+    if isinstance(payload, ToolResult):
+        return payload
     return tool_result(binding, payload, output_format=None, config=config)
 
 

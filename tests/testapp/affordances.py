@@ -1,51 +1,66 @@
-"""One declaration of ``affordances``, shared by the tests that advertise and call it.
+"""One kernel declaration of ``affordances``, shared by the tests that advertise and call it.
 
-Every condition is a callable rather than a condition on the row, so nothing here
-needs a database: drf-services answers a callable once per call and adds the answer
-to each mapping row a selector returns. Two conditions, so a schema that enumerates
-only the one a row happened to fail is told apart from one that enumerates the
-declaration.
+Every condition is a callable rather than a condition on the row, so answering
+one needs no query of its own. A kernel selector carries the answers on model
+instances and mappings, and ``DataclassPresenter`` reads by attribute, so the
+order a selector returns is an ``Invoice`` row: a test that calls a tool needs
+one in the database, and a test that only lists the tools needs none.
+
+The drf-services declaration is kept in ``affordances_drfs.py`` until the drfs
+path is deleted.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
-from django_service_specs import Affordance, SelectorKind
-from rest_framework import serializers
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_service_specs import (
+    Affordance,
+    DataclassPresenter,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+)
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from tests.testapp.models import Invoice
 
 
-class OrderSerializer(serializers.Serializer):
-    number = serializers.CharField()
+@dataclass
+class Order:
+    number: str
 
 
-CANCEL_ORDER: ServiceSpec[Any, Any, Any] = ServiceSpec(
-    service=lambda **_: None,
-    atomic=False,
+CANCEL_ORDER: ServiceSpec = ServiceSpec(
+    service=lambda: None,
+    permissions=[Unrestricted()],
     affordances=[
-        Affordance(code="already_shipped", reason="The order has shipped.", when=lambda **_: True),
-        Affordance(code="books_closed", reason="The books are closed.", when=lambda **_: False),
+        Affordance(code="already_shipped", reason="The order has shipped.", when=lambda: True),
+        Affordance(code="books_closed", reason="The books are closed.", when=lambda: False),
     ],
 )
 """Met on its first condition and refused on its second, so every call answers
-``books_closed``."""
+``books_closed``. Two conditions, so a schema enumerating only the one a row
+happened to fail is told apart from one enumerating the declaration."""
 
 DECLARED_CODES: list[str] = ["already_shipped", "books_closed"]
 
 
-def order_selector_spec(kind: SelectorKind, **overrides: Any) -> SelectorSpec[Any, Any]:
-    """A selector spec rendering one order, declaring ``cancel`` as an affordance."""
-    rows: Any = {"number": "A-1"} if kind is SelectorKind.RETRIEVE else [{"number": "A-1"}]
+def order_selector_spec(kind: SelectorKind, **overrides: Any) -> SelectorSpec:
+    """A selector spec presenting the one order, declaring ``cancel`` as an affordance."""
     fields: dict[str, Any] = {
         "kind": kind,
-        "selector": lambda **_: rows,
-        "output_serializer": OrderSerializer,
+        "selector": (
+            (lambda: Invoice.objects.get())
+            if kind is SelectorKind.RETRIEVE
+            else (lambda: Invoice.objects.all())
+        ),
+        "presenter": DataclassPresenter(Order),
         "affordances": {"cancel": CANCEL_ORDER},
+        "permissions": [Unrestricted()],
         **overrides,
     }
     return SelectorSpec(**fields)

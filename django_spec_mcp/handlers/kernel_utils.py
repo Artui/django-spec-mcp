@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Mapping
 from contextlib import suppress
 from dataclasses import dataclass, replace
 from io import BytesIO
@@ -199,8 +200,10 @@ def carry_token(request: Any, token: Any) -> Any:
     (``test_a_resource_permission_reads_the_request_the_read_arrived_on``).
     Every call on one request carries the one token the transport resolved for
     it, a batch's and a stream's included, so a second write sets what the
-    first did. An in-process call's is a copy already, made where its context
-    is (``copy_request``).
+    first did. The transport makes that first write the moment the request
+    authenticates (``carry_principal``), so an ``MCPPermission`` judged before
+    any handler runs sees the same principal. An in-process call's is a copy
+    already, made where its context is (``copy_request``).
     """
     request.mcp_token = token
     return seat(request, principal_of(token.user))
@@ -851,26 +854,38 @@ def resource_refusal(exc: DispatchError | ServiceError, scene: KernelRefusalScen
     selector that raises.
     """
     if isinstance(exc, InvalidArguments):
-        # Written as JSON writes it, so the integer row indices of a many call's
-        # tree are strings, as in a tool result; the kernel's order is kept.
-        return JsonRpcError(
-            JsonRpcErrorCode.INVALID_PARAMS,
-            "Invalid arguments",
-            data=json.loads(
-                json.dumps(
-                    validation_error_data(
-                        exc.detail,
-                        scene.arguments,
-                        include_value=scene.config.include_validation_value,
-                    ),
-                    default=str,
-                )
-            ),
-        )
+        return invalid_arguments_error(exc.detail, scene.arguments, scene.config)
     answer = answer_kernel_refusal(exc, scene)
     if isinstance(answer, JsonRpcError):
         return answer
     raise exc
+
+
+def invalid_arguments_error(
+    detail: Any, arguments: Mapping[str, Any], config: MCPConfig
+) -> JsonRpcError:
+    """The ``-32602`` a ``resources/read`` answers for arguments it refuses.
+
+    A fixed message carrying no value, with ``detail`` in ``data`` naming each
+    variable and its problem, and what was sent beside it when
+    ``include_validation_value`` says so: ``resource_refusal``'s answer to the
+    kernel's ``InvalidArguments``, and ``resource_presentation_refusal``'s to a
+    presenter refusing a shape the URI carried.
+    """
+    # Written as JSON writes it, so the integer row indices of a many call's
+    # tree are strings, as in a tool result; the kernel's order is kept.
+    return JsonRpcError(
+        JsonRpcErrorCode.INVALID_PARAMS,
+        "Invalid arguments",
+        data=json.loads(
+            json.dumps(
+                validation_error_data(
+                    detail, arguments, include_value=config.include_validation_value
+                ),
+                default=str,
+            )
+        ),
+    )
 
 
 def admitted_arguments(binding: KernelToolBinding, pool_seeds: PoolSeeds) -> frozenset[str]:
@@ -926,6 +941,7 @@ __all__ = [
     "call_context",
     "carry_token",
     "copy_request",
+    "invalid_arguments_error",
     "not_found_result",
     "on_the_wire",
     "page_request",

@@ -25,7 +25,7 @@ from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.testing import assert_tool_result_conforms
 from tests.testapp.models import Invoice
-from tests.testapp.serializers import InvoiceOutputSerializer, LedgerSerializer
+from tests.testapp.serializers_drfs import InvoiceOutputSerializer, LedgerSerializer
 
 
 def _server(output_serializer: type) -> MCPServer:

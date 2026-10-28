@@ -30,8 +30,7 @@ carries; releases up to 0.54.0 are in
   that is not a kernel spec, a knob of the other kind of tool, `scopes=()`,
   `UnknownArguments.PASSTHROUGH`, a resource's `uri_template` variable that no
   read or shape of the spec declares or that the server fills (a reflected read, or
-  a key a typed `kwargs=` provider declares, unless its type admits `UnsetType`), each named in the error, and, for now,
-  any `task_policy` but the default.
+  a key a typed `kwargs=` provider declares, unless its type admits `UnsetType`), each named in the error.
   A spec declaring `permissions=None` is refused under
   `REQUIRE_TOOL_PERMISSIONS`; with the setting off it registers with an
   `UnguardedToolWarning` and is called without a permission check, under a
@@ -140,9 +139,66 @@ carries; releases up to 0.54.0 are in
   reads what the call hands it. A registered seed's resolver runs once per
   conditioned kernel tool per listing, as it runs once per call, so a seed that
   queries is paid for per tool.
+- **A presenter refusing a caller's shape is the caller's `validation_error`.** A
+  `ServiceValidationError` a kernel tool's presenter raises while rendering is
+  answered as an `isError` `validation_error` naming the `shapes` the caller sent,
+  with the server's `query_param_on_pages` sentence on a paged tool, as the
+  drf-services path answers a refused read-shaping `QueryParam`, on the wire and
+  from `call_tool` alike. With no shape sent, a `null` one or one the server's
+  `server_arguments` answers for, the error is the server's and is raised as before:
+  a `-32603` on the wire. Anything else a presenter raises stays the server's.
+  A kernel resource answers the same refusal of a shape its URI carried as the
+  `-32602` `Invalid arguments` its shape check gives that variable, keyed by it,
+  or by `non_field_errors` when the URI carries several; with no shape in the
+  URI it is raised.
+
+- **A kernel tool can run as a task.** `register_tool` and `register_tools`'
+  `overrides` take `task_policy=` for a kernel `ServiceSpec` or `SelectorSpec`,
+  meaning what it means on the drf-services registrars: `OPTIONAL` answers a
+  client that declared the tasks extension with a task handle and runs inline for
+  one that did not, and `REQUIRED` refuses the latter `-32021`, or `-32603` on a
+  server with no task store and executor. The `scopes=` gate and the spec's own
+  `permissions` are asked before the task is created, so a refused caller queues
+  nothing, and the tool's rate limits are charged once, there. The worker runs
+  the call, under either policy, through the kernel's `dispatch`, under the server's `pool_seeds` and
+  `conventions`, asking the spec's permissions again and handing a service that
+  declares `progress` the task's reporter, so its reports reach `tasks/get`.
 
 ### Changed
 
+- **The MCP endpoint and the protected-resource metadata view are plain Django
+  views**, no longer DRF viewsets, so **no `REST_FRAMEWORK` setting reaches them**:
+  a project's `DEFAULT_THROTTLE_CLASSES`, `DEFAULT_AUTHENTICATION_CLASSES`,
+  renderers and `EXCEPTION_HANDLER` stop applying to the endpoint. The package's
+  own rate limits, `rate_limits=` on each tool, resource and prompt, are what
+  limit a caller, and `MCPAuthBackend` is the only authentication. An auth backend
+  answers an unauthenticated caller by returning `None`, which is the `401` with
+  its challenge: an exception it raises from `authenticate` is no longer rendered
+  by DRF, and nothing maps it in DRF's place. Django's `PermissionDenied` and
+  `Http404` raised there render as Django's own HTML `403` and `404` pages, and
+  any other exception, an `AuthenticationFailed` included (a `403` reading
+  `{"detail": ...}` until now), is a `500`. What a client
+  sees changes in a few places: `OPTIONS` answers `200` with `Allow` and an empty
+  body, where it served DRF's metadata, the class docstring included; `Allow` is
+  sent on a `405` and an `OPTIONS` answer only; a method the endpoint does not
+  route is a `405` with an empty body rather than a JSON `detail`; a `?format=`
+  query is ignored rather than answered `404`; and the async endpoint serves an
+  `Accept` naming only `text/event-stream`, the header the spec tells a client to
+  send for the GET stream, which was refused with a `406`. The sync endpoint,
+  which never streams, answers a `GET` or `HEAD` with its bodyless `405` whatever
+  the `Accept`, where one naming only `text/event-stream` was a `406`. The `406`
+  for an `Accept` admitting nothing the endpoint answers with is kept, as are the
+  CSRF and login-required opt-outs, and it now follows Django's reading of the
+  header. So an `Accept` of `application/json;q=0, text/event-stream`, which
+  was served a `200`, is a `406` from the sync endpoint wherever Django reads a
+  `q` of `0` as declaring JSON unacceptable, as Django 5.2 does, since JSON is
+  all that endpoint answers with; Django 4.2 ignores the `q` and still serves it. The `406` body and the
+  metadata document are serialized with `json.dumps` defaults, so they carry
+  `", "` and `": "` separators and escape non-ASCII characters, where DRF wrote
+  them compact and in UTF-8. `request.user` and `request.auser()` are the
+  bearer token's principal from the moment the request authenticates, so an
+  `MCPPermission` never judges the user a session cookie names, and the auth
+  backend is handed an anonymous request whatever the cookie says.
 - **`django-service-specs` 0.18.0 is the floor.** Its root holds every kernel name
   this package reads, and it reserves `shapes` as a pool name, so a `PoolSeeds`
   entry named `shapes` is refused when it is built, as one named `user` is.
@@ -241,5 +297,13 @@ carries; releases up to 0.54.0 are in
   spec's `FilterSet` still runs. A project using either has the package
   installed already; one that does not runs `pip install drf-spectacular` or
   `pip install django-filter`.
+
+### Fixed
+
+- **A `REQUIRED` tool's task runs.** The worker's run of a task went back
+  through the task decision, met a context declaring no extension, and was
+  refused `-32021`, so every task of a `REQUIRED` tool ended `failed` without
+  running. The worker's run now enters below that decision. A client that did
+  not declare the extension is still refused `-32021` by a `REQUIRED` tool.
 
 [Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.0.0...HEAD

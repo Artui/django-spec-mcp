@@ -100,9 +100,23 @@ def test_a_list_tool_takes_the_page_knobs() -> None:
 
 
 @pytest.mark.parametrize("policy", [TaskPolicy.OPTIONAL, TaskPolicy.REQUIRED])
-def test_a_task_policy_is_not_yet_supported(policy: TaskPolicy) -> None:
-    with pytest.raises(ImproperlyConfigured, match="is not yet supported for a kernel spec"):
-        _server().register_tool(_service(), name="t", task_policy=policy)
+@pytest.mark.parametrize("kind", ["service", "selector"])
+def test_a_task_policy_is_kept_on_the_binding(policy: TaskPolicy, kind: str) -> None:
+    # The binding is what ``maybe_create_task`` reads, so the policy has to
+    # reach it from either kind of tool, as it does from either drf-services
+    # registrar. What each policy does with a call is ``tests/tasks/``'.
+    spec = _service() if kind == "service" else _selector(SelectorKind.RETRIEVE)
+    binding = _server().register_tool(spec, name="t", task_policy=policy)
+    assert binding.task_policy is policy
+
+
+def test_register_tools_takes_a_task_policy_among_its_overrides() -> None:
+    registry = SpecRegistry([RegisteredSpec(name="slow", spec=_service())])
+
+    (binding,) = _server().register_tools(
+        registry, overrides={"slow": {"task_policy": TaskPolicy.REQUIRED}}
+    )
+    assert binding.task_policy is TaskPolicy.REQUIRED
 
 
 def test_an_empty_scope_tuple_is_refused() -> None:
@@ -255,10 +269,11 @@ def test_register_resource_refuses_an_empty_scope_tuple() -> None:
         )
 
 
+# ``selector=`` is refused the same way, held by the ``_drfs`` original of this
+# file: it is the drf-services form's own argument, which goes with that form.
 @pytest.mark.parametrize(
     ("knob", "value"),
     [
-        ("selector", object()),
         ("output_serializer", object),
         ("permissions", []),
         ("mime_type", "text/csv"),

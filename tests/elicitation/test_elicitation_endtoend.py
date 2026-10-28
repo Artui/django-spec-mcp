@@ -5,6 +5,10 @@ The handler suite proves the logic; this proves a conformant client can drive it
 result comes back inside a ``200`` rather than an error status, and that the
 retry is what the spec says it is: **a second, independent request**, with its
 own id, on a server holding nothing in between.
+
+Asked of the kernel ``rows.delete``, whose answers come back as spread
+arguments. The drf-services original is kept beside this file as
+``test_elicitation_endtoend_drfs.py``.
 """
 
 from __future__ import annotations

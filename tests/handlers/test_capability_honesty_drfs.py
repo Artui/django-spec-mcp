@@ -24,8 +24,10 @@ from django_spec_mcp.subscriptions.in_memory_subscription_broker import (
     InMemorySubscriptionBroker,
 )
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
-from tests.subscriptions.test_subscription_core import _context, _server
-from tests.tasks.conftest import RecordingExecutor, slow_service
+from tests.subscriptions.test_subscription_core import _server
+from tests.tasks.conftest import RecordingExecutor
+from tests.tasks.fixtures_drfs import slow_service
+from tests.utils import call_context
 
 MODERN = "2026-07-28"
 LEGACY = "2025-11-25"
@@ -51,16 +53,16 @@ def _full_server() -> MCPServer:
 
 
 def _full_context(server: MCPServer, **overrides: Any) -> Any:
-    """``_context`` does not thread the executor, and the tasks capability needs
+    """``call_context`` does not thread the executor, and the tasks capability needs
     both halves — a store without one creates tasks nothing will ever run."""
-    return _context(server, task_executor=server.task_executor, **overrides)
+    return call_context(server, task_executor=server.task_executor, **overrides)
 
 
 # ---------- the bundle, per era ----------
 
 
 def test_a_modern_caller_is_told_about_the_pushes() -> None:
-    caps = build_capabilities(_context(_pushing_server()), modern=True)
+    caps = build_capabilities(call_context(_pushing_server()), modern=True)
     assert caps.resources == {"listChanged": True, "subscribe": True}
     assert caps.prompts is None or caps.prompts == {"listChanged": True}
 
@@ -68,14 +70,14 @@ def test_a_modern_caller_is_told_about_the_pushes() -> None:
 def test_a_legacy_caller_is_not() -> None:
     """The bug this closes. Same server, same broker — the difference is only
     who is asking, and a legacy client has no method to receive any of it."""
-    caps = build_capabilities(_context(_pushing_server()), modern=False)
+    caps = build_capabilities(call_context(_pushing_server()), modern=False)
     assert caps.resources == {}
 
 
 def test_the_registries_themselves_are_unaffected() -> None:
     """Suppressing the flags must not suppress the capability. A legacy client
     still has resources to read — ``{}`` means supported."""
-    caps = build_capabilities(_context(_pushing_server()), modern=False)
+    caps = build_capabilities(call_context(_pushing_server()), modern=False)
     assert caps.resources == {}
     assert caps.resources is not None
 
@@ -123,7 +125,7 @@ def test_discover_follows_the_caller_not_the_server() -> None:
 
 
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.urls("tests.subscriptions.urls")
+@pytest.mark.urls("tests.subscriptions.urls_drfs")
 def test_the_method_a_legacy_client_would_have_called_does_not_exist(client: Client) -> None:
     """``resources/subscribe`` is deliberately not implemented: optional in
     ``2025-11-25``, and in ``2026-07-28`` the schema says

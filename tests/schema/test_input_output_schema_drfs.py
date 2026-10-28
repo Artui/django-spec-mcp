@@ -8,7 +8,7 @@ from rest_framework import serializers
 
 from django_spec_mcp.schema.input_schema import build_input_schema
 from django_spec_mcp.schema.output_schema import build_output_schema
-from tests.testapp.serializers import InvoiceOutputSerializer
+from tests.testapp.serializers_drfs import InvoiceOutputSerializer
 
 
 class _Ser(serializers.Serializer):

@@ -1032,13 +1032,42 @@ def read_shaping_error_result(
         for query_param in query_params
         if arguments.get(query_param.name) is not None
     ]
+    return rendering_refusal_result(
+        exc,
+        supplied=supplied,
+        arguments=arguments,
+        paginated=paginated,
+        config=config,
+        conventions=conventions,
+    )
+
+
+def rendering_refusal_result(
+    exc: drf_serializers.ValidationError | ServiceValidationError,
+    *,
+    supplied: list[str],
+    arguments: Mapping[str, Any],
+    paginated: bool,
+    config: MCPConfig,
+    conventions: AgentConventions,
+) -> ToolResult:
+    """The ``validation_error`` result for a refusal of ``supplied`` while rendering.
+
+    ``supplied`` is the caller's arguments the render read, as each path counts
+    them: a drf-services tool's read-shaping ``QueryParam`` values
+    (``read_shaping_error_result``), a kernel tool's ``shapes``
+    (``present_kernel_result``). Empty, ``exc`` is raised unchanged, because
+    nothing the caller sent shaped the render and the refusal is a server bug.
+    """
     # One branch arc to coverage, so the gate cannot see it removed. Held by the
-    # five tests in tests/handlers/test_render_time_query_params.py that assert
+    # five tests in tests/handlers/test_render_time_query_params_drfs.py that assert
     # the original error still escapes -- the three
     # ``test_render_error_with_nothing_supplied_still_raises*`` (sync selector,
     # async service, ``call_tool``), ``test_a_seeded_default_is_not_supplied`` and
-    # ``test_an_explicit_null_is_not_supplied`` -- each of which fails when this
-    # guard is deleted.
+    # ``test_an_explicit_null_is_not_supplied`` -- and on a kernel tool by
+    # tests/handlers/test_kernel_presenter_refusal.py's
+    # ``test_a_refusal_with_no_shape_supplied_is_raised``, each of which fails
+    # when this guard is deleted.
     if not supplied:
         raise exc
     detail: Any = exc.detail
@@ -1195,6 +1224,7 @@ __all__ = [
     "read_shaping_error_result",
     "refuse_missing_arguments",
     "render_convention",
+    "rendering_refusal_result",
     "resolve_bound",
     "resource_shape",
     "run_with_deadline",

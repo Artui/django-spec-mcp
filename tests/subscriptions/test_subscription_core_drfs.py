@@ -26,7 +26,8 @@ from django_spec_mcp.subscriptions.utils import (
 from django_spec_mcp.tasks.create_task import create_task
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
-from tests.tasks.conftest import RecordingExecutor, slow_service
+from tests.tasks.conftest import RecordingExecutor
+from tests.tasks.fixtures_drfs import slow_service
 
 # ----- SubscriptionFilter -----
 

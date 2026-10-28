@@ -20,7 +20,7 @@ from rest_framework_services.types.selector_spec import SelectorSpec
 from rest_framework_services.types.service_spec import ServiceSpec
 
 from django_spec_mcp import MCPServer
-from tests.testapp.affordances import (
+from tests.testapp.affordances_drfs import (
     CANCEL_ORDER,
     DECLARED_CODES,
     OrderSerializer,

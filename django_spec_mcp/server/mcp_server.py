@@ -730,9 +730,15 @@ class MCPServer:
         for ``REQUIRE_TOOL_PERMISSIONS``, which reads the spec's own
         ``permissions``.
 
-        ``task_policy`` other than ``FORBIDDEN`` is refused: the task path does
-        not run a kernel spec yet. Every other knob means what it means on
-        ``register_service_tool`` / ``register_selector_tool``.
+        ``task_policy`` means what it means on ``register_service_tool`` /
+        ``register_selector_tool``, for a service tool and a selector tool
+        alike: ``OPTIONAL`` answers a client that declared the tasks extension
+        with a task handle and runs inline for one that did not, and
+        ``REQUIRED`` refuses the latter with ``-32021``. The spec's own checks
+        are asked before the task is created, and the worker runs the call,
+        under either policy, through the same ``dispatch`` a direct call takes, under the server's
+        ``pool_seeds`` and ``conventions``. Every other knob means what it means
+        there too.
 
         A refusal from ``dispatch`` is answered as the drf-services path answers
         its counterpart: ``NotPermitted`` and ``PrincipalUnavailable`` as
@@ -1332,11 +1338,11 @@ class MCPServer:
         record (see ``build_worker_token``), the registries, config and stores
         from this server.
 
-        ``client_capabilities`` is deliberately empty. The worker is not
-        serving a client, and a task must never create another task — an empty
-        declaration makes ``maybe_create_task`` refuse, so a ``REQUIRED``
-        binding reached this way fails visibly instead of queueing itself
-        forever.
+        ``client_capabilities`` is empty, since the worker serves no client.
+        ``in_task_worker`` is what keeps the run from becoming another task:
+        ``maybe_create_task`` lets it through under either policy, so a
+        ``REQUIRED`` tool's task runs rather than being refused for a
+        declaration no worker makes.
         """
         http_request = HttpRequest()
         http_request.method = "POST"
@@ -1358,6 +1364,7 @@ class MCPServer:
             pool_seeds=self._pool_seeds,
             conventions=self._conventions,
             enforce_rate_limits=False,
+            in_task_worker=True,
         )
 
     async def notify_resource_updated(self, uri: str) -> int:
@@ -2252,7 +2259,7 @@ class MCPServer:
         handlers.
         """
         view = StreamableHttpViewSet.as_view(
-            STREAMABLE_HTTP_ACTION_MAP,  # ty: ignore[invalid-argument-type]
+            STREAMABLE_HTTP_ACTION_MAP,
             tools=self._tools,
             resources=self._resources,
             prompts=self._prompts,

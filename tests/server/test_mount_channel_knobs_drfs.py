@@ -28,7 +28,7 @@ from rest_framework_services import (
 )
 
 from django_spec_mcp import MCPServer, ToolDefinition, register_tools
-from tests.testapp.serializers import AgentInvoiceSerializer
+from tests.testapp.serializers_drfs import AgentInvoiceSerializer
 
 
 def _server() -> MCPServer:

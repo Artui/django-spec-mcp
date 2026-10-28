@@ -15,10 +15,10 @@ from rest_framework_services.types.selector_spec import SelectorSpec
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from tests.conformance.mcp import _project_scoped_selector, _ProjectScopedArgs
+from tests.conformance.mcp_drfs import _project_scoped_selector, _ProjectScopedArgs
 from tests.utils import tool_error
 
-pytestmark = pytest.mark.urls("tests.conformance.urls")
+pytestmark = pytest.mark.urls("tests.conformance.urls_drfs")
 
 
 @pytest.mark.django_db(transaction=True)

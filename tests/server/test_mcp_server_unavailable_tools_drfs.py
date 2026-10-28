@@ -22,7 +22,7 @@ from rest_framework_services.types.service_spec import ServiceSpec
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
-from tests.testapp.affordances import order_selector_spec
+from tests.testapp.affordances_drfs import order_selector_spec
 from tests.testapp.models import Invoice
 
 _POOL = "django_spec_mcp.handlers.offered_tools.base_pool"

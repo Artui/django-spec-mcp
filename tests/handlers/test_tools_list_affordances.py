@@ -13,18 +13,15 @@ The kernel version of the drf-services original, kept beside it as
 ``test_tools_list_affordances_drfs.py``. The same questions, of kernel specs
 registered with ``register_tool``: a ``DataclassPresenter`` stands where the
 original's ``OrderSerializer`` stood, and the order spec and its ``cancel``
-affordance are kernel twins declared here, since ``tests/testapp/affordances.py``
-declares drf-services ones.
+affordance are the kernel twins in ``tests/testapp/affordances.py``.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
 
 import pytest
 from django_service_specs import (
-    Affordance,
     DataclassPresenter,
     SelectorKind,
     SelectorSpec,
@@ -33,45 +30,13 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-
-
-@dataclass
-class Order:
-    number: str
-
-
-CANCEL_ORDER: ServiceSpec = ServiceSpec(
-    service=lambda: None,
-    permissions=[Unrestricted()],
-    affordances=[
-        Affordance(code="already_shipped", reason="The order has shipped.", when=lambda: True),
-        Affordance(code="books_closed", reason="The books are closed.", when=lambda: False),
-    ],
+from tests.testapp.affordances import (
+    CANCEL_ORDER,
+    DECLARED_CODES,
+    Order,
+    fresh_server,
+    order_selector_spec,
 )
-"""Met on its first condition and refused on its second, so every call answers
-``books_closed``."""
-
-DECLARED_CODES: list[str] = ["already_shipped", "books_closed"]
-
-
-def order_selector_spec(kind: SelectorKind, **overrides: Any) -> SelectorSpec:
-    """A selector spec presenting one order, declaring ``cancel`` as an affordance."""
-    rows: Any = {"number": "A-1"} if kind is SelectorKind.RETRIEVE else [{"number": "A-1"}]
-    fields: dict[str, Any] = {
-        "kind": kind,
-        "selector": lambda: rows,
-        "presenter": DataclassPresenter(Order),
-        "affordances": {"cancel": CANCEL_ORDER},
-        "permissions": [Unrestricted()],
-        **overrides,
-    }
-    return SelectorSpec(**fields)
-
-
-def fresh_server() -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
-
 
 _ORDER_ITEM: dict[str, Any] = {
     "type": "object",

@@ -15,6 +15,7 @@ from django.contrib.auth.models import AnonymousUser
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.protocol.types.task import Task
 from django_spec_mcp.tasks.build_worker_token import build_worker_token
 from django_spec_mcp.tasks.create_task import create_task
@@ -22,7 +23,11 @@ from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from django_spec_mcp.tasks.transition_task import transition_task
 from django_spec_mcp.tasks.types.task_record import TaskRecord
 from django_spec_mcp.types.task_status import TaskStatus
-from tests.tasks.conftest import BrokenExecutor, RecordingExecutor, slow_service
+from tests.tasks.conftest import BrokenExecutor, RecordingExecutor, context
+from tests.tasks.fixtures_drfs import (
+    server,  # noqa: F401
+    slow_service,
+)
 
 
 def _register(server: MCPServer, name: str, service: Any, **kwargs: Any) -> None:
@@ -170,6 +175,18 @@ def test_running_a_task_completes_it_with_the_tool_result(
     server.run_task(task.task_id)
     record: TaskRecord = store.get(task.task_id)
     assert record.status is TaskStatus.COMPLETED
+    assert record.task.result["structuredContent"] == {"done": "yes"}
+
+
+@pytest.mark.django_db
+def test_a_required_tool_runs_as_a_task_too(server: MCPServer, store: InMemoryTaskStore) -> None:
+    """The worker's run is the only place a ``REQUIRED`` tool's work can happen,
+    so its replay must not be asked for a task again."""
+    handle: Any = handle_tools_call({"name": "tasks.required", "arguments": {}}, context(server))
+    assert handle["resultType"] == "task", handle
+    server.run_task(handle["taskId"])
+    record: TaskRecord = store.get(handle["taskId"])
+    assert record.status is TaskStatus.COMPLETED, record.task.error
     assert record.task.result["structuredContent"] == {"done": "yes"}
 
 

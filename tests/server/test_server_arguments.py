@@ -49,7 +49,7 @@ from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
-from tests.subscriptions.test_subscription_core import _context
+from tests.utils import call_context
 
 
 @dataclass
@@ -330,7 +330,7 @@ def test_an_answer_cannot_replace_a_bound_value(is_async: bool) -> None:
         "arguments": {"note": "hi"},
         "inputResponses": {ELICITATION_KEY: {"action": "accept", "content": {"project": 8}}},
     }
-    context = _context(server, client_capabilities={"elicitation": {}})
+    context = call_context(server, client_capabilities={"elicitation": {}})
 
     if is_async:
         result = async_to_sync(handle_tools_call_async)(params, context)
