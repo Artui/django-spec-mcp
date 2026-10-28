@@ -2,13 +2,17 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+from django_service_specs import base_pool, resolve_callable_kwargs
+
 from django_spec_mcp._compat.acall import acall
 from django_spec_mcp._compat.tracing import span
+from django_spec_mcp._compat.utils import arun_selector_sync_safe
 from django_spec_mcp.auth.permissions.utils import DispatchShape
 from django_spec_mcp.handlers.handle_tools_call import _span_attrs
-from django_spec_mcp.handlers.kernel_utils import KernelAdmission, admit_kernel_read
+from django_spec_mcp.handlers.kernel_utils import KernelAdmission, admit_kernel_read, carry_token
 from django_spec_mcp.handlers.read_drfs_resource_async import read_drfs_resource_async
 from django_spec_mcp.handlers.read_kernel_resource_async import read_kernel_resource_async
+from django_spec_mcp.handlers.reads_through_drfs import reads_through_drfs
 from django_spec_mcp.handlers.runs_on_kernel import runs_on_kernel
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import (
@@ -19,8 +23,10 @@ from django_spec_mcp.handlers.utils import (
     resource_not_found_code,
     resource_shape,
 )
+from django_spec_mcp.output.build_resource_contents import build_resource_contents
 from django_spec_mcp.output.enforce_result_bytes import enforce_result_bytes
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.protocol.types.resource_contents import ResourceContents
 from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 
@@ -62,8 +68,10 @@ async def handle_resources_read_async(
         "mcp.resources.read",
         attributes={**_span_attrs(binding.name, context), "mcp.resource.uri": uri},
     ):
-        # See the sync sibling: the check and the view are built from one shape.
-        shape: DispatchShape = resource_shape(binding, vars_)
+        # See the sync sibling: a view reads plainly and builds no shape, and
+        # otherwise the check and the view are built from one.
+        plain: bool = not runs_on_kernel(binding) and not reads_through_drfs(binding)
+        shape: DispatchShape | None = None if plain else resource_shape(binding, vars_)
         allowed, required_scopes = await acall(
             check_permissions,
             binding.permissions,
@@ -105,7 +113,25 @@ async def handle_resources_read_async(
             return await read_kernel_resource_async(
                 cast(KernelResourceBinding, binding), uri, vars_, admission, context
             )
-        contents = await read_drfs_resource_async(binding, uri, vars_, shape, context)
+        contents: ResourceContents | JsonRpcError
+        if plain:
+            # See the sync sibling: the kernel's pool and the transport's
+            # request. The selector goes through ``arun_selector_sync_safe``,
+            # so a template it renders is read off the loop; encoding a
+            # document touches no ORM, so it runs here.
+            request = carry_token(context.http_request, context.token)
+            pool: dict[str, Any] = {
+                **vars_,
+                **base_pool(user=context.token.user, request=request, seeds=context.pool_seeds),
+            }
+            raw: Any = await arun_selector_sync_safe(
+                binding.selector, resolve_callable_kwargs(binding.selector, pool)
+            )
+            contents = build_resource_contents(binding=binding, uri=uri, raw=raw)
+        else:
+            contents = await read_drfs_resource_async(
+                binding, uri, vars_, cast(DispatchShape, shape), context
+            )
         if isinstance(contents, JsonRpcError):
             return contents
         result: dict[str, Any] = {

@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+from django_service_specs import base_pool, resolve_callable_kwargs, run_selector
+
 from django_spec_mcp._compat.tracing import span
 from django_spec_mcp.auth.permissions.utils import DispatchShape
 from django_spec_mcp.handlers.handle_tools_call import _span_attrs
-from django_spec_mcp.handlers.kernel_utils import KernelAdmission, admit_kernel_read
+from django_spec_mcp.handlers.kernel_utils import KernelAdmission, admit_kernel_read, carry_token
 from django_spec_mcp.handlers.read_drfs_resource import read_drfs_resource
 from django_spec_mcp.handlers.read_kernel_resource import read_kernel_resource
+from django_spec_mcp.handlers.reads_through_drfs import reads_through_drfs
 from django_spec_mcp.handlers.runs_on_kernel import runs_on_kernel
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import (
@@ -18,8 +21,10 @@ from django_spec_mcp.handlers.utils import (
     resource_not_found_code,
     resource_shape,
 )
+from django_spec_mcp.output.build_resource_contents import build_resource_contents
 from django_spec_mcp.output.enforce_result_bytes import enforce_result_bytes
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.protocol.types.resource_contents import ResourceContents
 from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 
@@ -65,14 +70,18 @@ def handle_resources_read(
         "mcp.resources.read",
         attributes={**_span_attrs(binding.name, context), "mcp.resource.uri": uri},
     ):
-        # The check and the view the read dispatches with are built from one
-        # shape, so they judge one request: the URI's variables in
+        # A view, and any binding needing nothing drf-services builds, reads
+        # plainly: it holds no ``DRFPermissionAdapter`` for a shape to bind, so
+        # none is built (``test_a_view_reads_without_an_offline_request_or_view``).
+        plain: bool = not runs_on_kernel(binding) and not reads_through_drfs(binding)
+        # Otherwise the check and the view the read dispatches with are built
+        # from one shape, so they judge one request: the URI's variables in
         # ``view.kwargs``, which a permission scoping by
         # ``view.kwargs["project_pk"]`` once saw as ``{}``
         # (``test_a_resource_permission_sees_the_uri_variables_of_the_read``),
         # the resource's name in ``view.action`` and an empty query string
         # (``test_a_resource_permission_reads_one_request_in_both_checks``).
-        shape: DispatchShape = resource_shape(binding, vars_)
+        shape: DispatchShape | None = None if plain else resource_shape(binding, vars_)
         allowed, required_scopes = check_permissions(
             binding.permissions, context.http_request, context.token, shape=shape
         )
@@ -114,7 +123,25 @@ def handle_resources_read(
             return read_kernel_resource(
                 cast(KernelResourceBinding, binding), uri, vars_, admission, context
             )
-        contents = read_drfs_resource(binding, uri, vars_, shape, context)
+        contents: ResourceContents | JsonRpcError
+        if plain:
+            # The kernel's pool and selector dispatch, and the request the
+            # kernel tool path hands a spec: the transport's ``HttpRequest``
+            # with the token on it, which a seed declaring ``request`` receives
+            # (``test_a_pool_seed_resolved_on_a_view_read_is_handed_the_transports_request``).
+            # The transport's seeds land after the URI-template variables, so
+            # none can be shadowed from the URI.
+            request = carry_token(context.http_request, context.token)
+            pool: dict[str, Any] = {
+                **vars_,
+                **base_pool(user=context.token.user, request=request, seeds=context.pool_seeds),
+            }
+            raw: Any = run_selector(
+                binding.selector, resolve_callable_kwargs(binding.selector, pool)
+            )
+            contents = build_resource_contents(binding=binding, uri=uri, raw=raw)
+        else:
+            contents = read_drfs_resource(binding, uri, vars_, cast(DispatchShape, shape), context)
         if isinstance(contents, JsonRpcError):
             return contents
         result: dict[str, Any] = {

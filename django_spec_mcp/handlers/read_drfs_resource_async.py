@@ -12,6 +12,7 @@ from django_spec_mcp.auth.permissions.utils import DispatchShape
 from django_spec_mcp.handlers.guard_resource_object import guard_resource_object
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.output.build_resource_contents import build_resource_contents
+from django_spec_mcp.output.render_drfs_resource_output import render_drfs_resource_output
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.protocol.types.resource_contents import ResourceContents
 from django_spec_mcp.registry.types.resource_binding import ResourceBinding
@@ -73,14 +74,10 @@ async def read_drfs_resource_async(
     # Rendering is ORM work: ``output_serializer(...).data`` iterates the
     # value, evaluating a lazy queryset right here. Off the loop, like the
     # selector above.
-    return await acall(
-        build_resource_contents,
-        binding=binding,
-        uri=uri,
-        raw=raw,
-        view=view,
-        request=drf_request,
+    payload: Any = await acall(
+        render_drfs_resource_output, binding, raw, view=view, request=drf_request
     )
+    return build_resource_contents(binding=binding, uri=uri, raw=payload)
 
 
 __all__ = ["read_drfs_resource_async"]

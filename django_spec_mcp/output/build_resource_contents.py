@@ -3,9 +3,6 @@ from __future__ import annotations
 import base64
 from typing import Any
 
-from django_service_specs import SelectorKind
-from rest_framework_services import base_serializer_context, renderable_serializer_class
-
 from django_spec_mcp.output.encode_json import encode_json
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.protocol.types.resource_contents import ResourceContents
@@ -19,52 +16,28 @@ def build_resource_contents(
     binding: ResourceBinding,
     uri: str,
     raw: Any,
-    view: Any = None,
-    request: Any = None,
 ) -> ResourceContents | JsonRpcError:
-    """Render a selector's return value into one ``resources/read`` block.
+    """Encode a resource's body into one ``resources/read`` block.
 
-    Shared by the sync and async read handlers, which are full parallel
-    implementations rather than wrappers — so anything that varies by binding
-    lives here, or the two transports drift and only one gets a fix.
+    Shared by both read handlers' plain path, a view's among them, and by
+    ``read_drfs_resource`` and its async sibling, which render ``raw`` through
+    the binding's ``output_serializer`` first
+    (``render_drfs_resource_output``). The read paths are full parallel
+    implementations rather than wrappers, so the encoding lives here, or the
+    two transports drift and only one gets a fix.
 
-    Two steps, in order:
-
-    1. **Render**, if the binding declares an ``output_serializer`` — with
-       ``many=True`` for a ``LIST`` selector. The serializer gets DRF's baseline
-       context (``request`` / ``format`` / ``view``) built from the synthesized
-       ``view`` / ``request``, so a field reading ``self.context["request"]``
-       resolves it as it would behind a view. A resource binding has no context
-       provider of its own: its selector is a bare callable, not a spec.
-
-       The declaration is resolved through drf-services'
-       ``renderable_serializer_class`` before it is instantiated, as
-       ``render_spec_output`` resolves it on the tool path. This site cannot
-       delegate to that function — it takes a spec, and the binding holds none —
-       so it makes the same resolution itself, rather than wrapping a dataclass
-       here. A raw dataclass declared as the output therefore renders through a
-       ``DataclassSerializer``; instantiated as declared, its own ``__init__``
-       received ``many=`` and every read raised.
-    2. **Encode** per the binding's
-       [`ResourceEncoding`][django_spec_mcp.types.ResourceEncoding].
-       ``JSON`` pretty-prints; ``TEXT`` passes the value through verbatim, which is what
-       an HTML / Markdown / CSV resource needs; ``BLOB`` base64-encodes it into
-       the spec's ``blob`` field. ``text`` and ``blob`` are mutually exclusive
-       on a ``contents`` entry, so exactly one is ever set.
+    Encoded per the binding's
+    [`ResourceEncoding`][django_spec_mcp.types.ResourceEncoding].
+    ``JSON`` pretty-prints; ``TEXT`` passes the value through verbatim, which is what
+    an HTML / Markdown / CSV resource needs; ``BLOB`` base64-encodes it into
+    the spec's ``blob`` field. ``text`` and ``blob`` are mutually exclusive
+    on a ``contents`` entry, so exactly one is ever set.
 
     A ``TEXT`` or ``BLOB`` binding whose selector returned the wrong Python type can
     only surface at read time, so it comes back as a
     [`JsonRpcError`][django_spec_mcp.protocol.types.json_rpc_error.JsonRpcError]
     rather than an exception — a well-formed error response instead of a 500."""
     payload: Any = raw
-    serializer_class = renderable_serializer_class(binding.output_serializer)
-    if serializer_class is not None:
-        payload = serializer_class(
-            raw,
-            many=binding.kind is SelectorKind.LIST,
-            context=base_serializer_context(view=view, request=request),
-        ).data
-
     if binding.encoding is ResourceEncoding.BLOB:
         if not isinstance(payload, bytes | bytearray | memoryview):
             return JsonRpcError(
