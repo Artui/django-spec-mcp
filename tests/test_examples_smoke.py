@@ -57,6 +57,13 @@ def test_no_example_imports_drf_or_drf_services() -> None:
 
 
 @pytest.mark.parametrize(("project", "settings_module", "mcp_module"), _EXAMPLES)
+def test_no_example_installs_drf(project: str, settings_module: str, mcp_module: str) -> None:
+    """An installed app is reached by Django's app loading, not by an import the guard above can see."""
+    settings_file = _EXAMPLES_DIR / project / Path(*settings_module.split("."))
+    assert "rest_framework" not in settings_file.with_suffix(".py").read_text()
+
+
+@pytest.mark.parametrize(("project", "settings_module", "mcp_module"), _EXAMPLES)
 def test_example_build_server(project: str, settings_module: str, mcp_module: str) -> None:
     root = _EXAMPLES_DIR / project
     code = f"import django; django.setup()\nimport {mcp_module} as m\nm.build_server()"
@@ -507,34 +514,40 @@ _JOB_STATUS = textwrap.dedent(
     def read(uri):
         return rpc("resources/read", {"uri": uri}, uri)
 
-    started = call("jobs.start", {"duration_seconds": 1})
+    started = call("jobs.start", {"duration_seconds": 2})
     job_id = started["structuredContent"]["id"]
-    # Bounded: a job of one second that has not finished in twenty is a failure.
+    # Bounded: a job of two seconds that has not finished in twenty is a failure.
     for _ in range(200):
         row = json.loads(read(f"jobs://{job_id}")["result"]["contents"][0]["text"])
         if row["status"] == "done":
             break
         time.sleep(0.1)
-    print(json.dumps({
+    replies = {
         "started": started,
         "refused": call("jobs.start", {"duration_seconds": 0}),
         "row": row,
         "done": call("jobs.list", {"status": "done"}),
         "queued": call("jobs.list", {"status": "queued"}),
         "missing": read("jobs://00000000-0000-0000-0000-000000000000"),
-    }))
+    }
+    # Started later and shorter, so ordering by creation and ordering by
+    # duration answer the two jobs in opposite orders.
+    replies["later"] = call("jobs.start", {"duration_seconds": 1})
+    replies["oldest_first"] = call("jobs.list", {"ordering": ["created"]})
+    replies["newest_first"] = call("jobs.list", {"ordering": ["-created"]})
+    print(json.dumps(replies))
     """
 )
 
 
 def test_job_status_starts_a_job_and_serves_its_status(tmp_path: Path) -> None:
-    """``jobs.start`` answers at once, the resource follows the job, ``jobs.list`` filters.
+    """``jobs.start`` answers at once, the resource follows the job, ``jobs.list`` filters and orders.
 
     The start returns the queued row with its id as a string, before the work
     runs; an out-of-range duration is a ``validation_error`` result; reading
     ``jobs://{job_id}`` follows the row to ``done``; the FilterSet's
-    ``status`` narrows the list; and a job that does not exist is a missing
-    resource.
+    ``status`` narrows the list and its ``created`` ordering sorts it; and a
+    job that does not exist is a missing resource.
     """
     result = subprocess.run(
         [sys.executable, "-c", _JOB_STATUS, str(tmp_path / "jobs.sqlite3")],
@@ -548,7 +561,7 @@ def test_job_status_starts_a_job_and_serves_its_status(tmp_path: Path) -> None:
 
     started = replies["started"]["structuredContent"]
     assert started["status"] == "queued"
-    assert started["duration_seconds"] == 1
+    assert started["duration_seconds"] == 2
     assert started["finished_at"] is None
 
     refused = replies["refused"]
@@ -566,3 +579,13 @@ def test_job_status_starts_a_job_and_serves_its_status(tmp_path: Path) -> None:
     assert replies["queued"]["structuredContent"]["items"] == []
 
     assert replies["missing"]["error"]["code"] == -32602
+
+    later = replies["later"]["structuredContent"]["id"]
+    assert [item["id"] for item in replies["oldest_first"]["structuredContent"]["items"]] == [
+        started["id"],
+        later,
+    ]
+    assert [item["id"] for item in replies["newest_first"]["structuredContent"]["items"]] == [
+        later,
+        started["id"],
+    ]

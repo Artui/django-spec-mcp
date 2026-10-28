@@ -264,7 +264,7 @@ concretely (`Any` doesn't introspect — see
 ## Worked example to copy from
 
 [`examples/invoicing/`](https://github.com/Artui/django-spec-mcp/tree/main/examples/invoicing)
-is a full Django project that exercises `register_service_tool`,
-`register_selector_tool` (with `FilterSet`, ordering, pagination),
-`register_resource` (templated URI), and `register_prompt`. It's a
+is a full Django project that declares its operations as kernel specs and
+exercises `register_tool` (a write, and a read with a `FilterSet`, ordering
+and pagination), `register_resource` (templated URI), and `register_prompt`. It's a
 faster way to see the end-to-end shape than reading the docs alone.
