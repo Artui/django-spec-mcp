@@ -221,8 +221,7 @@ carries; releases up to 0.54.0 are in
 - **A `REQUIRED` tool's task runs.** The worker's run of a task went back
   through the task decision, met a context declaring no extension, and was
   refused `-32021`, so every task of a `REQUIRED` tool ended `failed` without
-  running, on the drf-services path as on the kernel one. The worker's run now
-  enters below that decision. A client that did not declare the extension is
-  still refused `-32021` by a `REQUIRED` tool.
+  running. The worker's run now enters below that decision. A client that did
+  not declare the extension is still refused `-32021` by a `REQUIRED` tool.
 
 [Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.0.0...HEAD
