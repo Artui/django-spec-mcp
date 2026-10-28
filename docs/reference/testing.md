@@ -27,8 +27,8 @@ assert set(advertised) == set(result["structuredContent"][0])
 
 Comparing key sets catches a field that vanished. It passes unchanged when a
 property advertised as `integer` arrives as a string, or a `date-time` arrives
-as `"soon"` — which is what a typed client actually breaks on, and what an
-output serializer's `to_representation` override introduces without touching a
+as `"soon"` — which is what a typed client actually breaks on, and what a
+presenter returning a value of the wrong type introduces without touching a
 single key.
 
 `assert_tool_result_conforms` validates the payload against the schema, types

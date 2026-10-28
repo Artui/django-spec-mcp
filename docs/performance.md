@@ -68,8 +68,8 @@ A few specific things that can show up at scale:
 - **Auth backend** — if every call hits an external introspection
   endpoint, that's the bottleneck. Cache the introspection result in
   Django's cache (per-token TTL) and reuse across requests.
-- **Output serializer** — `ModelSerializer(many=True)` on a list of
-  thousands is N+1-prone. Add `.select_related()` /
+- **Presenter** — presenting thousands of rows, each of which follows a
+  relation, is N+1-prone. Add `.select_related()` /
   `.prefetch_related()` in the selector; use `output_format="toon"`
   to reduce token count if the bottleneck is downstream LLM cost.
 - **`atomic=True` on a service that doesn't write** — services

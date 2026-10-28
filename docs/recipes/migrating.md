@@ -65,13 +65,14 @@ Common gaps in DIY servers — each of which the package handles for you:
   `MCP-Session-Id` / `Origin` validation, body-size cap, 401
   challenges, notification 202) — required by the MCP spec.
 - **Schema introspection** — generating the `inputSchema` /
-  `outputSchema` from DRF serializers / dataclasses, so `tools/list` is
-  trustworthy.
-- **Dispatch wiring** — input validation, kwarg-pool resolution,
-  output serialization, error mapping (DRF / `ServiceError` →
-  JSON-RPC errors).
+  `outputSchema` from the spec's dataclasses, forms and reads, so
+  `tools/list` is trustworthy.
+- **Dispatch wiring** — argument validation, kwarg-pool resolution,
+  presentation, error mapping (a validation failure, a refused
+  permission, a `ServiceError` → JSON-RPC errors).
 - **Auth + rate limits + permissions** — DOT integration, scope-aware
-  challenges, per-binding `MCPPermission` and `MCPRateLimit`.
+  challenges, the spec's permission checks, per-binding `scopes=` and
+  `MCPRateLimit`.
 - **Async + SSE + replay** — JSON dispatch in a sync stack, async
   dispatch under ASGI, GET-side server-initiated push, reconnect via
   `Last-Event-ID`.
@@ -81,39 +82,46 @@ Common gaps in DIY servers — each of which the package handles for you:
 Mutations become **services**, reads become **selectors**. The
 function bodies stay the same; what changes is that the entry points
 are now plain Python (no `request` parsing, no JSON shaping) and a
-`ServiceSpec` / `SelectorSpec` carries the contract.
+kernel `ServiceSpec` / `SelectorSpec` carries the contract.
 
 ```python
-# After — a plain service callable
-from django_service_specs import ServiceError
+# After — plain callables
+from django.db.models import QuerySet
 
 
-def create_invoice(*, data: dict) -> Invoice:
-    return Invoice.objects.create(
-        number=data["number"],
-        amount_cents=data["amount_cents"],
-    )
+def create_invoice(*, number: str, amount_cents: int) -> Invoice:
+    return Invoice.objects.create(number=number, amount_cents=amount_cents)
 
 
 def list_invoices() -> QuerySet[Invoice]:
     return Invoice.objects.all()
 ```
 
-### Step 2 — Define DRF serializers (or dataclasses)
+A service receives each validated argument by name. One that needs the caller
+declares `user` among its keywords, and the kernel's pool fills it.
 
-The package generates `inputSchema` / `outputSchema` from these. If you
-already have DRF serializers, reuse them verbatim.
+### Step 2 — Describe what goes in and what comes out
+
+The package generates `inputSchema` / `outputSchema` from these. A dataclass
+is the shortest form; a Django form you already have works too, through the
+kernel's `FormValidator`.
 
 ```python
-class InvoiceInput(serializers.Serializer):
-    number = serializers.CharField(max_length=32)
-    amount_cents = serializers.IntegerField(min_value=0)
+from dataclasses import dataclass
 
 
-class InvoiceOutput(serializers.ModelSerializer):
-    class Meta:
-        model = Invoice
-        fields = ["id", "number", "amount_cents", "sent"]
+@dataclass
+class InvoiceInput:
+    number: str
+    amount_cents: int
+
+
+@dataclass
+class InvoiceOutput:
+    id: int
+    number: str
+    amount_cents: int
+    sent: bool
 ```
 
 ### Step 3 — Register on an `MCPServer`
@@ -122,36 +130,46 @@ Replace the custom view with a single `MCPServer` instance:
 
 ```python
 # After — wired through MCPServer
-from django_service_specs import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_service_specs import (
+    DataclassPresenter,
+    DataclassValidator,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+)
+
 from django_spec_mcp import MCPServer
 
-server = MCPServer(name="invoicing")
+server = MCPServer(name="invoicing", auth_backend=my_auth_backend)
 
-server.register_service_tool(
-    name="invoices.create",
-    spec=ServiceSpec(
+server.register_tool(
+    ServiceSpec(
         service=create_invoice,
-        input_serializer=InvoiceInput,
-        output_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            output_serializer=InvoiceOutput,
-        ),
+        validator=DataclassValidator(InvoiceInput),
+        presenter=DataclassPresenter(InvoiceOutput),
+        permissions=[CanManageInvoices()],
     ),
+    name="invoices.create",
     description="Create a new invoice.",
 )
 
-server.register_selector_tool(
-    name="invoices.list",
-    spec=SelectorSpec(
+server.register_tool(
+    SelectorSpec(
         kind=SelectorKind.LIST,
         selector=list_invoices,
-        output_serializer=InvoiceOutput,
+        presenter=DataclassPresenter(InvoiceOutput),
+        permissions=[CanManageInvoices()],
     ),
+    name="invoices.list",
+    description="List invoices.",
     paginate=True,
 )
 ```
+
+`CanManageInvoices` is a kernel `PermissionCheck` of your own; see
+[Add a custom permission](custom-permission.md). Every spec declares its
+permissions, so an operation the DIY view left open says so with
+`[Unrestricted()]`.
 
 ### Step 4 — Drop the URL conf in
 
@@ -171,7 +189,7 @@ Once the new endpoint passes Inspector / your end-to-end suite, delete:
 
 - the custom `View` and its URL
 - the custom JSON-RPC dispatcher
-- any hand-written input validation that the serializer now covers
+- any hand-written input validation that the spec's validator now covers
 - error-mapping code that translated exceptions to JSON-RPC errors
   (the package does this at the boundary)
 
@@ -183,12 +201,12 @@ mechanical because both packages think in terms of "callable + schema":
 
 | `fastapi-mcp`                                              | `django-spec-mcp`                                       |
 |------------------------------------------------------------|------------------------------------------------------------------------|
-| `@mcp.tool` on a FastAPI handler                           | `register_service_tool(...)` or `@server.service_tool`                  |
-| Pydantic input model                                       | DRF `Serializer` (or `@dataclass` — the package generates the schema)   |
-| Pydantic output model                                      | DRF `Serializer` on `ServiceSpec.output_selector_spec.output_serializer` |
-| `@mcp.resource("uri://{var}")`                             | `register_resource(uri_template="uri://{var}", selector=SelectorSpec(...))` |
+| `@mcp.tool` on a FastAPI handler                           | `register_tool(ServiceSpec(...), name=...)`                             |
+| Pydantic input model                                       | a `@dataclass` behind `DataclassValidator`, or a Django form behind `FormValidator` |
+| Pydantic output model                                      | a `@dataclass` behind `DataclassPresenter`                              |
+| `@mcp.resource("uri://{var}")`                             | `register_resource(SelectorSpec(kind=SelectorKind.RETRIEVE, ...), uri_template="uri://{var}")` |
 | `@mcp.prompt`                                              | `register_prompt(name=..., render=...)`                                 |
-| FastAPI's dependency injection (`request`, `db`, etc.)     | The kwarg pool — declare the kwargs you need on the callable; `resolve_callable_kwargs` handles the rest |
+| FastAPI's dependency injection (`request`, `db`, etc.)     | The kwarg pool — declare the keywords you need on the callable, such as `user`, and register a pool seed for anything else |
 | Streamable-HTTP transport implemented inside `fastapi-mcp` | Implemented inside `django-spec-mcp`; same wire shape   |
 
 ### Mapping example
@@ -206,48 +224,40 @@ async def create_invoice(data: InvoiceInputModel) -> InvoiceOutputModel:
 
 ```python
 # django-spec-mcp
-async def create_invoice(*, data: dict) -> Invoice:
-    return await Invoice.objects.acreate(
-        number=data["number"],
-        amount_cents=data["amount_cents"],
-    )
+async def create_invoice(*, number: str, amount_cents: int) -> Invoice:
+    return await Invoice.objects.acreate(number=number, amount_cents=amount_cents)
 
 
-server.register_service_tool(
-    name="create_invoice",
-    spec=ServiceSpec(
+server.register_tool(
+    ServiceSpec(
         service=create_invoice,
-        input_serializer=InvoiceInput,
-        output_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            output_serializer=InvoiceOutput,
-        ),
+        validator=DataclassValidator(InvoiceInput),
+        presenter=DataclassPresenter(InvoiceOutput),
+        permissions=[CanManageInvoices()],
     ),
+    name="create_invoice",
+    description="Create a new invoice.",
 )
 ```
 
-The `async def` works as-is — the dispatch layer detects async
-callables and awaits them natively when mounted under
-`server.async_urls`.
+The `async def` works as-is under `server.async_urls`: the dispatch layer
+detects an async callable and awaits it natively.
 
-### Pydantic → DRF serializer
+### Pydantic → dataclass
 
-Pydantic v2 and DRF serializers have similar shapes. For most fields a
+A Pydantic v2 model and a dataclass have similar shapes. For most fields a
 mechanical translation is enough:
 
-| Pydantic                   | DRF                                            |
+| Pydantic                   | Dataclass                                      |
 |----------------------------|------------------------------------------------|
-| `field: str = Field(...)`  | `field = serializers.CharField()`              |
-| `field: int = 0`           | `field = serializers.IntegerField(default=0)`  |
-| `field: list[str]`         | `field = serializers.ListField(child=serializers.CharField())` |
-| `field: SomeModel`         | nested `serializers.Serializer` subclass       |
-| `Field(..., min_length=N)` | `CharField(min_length=N)`                      |
+| `field: str = Field(...)`  | `field: str`                                   |
+| `field: int = 0`           | `field: int = 0`                               |
+| `field: list[str]`         | `field: list[str] = dataclasses.field(default_factory=list)` |
+| `field: SomeModel`         | `field: SomeDataclass`, a nested `@dataclass`  |
+| `Field(..., min_length=N)` | a Django form behind `FormValidator`, whose `CharField(min_length=N)` enforces the bound; the `inputSchema` does not advertise it |
 
-If the rewrite is large, fall back to **dataclasses**: every service
-callable can take a bare `@dataclass` for `data`, and the package
-auto-wraps it in DRF's `DataclassSerializer`. Annotate every field
-concretely (`Any` doesn't introspect — see
-[`docs/concepts.md`](../concepts.md)).
+Annotate every field concretely: a field typed `Any` has no JSON type to
+advertise, so registering the spec raises `ImproperlyConfigured` naming it.
 
 ### Ports & deployment
 

@@ -8,30 +8,31 @@
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![License](https://img.shields.io/pypi/l/django-spec-mcp.svg)](https://github.com/Artui/django-spec-mcp/blob/main/LICENSE)
 
-Expose [`djangorestframework-services`](https://github.com/Artui/djangorestframework-services)
+Serve [`django-service-specs`](https://github.com/Artui/django-service-specs)
 services and selectors as a [Model Context Protocol](https://modelcontextprotocol.io)
 (MCP) server, conforming to MCP **2026-07-28** and **2025-11-25** (Streamable HTTP).
 
 ## What this is
 
-`djangorestframework-services` lets a Django project expose **services** (mutations,
-side-effecting callables) and **selectors** (read callables) as a thin layer above
-DRF. Both are registered through `ServiceSpec` and dispatched via
-`inspect.signature` so any callable that names the kwargs it wants (`request`,
-`user`, `data`, `instance`, …) just works.
+`django-service-specs` is the kernel: a Django project declares each operation
+once as a spec. A `ServiceSpec` is a mutation, a side-effecting callable; a
+`SelectorSpec` is a read. The spec carries what the operation takes (a
+`Validator`, or `reads` declared as `Parameters`), who may run it (its
+`permissions`, kernel `PermissionCheck`s), and what it returns (a
+`Presenter`), and the kernel's `dispatch` runs it the same way for every
+transport.
 
-`django-spec-mcp` is an **alternate transport** over the same primitives.
-It mounts a single `/mcp` endpoint that speaks Streamable HTTP per the MCP
-spec, and registers your `ServiceSpec`s as MCP tools and resources. It does not
-walk DRF viewsets or routers — the unit of registration is the `ServiceSpec`,
-not a view.
+`django-spec-mcp` is the MCP transport over those specs. It mounts a single
+`/mcp` endpoint that speaks Streamable HTTP per the MCP spec, and registers
+your specs as MCP tools and resources. The endpoints are plain Django views,
+and the unit of registration is the spec, not a view.
 
 ## When to use it
 
 Reach for this package when:
 
-- Your project already uses `ServiceViewSet` (or plain `ServiceSpec` definitions)
-  and you want to expose those callables to an MCP-aware client (Claude Desktop,
+- Your project declares its operations as `django-service-specs` specs (or is
+  about to) and you want to expose them to an MCP-aware client (Claude Desktop,
   Inspector, Cursor, etc.).
 - You want a single, spec-compliant `/mcp` endpoint with pluggable auth
   (django-oauth-toolkit out of the box) and a small surface that you can audit.
@@ -41,12 +42,13 @@ Skip it when you don't need the MCP wire format — call your services directly.
 
 ## What ships
 
-- **Tools** — `tools/list`, `tools/call` for `register_service_tool`
-  (mutations) and `register_selector_tool` (reads, with optional
-  `FilterSet` + ordering + pagination).
+- **Tools** — `tools/list`, `tools/call` for `register_tool`, over a kernel
+  `ServiceSpec` (mutations) or `SelectorSpec` (reads, with an optional
+  `FilterSet`, ordering and pagination). `register_tools` registers every
+  spec in a kernel `SpecRegistry`.
 - **Resources** — `resources/list`, `resources/templates/list`,
-  `resources/read` against `SelectorSpec`-backed callables; RFC 6570
-  templated URIs.
+  `resources/read` against a kernel `RETRIEVE` `SelectorSpec`; RFC 6570
+  templated URIs whose variables are the spec's reads.
 - **Prompts** — `prompts/list`, `prompts/get` against render callables
   returning strings, `PromptMessage`s, or async coroutines.
 - **Discovery** — `server/discover`, the 2026-07-28 revision's replacement
@@ -54,10 +56,10 @@ Skip it when you don't need the MCP wire format — call your services directly.
   client can lead with it.
 - **Argument completion** — `completion/complete` against per-argument
   completers on prompts and resource templates.
-- **Pluggable auth** — `DjangoOAuthToolkitBackend` (default when
-  `oauth2_provider` is installed) and `AllowAnyBackend` (dev only).
-  Per-binding `MCPPermission` classes (`ScopeRequired`,
-  `DjangoPermRequired`) plus your own.
+- **Pluggable auth** — an `MCPAuthBackend` verifies the bearer token;
+  `DjangoOAuthToolkitBackend` (the default) and `AllowAnyBackend` (dev only)
+  ship. A tool or resource is guarded by its spec's own kernel `permissions`,
+  and `scopes=` at registration adds an OAuth scope gate.
 - **RFC 8707 audience binding** when `RESOURCE_URL` is configured;
   **RFC 9728 PRM** served from the configured backend.
 - **Per-binding rate limits** — `MCPRateLimit` Protocol with
@@ -113,8 +115,8 @@ Optional extras degrade gracefully:
   `__init__` if `redis` isn't installed.
 - The OTel tracing helper yields a no-op span when `opentelemetry-api` isn't
   importable, so handlers stay branch-free.
-- `spec.filter_set` on a selector tool raises a clear `ImportError` only if the
-  spec declares it without `django-filter` installed.
+- `filter_set=` on a selector spec needs `django-filter`, which the kernel's
+  `filter` extra installs; nothing else here imports it.
 
 ## Where to next
 

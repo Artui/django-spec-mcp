@@ -25,7 +25,7 @@ forbids module/class-level mutable state — see CLAUDE.md.)
 ## In production: a custom store
 
 Implement the `SessionStore` Protocol (four methods, no other contract).
-Since 0.7 every session is bound to the principal that initialized it:
+Every session is bound to the principal that initialized it:
 `create` receives a keyword-only `principal_id` and `owner` returns it —
 the transport compares it on every POST / GET / DELETE and treats a
 wrong-principal presentation exactly like an unknown session (404):

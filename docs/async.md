@@ -55,8 +55,8 @@ Everything else in `MIDDLEWARE` applies normally.
 
 ## Sync collaborators are bridged automatically
 
-`AsyncStreamableHttpViewSet` accepts the same auth backend and session store as
-the sync view. Sync methods on those collaborators are wrapped in
+`AsyncStreamableHttpViewSet`, the plain async Django view `async_urls` mounts,
+accepts the same auth backend and session store as the sync view. Sync methods on those collaborators are wrapped in
 `asgiref.sync.sync_to_async` at the call site, so the existing
 `AllowAnyBackend`, `DjangoOAuthToolkitBackend`, `InMemorySessionStore`, and
 `DjangoCacheSessionStore` work unchanged.

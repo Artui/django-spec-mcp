@@ -1,27 +1,30 @@
 # Expose a service
 
-The smallest possible end-to-end. A single service callable plus a JSON-Schema-
-producing input serializer is all the MCP server needs.
+The smallest possible end-to-end. A single service callable plus the arguments
+it reads, declared as kernel `Parameters`, is all the MCP server needs.
 
 ```python
-from rest_framework import serializers
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_service_specs import Parameter, Parameters, ServiceSpec, Unrestricted
+
 from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 
 
-def calculate_total(*, data: dict) -> dict:
+def calculate_total(*, items: list[dict]) -> dict:
     """Return the total of a list of line-item subtotals."""
-    return {"total": sum(item["amount"] for item in data["items"])}
+    return {"total": sum(item["amount"] for item in items)}
 
 
-class CalculateTotalInput(serializers.Serializer):
-    items = serializers.ListField(child=serializers.DictField(child=serializers.IntegerField()))
+LINE_ITEM = Parameters([Parameter("amount", "integer", required=True)])
 
-
-server = MCPServer(name="cart")
-server.register_service_tool(
+server = MCPServer(name="cart", auth_backend=AllowAnyBackend())
+server.register_tool(
+    ServiceSpec(
+        service=calculate_total,
+        reads=Parameters([Parameter("items", "array", items=LINE_ITEM, required=True)]),
+        permissions=[Unrestricted()],
+    ),
     name="cart.calculate_total",
-    spec=ServiceSpec(service=calculate_total, input_serializer=CalculateTotalInput),
     description="Sum the `amount` field across a list of line items.",
 )
 ```
