@@ -3,13 +3,11 @@
 Closes the loop the tasks extension describes: a client subscribes to task ids
 on ``subscriptions/listen`` and stops polling.
 
-Only the questions that need no registered tool are asked here, a brokerless
-server transitioning silently among them. Those that run or cancel a task of
-one (cancelling, answering an input request, a worker's outcome, the
-acknowledgement listing task ids) register a drf-services tool with a
-``task_policy``, which a kernel spec does not take yet (``register_tool``
-refuses it with ``ImproperlyConfigured``), and are owed until it does. The original is kept beside this
-file as ``test_task_notifications_drfs.py``.
+Asked of a kernel tool: transitions reaching a watcher, cancelling, answering
+an input request, a worker's outcome, the acknowledgement listing task ids, a
+brokerless server transitioning silently, and the capability rule at the
+transport. The original is kept beside this file as
+``test_task_notifications_drfs.py``.
 """
 
 from __future__ import annotations
@@ -20,8 +18,14 @@ from typing import Any
 import pytest
 from asgiref.sync import async_to_sync
 from django.db import transaction
+from django_service_specs import ServiceSpec, Unrestricted
 
+from django_spec_mcp import MCPServer, SubscriptionFilter, TaskPolicy
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.handlers.handle_tasks_cancel import handle_tasks_cancel
+from django_spec_mcp.handlers.handle_tasks_update import handle_tasks_update
+from django_spec_mcp.subscriptions.grant_subscription import grant_subscription
 from django_spec_mcp.subscriptions.in_memory_subscription_broker import (
     InMemorySubscriptionBroker,
 )
@@ -30,9 +34,27 @@ from django_spec_mcp.tasks.create_task import create_task
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from django_spec_mcp.tasks.transition_task import transition_task
 from django_spec_mcp.types.task_status import TaskStatus
-from tests.tasks.conftest import RecordingExecutor
+from tests.tasks.conftest import RecordingExecutor, done
+from tests.utils import call_context
 
 pytestmark = pytest.mark.django_db(transaction=True)
+
+
+def _server(broker: Any, store: Any) -> MCPServer:
+    server = MCPServer(
+        name="tasknotify",
+        auth_backend=AllowAnyBackend(),
+        subscription_broker=broker,
+        task_store=store,
+        task_executor=RecordingExecutor(store),
+    )
+    server.register_tool(
+        ServiceSpec(service=done, permissions=[Unrestricted()], atomic=False),
+        name="t.slow",
+        description="x",
+        task_policy=TaskPolicy.OPTIONAL,
+    )
+    return server
 
 
 def _task(store: Any) -> Any:
@@ -107,6 +129,50 @@ def test_nothing_is_announced_until_the_transaction_commits() -> None:
         transition_task(store, task.task_id, status=TaskStatus.COMPLETED, broker=broker)
         assert queue.qsize() == 0, "announced before commit"
     assert queue.qsize() == 1
+
+
+def test_cancelling_announces() -> None:
+    broker, store = InMemorySubscriptionBroker(), InMemoryTaskStore()
+    server = _server(broker, store)
+    task = _task(store)
+    queue = _watch(broker, task.task_id)
+    handle_tasks_cancel({"taskId": task.task_id}, call_context(server))
+    assert queue.get_nowait()["params"]["status"] == "cancelled"
+
+
+def test_answering_an_input_request_announces() -> None:
+    """Fulfilment moves the task back to ``working``, which a watcher should
+    hear exactly as it hears any other transition."""
+    broker, store = InMemorySubscriptionBroker(), InMemoryTaskStore()
+    server = _server(broker, store)
+    task = _task(store)
+    transition_task(store, task.task_id, status=TaskStatus.INPUT_REQUIRED, input_requests={"k": {}})
+    queue = _watch(broker, task.task_id)
+    handle_tasks_update({"taskId": task.task_id, "inputResponses": {"k": 1}}, call_context(server))
+    assert queue.get_nowait()["params"]["status"] == "working"
+
+
+def test_a_worker_running_a_task_announces_its_outcome() -> None:
+    """The end-to-end point of the feature: the client stops polling because
+    the worker tells it."""
+    broker, store = InMemorySubscriptionBroker(), InMemoryTaskStore()
+    server = _server(broker, store)
+    task = _task(store)
+    queue = _watch(broker, task.task_id)
+    server.run_task(task.task_id)
+    frame = queue.get_nowait()
+    assert frame["params"]["status"] == "completed"
+    assert frame["params"]["result"]["structuredContent"] == {"done": "yes"}
+
+
+def test_the_acknowledgement_lists_the_task_ids_it_agreed_to() -> None:
+    broker, store = InMemorySubscriptionBroker(), InMemoryTaskStore()
+    server = _server(broker, store)
+    task = _task(store)
+    granted, _ = grant_subscription(
+        SubscriptionFilter(task_ids=(task.task_id,)), call_context(server)
+    )
+    assert granted.to_dict()["taskIds"] == [task.task_id]
 
 
 # ----- the capability rule at the transport -----

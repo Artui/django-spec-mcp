@@ -62,8 +62,6 @@ def kernel_spec_to_tool(
       ``register_service_tool`` / ``register_selector_tool``.
     - a knob of the other kind of tool: ``paginate`` / ``max_page_size`` on a
       service tool or a ``RETRIEVE``, ``invalidates`` on a selector tool.
-    - a ``task_policy`` other than ``FORBIDDEN``, which the task path does not
-      run for a kernel spec yet.
     - ``scopes=()``, which reads as a gate and admits everyone. A bare string
       is one scope, as ``ScopeRequired`` reads it.
     - ``UnknownArguments.PASSTHROUGH``, which the kernel never honours: an
@@ -86,11 +84,6 @@ def kernel_spec_to_tool(
             "register_selector_tool."
         )
     _refuse_other_kinds_knobs(name, spec, invalidates, paginate, max_page_size)
-    if task_policy is not TaskPolicy.FORBIDDEN:
-        raise ImproperlyConfigured(
-            f"Tool {name!r}: task_policy={task_policy.name} is not yet supported for a "
-            "kernel spec; such a tool runs inline. Leave task_policy at its default."
-        )
     if unknown_arguments is UnknownArguments.PASSTHROUGH:
         raise ImproperlyConfigured(
             f"Tool {name!r}: UnknownArguments.PASSTHROUGH is not honoured by the kernel, "
@@ -120,6 +113,9 @@ def kernel_spec_to_tool(
         content_mime_type=content_mime_type,
         include_structured_content=include_structured_content,
         include_output_schema=include_output_schema,
+        # Kept on the binding for ``maybe_create_task``, which decides at the
+        # call (``test_a_task_policy_is_kept_on_the_binding``).
+        task_policy=task_policy,
         invalidates=invalidates,
         paginate=paginate,
         max_page_size=max_page_size,

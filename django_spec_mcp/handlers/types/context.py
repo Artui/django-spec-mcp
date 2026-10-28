@@ -94,6 +94,15 @@ class MCPCallContext:
     testing a predicate costs nothing to repeat, consuming a quota is a side
     effect that must happen exactly once."""
 
+    in_task_worker: bool = False
+    """Whether this call is a task worker's run of a task already created.
+
+    Set only by the worker's context (``MCPServer._worker_context``). The run is
+    the task, so ``maybe_create_task`` never asks it to become one: answering it
+    by the tool's ``task_policy`` again refused every ``REQUIRED`` tool's run
+    ``-32021``, since the worker declares no extension, and no such task could
+    ever complete."""
+
     config: MCPConfig = field(default_factory=build_mcp_config)
     """The owning server's resolved scalars, snapshotted in
     ``MCPServer.__init__``. Handlers read these instead of calling

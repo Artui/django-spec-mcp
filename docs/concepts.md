@@ -1005,8 +1005,9 @@ What changes against the drf-services tools:
   scope gate does not count as a guard.
 - **Registration refuses what a kernel tool cannot mean**: a spec that is not a
   kernel spec (`TypeError`), `paginate=` / `max_page_size=` on a service tool or
-  a `RETRIEVE`, `invalidates=` on a selector tool, a `task_policy=` other than
-  the default (not yet supported), and `UnknownArguments.PASSTHROUGH`.
+  a `RETRIEVE`, `invalidates=` on a selector tool, and
+  `UnknownArguments.PASSTHROUGH`. `task_policy=` is taken by either kind of
+  tool, as [Opting a tool in](#opting-a-tool-in) describes.
 - **A resource is a `RETRIEVE`.** `register_resource` takes the spec
   positionally, and the `selector=` form keeps the drf-services path; a `LIST`
   spec is refused, as is a knob of the `selector=` form beside a spec. A reader
@@ -2111,9 +2112,13 @@ The extension makes the **server** the sole decider — a client cannot ask for 
 task — so the choice lives on the binding, next to every other per-tool knob:
 
 ```python
-server.register_service_tool(
+from django_service_specs import ServiceSpec, Unrestricted
+
+from django_spec_mcp import TaskPolicy
+
+server.register_tool(
+    ServiceSpec(service=generate_report, permissions=[Unrestricted()]),
     name="reports.generate",
-    spec=ServiceSpec(service=generate_report),
     task_policy=TaskPolicy.OPTIONAL,
 )
 ```
@@ -2128,6 +2133,13 @@ server.register_service_tool(
 behaves exactly as it did**. Reach for `OPTIONAL` when a tool is slow but can
 still finish inside a request, and `REQUIRED` when it genuinely cannot — where
 running it inline would only hit the dispatch deadline.
+
+A service tool and a selector tool take `task_policy=` alike. A caller the
+spec's own `permissions` or the tool's `scopes=` refuse is answered `-32006`
+and no task is created, and the tool's rate limits are charged once, when the
+task is created. The worker runs the call, under either policy, through the
+same `dispatch` a direct call takes, under the server's `pool_seeds` and
+`conventions`, with the spec's permissions asked again.
 
 ### What a client sees
 

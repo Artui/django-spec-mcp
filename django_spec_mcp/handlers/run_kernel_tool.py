@@ -13,9 +13,9 @@ from django_spec_mcp.handlers.kernel_utils import (
     not_found_result,
     on_the_wire,
     page_request,
-    present_tool_result,
     tool_result,
 )
+from django_spec_mcp.handlers.present_kernel_result import present_kernel_result
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.types.kernel_input_round import KernelInputRound
 from django_spec_mcp.handlers.types.kernel_refusal_scene import KernelRefusalScene
@@ -77,7 +77,16 @@ def run_kernel_tool(
     bounded = bound_unpaginated_rows(binding, result, page, context.config)
     if isinstance(bounded, ToolResult):
         return bounded.to_dict()
-    payload: Any = present_tool_result(binding, bounded, page)
+    payload: Any = present_kernel_result(
+        binding,
+        bounded,
+        page,
+        arguments=arguments,
+        config=context.config,
+        conventions=context.conventions,
+    )
+    if isinstance(payload, ToolResult):
+        return payload.to_dict()
     return tool_result(
         binding, payload, output_format=params.get("outputFormat"), config=context.config
     ).to_dict()

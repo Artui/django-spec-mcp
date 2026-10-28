@@ -387,7 +387,9 @@ async def test_a_presenter_that_raises_is_a_json_rpc_internal_error(
 
     The original raised DRF's ``ValidationError``, which DRF rendered as a
     ``400`` with a bare list for a body before the backstop. A presenter's
-    exception is the server's fault whatever its type.
+    exception is the server's fault, the one exception being a
+    ``ServiceValidationError`` refusing a shape the caller sent, which is the
+    caller's ``validation_error`` (``test_kernel_presenter_refusal.py``).
     """
     caplog.set_level(logging.ERROR, logger="django_spec_mcp")
     response = await _post(

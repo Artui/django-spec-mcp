@@ -4,6 +4,11 @@
 service running as a task reports onto its own record and the client reads it
 through ``tasks/get``. The service body is identical either way; that is the
 requirement these tests hold.
+
+Asked of kernel tools: a kernel service declares ``progress`` as it declares
+``user``, and ``dispatch`` hands it the task's reporter in the worker and the
+kernel's ``null_progress`` inline. The original is kept beside this file as
+``test_task_progress_drfs.py``.
 """
 
 from __future__ import annotations
@@ -12,9 +17,11 @@ from typing import Any
 
 import pytest
 from django.core.cache import cache
+from django_service_specs import null_progress
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.protocol.types.task import Task
 from django_spec_mcp.tasks.django_cache_task_store import DjangoCacheTaskStore
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
@@ -24,10 +31,10 @@ from django_spec_mcp.tasks.report_task_progress import (
 )
 from django_spec_mcp.tasks.transition_task import transition_task
 from django_spec_mcp.tasks.types.task_record import TaskRecord
+from django_spec_mcp.types.task_policy import TaskPolicy
 from django_spec_mcp.types.task_status import TaskStatus
-from tests.tasks.conftest import RecordingExecutor, context
-from tests.tasks.fixtures_drfs import server  # noqa: F401
-from tests.tasks.test_task_lifecycle_drfs import _create, _register
+from tests.tasks.conftest import RecordingExecutor, context, register_kernel_tool
+from tests.tasks.test_task_lifecycle import _create
 
 # ----- rendering -----
 
@@ -156,25 +163,27 @@ def test_a_service_reporting_progress_is_visible_to_a_polling_client(
 
     The service declares ``progress`` and calls it — the same body that would
     stream ``notifications/progress`` inline. Run as a task, those calls have
-    to survive to the record, which means the sync dispatch path forwards the
-    reporter (it once did not, on the grounds that there was "no stream to
-    report on" — true of the connection, false of the worker).
+    to survive to the record, which means the worker hands ``dispatch`` the
+    task's reporter rather than the no-op.
     """
     seen: list[str] = []
 
-    def indexer(progress: Any, **_: Any) -> dict[str, str]:
+    def indexer(progress: Any) -> dict[str, str]:
         for row in (1, 2, 3):
             progress(row, total=3, message="Indexing")
-            seen.append(store.get(task.task_id).task.status_message)
+            seen.append(store.get(task_id).task.status_message)
         return {"rows": "3"}
 
-    _register(server, "tasks.indexer", indexer)
-    task: Task = _create(store, executor, tool_name="tasks.indexer")
-    server.run_task(task.task_id)
+    register_kernel_tool(server, "tasks.indexer", indexer, task_policy=TaskPolicy.OPTIONAL)
+    handle: Any = handle_tools_call({"name": "tasks.indexer", "arguments": {}}, context(server))
+    assert not isinstance(handle, JsonRpcError) and handle["resultType"] == "task", handle
+    task_id: str = handle["taskId"]
+    server.run_task(task_id)
 
     assert seen == ["Indexing (1/3)", "Indexing (2/3)", "Indexing (3/3)"]
-    record: TaskRecord = store.get(task.task_id)
+    record: TaskRecord = store.get(task_id)
     assert record.status is TaskStatus.COMPLETED
+    assert record.task.result["structuredContent"] == {"rows": "3"}
     # The last report survives the completing transition's own write, because
     # the two touch different fields.
     assert (record.progress, record.total) == (3, 3)
@@ -184,23 +193,23 @@ def test_a_service_reporting_progress_is_visible_to_a_polling_client(
 def test_the_same_service_runs_unchanged_off_the_task_path(server: MCPServer) -> None:
     """The no-op seed, which is what lets one spec serve both paths.
 
-    An ordinary sync ``tools/call`` supplies no reporter, drf-services
-    substitutes its own no-op, and the identical service body completes without
-    knowing the difference. If it did know — if ``progress`` were ``None`` here
-    — every spec would need a task-shaped and a request-shaped variant.
+    An ordinary sync ``tools/call`` supplies no reporter, the kernel substitutes
+    its own no-op, and the identical service body completes without knowing the
+    difference. If it did know — if ``progress`` were ``None`` here — every spec
+    would need a task-shaped and a request-shaped variant.
     """
     reported: list[Any] = []
 
-    def indexer(progress: Any, **_: Any) -> dict[str, str]:
+    def indexer(progress: Any) -> dict[str, str]:
         progress(1, total=1, message="Indexing")
         reported.append(progress)
         return {"ok": "yes"}
 
-    _register(server, "tasks.plain", indexer)
+    register_kernel_tool(server, "tasks.plain", indexer, task_policy=TaskPolicy.OPTIONAL)
     result: Any = handle_tools_call(
         {"name": "tasks.plain", "arguments": {}}, context(server, declares=False)
     )
 
     assert result["structuredContent"] == {"ok": "yes"}
-    # Called, and callable — the seed is a no-op, never ``None``.
-    assert len(reported) == 1 and callable(reported[0])
+    # Called, and callable — the seed is the kernel's no-op, never ``None``.
+    assert reported == [null_progress]

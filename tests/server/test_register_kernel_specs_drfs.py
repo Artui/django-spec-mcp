@@ -27,7 +27,6 @@ from django_spec_mcp.auth.permissions.scope_required import ScopeRequired
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from django_spec_mcp.types.output_format import OutputFormat
-from django_spec_mcp.types.task_policy import TaskPolicy
 from django_spec_mcp.types.tool_content_kind import ToolContentKind
 from tests.testapp.auth_backend import HeaderAuthBackend
 from tests.testapp.services import invoice_by_pk, list_invoices, record_invoice
@@ -91,12 +90,6 @@ def test_a_list_tool_takes_the_page_knobs() -> None:
     binding = _server().register_tool(_selector(), name="t", paginate=True, max_page_size=5)
     assert (binding.paginate, binding.max_page_size, binding.kind) == (True, 5, SelectorKind.LIST)
     assert binding.is_selector is True
-
-
-@pytest.mark.parametrize("policy", [TaskPolicy.OPTIONAL, TaskPolicy.REQUIRED])
-def test_a_task_policy_is_not_yet_supported(policy: TaskPolicy) -> None:
-    with pytest.raises(ImproperlyConfigured, match="is not yet supported for a kernel spec"):
-        _server().register_tool(_service(), name="t", task_policy=policy)
 
 
 def test_an_empty_scope_tuple_is_refused() -> None:

@@ -7,6 +7,7 @@ the two paths share only the helpers they call by name.
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from itertools import islice
 from typing import Any
@@ -708,26 +709,38 @@ def resource_refusal(exc: DispatchError | ServiceError, scene: KernelRefusalScen
     selector that raises.
     """
     if isinstance(exc, InvalidArguments):
-        # Written as JSON writes it, so the integer row indices of a many call's
-        # tree are strings, as in a tool result; the kernel's order is kept.
-        return JsonRpcError(
-            JsonRpcErrorCode.INVALID_PARAMS,
-            "Invalid arguments",
-            data=json.loads(
-                json.dumps(
-                    validation_error_data(
-                        exc.detail,
-                        scene.arguments,
-                        include_value=scene.config.include_validation_value,
-                    ),
-                    default=str,
-                )
-            ),
-        )
+        return invalid_arguments_error(exc.detail, scene.arguments, scene.config)
     answer = answer_kernel_refusal(exc, scene)
     if isinstance(answer, JsonRpcError):
         return answer
     raise exc
+
+
+def invalid_arguments_error(
+    detail: Any, arguments: Mapping[str, Any], config: MCPConfig
+) -> JsonRpcError:
+    """The ``-32602`` a ``resources/read`` answers for arguments it refuses.
+
+    A fixed message carrying no value, with ``detail`` in ``data`` naming each
+    variable and its problem, and what was sent beside it when
+    ``include_validation_value`` says so: ``resource_refusal``'s answer to the
+    kernel's ``InvalidArguments``, and ``resource_presentation_refusal``'s to a
+    presenter refusing a shape the URI carried.
+    """
+    # Written as JSON writes it, so the integer row indices of a many call's
+    # tree are strings, as in a tool result; the kernel's order is kept.
+    return JsonRpcError(
+        JsonRpcErrorCode.INVALID_PARAMS,
+        "Invalid arguments",
+        data=json.loads(
+            json.dumps(
+                validation_error_data(
+                    detail, arguments, include_value=config.include_validation_value
+                ),
+                default=str,
+            )
+        ),
+    )
 
 
 def admitted_arguments(binding: KernelToolBinding, pool_seeds: PoolSeeds) -> frozenset[str]:
@@ -782,6 +795,7 @@ __all__ = [
     "bound_unpaginated_rows",
     "call_context",
     "carry_token",
+    "invalid_arguments_error",
     "not_found_result",
     "on_the_wire",
     "page_request",
