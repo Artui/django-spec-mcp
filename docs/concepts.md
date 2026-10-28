@@ -971,6 +971,16 @@ What changes against the drf-services tools:
   of `arguments`, with no `data` key around them. `unknown_arguments=` reaches
   both the schema and the call, and `server_arguments=` names are left out of
   the schema and filled by the server.
+- **A declaration no call could run is refused at registration.**
+  `register_tool`, `register_tools` and `register_resource` ask the kernel's
+  `check_seeds` with the server's [`pool_seeds=`](#pool-seeds) and raise
+  `ImproperlyConfigured`, naming the tool or resource, for a parameter named
+  like a registered seed or the call's own `request` or `view`, a
+  positional-only parameter with no default, a keyword the callable requires
+  that nothing fills, and an optional read over a keyword the callable
+  requires. A read the tool's [`server_arguments=`](#server-arguments) binds is
+  filled on every call, so it is checked as required and registers; an optional
+  read the server does not bind is still refused.
 - **`scopes=` is the transport's gate.** A token must carry every scope named;
   one that is missing any is answered `-32006` with every declared scope in
   `requiredScopes`, not only the missing ones. A bare string is one scope, as
