@@ -437,12 +437,10 @@ def admit_kernel_read(
     ``test_an_admitted_reader_of_a_malformed_variable_is_charged_and_told_which``).
 
     ``REJECT`` is the read's own policy, the one ``read_kernel_resource``
-    dispatches under, and it answers as ``IGNORE`` would only while every
-    variable a URI template names is a read the spec declares. Registration
-    does not refuse a template naming another yet
-    (``test_a_template_variable_no_read_declares_is_refused_at_registration``,
-    a strict xfail); until it does, such a variable fails the shape check here
-    as it fails it in dispatch, and the call is judged on no arguments.
+    dispatches under, and it answers as ``IGNORE`` would, since every
+    variable a URI template names is a read the spec declares: registration
+    refuses a template naming another
+    (``test_a_template_variable_no_read_declares_is_refused_at_registration``).
     """
     arguments: dict[str, Any]
     try:
