@@ -165,14 +165,44 @@ def unguarded_grant(binding: Any, principal: Any, config: MCPConfig) -> Grant | 
 
 
 def carry_token(request: Any, token: Any) -> Any:
-    """Hang the resolved ``TokenInfo`` on ``request`` as ``mcp_token``, and return it.
+    """Make ``request`` the caller's: the token on it, and its principal as the user.
 
-    A spec reading the caller's token (its scopes, its audience) reads it off
-    the ``request`` in its ``call_context``, which is where a permission check
-    over HTTP finds it. Only the wire calls this: off HTTP there is neither a
-    request nor a token to carry.
+    Hangs the resolved ``TokenInfo`` on ``request`` as ``mcp_token``, and sets
+    ``request.user`` (and ``request.auser``, its async reader) to the token's
+    principal, ``principal_of(token.user)``: the user the call dispatches as,
+    or an ``AnonymousUser`` when the token names none. Every request this
+    package hands a consumer's code comes from here: a kernel spec's
+    ``call_context``, a prompt's ``render``, a completer and a pool seed on a
+    resource read. A spec reading the caller's token (its scopes, its
+    audience) reads it off this request, which is where a permission check
+    over HTTP finds it.
+
+    **The user is the token's, never the endpoint's.** Over the wire the
+    project's middleware resolved ``request.user`` from whatever the request
+    carried, a session cookie included, and that can name someone other than
+    the bearer token's principal, so code authorizing on ``request.user``
+    judged the wrong caller
+    (``test_every_path_sees_the_tokens_principal_not_the_sessions``); with no
+    principal it is anonymous, not the session's user
+    (``test_a_caller_the_token_names_no_one_is_anonymous_not_the_sessions_user``).
+    drf-mcp's DRF ``Request`` carried the token's user, and this keeps that.
+
+    The inbound request is written to rather than copied, because a spec
+    reading ``call_context["request"]`` is handed the very request the
+    transport received
+    (``test_a_resource_permission_reads_the_request_the_read_arrived_on``).
+    Every call on one request carries the one token the transport resolved for
+    it, a batch's and a stream's included, so a second write sets what the
+    first did.
     """
+    principal = principal_of(token.user)
+
+    async def auser() -> Any:
+        return principal
+
     request.mcp_token = token
+    request.user = principal
+    request.auser = auser
     return request
 
 

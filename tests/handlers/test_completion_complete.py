@@ -735,8 +735,8 @@ def test_a_completer_declaring_request_receives_the_transports_http_request() ->
     """The plain ``HttpRequest`` the kernel tool path hands a spec, the token on it.
 
     Not a DRF ``Request``: nothing reads one here, and the package ships without
-    DRF. ``user`` is the token's principal, and ``request.user`` is left as the
-    endpoint set it, so a completer wanting the caller declares ``user``.
+    DRF. Its ``user`` is the token's principal, as the ``user`` seed is, and
+    never the one the endpoint's session resolved.
     """
     seen: dict[str, Any] = {}
 
@@ -773,4 +773,4 @@ def test_a_completer_declaring_request_receives_the_transports_http_request() ->
     assert seen["request"] is context.http_request
     assert seen["request"].mcp_token is context.token
     assert seen["user"] is context.token.user
-    assert seen["request"].user is session_user
+    assert seen["request"].user is context.token.user

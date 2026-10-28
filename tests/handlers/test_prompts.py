@@ -388,9 +388,9 @@ async def test_a_render_declaring_request_receives_the_transports_http_request(
     is_async: bool,
 ) -> None:
     # The plain ``HttpRequest`` the kernel tool path hands a spec, with the
-    # resolved token on it as ``mcp_token``; no DRF ``Request`` is built. ``user``
-    # is the token's principal, while ``request.user`` is left as the endpoint
-    # set it, so a render wanting the caller declares ``user``.
+    # resolved token on it as ``mcp_token``; no DRF ``Request`` is built. Its
+    # ``user`` is the token's principal, as the ``user`` seed is, and never the
+    # one the endpoint's session resolved.
     seen: dict[str, Any] = {}
 
     def render(request: Any, user: Any) -> str:
@@ -421,4 +421,4 @@ async def test_a_render_declaring_request_receives_the_transports_http_request(
     assert seen["request"] is http_request
     assert seen["request"].mcp_token is context.token
     assert seen["user"] is context.token.user
-    assert seen["request"].user is session_user
+    assert seen["request"].user is context.token.user
