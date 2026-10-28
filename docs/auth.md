@@ -10,16 +10,22 @@ RFC 9728 metadata endpoint clients use to discover them.
 | Surface | Protocol | Default |
 | --- | --- | --- |
 | `MCPAuthBackend` | Authenticate request → `TokenInfo`, build `WWW-Authenticate`, supply PRM payload | **always** `DjangoOAuthToolkitBackend` unless you pass `auth_backend=`; mounting refuses if its extra is missing |
-| `MCPPermission` | Per-tool / per-resource gate (AND-combined) | `[]` (no extra constraints) |
+| The spec's `permissions` | Kernel `PermissionCheck`s guarding a tool or resource | required: a spec with none is refused at registration |
+| `scopes=` | OAuth scopes a tool's or resource's caller must carry | `None` (no scope gate) |
+| `MCPPermission` | Per-prompt / per-view gate (AND-combined) | `[]`; a prompt with none is refused |
 | `/.well-known/oauth-protected-resource` | RFC 9728 metadata | served from backend's `protected_resource_metadata()` |
 
 The transport flow on every request:
 
 1. Validate `Origin`, `MCP-Protocol-Version`, `MCP-Session-Id` (where required).
-2. `backend.authenticate(request)` → `TokenInfo | None`. `None` → 401 with the
-   challenge from `backend.www_authenticate_challenge(...)`.
-3. Per-binding permissions evaluated; denial → 403, required scopes surfaced in
-   the challenge.
+2. `backend.authenticate(request)` → `TokenInfo | None`. `None`, the answer
+   for a caller the backend cannot authenticate, → 401 with the challenge from
+   `backend.www_authenticate_challenge(...)`. A backend that raises instead is
+   not answered as MCP: a `PermissionDenied` or `Http404` renders as Django's
+   own HTML 403 or 404, and anything else is a 500. From here on
+   `request.user` and `request.auser()` are the token's principal.
+3. The binding's scope gate and its spec's permissions are asked; a denial →
+   403, with any required scopes surfaced in the challenge.
 4. Handler dispatched.
 
 ## `AllowAnyBackend` (dev only)
@@ -89,191 +95,156 @@ The `SERVER_INFO` keys flow into both:
     MCPServer(name="internal", version="2.0.0", url_namespace="internal-mcp")
     ```
 
-## `MCPPermission` classes
+## Who may call a tool
 
-!!! warning "DRF viewset permissions do not apply over MCP"
-    This package deliberately bypasses DRF's view-layer pipeline, so
-    viewset-level `permission_classes` and the `REST_FRAMEWORK` default
-    permission classes have **no effect** on MCP tool calls. Only
-    `spec.permission_classes` (wrapped via `DRFPermissionAdapter`) and the
-    per-binding `permissions=[...]` below gate a tool. Registering a tool
-    with neither is **refused** — `ImproperlyConfigured` at registration.
-    Set `SPEC_MCP["REQUIRE_TOOL_PERMISSIONS"] = False` to downgrade
-    that to an `UnguardedToolWarning` while migrating a large surface.
+!!! warning "`REST_FRAMEWORK` settings do not reach `/mcp/`"
+    The endpoints and the protected-resource metadata are plain Django views,
+    so nothing in a project's `REST_FRAMEWORK` setting applies to them: not its
+    default permission or authentication classes, not its throttles, renderers
+    or `EXCEPTION_HANDLER`. What gates an MCP call is the auth backend above,
+    the spec's own `permissions`, the `scopes=` gate at registration, and the
+    `rate_limits=` of each tool, resource and prompt
+    ([Add rate limiting](recipes/rate-limiting.md)).
 
-    A kernel spec registered through `register_tool` or
-    `register_resource` is guarded by its own `permissions` alone; a
-    `scopes=` gate does not count. With the setting off, one declaring
-    `permissions=None` warns at registration and each call runs under a
-    kernel `Grant` built for that spec and that caller, so it is called
-    with no permission check. A kernel spec that does declare checks has them
-    asked before any rate limit is charged. A call whose arguments fail the
-    kernel's argument check, other than a `many` call refused only by its rows,
-    and a completion, are judged as a filtered listing judges the spec: its
-    checks asked on no arguments. See
-    [Kernel specs](concepts.md#kernel-specs).
+A tool or resource is guarded by its spec's `permissions`: a list of kernel
+[`PermissionCheck`][django_service_specs.PermissionCheck] instances, the same
+checks every other transport on the kernel asks. Each is asked through the
+kernel's `dispatch` of the principal the backend resolved, `TokenInfo.user`,
+before any rate limit is charged, the target is looked up or the service runs.
 
-    The same check runs on `register_resource` and `register_prompt`: the
-    identical selector reaches the identical rows whichever surface exposes
-    it. Interactive **views** (`register_ui_resource`) are the one exemption,
-    and a deliberate one — a view is a template rendered with no context, a
-    literal document, or a zero-argument callable, none of which can read the
-    caller's data.
+Registering a spec that declares no `permissions` at all is **refused**:
+`ImproperlyConfigured` at registration. `[Unrestricted()]` is the honest choice
+for an operation open to every caller, because it says so out loud. Set
+`SPEC_MCP["REQUIRE_TOOL_PERMISSIONS"] = False` to downgrade the refusal to an
+`UnguardedToolWarning`; a spec declaring `permissions=None` then runs each call
+under a kernel `Grant` built for that spec and that caller, so it is called
+with no permission check. A `scopes=` gate does not count as a guard either
+way. See [Kernel specs](concepts.md#kernel-specs).
 
-    That third source is caller-blind **because registration enforces it**: a
-    `selector=` declaring any fillable parameter is refused, since the read path
-    resolves every binding's selector against a pool carrying `request` and
-    `user`. Without that refusal the exemption was unsound for one of its three
-    cases — a caller-aware view registered unguarded, served into a document
-    hosts may cache across callers. If you want a view whose content depends on
-    who is asking, you want `register_resource`, where the declaration check
-    applies.
-
-Per-binding permissions are AND-combined. Two ship in v1:
-
-- `ScopeRequired(["a", "b"])` — token must carry every listed OAuth scope. A
-  single scope may be passed bare: `ScopeRequired("invoices:write")`.
-- `DjangoPermRequired("app.codename")` — `user.has_perm(...)` must be true. Anonymous users are always rejected by this class.
-
-Both refuse an **empty** requirement. `all(...)` over nothing is `True`, so
-`ScopeRequired([])` would permit every request while reading as a guard at the
-registration site — and would satisfy the unguarded-tool check that would
-otherwise have warned.
+A check is a subclass with a `has_permission(principal, spec)` method. A Django
+permission is a few lines:
 
 ```python
-from django_spec_mcp import MCPServer, ScopeRequired, DjangoPermRequired
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_service_specs import PermissionCheck, ServiceSpec
 
-server.register_service_tool(
+
+class HasDjangoPerm(PermissionCheck):
+    def __init__(self, codename: str) -> None:
+        self.codename = codename
+
+    def has_permission(self, principal, spec) -> bool:
+        return principal.has_perm(self.codename)
+
+
+server.register_tool(
+    ServiceSpec(service=refund_invoice, permissions=[HasDjangoPerm("invoices.refund_invoice")]),
     name="invoices.refund",
-    spec=ServiceSpec(service=refund_invoice),
-    permissions=[
-        ScopeRequired(["invoices:write"]),
-        DjangoPermRequired("invoices.refund_invoice"),
-    ],
+    description="Refund an invoice.",
+    scopes=("invoices:write",),
 )
 ```
 
-Custom permissions implement the [`MCPPermission`](reference/auth.md) Protocol:
+A check refusing the caller is answered `-32006` "Insufficient permission"
+with HTTP 403. The challenge names no `scope`, because no scope the client could
+obtain would change the answer.
+
+**A check that depends on the token** rather than the user, a claim say, asks
+for the call's context by declaring a keyword `call_context`. Over HTTP its
+`"request"` is the Django `HttpRequest`, carrying the backend's `TokenInfo` as
+`request.mcp_token`; `request.user` and `request.auser()` are the token's
+principal from authentication on, whatever the session cookie names. Off HTTP,
+`"request"` is `None`, so a check reading the token decides for itself what
+that means:
 
 ```python
-from django.http import HttpRequest
-from django_spec_mcp import TokenInfo
+from django_service_specs import PermissionCheck
 
 
-class TenantMatches:
-    def __init__(self, tenant_id: int) -> None:
-        self._tenant_id = tenant_id
+class HasClaim(PermissionCheck):
+    def __init__(self, claim: str) -> None:
+        self.claim = claim
 
-    def has_permission(self, request: HttpRequest, token: TokenInfo) -> bool:
-        return getattr(token.user, "tenant_id", None) == self._tenant_id
-
-    def required_scopes(self) -> list[str]:
-        return []
+    def has_permission(self, principal, spec, *, call_context) -> bool:
+        request = call_context.get("request")
+        token = getattr(request, "mcp_token", None)
+        return token is not None and self.claim in (token.raw or {})
 ```
 
-`required_scopes()` is what gets surfaced in the `WWW-Authenticate` header on
-denial — return `[]` if there's nothing scope-shaped to advertise, or omit the
-method entirely.
+A check may ask for the call's `arguments` the same way, and for a registered
+pool seed by its name. A check is **synchronous**: one declaring an `async def`
+method is refused with `ImproperlyConfigured` when the spec is built, because an
+un-awaited coroutine is truthy and would allow every call.
+
+### The scope gate
+
+`scopes=` on `register_tool` and `register_resource` names the OAuth scopes the
+caller's token must carry, every one of them. A bare string is one scope:
+`scopes="invoices:write"`. A token missing one is answered `-32006` with HTTP
+403, every declared scope in `data.requiredScopes`, and a challenge carrying
+`error="insufficient_scope"` and the scopes, so the client knows what to ask
+for. `scopes=()` is refused, since it would read as a gate and admit every
+caller.
+
+The scope gate is a transport check, beside the spec's permissions rather than
+in place of them: it never satisfies `REQUIRE_TOOL_PERMISSIONS`, which reads
+the spec's own `permissions`.
+
+### Prompts and interactive views
+
+A prompt and an interactive view are not specs, so they are gated by
+`permissions=[...]` on `register_prompt` and `register_ui_resource`: objects
+with a `has_permission(request, token)` method, AND-combined. Two ship:
+
+- `ScopeRequired(["a", "b"])` — the token must carry every listed OAuth scope.
+  A single scope may be passed bare: `ScopeRequired("invoices:write")`.
+- `DjangoPermRequired("app.codename")` — `user.has_perm(...)` must be true.
+  Anonymous users are always rejected by this class.
+
+Both refuse an **empty** requirement. `all(...)` over nothing is `True`, so
+`ScopeRequired([])` would permit every request while reading as a guard at the
+registration site. Your own implements the
+[`MCPPermission`](reference/auth.md) Protocol; see
+[Add a custom permission](recipes/custom-permission.md#gating-a-prompt-or-a-view).
 
 !!! warning "`permissions=` must contain permission objects"
 
     Every entry needs a `has_permission(request, token)` method, and this is
     checked at registration. The reason is not tidiness: an entry that cannot
     answer it is skipped at dispatch, so a binding "guarded" by one is
-    **ungated** — and because the list is non-empty, the unguarded-tool warning
+    **ungated** — and because the list is non-empty, the unguarded check
     stays quiet. `permissions="ScopeRequired"` is the likely way in: a bare
     string spreads into one entry per character.
 
-### Reusing DRF `BasePermission` classes
+A prompt with no permissions at all is refused like a tool. Interactive
+**views** (`register_ui_resource`) are the one exemption, and a deliberate
+one — a view is a template rendered with no context, a literal document, or a
+zero-argument callable, none of which can read the caller's data.
 
-If a permission class already exists as a DRF `BasePermission` (e.g. one
-shared with your HTTP transport), wrap it with `DRFPermissionAdapter`
-rather than rewriting it for MCP:
-
-```python
-from rest_framework.permissions import DjangoModelPermissions
-from django_spec_mcp import DRFPermissionAdapter
-
-server.register_service_tool(
-    name="invoices.create",
-    spec=ServiceSpec(service=create_invoice),
-    permissions=[DRFPermissionAdapter(DjangoModelPermissions)],
-)
-```
-
-`ServiceSpec` / `SelectorSpec` also carry a `permission_classes`
-attribute. Any DRF permission classes declared on the spec are
-auto-wrapped and prepended to the per-binding `permissions` tuple —
-the same spec that backs your HTTP view governs the MCP binding
-without you restating the contract at the MCP call site.
-
-On every path that judges a tool call's adapters (`tools/call` on either
-handler, `acall_tool`, the pre-flight of a streamed call, and a task's creation), the adapter's stand-in is built from the same
-values as the view the spec is dispatched with, so a class reads the same
-request in both checks: `request.data` is the call's arguments less its route
-and query values, `request.query_params` holds the declared `QueryParam`
-values, `view.kwargs` the URL kwargs, `view.action` the tool's name, and the
-method is `POST`. That is DRF's own layout, and the same on a service tool, a
-selector tool and the view `call_tool` dispatches with, though `call_tool`
-judges no adapter: it judges the spec's classes against that view alone. Each check gets a `request.data` of its own, so a class
-writing into it reaches neither the next check nor the caller's `arguments`.
-`request.auth` is the token backend's payload (`None` from `call_tool` and
-`acall_tool`), set beside `request.user`, so a class such as `TokenHasScope`
-that reads `request.auth` first still sees the caller.
-
-A `tools/call` retry whose `inputResponses` change any argument, the route, a
-query value or `request.data`, is judged again on the arguments the answers
-produce, before a rate limit is charged, the target is looked up or the service
-runs. An answer is merged even on a first call with no `requestState`, so this
-is what keeps a class admitting project 7 from running the service on project 8
-sent as 7 and answered as 8. An answer restating what the call sent is not
-judged again.
-
-`resources/read` and a resource subscription judge the request the read is
-dispatched with, built from one shape: the URI's variables in `view.kwargs`, so
-a class scoping by `view.kwargs["project_pk"]` reads the route the request
-names, as it does over HTTP; the resource's name in `view.action`; `{}` as
-`request.data`; an empty `request.query_params`, since a resource takes no
-query value; and the token backend's payload as `request.auth`.
-
-The paths that name no tool call judge these as `request.data`:
-
-| Path | `request.data` | `view.action` |
-| --- | --- | --- |
-| `prompts/get` | the prompt's arguments | the prompt's name |
-| `completion/complete` | `{}` | `None` |
-| the listings filter | `{}` | `None` |
-
-`prompts/get` also replaces the endpoint's query string with an empty one.
-`completion/complete` on a resource template names the template rather than a
-URI, so a template whose permission scopes by a URI variable completes for
-nobody. A kernel resource's spec checks are asked on no arguments in the same
-way, so a check scoping by a URI variable refuses the completion, whether it
-answers no on the missing arguments or raises on them. The listings filter is described
-[below](#filtering-listings-by-permissions).
+That third source is caller-blind **because registration enforces it**: a
+`selector=` declaring any fillable parameter is refused, since the read path
+resolves every binding's callable against a pool carrying `request` and
+`user`. Without that refusal the exemption would be unsound for one of its
+three cases — a caller-aware view registered unguarded, served into a document
+hosts may cache across callers. If you want a view whose content depends on
+who is asking, you want `register_resource`, where the declaration check
+applies.
 
 ### Object-level permissions
 
-`has_object_permission` runs on every path, against the row the dispatch
-resolved. The tool paths (`tools/call` on a service or selector tool, and
-`call_tool` / `acall_tool`) judge the spec's class-level `has_permission` up
-front, against the request and view the call runs with, before the target is
-looked up, and pass `dispatch_spec` only the object-level half as
-`on_target_resolved`: each class's `has_object_permission` on the resolved row,
-so the target guard does not ask `has_permission` again. On `tools/call` the
-binding's wrapped copy of each class has already asked it once, against a
-stand-in that sees the same request, so a call asks `has_permission` twice per
-class, a streamed call once more in its pre-flight, and a retry whose answers
-change the arguments once more again, on the arguments they produce.
-`call_tool`, which judges no stand-in, asks it once.
-A kernel spec's own checks are asked once on a plain call, and on a streamed
-call once in its pre-flight and once more when the call runs, when its
-arguments pass the kernel's argument check.
-`resources/read` runs drf-services' `enforce_permissions`, both halves, on the
-selector's return. A `LIST` / collection
-result gets the class-level check only — object permissions are a per-row
-concept, and a set is authorized per-set.
+A check's `has_object_permission(principal, spec, target)` runs against the
+row the dispatch resolved: the target of a retrieve, or the instance an update
+acts on. It allows by default, because most checks are class-level only.
+`has_scope_permission(principal, spec, scope)` is the same question for a call
+that resolves no single row: the set a bulk call acts on or a collection
+reads, and `None` for a create. A kernel spec's checks are asked once on a
+plain call, and on a streamed call once in its pre-flight and once more when
+the call runs, when its arguments pass the kernel's argument check.
+
+A resource read runs the same `dispatch`, so its spec's checks see the row the
+URI names. `completion/complete` on a resource template names the template
+rather than a URI, so the spec's checks are asked on no arguments, and a check
+scoping by a URI variable refuses the completion, whether it answers no on the
+missing arguments or raises on them.
 
 ### Filtering listings by permissions
 
@@ -287,20 +258,17 @@ call's arguments — see
 `SPEC_MCP["FILTER_LISTINGS_BY_PERMISSIONS"] = True` to drop
 bindings whose permissions deny the caller before paginating.
 
-This is **binding-level** gating. A binding's own permissions, a
-drf-services binding's or a kernel binding's `scopes=` gate, are evaluated
-against a synthetic data-less request, so a permission whose decision depends
-on the call arguments will conservatively deny at list time. A tool or
-resource whose operation is a `django_service_specs` spec is judged by its
-spec's own checks as well, asked through the kernel's `authorize` with no
-arguments, because a listing has none; a create, a service spec with no
-instance or collection selector, is also asked each check's
-`has_scope_permission` of `None`, as every call to it is. Both questions get
-the caller's principal, the server's pool seeds and a `call_context` whose
-request carries the token, as a call does. A caller the checks refuse is not
-shown the binding, and neither is a deactivated caller. A spec declaring
-`permissions=None` is listed only where its call is granted, as `register_tool`
-grants it with `REQUIRE_TOOL_PERMISSIONS` off.
+This is **binding-level** gating. A binding's `scopes=` gate, and a prompt's or
+view's permission objects, are evaluated against the caller's token. A tool or
+resource is judged by its spec's own checks as well, asked through the
+kernel's `authorize` with no arguments, because a listing has none; a create,
+a service spec with no instance or collection selector, is also asked each
+check's `has_scope_permission` of `None`, as every call to it is. Both
+questions get the caller's principal, the server's pool seeds and a
+`call_context` whose request carries the token, as a call does. A caller the
+checks refuse is not shown the binding, and neither is a deactivated caller. A
+spec declaring `permissions=None` is listed only where its call is granted, as
+`register_tool` grants it with `REQUIRE_TOOL_PERMISSIONS` off.
 
 A check whose decision depends on the call arguments cannot answer at list time
 and will conservatively deny: when asking it raises, that binding alone is
@@ -308,9 +276,8 @@ hidden and the rest of the listing is unaffected. Mark such a binding with
 `always_listed=True` to keep it visible as a discovery aid; the check still
 gates the actual invocation. An `ImproperlyConfigured` raised by a check is not
 a refusal: it is raised and fails the listing, because the call raises it too.
-For the binding-level permissions that sit beside a spec's checks, such as
-`ScopeRequired`, a custom permission can declare an `is_listable(token)` method
-to override the list-time check independently of
+A prompt's or view's permission object can declare an `is_listable(token)`
+method to override the list-time check independently of
 `has_permission(request, token)`; a kernel check has no such method, and
 `always_listed` is its way back.
 
@@ -331,7 +298,7 @@ points clients at. Setting it does **not**, on its own, reject anything.
     nothing else.
 
     It is nonetheless **off by default**, and since the `[oauth]` extra floors
-    DOT at `>=3.4` that is no longer about the floor. A token that records *no*
+    DOT at `>=3.4` that is not about the floor. A token that records *no*
     resource is rejected, and one only records a resource if the client sent
     RFC 8707's `resource` parameter. The MCP spec obliges MCP clients to send
     it; the other clients of your authorization server — a browser app, a
@@ -341,11 +308,6 @@ points clients at. Setting it does **not**, on its own, reject anything.
     make. The check itself is capability-based rather than version-based, so it
     asks your configured token model rather than DOT's version number.
 
-    Enforcement used to be implied by `resource_url` alone. That made the
-    bundled backend unusable: configuring the resource URL a resource server is
-    supposed to publish rejected *every* token, and clearing it published
-    invalid metadata — there was no configuration that did both. Enforcement is
-    now `ENFORCE_AUDIENCE`, default `False`.
 
 !!! danger "The MCP spec makes this a MUST, so treat the default as a floor, not a recommendation"
     `2026-07-28` says a resource server **MUST** validate that access tokens were
@@ -695,5 +657,5 @@ Inspector reads PRM, hits your AS metadata, walks the auth flow, and exercises
 | 401 with `WWW-Authenticate` but no `resource_metadata` | `SERVER_INFO["resource_metadata_url"]` not set. |
 | Token accepted but every call still 401 | `ENFORCE_AUDIENCE` is on and the `audience_getter` returns something other than `RESOURCE_URL` (with stock DOT it returns `None`, since DOT records no resource). |
 | 403 with `error="insufficient_scope"` and `scope=` in the challenge | Token authenticated, missing one of the per-binding scopes. The body also carries JSON-RPC `-32006` with `data.requiredScopes`. |
-| 403 with no `scope=` | A non-scope permission denied (e.g. `DjangoPermRequired`). RFC 6750 defines no error code for that case, so the challenge advertises nothing rather than a scope the client cannot obtain. |
+| 403 with no `scope=` | A spec's permission check refused the caller, or a non-scope permission on a prompt (e.g. `DjangoPermRequired`). RFC 6750 defines no error code for that case, so the challenge advertises nothing rather than a scope the client cannot obtain. |
 | 403 with `INVALID_REQUEST` (`-32600`) in the body | Not a permission failure — `Origin` rejection. |
