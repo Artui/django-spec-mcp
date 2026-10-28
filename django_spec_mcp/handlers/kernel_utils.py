@@ -7,7 +7,6 @@ the two paths share only the helpers they call by name.
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from itertools import islice
 from typing import Any
@@ -277,45 +276,6 @@ def admits_without_arguments(
     return True
 
 
-def refuses_a_row_alone(spec: Any, refusal: InvalidArguments) -> bool:
-    """Whether ``check_call`` raised ``refusal`` for a ``many`` call's rows, after its checks.
-
-    ``check_call`` raises a refused row of a ``many`` call as
-    ``InvalidArguments``, as it raises a failed shape, but only after its
-    class-level check admitted the checked top level, so that admission is
-    the call's and the row is dispatch's to report, after the charge. Told
-    apart by its tree, keyed by row index under ``many_argument`` alone: a
-    failed top level is raised before the check and without the rows, whose
-    refusals are carried to dispatch's Validator step
-    (``test_check_call_raises_a_refused_row_only_after_admitting_the_top_level``
-    pins both). Until ``check_call`` marks a refused row distinctly, which is
-    asked of the kernel, the tree is the only public sign.
-
-    One arc to coverage. Without the first conjunct an array parameter of a
-    spec that is not ``many``, whose items fail at their index, reads as a
-    refused row
-    (``test_an_array_argument_failing_at_an_index_is_no_refused_row``); without
-    the second every shape failure of a ``many`` spec does
-    (``test_a_many_list_that_is_no_list_is_a_failed_shape``); without the
-    argument's own name a ``many`` spec naming its list something but ``items``
-    reads as a failed shape
-    (``test_a_refused_row_under_a_named_many_argument_keeps_its_admission``).
-
-    **A known hole, until the kernel marks the refusal.** The tree is the only
-    sign, so a check or a seed resolver that itself raises an
-    ``InvalidArguments`` shaped like a refused row (``{many_argument: {0: ...}}``)
-    reads as one: the caller keeps its admission, is charged, and is handed that
-    detail. Probed with a class-level check raising it and with a pool seed
-    resolver raising it, both charged once and both answered the raised tree as
-    the validation result. Not held by a test, since the answer is the kernel's
-    to make distinguishable and closing it here would mean guessing which
-    ``InvalidArguments`` a check meant.
-    """
-    return bool(getattr(spec, "many", False)) and isinstance(
-        refusal.detail.get(spec.many_argument), Mapping
-    )
-
-
 def admit_kernel_call(
     binding: KernelToolBinding | KernelResourceBinding,
     arguments: dict[str, Any],
@@ -363,10 +323,17 @@ def admit_kernel_call(
 
     A ``many`` call whose top level passes and whose rows do not is no
     failed shape: ``check_call`` asked the checks on the checked top level
-    before it raised the row (``refuses_a_row_alone``), so their answer
-    stands, a refusal as ``-32006`` and an admission leaving the row to
-    dispatch, never judged again on no arguments
+    before it raised the row, and marks that refusal ``after_authorize``, so
+    their answer stands, a refusal as ``-32006`` and an admission leaving the
+    row to dispatch, never judged again on no arguments
     (``test_a_many_call_with_a_refused_row_is_answered_on_its_checked_top_level``).
+    The mark is the kernel's, not a reading of the refusal's tree: a check
+    raising a tree shaped like a refused row keeps no admission
+    (``test_a_check_raising_a_refusal_shaped_like_a_refused_row_keeps_no_admission``),
+    and neither a spec that is not ``many`` failing an array at an index
+    (``test_an_array_argument_failing_at_an_index_is_no_refused_row``) nor a
+    ``many`` list that is no list
+    (``test_a_many_list_that_is_no_list_is_a_failed_shape``) reads as one.
 
     So the checks are asked once on a call whose arguments pass, and once on
     one whose arguments fail, by that judgment, since dispatch refuses the
@@ -403,7 +370,7 @@ def admit_kernel_call(
     except _DENIALS:
         raise
     except InvalidArguments as refusal:
-        if not refuses_a_row_alone(binding.spec, refusal) and not admits_without_arguments(
+        if not refusal.after_authorize and not admits_without_arguments(
             binding, principal, config=config, pool_seeds=pool_seeds, call_context=context
         ):
             raise NotPermitted() from None
@@ -814,7 +781,6 @@ __all__ = [
     "admit_kernel_read",
     "admit_kernel_tool_call",
     "admits_without_arguments",
-    "refuses_a_row_alone",
     "bound_unpaginated_rows",
     "call_context",
     "carry_token",
