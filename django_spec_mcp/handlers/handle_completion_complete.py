@@ -126,10 +126,11 @@ def handle_completion_complete(
         # The request the kernel tool path hands a spec: the transport's own
         # ``HttpRequest``, the resolved token on it as ``mcp_token``
         # (``test_a_completer_declaring_request_receives_the_transports_http_request``).
-        # Its ``user`` is whatever the endpoint set, which a bearer token does
-        # not, so the caller is the ``user`` seed beside it, and its query
-        # string is the endpoint's: a completer reads what the client typed from
-        # ``value`` and ``arguments``, never from the request.
+        # Its ``user`` is the token's principal, and the ``user`` seed is that
+        # same principal, an anonymous caller included
+        # (``test_a_completers_user_and_request_user_agree_for_a_token_naming_no_one``).
+        # Its query string is the endpoint's: a completer reads what the client
+        # typed from ``value`` and ``arguments``, never from the request.
         request = carry_token(context.http_request, context.token)
         # Every dispatcher-owned name is dropped from the client's siblings
         # before the spread, then the transport's own seeds are applied on top.
@@ -152,7 +153,7 @@ def handle_completion_complete(
                 if key not in RESERVED_POOL_SEEDS | COMPLETION_EDGE_SEEDS
             },
             "request": request,
-            "user": context.token.user,
+            "user": request.user,
             "value": value,
             "arguments": resolved_siblings,
         }

@@ -25,6 +25,7 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
+from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest
 from django.test import Client, override_settings
@@ -774,3 +775,27 @@ def test_a_completer_declaring_request_receives_the_transports_http_request() ->
     assert seen["request"].mcp_token is context.token
     assert seen["user"] is context.token.user
     assert seen["request"].user is context.token.user
+
+
+def test_a_completers_user_and_request_user_agree_for_a_token_naming_no_one() -> None:
+    seen: dict[str, Any] = {}
+
+    def completer(*, request: Any, user: Any) -> list[str]:
+        seen.update(user=user, request_user=request.user)
+        return ["a"]
+
+    server = _server()
+    server.register_prompt(
+        name="p",
+        render=lambda language="python": language,
+        arguments=[PromptArgument(name="language")],
+        completions={"language": completer},
+    )
+
+    handle_completion_complete(
+        {"ref": {"type": "ref/prompt", "name": "p"}, "argument": {"name": "language"}},
+        _ctx(server),
+    )
+
+    assert isinstance(seen["user"], AnonymousUser)
+    assert seen["user"] is seen["request_user"]

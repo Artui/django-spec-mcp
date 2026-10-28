@@ -99,7 +99,7 @@ async def handle_prompts_get_async(
         pool: dict[str, Any] = {
             **arguments_raw,
             "request": request,
-            "user": context.token.user,
+            "user": request.user,
         }
         kwargs: dict[str, Any] = resolve_callable_kwargs(binding.render, pool)
         raw: Any = await acall(binding.render, **kwargs)

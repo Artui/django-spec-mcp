@@ -105,10 +105,12 @@ def handle_prompts_get(
         # The request the kernel tool path hands a spec: the transport's own
         # ``HttpRequest``, the resolved token on it as ``mcp_token``
         # (``test_a_render_declaring_request_receives_the_transports_http_request``).
-        # Its ``user`` is whatever the endpoint set, which a bearer token does
-        # not, so the caller is the ``user`` seed beside it, and its query
-        # string is the endpoint's: a render reads the prompt's arguments by
-        # name, never off the request.
+        # Its ``user`` is the token's principal, and the ``user`` seed is that
+        # same principal, so a render declaring ``user`` and one reading
+        # ``request.user`` agree, an anonymous caller included
+        # (``test_user_and_request_user_agree_for_a_token_naming_no_one``). Its
+        # query string is the endpoint's: a render reads the prompt's arguments
+        # by name, never off the request.
         request = carry_token(context.http_request, context.token)
         # The transport's seeds are applied *after* the client-supplied
         # arguments, so an argument named ``user`` or ``request`` shadows
@@ -119,7 +121,7 @@ def handle_prompts_get(
         pool: dict[str, Any] = {
             **arguments_raw,
             "request": request,
-            "user": context.token.user,
+            "user": request.user,
         }
         kwargs: dict[str, Any] = resolve_callable_kwargs(binding.render, pool)
         raw: Any = binding.render(**kwargs)

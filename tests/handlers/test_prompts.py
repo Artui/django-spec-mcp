@@ -17,6 +17,7 @@ from typing import Any
 
 import pytest
 from asgiref.sync import sync_to_async
+from django.contrib.auth.models import AnonymousUser
 from django.http import HttpRequest, QueryDict
 
 from django_spec_mcp import MCPServer
@@ -444,3 +445,25 @@ def test_render_reads_the_endpoints_query_string_and_no_drf_attributes() -> None
     handle_prompts_get({"name": "p", "arguments": {}}, context)
 
     assert seen == {"get": {"on": "endpoint"}, "drf": []}
+
+
+async def test_user_and_request_user_agree_for_a_token_naming_no_one() -> None:
+    """A token naming no one seeds ``user`` as the anonymous principal
+    ``request.user`` is, on both dispatchers, so declaring ``user`` and reading
+    ``request.user`` answer alike."""
+    seen: list[tuple[Any, Any]] = []
+    server = _server()
+
+    def render(*, request: Any, user: Any) -> str:
+        seen.append((user, request.user))
+        return "ok"
+
+    server.register_prompt(name="p", description="d", render=render)
+
+    handle_prompts_get({"name": "p", "arguments": {}}, _ctx(server))
+    await handle_prompts_get_async({"name": "p", "arguments": {}}, _ctx(server))
+
+    assert len(seen) == 2
+    for user, request_user in seen:
+        assert isinstance(user, AnonymousUser)
+        assert user is request_user
