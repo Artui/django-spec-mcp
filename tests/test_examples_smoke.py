@@ -62,8 +62,8 @@ _INVOICING_FIELD_SELECTION = textwrap.dedent(
     from invoices.models import Invoice
 
     call_command("migrate", verbosity=0)
-    for number in ("INV-A", "INV-B", "INV-C"):
-        Invoice.objects.create(number=number, amount_cents=100)
+    for number, amount in (("INV-A", 300), ("INV-B", 100), ("INV-C", 200)):
+        Invoice.objects.create(number=number, amount_cents=amount)
 
     client = Client(HTTP_ORIGIN="http://localhost")
     initialized = client.post(
@@ -96,8 +96,9 @@ _INVOICING_FIELD_SELECTION = textwrap.dedent(
         return {"status": response.status_code, "body": response.json()}
 
     print(json.dumps({
-        "rows": call({"fields": "number", "limit": 2}),
-        "envelope": call({"fields": "items"}),
+        "rows": call({"fields": ["number"], "limit": 2}),
+        "envelope": call({"fields": ["items"]}),
+        "ordered": call({"ordering": ["-amount"], "min_amount": "150", "fields": ["number"]}),
     }))
     """
 )
@@ -109,8 +110,9 @@ def test_invoicing_field_selection_is_per_item_and_refuses_the_envelope() -> Non
     Not only that the example runs: that it demonstrates what it claims. A row
     selection narrows each item, and a selection written against the page
     envelope (the shape the tool's ``outputSchema`` shows) is an ``isError``
-    ``validation_error`` naming the argument, where it used to escape as a bare
-    DRF body that no JSON-RPC client could parse.
+    ``validation_error`` keyed by the argument, refused by the ``fields``
+    shape's choices before the selector runs. The FilterSet's filters and its
+    ordering narrow and sort the same page.
     """
     result = subprocess.run(
         [sys.executable, "-c", _INVOICING_FIELD_SELECTION],
@@ -133,13 +135,17 @@ def test_invoicing_field_selection_is_per_item_and_refuses_the_envelope() -> Non
     assert envelope["body"]["id"] == 2
     tool_result = envelope["body"]["result"]
     assert tool_result["isError"] is True
-    error = json.loads(tool_result["content"][0]["text"])["error"]
-    assert error["type"] == "validation_error"
-    assert error["detail"] == {"fields": ["Unknown field `items`."]}
-    assert error["message"].startswith(
-        "`fields` was rejected while rendering the result: Unknown field `items`."
-    )
-    assert "never to the page envelope" in error["message"]
+    assert json.loads(tool_result["content"][0]["text"])["error"] == {
+        "type": "validation_error",
+        "message": "Invalid arguments",
+        "detail": {
+            "fields": {"0": ["Select a valid choice. items is not one of the available choices."]}
+        },
+    }
+
+    # ``min_amount`` drops INV-B, and ``ordering`` sorts by amount, largest first.
+    ordered = replies["ordered"]["body"]["result"]["structuredContent"]
+    assert ordered["items"] == [{"number": "INV-A"}, {"number": "INV-C"}]
 
 
 # Runs inside the invoicing project, like the script above: the tool listing and
@@ -172,22 +178,21 @@ _INVOICING_CLIENT = textwrap.dedent(
             content_type="application/json",
             HTTP_MCP_PROTOCOL_VERSION="2026-07-28",
             HTTP_MCP_METHOD=method,
-            **({"HTTP_MCP_NAME": params["name"]} if "name" in params else {}),
+            **({"HTTP_MCP_NAME": params.get("name") or params["uri"]}
+               if "name" in params or "uri" in params else {}),
         )
         return response.json()["result"]
 
-    def call(name, arguments):
-        return post("tools/call", {"name": name, "arguments": arguments, "_meta": {
-            "io.modelcontextprotocol/protocolVersion": "2026-07-28",
-            "io.modelcontextprotocol/clientInfo": {"name": "smoke", "version": "0"},
-            "io.modelcontextprotocol/clientCapabilities": {},
-        }})
-
-    listed = post("tools/list", {"_meta": {
+    META = {
         "io.modelcontextprotocol/protocolVersion": "2026-07-28",
         "io.modelcontextprotocol/clientInfo": {"name": "smoke", "version": "0"},
         "io.modelcontextprotocol/clientCapabilities": {},
-    }})
+    }
+
+    def call(name, arguments):
+        return post("tools/call", {"name": name, "arguments": arguments, "_meta": META})
+
+    listed = post("tools/list", {"_meta": META})
     tools = {tool["name"]: tool for tool in listed["tools"]}
     """
 )
@@ -198,7 +203,8 @@ _INVOICING_LOOKUP_EMPTY_IDEMPOTENT_SEEDS = _INVOICING_CLIENT + textwrap.dedent(
         "set_amount": call("invoices.set_amount", {"number": "INV-A", "amount_cents": 250}),
         "no_number": call("invoices.set_amount", {"amount_cents": 250}),
         "find_miss": call("invoices.find", {"number": "INV-404"}),
-        "outstanding": call("invoices.outstanding", {"currency": "USD"}),
+        "outstanding": call("invoices.outstanding", {}),
+        "currency": call("invoices.outstanding", {"currency": "USD"}),
         "unsent": call("invoices.unsent", {"sent": True}),
         "refused": call("invoices.create", {"number": "INV-C", "amount_cents": -5}),
     }))
@@ -214,8 +220,8 @@ def test_invoicing_demonstrates_lookup_empty_result_idempotency_and_seeds() -> N
     ``idempotentHint``, and keeps a strict ``outputSchema`` because it has no
     output re-read, its refusal worded by the server's ``conventions=``; ``invoices.find`` answers a miss with ``{}`` under a
     schema that admits it; ``invoices.outstanding`` reads the mount's
-    ``currency`` seed, does not advertise it, and a client ``currency`` does
-    not replace it; ``invoices.unsent`` binds ``sent`` with
+    ``currency`` seed, does not advertise it, and refuses a client
+    ``currency`` rather than read it; ``invoices.unsent`` binds ``sent`` with
     ``server_arguments=``, so it is not advertised and a client's ``sent`` is
     dropped; and ``invoices.create`` answers refused arguments with a
     ``validation_error`` result, not a JSON-RPC ``-32602``.
@@ -253,7 +259,7 @@ def test_invoicing_demonstrates_lookup_empty_result_idempotency_and_seeds() -> N
     assert tools["invoices.find"]["inputSchema"]["required"] == ["number"]
     # A convention the example does not override keeps the package's words.
     assert tools["invoices.list"]["inputSchema"]["properties"]["fields"]["description"] == (
-        "Comma-separated invoice fields to return, e.g. id,number. On a paged result it "
+        "Invoice fields to return, e.g. id and number. On a paged result it "
         "applies to each item in `items`, never to the page envelope (`items`, `page`, "
         "`totalPages`, `hasNext`)."
     )
@@ -272,8 +278,13 @@ def test_invoicing_demonstrates_lookup_empty_result_idempotency_and_seeds() -> N
         "amount_cents": 250,
         "currency": "EUR",
     }
-    # Filled by the server, so not asked of the client.
+    # Filled by the server, so not asked of the client, and a client's own
+    # ``currency`` is refused rather than read in the seed's place.
     assert "currency" not in tools["invoices.outstanding"]["inputSchema"]["properties"]
+    assert replies["currency"]["isError"] is True
+    assert json.loads(replies["currency"]["content"][0]["text"])["error"]["detail"] == {
+        "currency": ["Unknown argument."]
+    }
 
     # Bound by the mount's ``server_arguments``: not advertised, not required,
     # and a client's ``sent: true`` is dropped, so only the unsent invoice
@@ -285,7 +296,7 @@ def test_invoicing_demonstrates_lookup_empty_result_idempotency_and_seeds() -> N
     assert [row["number"] for row in replies["unsent"]["structuredContent"]["items"]] == ["INV-A"]
 
     # Refused input is a tool execution error the model reads, with the
-    # serializer's errors keyed by field under ``detail``.
+    # form's errors keyed by field under ``detail``.
     refused = replies["refused"]
     assert refused["isError"] is True
     error = json.loads(refused["content"][0]["text"])["error"]
@@ -312,12 +323,12 @@ _INVOICING_SPREAD_CLOSED_AND_EMPTY = _INVOICING_CLIENT + textwrap.dedent(
 
 
 def test_invoicing_demonstrates_a_closed_spread_schema_and_a_declared_empty_result() -> None:
-    """``invoices.apply_credit``, a service tool with no input serializer.
+    """``invoices.apply_credit``, a service tool with no Validator.
 
-    Its arguments are spread into the service's own parameters, so the
-    ``inputSchema`` lists ``credit_cents`` beside the lookup's ``number`` and,
-    under the default ``REJECT``, is closed: a call naming ``memo`` is a
-    ``validation_error`` naming it, and nothing ran. The spec declares
+    Its spec's ``reads`` are the service's own keywords, so the ``inputSchema``
+    lists ``credit_cents`` beside the lookup's ``number`` and, under the default
+    ``REJECT``, is closed: a call naming ``memo`` is a ``validation_error``
+    keyed by it, and nothing ran. The spec declares
     ``allow_none=True`` with no output re-read, so its ``outputSchema`` admits
     the ``{}`` that a credit settling the invoice is served as.
     """
@@ -342,7 +353,7 @@ def test_invoicing_demonstrates_a_closed_spread_schema_and_a_declared_empty_resu
     assert json.loads(typo["content"][0]["text"])["error"] == {
         "type": "validation_error",
         "message": "Invalid arguments",
-        "detail": {"non_field_errors": ["Unexpected argument(s): 'memo'."]},
+        "detail": {"memo": ["Unknown argument."]},
     }
 
     assert {"maxProperties": 0} in replies["tool"]["outputSchema"]["anyOf"]
@@ -350,3 +361,62 @@ def test_invoicing_demonstrates_a_closed_spread_schema_and_a_declared_empty_resu
     assert replies["settles"]["structuredContent"] == {}
     # The refused call took nothing off; the settling one deleted ``INV-B``.
     assert replies["remaining"] == {"INV-A": 60}
+
+
+_INVOICING_RESOURCE_PROMPT_AND_SEND = _INVOICING_CLIENT + textwrap.dedent(
+    """
+    pk = Invoice.objects.get(number="INV-A").pk
+    print(json.dumps({
+        "pk": pk,
+        "read": post("resources/read", {"uri": f"invoices://{pk}", "_meta": META}),
+        "prompt": post(
+            "prompts/get",
+            {"name": "compose_invoice_email", "arguments": {"pk": str(pk)}, "_meta": META},
+        ),
+        "sent": call("invoices.mark_sent", {"pk": pk}),
+        "again": call("invoices.mark_sent", {"pk": pk}),
+    }))
+    """
+)
+
+
+def test_invoicing_serves_its_resource_prompt_and_send_tool() -> None:
+    """The ``invoice`` resource, the email prompt and ``invoices.mark_sent``.
+
+    The resource reads one row through the URI template's ``pk``, presented by
+    the same dataclass as the tools; the prompt renders from the database; and
+    marking an invoice sent twice is a ``service_error`` result the second time.
+    """
+    result = subprocess.run(
+        [sys.executable, "-c", _INVOICING_RESOURCE_PROMPT_AND_SEND],
+        cwd=_EXAMPLES_DIR / "invoicing",
+        env={**os.environ, "DJANGO_SETTINGS_MODULE": "invoicing.settings"},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    replies = json.loads(result.stdout)
+    pk = replies["pk"]
+
+    [contents] = replies["read"]["contents"]
+    assert contents["uri"] == f"invoices://{pk}"
+    assert contents["mimeType"] == "application/json"
+    row = json.loads(contents["text"])
+    assert {key: row[key] for key in ("id", "number", "amount_cents", "sent")} == {
+        "id": pk,
+        "number": "INV-A",
+        "amount_cents": 100,
+        "sent": False,
+    }
+
+    [message] = replies["prompt"]["messages"]
+    assert message["role"] == "user"
+    assert "Invoice INV-A for $1.00 is now ready." in message["content"]["text"]
+
+    assert replies["sent"]["structuredContent"]["sent"] is True
+    again = replies["again"]
+    assert again["isError"] is True
+    assert json.loads(again["content"][0]["text"])["error"] == {
+        "type": "service_error",
+        "message": f"Invoice {pk} is already sent",
+    }

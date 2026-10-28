@@ -1,28 +1,40 @@
-# `invoicing/` — service tools, selector tool, resource, prompt
+# `invoicing/` — service tools, selector tools, resource, prompt
 
 A representative Django project that exposes an `Invoice` model over
-MCP using every public registration surface of
-`django-spec-mcp`:
+MCP. Every operation is a `django_service_specs` spec (`ServiceSpec` or
+`SelectorSpec`), mounted with `register_tool` and `register_resource`:
 
 | Surface                        | Demonstrated by                                              |
 |--------------------------------|--------------------------------------------------------------|
-| `register_service_tool`        | `invoices.create` — creates a new invoice (atomic mutation). |
-| `register_service_tool`        | `invoices.mark_sent` — flips the `sent` flag.                |
-| Argument validation            | `invoices.create` with a negative `amount_cents` — an `isError` result of type `validation_error` with the serializer's errors under `detail`, not a JSON-RPC error.|
-| `register_service_tool`        | `invoices.set_amount` — targets an invoice by number through `instance_selector_spec`, so `number` is in its `inputSchema`, required because the lookup gives it no default, and a call without it is a `validation_error` result; `idempotent=True` lists `idempotentHint: true`; with no output re-read selector its `outputSchema` keeps a strict `required`.|
-| `argument_binding=SPREAD_AUTHOR_WINS` with no `input_serializer` | `invoices.apply_credit` — the arguments are spread into `apply_credit(*, instance, credit_cents)`, so its `inputSchema` lists `credit_cents` beside the lookup's `number` and, under the default `unknown_arguments=REJECT`, is closed (`additionalProperties: false`): a call adding `memo` is a `validation_error` naming it, not an argument dropped unread.|
+| `ServiceSpec` + `FormValidator` | `invoices.create` — creates a new invoice (atomic mutation), its arguments validated by a Django form. |
+| Argument validation            | `invoices.create` with a negative `amount_cents` — an `isError` result of type `validation_error` with the form's errors under `detail`, not a JSON-RPC error.|
+| `ServiceSpec(reads=)`          | `invoices.mark_sent` — flips the `sent` flag; `pk` is a read with `minimum=1`, and marking a sent invoice again is a `service_error` result.|
+| `instance_selector_spec`       | `invoices.set_amount` — targets an invoice by number, so the lookup's `number` is in its `inputSchema`, required because the read says so, and a call without it is a `validation_error` result; `idempotent=True` lists `idempotentHint: true`; with no output re-read its `outputSchema` keeps a strict `required`.|
+| A spec with no Validator       | `invoices.apply_credit` — its `reads` are the service's own keywords, so its `inputSchema` lists `credit_cents` beside the lookup's `number` and, under the default `unknown_arguments=REJECT`, is closed (`additionalProperties: false`): a call adding `memo` is a `validation_error` keyed by it, not an argument dropped unread.|
 | `ServiceSpec(allow_none=True)` | `invoices.apply_credit` — no output re-read, so the service's own return is presented; a credit that settles the invoice returns `None`, served as `structuredContent: {}`, which its `outputSchema` admits.|
-| `register_selector_tool`       | `invoices.list` — list with `FilterSet`, ordering, pagination, and a `QueryParam` the spec reads for field selection.|
-| `server_arguments=`            | `invoices.unsent` — the mount binds the selector's `sent` parameter to `False`, so the tool's `inputSchema` does not list it and a client `sent: true` is dropped (and logged by name), never read.|
-| `register_selector_tool`       | `invoices.find` — an `allow_none` RETRIEVE: a miss is `structuredContent: {}`, which its `outputSchema` admits.|
-| `MCPServer(pool_seeds=)`       | `invoices.outstanding` — reads the mount's `currency` seed, which its `inputSchema` does not advertise; a client `currency` argument cannot replace it.|
+| `SelectorSpec(filter_set=, shapes=)` | `invoices.list` — a `FilterSet` (its ordering included), pagination, and a `fields` shape the presenter reads for field selection.|
+| `server_arguments=`            | `invoices.unsent` — the mount binds the selector's `sent` read to `False`, so the tool's `inputSchema` does not list it and a client `sent: true` is dropped (and logged by name), never read.|
+| `SelectorSpec(allow_none=True)` | `invoices.find` — a `RETRIEVE` that may find nothing: a miss is `structuredContent: {}`, which its `outputSchema` admits.|
+| `MCPServer(pool_seeds=)`       | `invoices.outstanding` — reads the mount's `currency` seed, which its `inputSchema` does not advertise; a client `currency` argument is refused, not read in its place.|
 | `MCPServer(conventions=)`      | `invoices.set_amount` without `number` — the refusal's message is the server's own `missing_arguments` wording, which points the model at `invoices.list`; every sentence it does not override keeps the package's words.|
-| `register_resource`            | `invoice` — single invoice by PK via `invoices://{pk}` URI.  |
+| `register_resource`            | `invoice` — single invoice by PK via `invoices://{pk}` URI, the template's `pk` being the spec's read.|
 | `register_prompt`              | `compose_invoice_email` — render an email body for an invoice.|
 
-The whole MCP wiring lives in `invoices/mcp.py`. Models, serializers,
-filters, services, selectors are split into their own modules so each
-piece is small.
+Every spec declares `permissions=[Unrestricted()]`, which says "deliberately
+open" out loud; a spec declaring none is refused at registration. The prompt
+is a render callable rather than a spec, so it is gated by an `MCPPermission`
+instead, `OpenPrompt` in `invoices/permissions.py`.
+
+The whole MCP wiring lives in `invoices/mcp.py`. Models, forms, the
+dataclasses results are presented through, the presenter, filters, services
+and selectors are split into their own modules so each piece is small.
+
+**Field selection is an array of field names.** The `fields` shape declares
+the names an invoice has as its `choices`, so the shape check refuses any
+other before the selector runs, keyed by its position in the list. A
+comma-separated string the presenter parses and refuses itself is not
+available on a kernel spec today: a presenter's `ServiceValidationError` is
+not answered as a `validation_error` result.
 
 ## Layout
 
@@ -40,7 +52,10 @@ invoicing/
     ├── __init__.py
     ├── apps.py
     ├── models.py
-    ├── serializers.py
+    ├── forms.py             ← the form invoices.create validates with
+    ├── shapes.py            ← the dataclasses results are presented through
+    ├── presenters.py        ← field selection for invoices.list
+    ├── permissions.py       ← the prompt's gate
     ├── filters.py
     ├── services.py
     ├── selectors.py
@@ -56,7 +71,7 @@ invoicing/
 cd examples/invoicing
 
 # Install the package, and django-filter for the selector tool's FilterSet
-uv pip install -e "../.." django-filter
+uv pip install -e "../.." "django-service-specs[filter]"
 
 # Database
 python manage.py migrate
@@ -106,33 +121,36 @@ curl -s -X POST http://localhost:8000/mcp/ $H \
        "params":{"name":"invoices.create",
                  "arguments":{"number":"INV-X","amount_cents":-5}}}'
 
-# List with the selector tool — filter, sort, paginate
+# List with the selector tool — filter, sort, paginate. Ordering reads one
+# key holding several names, so it is an array; a number filter is a decimal
+# string, as its form field reads one.
 curl -s -X POST http://localhost:8000/mcp/ $H \
   -d '{"jsonrpc":"2.0","id":3,"method":"tools/call",
        "params":{"name":"invoices.list",
-                 "arguments":{"sent":false,"ordering":"-created","page":1,"limit":2}}}'
+                 "arguments":{"sent":false,"min_amount":"100","ordering":["-created"],
+                              "page":1,"limit":2}}}'
 
 # Select fields. The tool pages, so `fields` names an invoice's fields and
 # applies to each item in `items`; its advertised description says so.
 curl -s -X POST http://localhost:8000/mcp/ $H \
   -d '{"jsonrpc":"2.0","id":4,"method":"tools/call",
-       "params":{"name":"invoices.list","arguments":{"fields":"id,number"}}}'
+       "params":{"name":"invoices.list","arguments":{"fields":["id","number"]}}}'
 
 # Selecting the page envelope instead is refused as an `isError` result with
 # `"type": "validation_error"` and `detail.fields`, which a model can correct
 # from, rather than answered with a page of empty rows
 curl -s -X POST http://localhost:8000/mcp/ $H \
   -d '{"jsonrpc":"2.0","id":5,"method":"tools/call",
-       "params":{"name":"invoices.list","arguments":{"fields":"items"}}}'
+       "params":{"name":"invoices.list","arguments":{"fields":["items"]}}}'
 
 # Mark one as sent
 curl -s -X POST http://localhost:8000/mcp/ $H \
   -d '{"jsonrpc":"2.0","id":6,"method":"tools/call",
        "params":{"name":"invoices.mark_sent","arguments":{"pk":1}}}'
 
-# Take a credit off an invoice. The tool has no input serializer: its
-# arguments are the service's own parameters, and the schema is closed, so
-# adding e.g. "memo" is refused as an `isError` `validation_error` naming it.
+# Take a credit off an invoice. The spec has no Validator: its reads are the
+# service's own keywords, and the schema is closed, so adding e.g. "memo" is
+# refused as an `isError` `validation_error` keyed by it.
 # A credit covering the whole amount deletes the invoice and answers `{}`.
 curl -s -X POST http://localhost:8000/mcp/ $H \
   -d '{"jsonrpc":"2.0","id":7,"method":"tools/call",
