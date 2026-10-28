@@ -183,10 +183,6 @@ def test_an_optional_read_the_server_does_not_bind_is_still_refused() -> None:
     assert "card" not in server.tools
 
 
-def _renamed(*, instance: Any) -> _Card:
-    return instance
-
-
 @pytest.mark.parametrize("seat", ["instance_selector_spec", "collection_selector_spec"])
 def test_an_optional_lookup_read_the_server_binds_registers_and_is_filled(seat: str) -> None:
     # The binding reaches the target selector's reads too, which are the
