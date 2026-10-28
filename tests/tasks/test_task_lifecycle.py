@@ -25,7 +25,6 @@ import pytest
 from django.contrib.auth.models import AnonymousUser
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.protocol.types.task import Task
 from django_spec_mcp.tasks.build_worker_token import build_worker_token
@@ -302,19 +301,6 @@ def test_with_task_leaves_the_original_untouched() -> None:
     assert record.status is TaskStatus.WORKING
     assert changed.status is TaskStatus.COMPLETED
     assert replace(changed, enqueued=True).to_wire() is changed.task
-
-
-@pytest.fixture
-def server(store: InMemoryTaskStore, executor: RecordingExecutor) -> MCPServer:
-    """A task-running server with no tool, standing in for the conftest's
-    drf-services one: running a task that names no live tool asks nothing of
-    a spec."""
-    return MCPServer(
-        name="tasks-kernel",
-        auth_backend=AllowAnyBackend(),
-        task_store=store,
-        task_executor=executor,
-    )
 
 
 def test_the_task_is_durable_before_the_executor_is_called(
