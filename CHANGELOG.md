@@ -148,7 +148,7 @@ carries; releases up to 0.54.0 are in
   server with no task store and executor. The `scopes=` gate and the spec's own
   `permissions` are asked before the task is created, so a refused caller queues
   nothing, and the tool's rate limits are charged once, there. The worker runs
-  an `OPTIONAL` tool's call through the kernel's `dispatch`, under the server's `pool_seeds` and
+  the call, under either policy, through the kernel's `dispatch`, under the server's `pool_seeds` and
   `conventions`, asking the spec's permissions again and handing a service that
   declares `progress` the task's reporter, so its reports reach `tasks/get`.
 
@@ -215,5 +215,14 @@ carries; releases up to 0.54.0 are in
   spec's `FilterSet` still runs. A project using either has the package
   installed already; one that does not runs `pip install drf-spectacular` or
   `pip install django-filter`.
+
+### Fixed
+
+- **A `REQUIRED` tool's task runs.** The worker's run of a task went back
+  through the task decision, met a context declaring no extension, and was
+  refused `-32021`, so every task of a `REQUIRED` tool ended `failed` without
+  running, on the drf-services path as on the kernel one. The worker's run now
+  enters below that decision. A client that did not declare the extension is
+  still refused `-32021` by a `REQUIRED` tool.
 
 [Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.0.0...HEAD

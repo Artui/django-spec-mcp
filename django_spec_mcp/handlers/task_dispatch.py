@@ -32,6 +32,9 @@ def maybe_create_task(
     Returns ``None`` — the overwhelmingly common case — when it should not, and
     the caller runs the tool inline. Anything else is the response.
 
+    A task worker's run of a task (``context.in_task_worker``) is never one:
+    it is the work the task was created for.
+
     **Three conditions, and all three must hold**: the binding opts in
     ([`TaskPolicy`][django_spec_mcp.types.TaskPolicy]), the server can actually
     run tasks, and the client declared the extension **on this request**. Each failure
@@ -59,6 +62,12 @@ def maybe_create_task(
     pays. Without the charge here, declaring the tasks extension would be a
     self-service exemption from every quota a task-shaped tool configures.
     """
+    # A worker's run is the task this decision already made, so it runs, under
+    # either policy: asked again, a ``REQUIRED`` tool's run met a worker that
+    # declares no extension and was refused ``-32021``
+    # (``test_a_required_tool_runs_as_a_task_too``, both paths).
+    if context.in_task_worker:
+        return None
     policy: TaskPolicy = getattr(binding, "task_policy", TaskPolicy.FORBIDDEN)
     if policy is TaskPolicy.FORBIDDEN:
         return None

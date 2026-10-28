@@ -2137,8 +2137,8 @@ running it inline would only hit the dispatch deadline.
 A service tool and a selector tool take `task_policy=` alike. A caller the
 spec's own `permissions` or the tool's `scopes=` refuse is answered `-32006`
 and no task is created, and the tool's rate limits are charged once, when the
-task is created. The worker runs an `OPTIONAL` tool's call through the same
-`dispatch` a direct call takes, under the server's `pool_seeds` and
+task is created. The worker runs the call, under either policy, through the
+same `dispatch` a direct call takes, under the server's `pool_seeds` and
 `conventions`, with the spec's permissions asked again.
 
 ### What a client sees

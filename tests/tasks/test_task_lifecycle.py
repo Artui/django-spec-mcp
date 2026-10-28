@@ -183,15 +183,6 @@ def test_running_a_task_completes_it_with_the_tool_result(
     assert record.task.result["structuredContent"] == {"done": "yes"}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "The worker's context declares no extension, so its replay of a REQUIRED "
-        "tool's call is refused -32021 by maybe_create_task, on the drf-services "
-        "path as on the kernel one: a REQUIRED task never completes."
-    ),
-)
 @pytest.mark.django_db
 def test_a_required_tool_runs_as_a_task_too(
     policy_server: MCPServer, store: InMemoryTaskStore
