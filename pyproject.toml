@@ -5,14 +5,14 @@ build-backend = "hatchling.build"
 [project]
 name = "django-spec-mcp"
 dynamic = ["version"]
-description = "Expose djangorestframework-services services and selectors as an MCP (Model Context Protocol) server."
+description = "Serve django-service-specs services and selectors over MCP (Model Context Protocol)."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [
     { name = "Artur Veres", email = "artur8118@gmail.com" },
 ]
-keywords = ["django", "drf", "rest-framework", "mcp", "model-context-protocol", "ai", "llm"]
+keywords = ["django", "mcp", "model-context-protocol", "ai", "llm", "agents"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Web Environment",
@@ -37,109 +37,19 @@ classifiers = [
 ]
 dependencies = [
     "django>=4.2",
-    "djangorestframework>=3.14",
-    # 0.48 floor, and it is a hard one: 0.48 renamed the audience API with no
-    # deprecation aliases, so ``FieldMarking``, ``MARKING``, ``AudienceProjection``,
-    # ``OfflineContract``, ``build_audience_projection`` and ``render_for_audience``
-    # do not exist under 0.47 at all -- and the registry, both schema builders and
-    # every dispatch path import them at module level. ``paginate_output`` /
-    # ``DEFAULT_PAGE_SIZE``, which own the selector pagination this transport used
-    # to shape itself, arrived in 0.47 and are imported the same way.
-    # 0.49 is where a self-referential serializer stopped crashing schema
-    # generation. That is not a fix this package can route around: ``tools/list``
-    # builds every advertised schema on every request, so a spec whose serializer
-    # nests itself takes the server down at discovery rather than at the one call
-    # that used it. The floor is here to keep that crash out of reach, not because
-    # anything below imports a 0.49 symbol.
-    # 0.51 is where ``renderable_serializer_class`` first exists, and
-    # ``build_resource_contents`` imports it at module level. It is what renders a
-    # resource whose output is declared as a raw dataclass -- instantiated as
-    # declared, the dataclass's own ``__init__`` received ``many=`` and every read
-    # raised. The same release makes ``render_spec_output`` resolve it the same
-    # way, which is what fixes the tool half, so registration admitting a dataclass
-    # output is only true on both paths from here.
-    # 0.50 in passing refuses to derive a schema for an input serializer that is
-    # neither a ``Serializer`` subclass nor a dataclass. Nothing here depends on
-    # that: registration refuses the shape itself before a schema is derived.
-    # 0.52 is where ``enforce_affordances`` first exists, and the chain dispatcher
-    # imports it at module level. A chain runs each step's service without
-    # ``dispatch_spec``, so it has to apply that service's affordances itself;
-    # without the function, a service refused as a tool of its own ran, and
-    # succeeded, as a chain step.
-    # 0.52.1 is where ``materialize_retrieve`` first exists, and the chain
-    # dispatcher imports it at module level. It resolves a RETRIEVE step's selector
-    # result to the row, which is what the object-level permission judges; handed
-    # a queryset, that check skipped the step. The same release renders a single
-    # ``None`` as ``None`` rather than as the output serializer's blank row.
-    # 0.53.0: every service dispatch passes ``many_as_argument=True``, which first
-    # exists there, so below it every service tool call raises ``TypeError`` --
-    # the import succeeds and nothing fails until a call. It is also where a
-    # ``many=True`` spec's list is read from the one argument
-    # ``ServiceSpec.many_argument`` names.
-    # 0.54.0 is where ``operation_affordances`` and
-    # ``unmet_operation_affordance`` first exist, and ``tools/list`` imports
-    # both at module level to leave out a tool whose operation condition is unmet.
-    # They answer a condition against the names drf-services itself enforces it
-    # with at the call, which is why the listing asks them rather than restating
-    # that rule.
-    # 0.55.0: ``spec_to_json_schema`` takes
-    # ``supplied=`` there, the names this server fills for a selector, which is
-    # what makes a parameter without a default required in the ``inputSchema``
-    # and a call without it a ``validation_error`` rather than a ``TypeError``.
-    # Both schema builders and the missing-argument check pass it, so below it a
-    # ``tools/list`` or call reaching a selector raises ``TypeError``. It is also
-    # where ``declared_input_keys`` admits only the target lookup dispatch calls,
-    # which is the one lookup a service tool advertises: below it the bind admits
-    # the other lookup's keys too, and under ``REJECT`` the closed ``inputSchema``
-    # refuses a key the server would accept.
-    # 0.56.0: ``provider_keys``, ``can_present_nothing`` and
-    # ``server_owned_keys`` first exist there, and the schema readers import
-    # them at module level. It is also where
-    # ``spec_to_json_schema(argument_binding=)`` lists a spreading service's own
-    # parameters, the set a closed service-tool ``inputSchema`` advertises, and
-    # where a missing argument is refused only where the caller could have sent
-    # it.
-    # 0.58.0 is the floor, and it is a hard one: ``AffordanceDeclarer``
-    # (``rest_framework_services.types.affordance_declarer``) and
-    # ``dispatch.utils.DROPPED_EDGE_SEEDS`` first exist there, and the tool
-    # bindings, the schema builders and the registration checks import them at
-    # module level, so
-    # against 0.57.0 the server does not import. It is also the release that
-    # runs every spec through the kernel's ``dispatch`` and retires
-    # ``ArgumentBinding.SPREAD_CALLER_WINS`` and ``UnknownArguments.PASSTHROUGH``,
-    # which is why registration refuses both rather than handing them on to a
-    # call that raises ``ValueError``. 0.59.0 is the floor now because it is the
-    # release written against the kernel floor below: it fills the call's
-    # context for a tool's providers, and it keeps the caller's value for a
-    # filter key the server shadows beside a typed provider, which 0.58.0 drops
-    # on the kernel's route.
-    "djangorestframework-services>=0.59.0",
-    # The kernel this package imports its own names from. 0.10.0 is the floor.
-    # 0.9.0 is the hard half: ``ServerArguments``, ``check_server_arguments`` and
-    # ``apply_server_arguments``, which ``server_arguments=`` is built on, first
-    # exist there and are imported at module level, so against 0.8.0 the server
-    # does not import. drf-services 0.58.0 itself accepts 0.8.0, so this pin,
-    # not the transitive one, is what holds the kernel up. 0.10.0 buys the
-    # mapping of a selector's ``Http404`` to a missing row in ``dispatch`` and
-    # ``adispatch``; below it ``get_object_or_404`` in a selector escapes to the
-    # backstop as a server fault. The pydantic-ai package's floor moves with this
-    # one: the two routes reach one spec, and with only one raised the same
-    # selector is a not-found on one route and an error on the other. 0.14.0
-    # reserves ``call_context`` as a pool name, which ``RESERVED_POOL_SEEDS``
-    # re-exports and ``pool_seeds=`` therefore refuses, and drf-services 0.59.0
-    # requires it. 0.19.0 is the floor now: registration refuses a kernel
+    # The kernel this package serves, and the one it imports its own names from.
+    # 0.19.0 is the floor, and it is a hard one: registration refuses a kernel
     # spec through its ``check_seeds``, a kernel tool words a missing argument
     # off ``InvalidArguments.missing``, keeps its grant for a refused row by
-    # ``after_authorize``, and its listing reads ``provider_reached``, all
-    # first public in 0.19.0, which also refuses a read named ``request`` or
-    # ``view`` when the spec is built.
+    # ``after_authorize``, and its listing reads ``provider_reached``, all first
+    # public in 0.19.0 and imported at module level, so below it the server does
+    # not import. 0.19.0 also refuses a read named ``request`` or ``view`` when
+    # the spec is built, which is why ``register_resource`` reserves ``request``
+    # itself only for a URI-template variable. The pydantic-ai package's floor
+    # moves with this one: the two routes reach one spec, and with only one
+    # raised the same selector can be a not-found on one route and an error on
+    # the other.
     "django-service-specs>=0.19.0",
-    "djangorestframework-dataclasses>=1.3.1",
-    # ``typing_extensions.Unpack`` is used at runtime by the strict service /
-    # selector Protocols (PEP 692) we re-export from the sister package.
-    # Already pulled in transitively, but declared here so we don't depend on
-    # an implicit contract.
-    "typing_extensions>=4.6",
 ]
 
 [project.optional-dependencies]
@@ -216,7 +126,6 @@ dev = [
     # then measure a configuration no consumer can install.
     "django-oauth-toolkit>=3.4",
     "django-stubs>=5.0",
-    "djangorestframework-stubs>=3.15",
     "redis>=5.0.1",
     # 2.20.1, not 2.20: ``FakeAsyncRedis`` — which the async broker and replay
     # buffer tests import — first exists in 2.20.1. The `floor` job in
@@ -231,25 +140,19 @@ dev = [
     # while the submodule does not, and the checker cannot tell that from a
     # dependency that moved out from under the docs.
     "opentelemetry-exporter-otlp-proto-grpc>=1.27",
-    # The ``FilterSet`` a selector spec declares is drf-services' and runs on
-    # django-filter, which the selector-filtering tests exercise. A project
-    # declaring one installs django-filter itself, so it is no extra here.
-    "django-filter>=23",
-    # Likewise drf-spectacular: drf-services reads its ``@extend_schema_*``
-    # annotations into a tool's ``inputSchema``, the recipe documenting that
-    # imports it, and ``tests/schema/test_spectacular_annotations_drfs.py`` holds
-    # the recipe's claims. A project using the annotations has it installed
-    # already. Both leave with drf-services.
-    "drf-spectacular>=0.27",
+    # The ``FilterSet`` a selector spec declares runs on django-filter, through
+    # the kernel's ``filter`` extra, which the selector-filtering tests and the
+    # filtering recipe exercise. A project declaring one installs the extra
+    # itself, so it is no extra here.
+    "django-filter>=23.1",
+    # The tests and the docs declare a ``TypedDict`` from here, as a project on
+    # Python 3.10 does. The kernel requires it at runtime, so nothing about a
+    # consumer's install depends on this line.
+    "typing_extensions>=4.14",
     # The ``test`` extra's dependency, declared here too because ``uv sync
     # --all-groups`` installs groups but not extras — the suite that covers the
     # conformance helper would otherwise run without it in the test matrix.
     "jsonschema[format-nongpl]>=4.0.1",
-    # The field-selection library a read-shaping ``QueryParam`` most often
-    # carries. The render-time tests keep a stand-in serializer for most cases
-    # and hold it to this producer, so the double cannot drift into describing
-    # an error restql does not raise. 0.18 is the release those tests checked.
-    "django-restql>=0.18",
 ]
 docs = [
     "mkdocs>=1.6",
@@ -270,14 +173,6 @@ testpaths = ["tests"]
 # `DJANGO_SETTINGS_MODULE` is applied, which breaks collection outright.
 filterwarnings = [
     "ignore:MCP tool .* is registered with no description",
-    # pypeg2 (django-restql's parser, last released 2015) has unescaped regex
-    # literals that Python reports when it compiles the module: a SyntaxWarning
-    # from 3.12, a DeprecationWarning on 3.10 and 3.11, worded differently. It is
-    # emitted once per fresh bytecode cache, so it shows up in CI and not on a
-    # warm checkout. Scoped to that package's path: a compile-time warning names
-    # the file, not an importable module, hence the leading `.*`.
-    "ignore:.*invalid escape sequence:SyntaxWarning:.*pypeg2",
-    "ignore:.*invalid escape sequence:DeprecationWarning:.*pypeg2",
 ]
 
 [tool.coverage.run]
@@ -316,10 +211,6 @@ ignore = [
 # generated by Django, so the import would be dropped on every makemigrations.
 "__init__.py" = ["F401", "I002"]
 "**/migrations/*.py" = ["I002"]
-# This test's subject is a parameter annotation naming a type imported only for
-# type checking, so it needs the real guard: made a plain import, the hint
-# resolves and the test passes without exercising the unresolved path.
-"tests/schema/test_selector_tool_requiredness_drfs.py" = ["TID251"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["django_spec_mcp"]

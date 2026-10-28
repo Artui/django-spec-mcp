@@ -121,26 +121,24 @@ jobs:
               INSTALLED_APPS=[
                   "django.contrib.contenttypes",
                   "django.contrib.auth",
-                  "rest_framework",
               ],
               DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}},
               SPEC_MCP={"ALLOWED_ORIGINS": ["*"], "SERVER_INFO": {}},
           )
           django.setup()
 
-          from rest_framework.permissions import AllowAny
+          from django_service_specs import ServiceSpec, Unrestricted
           from django_spec_mcp import MCPServer
-          from rest_framework_services.types.service_spec import ServiceSpec
 
           # Constructing a bare server builds its own auth backend and session
           # store defaults, and registering a tool runs the full spec
           # reflection. Both are where an upstream release that turned a lazy
           # import into a hard requirement would surface first.
           server = MCPServer(name="drift")
-          server.register_service_tool(
+          server.register_tool(
+              ServiceSpec(service=lambda: None, permissions=[Unrestricted()]),
               name="noop",
               description="Probe tool for the unpinned base install.",
-              spec=ServiceSpec(service=lambda: None, permission_classes=[AllowAny]),
           )
           assert server.tools.get("noop") is not None
 

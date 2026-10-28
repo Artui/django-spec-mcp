@@ -8,9 +8,6 @@ USE_TZ = True
 INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.auth",
-    # The endpoints are still DRF viewsets, and the ``*_drfs.py`` tests build
-    # drf-services specs; both go with the drfs path, and this line with them.
-    "rest_framework",
     "oauth2_provider",
     "tests.testapp",
 ]
