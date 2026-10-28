@@ -281,7 +281,7 @@ async def test_a_session_cookie_does_not_bring_csrf_to_the_endpoint(mount: bool)
     with override_settings(MIDDLEWARE=_SESSION_MIDDLEWARE, **_SESSION_SETTINGS):
         if mount:
             client: Any = AsyncClient(enforce_csrf_checks=True)
-            await client.aforce_login(user)
+            await sync_to_async(client.force_login)(user)
             initialized = await _apost_initialize(client)
             deleted = await client.delete(
                 _ENDPOINT,
@@ -344,7 +344,7 @@ async def test_a_session_user_is_not_the_caller_the_auth_backend_sees(mount: boo
     ):
         if mount:
             client: Any = AsyncClient()
-            await client.aforce_login(user)
+            await sync_to_async(client.force_login)(user)
             response = await _apost_initialize(client)
         else:
             response = await sync_to_async(_logged_in_initialize)(user)

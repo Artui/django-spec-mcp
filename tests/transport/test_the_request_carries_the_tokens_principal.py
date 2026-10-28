@@ -109,7 +109,7 @@ async def _async_call(
     session_user: Any, bearer: str | None, method: str, name: str, *, progress: bool = False
 ) -> Any:
     client = AsyncClient()
-    await client.aforce_login(session_user)
+    await sync_to_async(client.force_login)(session_user)
     body, headers = _body(method, name, progress=progress)
     if bearer is not None:
         headers["Authorization"] = f"Bearer {bearer}"
