@@ -296,6 +296,21 @@ async def test_a_session_cookie_does_not_bring_csrf_to_the_endpoint(mount: bool)
     assert deleted.status_code == 204
 
 
+async def test_csrf_never_answers_for_the_protected_resource_metadata(mount: bool) -> None:
+    """A POST there is the view's own ``405``, not ``CsrfViewMiddleware``'s ``403``.
+
+    The metadata only answers ``GET``, so the opt-out shows only as which
+    refusal a POST gets: without it the middleware refuses first.
+    """
+    with override_settings(MIDDLEWARE=_SESSION_MIDDLEWARE, **_SESSION_SETTINGS):
+        if mount:
+            response = await AsyncClient(enforce_csrf_checks=True).post(_PRM)
+        else:
+            response = await sync_to_async(Client(enforce_csrf_checks=True).post)(_PRM)
+    assert response.status_code == 405, response.content[:200]
+    assert response["Allow"] == _PRM_ALLOW
+
+
 @pytest.mark.skipif(DJANGO_VERSION < (5, 1), reason="LoginRequiredMiddleware lands in Django 5.1")
 @pytest.mark.parametrize("path", [_ENDPOINT, _PRM])
 async def test_login_required_middleware_never_redirects_an_endpoint(

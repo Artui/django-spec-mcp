@@ -126,13 +126,29 @@ def seat_anonymous(request: HttpRequest) -> None:
 def is_raised_denial(exc: BaseException) -> bool:
     """Whether an exception escaping dispatch is a permission denial, not a fault.
 
-    Django's ``PermissionDenied`` is one (``test_a_raised_permission_denial_is_a_denial_not_a_fault``
-    in ``test_dispatch_backstop.py``). A drf-services permission class raises
-    DRF's instead, which is not a subclass of Django's, and it is recognised by
-    the ``403`` it declares as ``status_code``, so the transport need not
-    import DRF to read it (the same test in ``test_dispatch_backstop_drfs.py``).
+    Django's ``PermissionDenied`` is one
+    (``test_a_raised_permission_denial_is_a_denial_not_a_fault`` in
+    ``test_dispatch_backstop.py``). The second check is there only for the
+    drf-services path, and goes with it: a drf-services permission class raises
+    DRF's ``PermissionDenied``, which is not a subclass of Django's, so it is
+    recognised by the module and name of a class in its MRO, which needs no
+    import of DRF (the same test in ``test_dispatch_backstop_drfs.py``). Its
+    name half is what keeps DRF's other exceptions faults
+    (``test_an_escaping_api_exception_is_a_json_rpc_internal_error`` there),
+    and its module half is what refuses another
+    library's class named ``PermissionDenied`` (the ``namesake`` case of
+    ``test_an_exception_declaring_a_403_is_still_a_server_fault``).
+
+    **Not by the status an exception declares.** An HTTP client's error for an
+    upstream ``403`` carries ``status_code = 403`` too (``openai`` and
+    ``anthropic`` both do), and a tool whose upstream key was rejected is a
+    server fault, answered ``500`` and logged at ``ERROR``
+    (``test_an_exception_declaring_a_403_is_still_a_server_fault``).
     """
-    return isinstance(exc, PermissionDenied) or getattr(exc, "status_code", None) == 403
+    return isinstance(exc, PermissionDenied) or any(
+        cls.__module__ == "rest_framework.exceptions" and cls.__name__ == "PermissionDenied"
+        for cls in type(exc).__mro__
+    )
 
 
 def is_permission_denial(result: Any) -> bool:

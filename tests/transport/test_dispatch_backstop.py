@@ -111,6 +111,39 @@ def _list_does_not_exist() -> Any:
     raise Invoice.DoesNotExist(SECRET)
 
 
+class _UpstreamForbidden(Exception):
+    """Shaped like an HTTP client's error for an upstream ``403``.
+
+    ``openai.PermissionDeniedError`` and ``anthropic.PermissionDeniedError``
+    both carry ``status_code = 403``: a tool whose upstream key was rejected is
+    the server's fault, not a refusal of the caller.
+    """
+
+    status_code = 403
+
+
+def _upstream_forbidden() -> Any:
+    raise _UpstreamForbidden(SECRET)
+
+
+# A library's own ``PermissionDenied``: the name DRF's carries, from another
+# module, so only the module half of ``is_raised_denial``'s check refuses it.
+_NamesakeForbidden: type[Exception] = type(
+    "PermissionDenied", (_UpstreamForbidden,), {"__module__": "some_sdk.errors"}
+)
+
+
+def _namesake_forbidden() -> Any:
+    raise _NamesakeForbidden(SECRET)
+
+
+class _UpstreamForbiddenCheck(PermissionCheck):
+    """A check that calls an upstream API and lets its ``403`` escape."""
+
+    def has_permission(self, *args: Any, **kwargs: Any) -> bool:
+        raise _UpstreamForbidden(SECRET)
+
+
 def _explode() -> list[dict[str, Any]]:
     raise RuntimeError(SECRET)
 
@@ -168,6 +201,11 @@ def _server() -> MCPServer:
     )
     server.register_tool(_selector(_missing_row), name="missing.list")
     server.register_tool(_selector(_list_does_not_exist), name="boom.list_does_not_exist")
+    server.register_tool(_selector(_upstream_forbidden), name="boom.upstream_body")
+    server.register_tool(_selector(_namesake_forbidden), name="boom.namesake_body")
+    server.register_tool(
+        _selector(_rows, permissions=[_UpstreamForbiddenCheck()]), name="boom.upstream_check"
+    )
     server.register_tool(_selector(_rows, permissions=[_ExplodingCheck()]), name="boom.permission")
     server.register_tool(_selector(_rows), name="ok.gated", scopes="mcp:admin")
     server.register_tool(
@@ -390,6 +428,40 @@ async def test_any_other_escaping_exception_is_a_json_rpc_internal_error(
     _assert_internal_error(response)
     _assert_logged(caplog, _VIEWSET_LOGGERS[is_async], RuntimeError)
     assert "db-primary" in caplog.text
+
+
+@_PATHS
+@pytest.mark.parametrize(
+    ("tool", "raised"),
+    [
+        ("boom.upstream_body", _UpstreamForbidden),
+        ("boom.upstream_check", _UpstreamForbidden),
+        ("boom.namesake_body", _NamesakeForbidden),
+    ],
+    ids=["body", "check", "namesake"],
+)
+async def test_an_exception_declaring_a_403_is_still_a_server_fault(
+    is_async: bool,
+    modern: bool,
+    tool: str,
+    raised: type[Exception],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Only a ``PermissionDenied`` is a denial; a ``status_code`` of ``403`` is not.
+
+    An upstream API refusing the server's own key raises exactly this shape,
+    from a tool's body or from a check calling out, and answering it with a
+    ``403`` and a Bearer challenge would tell the caller to fetch a token that
+    cannot help, logged below ``ERROR`` where nobody looks. Nor is a class
+    merely named ``PermissionDenied``: only DRF's, by module and name.
+    """
+    caplog.set_level(logging.ERROR, logger="django_spec_mcp")
+    response = await _post(
+        is_async, _server(), "tools/call", {"name": tool, "arguments": {}}, modern=modern
+    )
+    _assert_internal_error(response)
+    assert "WWW-Authenticate" not in response
+    _assert_logged(caplog, _VIEWSET_LOGGERS[is_async], raised)
 
 
 @_PATHS

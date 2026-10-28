@@ -62,10 +62,16 @@ from django_spec_mcp.types.sessionless_methods import SESSIONLESS_METHODS
 
 _SESSION_HEADER: str = "Mcp-Session-Id"
 _VERSION_HEADER: str = "Mcp-Protocol-Version"
-# WSGI never streams, so JSON is all this view answers with: a client
-# accepting only ``text/event-stream`` cannot be served here
-# (``test_the_sync_endpoint_refuses_an_accept_naming_only_a_stream``).
+# WSGI never streams, so JSON is all this view answers a POST, DELETE or
+# OPTIONS with, and a client accepting only ``text/event-stream`` there cannot
+# be served (``test_the_sync_endpoint_refuses_an_accept_naming_only_a_stream``).
 _ANSWERS_WITH: tuple[str, ...] = ("application/json",)
+# Answered with a bodyless ``405`` whatever the ``Accept``, so never refused
+# for it: the spec has a GET list ``text/event-stream`` and a server that
+# offers no stream answer ``405``, which negotiating first turned into a ``406``
+# (``test_a_sync_get_naming_only_a_stream_is_the_405_not_a_406``). ``head``
+# because Django routes it to the ``get`` handler.
+_UNNEGOTIATED: frozenset[str] = frozenset({"GET", "HEAD"})
 
 # Passed to ``as_view`` by ``MCPServer``, so the canonical routing lives next to
 # the view rather than in the URL conf.
@@ -262,9 +268,10 @@ class StreamableHttpViewSet(View):
         super().setup(request, *args, **kwargs)
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
-        refused: JsonResponse | None = not_acceptable(request, _ANSWERS_WITH)
-        if refused is not None:
-            return refused
+        if request.method not in _UNNEGOTIATED:
+            refused: JsonResponse | None = not_acceptable(request, _ANSWERS_WITH)
+            if refused is not None:
+                return refused
         return super().dispatch(request, *args, **kwargs)
 
     # ----- actions (routed by ``as_view``'s map) -----
