@@ -117,7 +117,9 @@ carries; releases up to 0.54.0 are in
   call's own `request` or `view`, a positional-only parameter with no default, a
   keyword the callable requires that nothing fills, and an optional read over a
   keyword the callable requires, rather than listing a tool or resource every
-  call to which fails, or every call leaving the read out. A kernel tool
+  call to which fails, or every call leaving the read out. A read the tool's
+  `server_arguments` binds is filled on every call, so it is checked as
+  required and never refused as optional. A kernel tool
   call refused for leaving arguments out is answered in the server's
   `AgentConventions.missing_arguments`, ``Missing required argument(s): `pk`.``
   by default, read off the kernel's `InvalidArguments.missing`, with the per-field
