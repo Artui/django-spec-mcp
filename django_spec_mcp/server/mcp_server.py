@@ -1638,7 +1638,6 @@ class MCPServer:
                 "register_resource; a kernel SelectorSpec declares its own selector, "
                 "presenter and permissions."
             )
-        _check_kernel_resource_encoding(name, spec, encoding)
         binding = kernel_selector_to_resource(
             spec,
             name=name,
@@ -1656,6 +1655,9 @@ class MCPServer:
             mime_type=mime_type,
             encoding=encoding,
         )
+        # After the adapter, which refuses what is no RETRIEVE SelectorSpec first
+        # (test_the_spec_is_checked_for_a_resource_before_its_encoding).
+        _check_kernel_resource_encoding(name, binding.spec, encoding)
         template_variables: tuple[str, ...] = _template_variables(uri_template)
         validate_channel_names(
             label=f"Resource {name!r}",

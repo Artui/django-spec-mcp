@@ -344,6 +344,26 @@ def test_a_non_json_encoding_beside_allow_none_is_refused(encoding: ResourceEnco
         )
 
 
+def test_the_spec_is_checked_for_a_resource_before_its_encoding() -> None:
+    # A spec that is no resource at all is told so, not that its affordances
+    # cannot sit beside a non-JSON encoding.
+    affordances = {"cancel": CANCEL_ORDER}
+    with pytest.raises(TypeError, match="register_resource takes a django_service_specs"):
+        _server().register_resource(
+            _service(affordances=list(CANCEL_ORDER.affordances or ())),
+            name="r",
+            uri_template="r://{pk}",
+            encoding=ResourceEncoding.TEXT,
+        )
+    with pytest.raises(ImproperlyConfigured, match="its SelectorSpec is a RETRIEVE, not a LIST"):
+        _server().register_resource(
+            replace(_selector(), presenter=DataclassPresenter(_Row), affordances=affordances),
+            name="r",
+            uri_template="r://",
+            encoding=ResourceEncoding.TEXT,
+        )
+
+
 def test_a_json_resource_keeps_affordances_and_allow_none() -> None:
     # The control for both refusals: under JSON, a presented object with its
     # affordances and a ``null`` for a missing row are both bodies.
