@@ -626,6 +626,29 @@ async def test_a_refused_row_under_a_named_many_argument_keeps_its_admission(
 
 
 @_ASYNC
+async def test_a_check_raising_a_refusal_shaped_like_a_refused_row_keeps_no_admission(
+    is_async: bool,
+) -> None:
+    # A check raising ``InvalidArguments`` keyed by row index under the many
+    # argument is no refused row: the kernel marks the one ``check_call`` raises
+    # after admitting the top level (``after_authorize``), and this one is not
+    # marked. So it is answered as any refusal a check raises is, judged on no
+    # arguments, which this check cannot answer, and refused before the charge.
+    # Read off the tree alone, it kept an admission it was never given and was
+    # charged.
+    limit = _CountingLimit()
+    tree = InvalidArguments({"items": {0: {"amount_cents": ["Not this row."]}}})
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server.register_tool(_tenant_bulk(_Raises(tree)), name="get", rate_limits=[limit])
+    rows = [{"number": "A-1", "amount_cents": 1}]
+
+    out = await _call(server, {"tenant": 1, "items": rows}, is_async=is_async)
+
+    assert _forbidden(out), out
+    assert limit.consumed == 0
+
+
+@_ASYNC
 async def test_an_array_argument_failing_at_an_index_is_no_refused_row(is_async: bool) -> None:
     # A spec that is not ``many`` fails an array argument's item at its index,
     # under the argument's name, ``items`` here: a failed shape all the same,

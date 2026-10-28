@@ -1,15 +1,11 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import Any
 
 from django_service_specs import (
     DEFAULT_POOL_SEEDS,
-    Parameters,
     PoolSeeds,
-    SelectorSpec,
-    ServiceSpec,
-    provider_keys,
+    provider_reached,
     server_owned_keys,
     spec_input_schema,
 )
@@ -41,7 +37,14 @@ def kernel_tool_input_schema(
       keys a typed ``kwargs=`` or ``input_data=`` provider always fills
       (``test_a_name_a_typed_provider_returns_is_not_asked_for``);
     - a parameter a provider may fill is offered and not required, because
-      dispatch does not demand it of the caller (``_may_fill``);
+      dispatch does not demand it of the caller: the kernel's
+      ``provider_reached``, the reader its shape check relaxes by. It names
+      the keys a typed provider always fills too, which are withheld above
+      already. Without it every such parameter is required
+      (``test_an_untyped_provider_leaves_every_read_offered_and_none_required``,
+      ``test_a_lookup_read_beside_an_untyped_provider_is_offered_and_not_required``),
+      and each seat's keys are its own
+      (``test_a_key_one_seat_may_decline_is_still_required_by_another``);
     - a paginated ``LIST`` tool advertises ``page`` and ``limit``, as the
       drf-services selector schema does, ``limit`` bounded by ``max_page_size``
       when there is one, and each of its ``shapes`` says it applies to every
@@ -75,48 +78,11 @@ def kernel_tool_input_schema(
             limit["maximum"] = max_page_size
         properties["limit"] = limit
     schema["properties"] = properties
-    unasked: frozenset[str] = withheld | _may_fill(spec)
+    unasked: frozenset[str] = withheld | provider_reached(spec)
     required = [name for name in schema.pop("required", []) if name not in unasked]
     if required:
         schema["required"] = required
     return schema
-
-
-def _may_fill(spec: ServiceSpec | SelectorSpec) -> frozenset[str]:
-    """Every top-level parameter a provider may fill without always filling it.
-
-    Each provider's values reach one seat: a ``kwargs=`` provider its spec's
-    ``reads``, a service's target selector's ``kwargs=`` that selector's
-    ``reads``, and ``input_data=`` the Validator's fields. In its seat, a typed
-    provider may fill the keys it may decline with ``UNSET``, and one whose
-    return says nothing about its keys may fill every parameter. Read with the
-    kernel's public ``provider_keys``, standing in for the reader its dispatch
-    relaxes the same parameters with, which it does not export
-    (``dispatch.utils.provider_reached``).
-
-    The Validator's seat is read only on a service that has a Validator and is
-    not ``many``, whose fields are each row's rather than top-level arguments.
-    Each condition is held by its own test: a selector has no Validator (every
-    case of ``test_an_untyped_provider_leaves_every_read_offered_and_none_required``),
-    and of the two conjuncts coverage sees as one arc, a service may have none
-    (``test_a_service_without_a_validator_relaxes_its_reads_alone``) and a
-    ``many`` spec's rows are no seat
-    (``test_an_untyped_input_data_leaves_a_many_specs_list_required``). Each
-    seat's keys are its own (``test_a_key_one_seat_may_decline_is_still_required_by_another``).
-    """
-    seats: list[tuple[Callable[..., Any] | None, Parameters]] = [(spec.kwargs, spec.reads)]
-    if isinstance(spec, ServiceSpec):
-        target = spec.target_selector_spec()
-        if target is not None:
-            seats.append((target.kwargs, target.reads))
-        if spec.validator is not None and not spec.many:
-            seats.append((spec.input_data, spec.validator.parameters()))
-    reached: set[str] = set()
-    for provider, parameters in seats:
-        keys = provider_keys(provider)
-        names = parameters.names()
-        reached |= names if keys is None else names & keys.declinable
-    return frozenset(reached)
 
 
 def _on_each_item(fragment: dict[str, Any], scope: str) -> dict[str, Any]:

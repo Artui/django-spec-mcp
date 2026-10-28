@@ -17,6 +17,7 @@ from django_service_specs import (
     Parameters,
     SelectorKind,
     SelectorSpec,
+    ServerArguments,
     Unrestricted,
 )
 
@@ -111,25 +112,24 @@ def test_the_listing_reads_the_servers_paging_sentence() -> None:
     assert _listed(server)["properties"]["fields"]["description"] == "Per row."
 
 
-def test_a_paged_tools_shape_a_registered_seed_fills_is_withheld_not_described() -> None:
+def test_a_paged_tools_shape_the_server_answers_is_withheld_not_described() -> None:
     # Only a shape still listed is told it applies to each item: one the
-    # server's seed fills is withheld before the sentence is laid on.
-    server = MCPServer(
-        name="t", auth_backend=AllowAnyBackend(), session_store=None, pool_seeds=SEEDS
-    )
+    # server answers for is withheld before the sentence is laid on. A shape
+    # named like a registered seed would be withheld too, but no call could run
+    # it, so registration refuses that one.
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
     server.register_tool(
         SelectorSpec(
             kind=SelectorKind.LIST,
             selector=lambda **_: [],
-            shapes=Parameters(
-                [Parameter("fields", "string"), Parameter("tenant", "string", reflected=True)]
-            ),
+            shapes=Parameters([Parameter("fields", "string"), Parameter("tenant", "string")]),
             presenter=DataclassPresenter(_Row),
             permissions=[Unrestricted()],
         ),
         name="rows",
         description="Read rows.",
         paginate=True,
+        server_arguments=ServerArguments(values={"tenant": "acme"}),
     )
 
     properties = _listed(server)["properties"]

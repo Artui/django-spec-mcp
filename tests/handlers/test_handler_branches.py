@@ -213,7 +213,7 @@ def test_a_resource_read_passes_through_with_no_presenter(read: Handle) -> None:
 def test_a_resource_read_denied_by_its_scope_gate(read: Handle) -> None:
     server = _server()
     server.register_resource(
-        SelectorSpec(kind=SelectorKind.RETRIEVE, selector=dict, permissions=OPEN),
+        SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda: {}, permissions=OPEN),
         name="r",
         uri_template="r://",
         scopes=("scope:x",),

@@ -5,6 +5,7 @@ import re
 import sys
 import warnings
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import replace
 from typing import Any, cast
 
 from asgiref.sync import sync_to_async
@@ -16,12 +17,14 @@ from django_service_specs import (
     UNSET,
     Affordance,
     FieldMarking,
+    Parameters,
     PoolSeeds,
     SelectorKind,
     ServerArguments,
     SpecRegistry,
     UnknownArguments,
     UnsetType,
+    check_seeds,
     kernel_spec,
     server_owned_keys,
 )
@@ -705,6 +708,15 @@ class MCPServer:
         projected (two labels, say) is refused naming the tool, rather than
         failing every ``tools/list`` of the server.
 
+        A declaration no call on this server can run as written is refused
+        naming the tool, by the kernel's ``check_seeds`` with the server's
+        ``pool_seeds``: a parameter named like a registered seed or the call's
+        own ``request`` or ``view``, a positional-only parameter with no
+        default, a keyword the callable requires that nothing fills, and an
+        optional read over a keyword the callable requires. A read
+        ``server_arguments`` binds a value to is filled on every call, so it is
+        never refused as optional.
+
         ``display_name`` and ``display_description`` are labels for in-process
         consumers, read off the binding and never sent on the wire.
 
@@ -837,6 +849,22 @@ class MCPServer:
         # (``test_a_presenter_whose_markings_cannot_project_is_refused_at_registration``).
         try:
             _ = binding.audience_projection
+        except ImproperlyConfigured as exc:
+            raise ImproperlyConfigured(f"MCP tool {binding.name!r}: {exc}") from exc
+        # A declaration this server's calls cannot run as written is refused
+        # here, rather than listed and failed on every call: a parameter a
+        # registered seed or the call's own ``request`` / ``view`` meets, a
+        # positional-only one, a keyword nothing fills, and an optional read over
+        # a keyword that requires it. The kernel's reader, handed this server's
+        # seeds, so the refusal is the one ``dispatch`` would make
+        # (``test_a_read_a_seed_occupies_is_refused_at_registration``,
+        # ``test_a_required_parameter_nothing_fills_is_refused_at_registration``).
+        # Asked of the spec as this server calls it: a read the binding's
+        # ``server_arguments`` fill is never left out, so it is judged as
+        # demanded (``_as_called``). The binding keeps the spec as declared.
+        bound = frozenset(binding.server_arguments.values)
+        try:
+            check_seeds(_as_called(binding.spec, bound), pool_seeds=self._pool_seeds)
         except ImproperlyConfigured as exc:
             raise ImproperlyConfigured(f"MCP tool {binding.name!r}: {exc}") from exc
         # The spec's own permissions are the tool's guard; the scope gate on
@@ -1472,7 +1500,10 @@ class MCPServer:
         declares for itself, or that a presented row fixes (``selector``,
         ``output_serializer``, ``permissions``, ``mime_type`` and
         ``encoding``), are refused beside a positional spec, as ``scopes`` is
-        beside ``selector=``.
+        beside ``selector=``. A spec no read can run as written is refused
+        naming the resource, as ``register_tool`` refuses one. A read the URI
+        template names is filled on every read, as a value ``server_arguments``
+        binds is on every call, so it is never refused as optional.
         """
         if spec is not None:
             return self._register_kernel_resource(
@@ -1639,6 +1670,21 @@ class MCPServer:
             raise ImproperlyConfigured(
                 f"Resource {name!r}: uri_template " + "; and uri_template ".join(refusals) + "."
             )
+        # After the template's own checks, so a variable is refused in their
+        # words: a selector no read can run as written is refused as
+        # ``register_tool`` refuses one, by the kernel's reader with this
+        # server's seeds
+        # (``test_a_selector_no_read_can_run_is_refused_at_registration``).
+        # The matcher fills every template variable on every read, so a read
+        # the template names is checked as demanded, as a bound server argument
+        # is (``test_an_optional_read_the_template_names_registers_and_is_read``,
+        # ``test_an_optional_read_the_template_does_not_name_is_still_refused``).
+        try:
+            check_seeds(
+                _demanding(spec, frozenset(template_variables)), pool_seeds=self._pool_seeds
+            )
+        except ImproperlyConfigured as exc:
+            raise ImproperlyConfigured(f"Resource {name!r}: {exc}") from exc
         # The spec's own permissions are the guard, as for ``register_tool``.
         if check_kernel_spec_guarded(
             binding.name, spec, require=self._config.require_tool_permissions, kind="resource"
@@ -2501,6 +2547,62 @@ def _refuse_pagination_named_reads(binding: KernelToolBinding) -> None:
             "which takes them from the arguments before the selector is called, so the "
             "read would never receive the caller's value. Rename the read."
         )
+
+
+def _as_called(
+    spec: KernelServiceSpec | KernelSelectorSpec, bound: frozenset[str]
+) -> KernelServiceSpec | KernelSelectorSpec:
+    """``spec`` as a call on this server meets it: every read in ``bound`` demanded.
+
+    ``bound`` is a binding's ``server_arguments.values``, which replace the
+    caller's arguments of those names on every call, so such a read is never
+    left out whatever it declares. ``check_seeds`` reads a read declared
+    optional over a keyword with no default as one a call may leave out, and
+    so refuses it; asked of this copy instead, it refuses only the reads the
+    server does not fill
+    (``test_an_optional_read_the_server_binds_registers_and_is_filled``,
+    ``test_an_optional_read_the_server_does_not_bind_is_still_refused``). A
+    target selector's reads are the call's arguments too, so its seat is read
+    the same way (``test_an_optional_lookup_read_the_server_binds_registers_and_is_filled``,
+    one case per seat). Only for the check: the binding keeps the declared spec.
+    """
+    if isinstance(spec, KernelServiceSpec):
+        if spec.instance_selector_spec is not None:
+            spec = spec.derive(
+                instance_selector_spec=cast(
+                    KernelSelectorSpec, _demanding(spec.instance_selector_spec, bound)
+                )
+            )
+        if spec.collection_selector_spec is not None:
+            spec = spec.derive(
+                collection_selector_spec=cast(
+                    KernelSelectorSpec, _demanding(spec.collection_selector_spec, bound)
+                )
+            )
+    return _demanding(spec, bound)
+
+
+def _demanding(
+    spec: KernelServiceSpec | KernelSelectorSpec, bound: frozenset[str]
+) -> KernelServiceSpec | KernelSelectorSpec:
+    """``spec`` with each of its own reads named in ``bound`` required, and declaring no default.
+
+    ``bound`` is what is sent on every call: a binding's ``server_arguments``
+    values, or a resource's URI-template variables. The default is dropped as
+    well, because ``check_seeds`` demands a read only when it is required and
+    declares none
+    (``test_a_bound_read_declaring_a_default_registers_and_takes_the_bound_value``).
+    """
+    if not bound & spec.reads.names():
+        return spec
+    return spec.derive(
+        reads=Parameters.of(
+            *(
+                replace(read, required=True, default=UNSET) if read.name in bound else read
+                for read in spec.reads
+            )
+        )
+    )
 
 
 def _refuse_retired_argument_binding(name: str, argument_binding: ArgumentBinding) -> None:

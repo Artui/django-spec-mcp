@@ -30,9 +30,11 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest
 from django_service_specs import (
+    DEFAULT_POOL_SEEDS,
     DataclassPresenter,
     Parameter,
     Parameters,
+    PoolSeeds,
     SelectorKind,
     SelectorSpec,
     Unrestricted,
@@ -148,6 +150,87 @@ def test_a_template_variable_no_read_declares_is_refused_at_registration() -> No
             name="bad",
             uri_template="bad://{pk}",
         )
+
+
+def _requires_an_owner(*, pk: int, owner: str) -> Invoice:
+    return Invoice(number=f"{owner}-{pk}", amount_cents=100)
+
+
+@pytest.mark.parametrize(
+    ("spec", "seeds", "offender"),
+    [
+        pytest.param(
+            SelectorSpec(
+                kind=SelectorKind.RETRIEVE,
+                selector=_requires_an_owner,
+                reads=_PK,
+                permissions=OPEN,
+            ),
+            DEFAULT_POOL_SEEDS,
+            "owner",
+            id="a-keyword-nothing-fills",
+        ),
+        pytest.param(
+            SelectorSpec(
+                kind=SelectorKind.RETRIEVE,
+                selector=lambda *, pk, tenant: Invoice(number=tenant, amount_cents=pk),
+                reads=Parameters([*_PK, Parameter("tenant", "string", required=True)]),
+                permissions=OPEN,
+            ),
+            DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme"),
+            "tenant",
+            id="a-read-a-registered-seed-occupies",
+        ),
+    ],
+)
+def test_a_selector_no_read_can_run_is_refused_at_registration(
+    spec: SelectorSpec, seeds: PoolSeeds, offender: str
+) -> None:
+    # Neither name is a template variable, so the variable checks above pass
+    # it; the kernel's ``check_seeds``, asked with the server's seeds, does not.
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), pool_seeds=seeds)
+    with pytest.raises(ImproperlyConfigured, match=rf"Resource 'bad': .*\['{offender}'\]"):
+        server.register_resource(spec, name="bad", uri_template="bad://{pk}")
+    assert len(server.resources) == 0
+
+
+@pytest.mark.django_db
+def test_an_optional_read_the_template_names_registers_and_is_read() -> None:
+    # The matcher fills every template variable on every read, so ``pk`` is
+    # never left out whatever the read declares, as a bound server argument is
+    # not; a read the template names is checked as required.
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend())
+    server.register_resource(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=_invoice,
+            reads=Parameters([Parameter("pk", "integer")]),
+            presenter=DataclassPresenter(Invoice),
+            permissions=OPEN,
+        ),
+        name="invoice",
+        uri_template="invoices://{pk}",
+    )
+    out = handle_resources_read({"uri": "invoices://7"}, _ctx(server))
+    assert _body(out) == {"number": "INV-7", "amount_cents": 100}
+
+
+def test_an_optional_read_the_template_does_not_name_is_still_refused() -> None:
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend())
+    with pytest.raises(
+        ImproperlyConfigured, match=r"Resource 'bad': .*\['owner'\], declared as optional"
+    ):
+        server.register_resource(
+            SelectorSpec(
+                kind=SelectorKind.RETRIEVE,
+                selector=_requires_an_owner,
+                reads=Parameters([*_PK, Parameter("owner", "string")]),
+                permissions=OPEN,
+            ),
+            name="bad",
+            uri_template="bad://{pk}",
+        )
+    assert len(server.resources) == 0
 
 
 def test_the_refusal_names_the_resource_and_each_variable_no_read_declares() -> None:

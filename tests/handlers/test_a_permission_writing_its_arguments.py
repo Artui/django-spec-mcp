@@ -121,7 +121,11 @@ def _server(
         spec = SelectorSpec(
             kind=SelectorKind.RETRIEVE,
             selector=service,
-            reads=Parameters([Parameter("note", "string"), Parameter("owner", "string")]),
+            # ``note`` is required: the selector has no default for it, and an
+            # optional read over such a keyword is refused at registration.
+            reads=Parameters(
+                [Parameter("note", "string", required=True), Parameter("owner", "string")]
+            ),
             kwargs=provider,
             permissions=permissions,
         )

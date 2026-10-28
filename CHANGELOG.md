@@ -109,6 +109,23 @@ carries; releases up to 0.54.0 are in
   `register_tool` or `register_tools` name the line that registered it, not a
   line inside django-spec-mcp, so a warnings filter keyed on the registering
   module matches them.
+- **A kernel spec whose declaration cannot hold is refused at registration, and
+  a kernel tool names the arguments a call left out.** `register_tool`,
+  `register_tools` and `register_resource` ask the kernel's `check_seeds` with
+  the server's `pool_seeds` and refuse, naming the tool or resource, a spec no
+  call could run as written: a parameter named like a registered seed or the
+  call's own `request` or `view`, a positional-only parameter with no default, a
+  keyword the callable requires that nothing fills, and an optional read over a
+  keyword the callable requires, rather than listing a tool or resource every
+  call to which fails, or every call leaving the read out. A read always sent
+  is checked as required and never refused as optional: one the tool's
+  `server_arguments` binds a value to, and one a resource's URI template
+  names, which every read fills. A kernel tool
+  call refused for leaving arguments out is answered in the server's
+  `AgentConventions.missing_arguments`, ``Missing required argument(s): `pk`.``
+  by default, read off the kernel's `InvalidArguments.missing`, with the per-field
+  detail as before. That includes a Validator field, which the drf-services
+  path answers as `Invalid arguments`.
 - **An unpaginated kernel `LIST` tool is held to the row ceiling.** Its own
   `max_page_size`, deferring to the server's `MAX_PAGE_SIZE`, is the most rows
   one result carries. A result over it is refused as `result_too_large` rather

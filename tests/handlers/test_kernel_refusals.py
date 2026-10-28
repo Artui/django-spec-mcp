@@ -23,7 +23,7 @@ out fails a named test even where the map stays total:
 
 Each row with a drf-services counterpart is also compared with what a drf-services
 tool serves for it: ``test_a_denial_is_answered_as_the_drf_services_path_answers_it``,
-``test_invalid_arguments_are_answered_as_the_drf_services_path_answers_them`` and
+``test_invalid_arguments_carry_the_drf_services_detail_in_the_servers_own_wording`` and
 ``test_a_service_refusal_is_answered_as_the_drf_services_path_answers_it``. A bare
 ``DispatchError`` and a deactivated principal have none: drf-services raises neither.
 """
@@ -203,7 +203,7 @@ def test_a_deactivated_principal_is_insufficient_permission(client: Client) -> N
 def test_invalid_arguments_carry_their_per_field_detail(kernel: KernelClient) -> None:
     error = _error(kernel.call("validated", {"amount_cents": 3}))
     assert error["type"] == "validation_error"
-    assert error["message"] == "Invalid arguments"
+    assert error["message"] == "Missing required argument(s): `number`."
     # The refusal's own map, not the non-field sentence a bare DispatchError gets.
     assert set(error["detail"]) == {"number"}
 
@@ -326,11 +326,14 @@ def test_a_denial_is_answered_as_the_drf_services_path_answers_it(client: Client
     assert _served(client, _build(), "denied") == _served(client, drfs, "denied")
 
 
-def test_invalid_arguments_are_answered_as_the_drf_services_path_answers_them(
+def test_invalid_arguments_carry_the_drf_services_detail_in_the_servers_own_wording(
     client: Client,
 ) -> None:
     """The same missing field, refused by a serializer there and the kernel's
-    validator here, answers the same error, per-field detail and wording included."""
+    validator here, answers the same per-field detail. The wording differs by
+    design: the kernel reads the field as left out, so it is named in the
+    server's ``missing_arguments``, where the drf-services path keeps
+    ``Invalid arguments`` for a serializer's own field."""
     drfs = MCPServer(name="drfs", auth_backend=build_kernel_server()._auth_backend)
     drfs.register_service_tool(
         name="validated",
@@ -338,8 +341,10 @@ def test_invalid_arguments_are_answered_as_the_drf_services_path_answers_them(
     )
     by_drfs = _error(_served(client, drfs, "validated", {"data": {}}))
     by_kernel = _error(_served(client, _build(), "validated", {}))
-    assert by_kernel == by_drfs
-    assert by_kernel["detail"] == {"number": ["This field is required."]}
+    assert by_kernel["detail"] == by_drfs["detail"] == {"number": ["This field is required."]}
+    assert by_kernel["type"] == by_drfs["type"] == "validation_error"
+    assert by_drfs["message"] == "Invalid arguments"
+    assert by_kernel["message"] == "Missing required argument(s): `number`."
 
 
 def _served(

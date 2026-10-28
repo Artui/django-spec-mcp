@@ -7,10 +7,9 @@ kernel path the first two are the kernel's own ``CALL_SEEDS``, read off the
 call's context, and ``serializer`` is an ordinary argument, since a kernel
 Validator binds nothing of that name. So this asks what each of the three is to
 a kernel tool: ``serializer`` is advertised and received; a read named
-``request`` or ``view``, or after a seed the server registers, should be
-refused at registration, because no caller's value of that name reaches the
-service. It registers and is listed today, which is the defect the strict xfail
-below holds. A top-level Validator field of such a name is not a defect: the
+``request`` or ``view`` is refused by the kernel when the spec is built, and
+one named after a seed the server registers is refused at registration,
+because no caller's value of that name reaches the service. A top-level Validator field of such a name is not a defect: the
 kernel documents it as the caller's, validated into ``data`` and never handed
 to the service under that name, so the last test here holds that answer.
 
@@ -105,22 +104,19 @@ def _reading(name: str) -> ServiceSpec:
     )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    # Only "did not raise" counts, so a spec that failed to build is not taken
-    # for the defect.
-    raises=pytest.fail.Exception,
-    reason=(
-        "register_tool admits a read no caller's value can reach: a read named "
-        "after a CALL_SEEDS name or a registered seed raises ImproperlyConfigured out of "
-        "every dispatch. Fix: refuse it at registration, as the drfs registrars refuse a "
-        "TOOL_EDGE_SEEDS or pool_seeds name, or have the kernel refuse it."
-    ),
-)
-@pytest.mark.parametrize("name", [*sorted(CALL_SEEDS), "tenant"])
-def test_a_read_named_after_a_seed_is_refused_at_registration(name: str) -> None:
+@pytest.mark.parametrize("name", sorted(CALL_SEEDS))
+def test_a_read_named_after_a_call_seed_is_refused_when_the_spec_is_built(name: str) -> None:
+    # The kernel's own refusal: no registrar of this package is reached.
     with pytest.raises(ImproperlyConfigured, match=rf"\['{name}'\]"):
-        _server(_reading(name))
+        _reading(name)
+
+
+def test_a_read_named_after_a_seed_the_server_registers_is_refused_at_registration() -> None:
+    # The spec builds, since the kernel cannot know this server's seeds; the
+    # registrar asks ``check_seeds`` with them and refuses it naming the tool.
+    spec = _reading("tenant")
+    with pytest.raises(ImproperlyConfigured, match=r"MCP tool 'echo': .*\['tenant'\]"):
+        _server(spec)
 
 
 @pytest.mark.parametrize("name", ["call_context", "user"])

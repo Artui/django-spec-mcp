@@ -72,13 +72,13 @@ def _card(*, project: int, draw: int = 0) -> _Card:
     return _Card(project=project, draw=draw)
 
 
-def _selector(*, project_required: bool = True) -> SelectorSpec:
+def _selector() -> SelectorSpec:
     return SelectorSpec(
         kind=SelectorKind.RETRIEVE,
         selector=_card,
         reads=Parameters(
             [
-                Parameter("project", "integer", required=project_required),
+                Parameter("project", "integer", required=True),
                 Parameter("draw", "integer", required=False),
             ]
         ),
@@ -138,6 +138,95 @@ def test_the_bound_value_wins_and_the_withheld_one_is_dropped(
     assert "project" in message
 
 
+def _optional_reads(selector: Any, *names: str) -> SelectorSpec:
+    return SelectorSpec(
+        kind=SelectorKind.RETRIEVE,
+        selector=selector,
+        reads=Parameters([Parameter(name, "integer") for name in names]),
+        presenter=DataclassPresenter(_Card),
+        permissions=[Unrestricted()],
+    )
+
+
+def test_an_optional_read_the_server_binds_registers_and_is_filled() -> None:
+    # An optional read over a keyword with no default is refused at
+    # registration, since a call may leave it out; a bound one never is left
+    # out, because the server's value replaces the caller's on every call.
+    server = _server()
+    bind = ServerArguments(values={"project": 7})
+    server.register_tool(
+        _optional_reads(_card, "project", "draw"),
+        name="card",
+        description="d",
+        server_arguments=bind,
+    )
+    result = server.call_tool("card", {}, user=None)
+    assert result.structured_content == {"project": 7, "draw": 0}
+
+
+def test_a_bound_read_declaring_a_default_registers_and_takes_the_bound_value() -> None:
+    # A read declaring a default is not demanded either, so the derived copy
+    # drops the default as well as requiring the read; requiring it alone
+    # leaves it refused as optional.
+    server = _server()
+    server.register_tool(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=_card,
+            reads=Parameters([Parameter("project", "integer", default=3)]),
+            presenter=DataclassPresenter(_Card),
+            permissions=[Unrestricted()],
+        ),
+        name="card",
+        description="d",
+        server_arguments=ServerArguments(values={"project": 7}),
+    )
+    result = server.call_tool("card", {}, user=None)
+    assert result.structured_content == {"project": 7, "draw": 0}
+
+
+def _card_for(*, project: int, owner: int) -> _Card:
+    return _Card(project=project, draw=owner)
+
+
+def test_an_optional_read_the_server_does_not_bind_is_still_refused() -> None:
+    server = _server()
+    bind = ServerArguments(values={"project": 7})
+    with pytest.raises(
+        ImproperlyConfigured, match=r"MCP tool 'card': .*\['owner'\], declared as optional"
+    ):
+        server.register_tool(
+            _optional_reads(_card_for, "project", "owner"),
+            name="card",
+            description="d",
+            server_arguments=bind,
+        )
+    assert "card" not in server.tools
+
+
+@pytest.mark.parametrize("seat", ["instance_selector_spec", "collection_selector_spec"])
+def test_an_optional_lookup_read_the_server_binds_registers_and_is_filled(seat: str) -> None:
+    # The binding reaches the target selector's reads too, which are the
+    # call's arguments as the spec's own are.
+    lookup = SelectorSpec(
+        kind=SelectorKind.RETRIEVE if seat == "instance_selector_spec" else SelectorKind.LIST,
+        selector=lambda *, project: _Card(project=project, draw=0),
+        reads=Parameters([Parameter("project", "integer")]),
+    )
+    target = "instance" if seat == "instance_selector_spec" else "collection"
+    spec = ServiceSpec(
+        service=lambda **pool: pool[target],
+        permissions=[Unrestricted()],
+        atomic=False,
+        **{seat: lookup},
+    )
+    server = _server()
+    bind = ServerArguments(values={"project": 7})
+    server.register_tool(spec, name="act", description="d", server_arguments=bind)
+    result = server.call_tool("act", {}, user=None)
+    assert result.is_error is False, result.to_dict()
+
+
 @pytest.mark.django_db
 def test_a_service_tools_schema_subtracts_the_bound_field() -> None:
     server = _server()
@@ -188,7 +277,7 @@ def test_a_registered_seed_is_refused_with_the_servers_own_seeds() -> None:
 
 def test_no_binding_leaves_the_tool_as_it_was() -> None:
     server = _server()
-    server.register_tool(_selector(project_required=False), name="card", description="d")
+    server.register_tool(_selector(), name="card", description="d")
     assert set(_schema(server, "card")["properties"]) == {"project", "draw"}
     result = server.call_tool("card", {"project": 3}, user=None)
     assert result.structured_content == {"project": 3, "draw": 0}

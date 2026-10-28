@@ -45,7 +45,9 @@ def _build_server() -> MCPServer:
         )
     for i in range(4):
         server.register_resource(
-            SelectorSpec(kind=SelectorKind.RETRIEVE, selector=dict, permissions=[Unrestricted()]),
+            SelectorSpec(
+                kind=SelectorKind.RETRIEVE, selector=lambda: {}, permissions=[Unrestricted()]
+            ),
             name=f"r.{i}",
             uri_template=f"r{i}://",
         )

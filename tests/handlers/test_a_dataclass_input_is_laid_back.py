@@ -12,9 +12,9 @@ call left the argument out, and the schema requires exactly the names nothing
 defaults. A read's declared ``default`` is reported in the schema, not applied,
 so the default a selector reads is its own signature's, declared beside it.
 A read declared optional over a selector with no default of its own is where
-the two come apart: the schema offers it as optional and the call leaving it
-out is refused. Held as a strict ``xfail``, as a question for the kernel
-rather than a settled defect. The original is kept beside this file as
+the two would come apart, the schema offering it as optional and the call
+leaving it out refused as missing, so registration refuses that declaration,
+naming the tool, and no client is shown the schema. The original is kept beside this file as
 ``test_a_dataclass_input_is_laid_back_drfs.py``.
 """
 
@@ -129,37 +129,19 @@ def _read_without_a_default(*, number: str, limit: int) -> dict[str, Any]:
     return {"number": number, "limit": limit}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "A read declared optional over a selector keyword with no default is offered as "
-        "optional and refused when left out. Fixed only if registration refuses that "
-        "declaration, which is a question for the kernel, not a settled defect: its "
-        "selectors/utils.py refuses such a keyword at the call because a registered seed "
-        "may fill it, held by test_an_optional_read_a_selector_requires_is_refused_when_not_sent."
-    ),
-)
-async def test_a_read_the_schema_offers_as_optional_is_not_refused_when_left_out() -> None:
-    # A registration refusing the declaration is the two agreeing too, since no
-    # client is ever shown the schema.
+def test_a_read_the_schema_would_offer_as_optional_over_a_required_keyword_is_refused() -> None:
     server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
-    try:
-        server.register_tool(
-            SelectorSpec(
-                kind=SelectorKind.RETRIEVE,
-                selector=_read_without_a_default,
-                reads=Parameters(
-                    [Parameter("number", "string", required=True), Parameter("limit", "integer")]
-                ),
-                permissions=OPEN,
-            ),
-            name="read",
-        )
-    except ImproperlyConfigured:
-        return
-    listed: Any = server.list_tools(user=None)
+    spec = SelectorSpec(
+        kind=SelectorKind.RETRIEVE,
+        selector=_read_without_a_default,
+        reads=Parameters(
+            [Parameter("number", "string", required=True), Parameter("limit", "integer")]
+        ),
+        permissions=OPEN,
+    )
 
-    out = await server.acall_tool("read", {"number": "A"}, user=None)
-
-    assert "limit" not in listed["tools"][0]["inputSchema"]["required"]
-    assert "isError" not in out, out
+    with pytest.raises(
+        ImproperlyConfigured, match=r"MCP tool 'read': .*\['limit'\], declared as optional reads"
+    ):
+        server.register_tool(spec, name="read")
+    assert "read" not in server.tools

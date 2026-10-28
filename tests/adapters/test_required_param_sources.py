@@ -12,14 +12,16 @@ here so a refusal of the unfilled cases cannot reach them.
 
 A required parameter none of them fills was refused at registration on the
 drf-services path, because every call to such a tool raises ``TypeError`` out of
-dispatch. The kernel route registers it, lists it, and raises on every call.
-The strict xfail below holds the cases until registration refuses them. The
-registered pool is not known when a spec is built (``lambda *, tenant: tenant``
-is valid on a server whose pool registers ``tenant``), so the ask is a kernel
-reader taking ``pool_seeds``, called at registration. The same holds for a
-Validator field the callable has no way to receive, which is advertised,
-accepted and silently dropped; the second xfail holds that, and the drf-services
-twin that refused it is ``test_input_serializer_validation_drfs.py``.
+dispatch, and it is refused at registration here too: ``register_tool`` asks the
+kernel's ``check_seeds`` with the server's ``pool_seeds``, since the registered
+pool is not known when a spec is built (``lambda *, tenant: tenant`` is valid on
+a server whose pool registers ``tenant``). A Validator field the callable has
+no way to receive registers, is advertised, and is validated on the call,
+which runs without it. The kernel answers such a field with
+``unreceived_fields`` and does not refuse it, because such a spec runs and may
+mean to (a Validator checking that two fields agree passes one of them on), and
+this package does not refuse it either. The drf-services twin that refused it is
+``test_input_serializer_validation_drfs.py``.
 
 The drf-services original asked this of trust mode, ``ArgumentBinding``,
 ``UrlKwarg`` sources and an ``input_serializer``'s fields under each binding;
@@ -29,6 +31,7 @@ is kept beside this file as ``test_required_param_sources_drfs.py``.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -43,6 +46,7 @@ from django_service_specs import (
     SelectorSpec,
     ServiceSpec,
     Unrestricted,
+    unreceived_fields,
 )
 
 from django_spec_mcp import MCPServer
@@ -151,56 +155,60 @@ def test_a_selector_requiring_the_view_registers_and_is_handed_it() -> None:
     assert seen == [None]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    # "DID NOT RAISE" only, so no other error can keep the test quietly xfailed.
-    raises=pytest.fail.Exception,
-    reason=(
-        "register_tool accepts a callable whose required parameter nothing in the pool "
-        "fills, and every call raises TypeError out of dispatch. Fix: a kernel reader "
-        "taking pool_seeds, called at registration, because the registered pool is not "
-        "known when a spec is built."
-    ),
-)
+# The kernel's wording for a keyword no read, seed or default fills.
+_UNFILLED = "which nothing fills"
+
+
 @pytest.mark.parametrize(
-    "build",
+    ("build", "wording"),
     [
-        # Factories, built inside the block: a spec refused when it is built
-        # must neither fail collection nor stay xfailed for the wrong reason.
-        pytest.param(lambda: _service(lambda *, other: other), id="service"),
-        pytest.param(lambda: _retrieve(lambda *, pk: pk), id="selector"),
+        # Factories, built inside the block, so a spec refused when it is built
+        # cannot fail collection; the match on the tool's name says the
+        # registration refused it, not the spec's construction.
+        pytest.param(lambda: _service(lambda *, other: other), _UNFILLED, id="service"),
+        pytest.param(lambda: _retrieve(lambda *, pk: pk), _UNFILLED, id="selector"),
         pytest.param(
-            lambda: _service(lambda *, instance: instance), id="instance-without-a-lookup"
+            lambda: _service(lambda *, instance: instance),
+            _UNFILLED,
+            id="instance-without-a-lookup",
         ),
-        pytest.param(lambda: _retrieve(lambda pk, /: pk, reads=_PK), id="positional-only"),
+        pytest.param(
+            lambda: _retrieve(lambda pk, /: pk, reads=_PK),
+            "positional-only parameter",
+            id="positional-only",
+        ),
         # The kernel seeds ``data`` for a service only, so a selector requiring it
         # is as unfilled as ``other``.
-        pytest.param(lambda: _retrieve(lambda *, data: data), id="selector-requiring-data"),
+        pytest.param(
+            lambda: _retrieve(lambda *, data: data), _UNFILLED, id="selector-requiring-data"
+        ),
     ],
 )
 def test_a_required_parameter_nothing_fills_is_refused_at_registration(
-    build: Callable[[], Any],
+    build: Callable[[], Any], wording: str
 ) -> None:
-    with pytest.raises(ImproperlyConfigured):
+    with pytest.raises(ImproperlyConfigured, match=rf"MCP tool 't': .*{wording}"):
         _server(build())
 
 
-@pytest.mark.xfail(
-    strict=True,
-    # "DID NOT RAISE" only, so no other error can keep the test quietly xfailed.
-    raises=pytest.fail.Exception,
-    reason=(
-        "register_tool accepts a Validator field the callable cannot receive, which is "
-        "advertised in inputSchema, accepted, and dropped without an error. Fix: the "
-        "kernel refuses a Validator field the callable takes neither by name nor through "
-        "data or **kwargs, as the drf-services path did "
-        "(test_input_serializer_validation_drfs.py)."
-    ),
-)
-def test_a_validator_field_the_callable_cannot_receive_is_refused_at_registration() -> None:
+def test_a_validator_field_the_callable_cannot_receive_registers_and_is_validated() -> None:
     # ``note`` reaches a callable naming it, taking ``data`` or taking ``**kwargs``;
-    # this one takes ``title`` alone, so ``note`` would be lost.
-    with pytest.raises(ImproperlyConfigured, match="note"):
-        _server(
-            _service(lambda *, title: title, validator=DataclassValidator(_Titled)),
-        )
+    # this one takes ``title`` alone, so ``note`` is validated and not passed on.
+    spec = _service(lambda *, title: title, validator=DataclassValidator(_Titled))
+    server = _server(spec)
+    listed: Any = server.list_tools(user=None)
+
+    out = server.call_tool("t", {"title": "a", "note": "kept"}, user=None).to_dict()
+    refused = server.call_tool("t", {"title": "a", "note": 5}, user=None).to_dict()
+
+    assert unreceived_fields(spec) == frozenset({"note"})
+    assert "note" in listed["tools"][0]["inputSchema"]["properties"]
+    assert out.get("isError") is not True, out
+    assert out["structuredContent"] == "a"
+    # A refusal naming no missing argument keeps the generic message.
+    assert refused.get("isError") is True, refused
+    assert json.loads(refused["content"][0]["text"])["error"] == {
+        "type": "validation_error",
+        "message": "Invalid arguments",
+        "detail": {"note": ["Expected a string."]},
+    }

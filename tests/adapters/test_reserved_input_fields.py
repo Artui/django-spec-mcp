@@ -11,13 +11,10 @@ argument of one name meet in three ways:
   parameter of that name keeps the seed;
 - a ``reads`` entry nobody marked ``reflected``, named like a registered seed or
   like the call's own ``request`` / ``view``, is refused by the kernel's
-  ``dispatch`` on every call. ``register_tool`` registers it, so the tool is
-  listed and no call to it can succeed. Those two tests are strict xfails until
-  registration refuses it. The kernel's ``check_call`` answers it today, off
-  label, as a side effect of running ``dispatch``'s prelude; the ask is a public
-  kernel reader of exactly this, preferred because every package registering
-  kernel specs needs the same registration-time answer, with ``MCPServer``
-  handing its ``pool_seeds`` to ``kernel_spec_to_tool``.
+  ``dispatch`` on every call, so ``register_tool`` refuses it, asking the
+  kernel's ``check_seeds`` with the server's ``pool_seeds``. A service spec's
+  read of either call name is refused earlier, when the spec is built; a
+  selector spec's is not, and is refused at registration.
 
 The drf-services original asked this of an ``input_serializer`` field under each
 ``ArgumentBinding``, refused at registration because the seed silently won the
@@ -116,51 +113,32 @@ def test_a_validator_field_named_like_a_registered_seed_is_the_callers_and_reach
     assert out["structuredContent"] == {"sent": "mine", "seeded": "acme"}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    # "DID NOT RAISE" only, so no other error can keep the test quietly xfailed.
-    raises=pytest.fail.Exception,
-    reason=(
-        "register_tool accepts a read a registered seed occupies, which dispatch refuses "
-        "on every call. Fix: a public kernel reader of the parameters dispatch refuses "
-        "(preferred, as several packages need it; check_call detects them today, off "
-        "label), which kernel_spec_to_tool asks, with MCPServer._kernel_tool_binding "
-        "passing pool_seeds=self._pool_seeds."
-    ),
-)
 def test_a_read_named_like_a_registered_seed_is_refused_at_registration() -> None:
-    # The spec is built inside the block, so a refusal from either layer, the
-    # spec's construction or the registration, turns the xfail into an XPASS.
-    with pytest.raises(ImproperlyConfigured, match="tenant"):
-        spec = ServiceSpec(
-            service=lambda *, tenant: tenant,
-            atomic=False,
-            permissions=[Unrestricted()],
-            reads=Parameters([Parameter("tenant", "string", required=True)]),
-        )
-        _server(pool_seeds=_SEEDED).register_tool(spec, name="t")
+    # Built outside the block: the spec is valid on its own, and only a server
+    # registering ``tenant`` makes the read one no caller's value reaches.
+    spec = ServiceSpec(
+        service=lambda *, tenant: tenant,
+        atomic=False,
+        permissions=[Unrestricted()],
+        reads=Parameters([Parameter("tenant", "string", required=True)]),
+    )
+    server = _server(pool_seeds=_SEEDED)
+    with pytest.raises(ImproperlyConfigured, match=r"MCP tool 't': .*\['tenant'\]"):
+        server.register_tool(spec, name="t")
+    assert "t" not in server.tools
 
 
-@pytest.mark.xfail(
-    strict=True,
-    # "DID NOT RAISE" only, so no other error can keep the test quietly xfailed.
-    raises=pytest.fail.Exception,
-    reason=(
-        "register_tool accepts a read named request or view, which dispatch refuses on "
-        "every mount and every call. Fix: a public kernel reader of the parameters "
-        "dispatch refuses (preferred, as several packages need it; check_call detects "
-        "them today, off label) for kernel_spec_to_tool to ask, or the kernel refusing "
-        "a read of either name nobody marked reflected when the spec is built, as it "
-        "refuses RESERVED_POOL_SEEDS."
-    ),
-)
 @pytest.mark.parametrize("name", ["request", "view"])
 def test_a_read_named_after_the_calls_own_seat_is_refused_at_registration(name: str) -> None:
-    with pytest.raises(ImproperlyConfigured, match=name):
-        spec = SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            selector=lambda **_: None,
-            permissions=[Unrestricted()],
-            reads=Parameters([Parameter(name, "string", required=True)]),
-        )
-        _server().register_tool(spec, name="t")
+    # A selector spec's own read of either name is not refused when it is
+    # built, so the registration is what refuses it.
+    spec = SelectorSpec(
+        kind=SelectorKind.RETRIEVE,
+        selector=lambda **_: None,
+        permissions=[Unrestricted()],
+        reads=Parameters([Parameter(name, "string", required=True)]),
+    )
+    server = _server()
+    with pytest.raises(ImproperlyConfigured, match=rf"MCP tool 't': .*\['{name}'\]"):
+        server.register_tool(spec, name="t")
+    assert "t" not in server.tools
