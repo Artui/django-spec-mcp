@@ -83,7 +83,7 @@ The presenter stays authoritative — it is the one declaration this server, any
 in-process toolset and any other transport serving the spec all read. When a
 single tool genuinely needs what its sibling hides, that is a different
 presenter, and it belongs on the spec the registry holds rather than on this
-mount:
+mount. With `invoice_spec` presenting through `DataclassPresenter(InvoiceOutput)`:
 
 ```python
 from dataclasses import dataclass, replace
@@ -95,6 +95,8 @@ from django_service_specs import DataclassPresenter
 class InvoiceWithEtag(InvoiceOutput):
     etag: str  # this tool returns the etag after all
 
+
+registry.register("lookup_invoice", invoice_spec, tags=("billing",))
 
 entry = registry.get("lookup_invoice")
 billing = registry.by_tag("billing").replace(

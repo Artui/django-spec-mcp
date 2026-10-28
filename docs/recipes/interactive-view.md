@@ -36,9 +36,9 @@ what you take on by skipping it.
     // envelope, unchanged.
     var rows = (structuredContent && structuredContent.items) || [];
     document.getElementById("root").innerHTML = rows.length
-      ? "<table><thead><tr><th>Number</th><th>Customer</th><th>Total</th></tr></thead><tbody>" +
+      ? "<table><thead><tr><th>Number</th><th>Amount (cents)</th><th>Sent</th></tr></thead><tbody>" +
         rows.map(function (r) {
-          return "<tr><td>" + r.number + "</td><td>" + r.customer + "</td><td>" + r.total + "</td></tr>";
+          return "<tr><td>" + r.number + "</td><td>" + r.amount_cents + "</td><td>" + (r.sent ? "yes" : "no") + "</td></tr>";
         }).join("") +
         "</tbody></table>"
       : "<p class='empty'>No invoices matched.</p>";
@@ -62,13 +62,16 @@ that pulls its runtime from a CDN needs that origin in `resource_domains`
 before it will boot at all, on every host.
 
 The view can also fetch fresh data itself. `mcpApp.callTool("list_invoices",
-{ordering: "-total"})` returns a promise and goes back through the ordinary
+{ordering: ["-amount"]})` returns a promise and goes back through the ordinary
 `tools/call` endpoint, permissions and all. The rest of the surface —
 `onToolInput`, `onToolCancelled`, `onHostContext`, `onTeardown`,
 `requestDisplayMode`, `sendMessage`, `openLink`, `hostContext` — is documented
 on [`build_app_document`][django_spec_mcp.ui.build_app_document.build_app_document].
 
 ## 2. The tool
+
+`InvoiceOutput` and `InvoiceFilterSet` are the ones from
+[A selector tool with filtering, ordering, and pagination](selector-tool-with-filterset.md).
 
 ```python
 from django_service_specs import DataclassPresenter, SelectorKind, SelectorSpec
