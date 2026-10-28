@@ -28,8 +28,7 @@ _EXAMPLES = [
 
 
 # What the examples declare their operations with is the kernel, so nothing in
-# them may reach for DRF or drf-services: the transport is the only part of the
-# stack that may still name either, and it is not the examples' to name.
+# them may reach for DRF or drf-services.
 _NOT_THE_KERNEL = ("rest_framework", "rest_framework_services", "rest_framework_dataclasses")
 
 

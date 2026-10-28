@@ -10,23 +10,16 @@ registered with ``register_tool``, end to end through ``call_tool``. A
 var-positional parameter and a defaulted one need no source, and are asked
 here so a refusal of the unfilled cases cannot reach them.
 
-A required parameter none of them fills was refused at registration on the
-drf-services path, because every call to such a tool raises ``TypeError`` out of
-dispatch, and it is refused at registration here too: ``register_tool`` asks the
-kernel's ``check_seeds`` with the server's ``pool_seeds``, since the registered
+A required parameter none of them fills is refused at registration, because every
+call to such a tool raises ``TypeError`` out of dispatch: ``register_tool`` asks
+the kernel's ``check_seeds`` with the server's ``pool_seeds``, since the registered
 pool is not known when a spec is built (``lambda *, tenant: tenant`` is valid on
 a server whose pool registers ``tenant``). A Validator field the callable has
 no way to receive registers, is advertised, and is validated on the call,
 which runs without it. The kernel answers such a field with
 ``unreceived_fields`` and does not refuse it, because such a spec runs and may
 mean to (a Validator checking that two fields agree passes one of them on), and
-this package does not refuse it either. The drf-services twin that refused it is
-``test_input_serializer_validation_drfs.py``.
-
-The drf-services original asked this of trust mode, ``ArgumentBinding``,
-``UrlKwarg`` sources and an ``input_serializer``'s fields under each binding;
-none has a kernel counterpart, since a kernel spec declares its arguments. It
-is kept beside this file as ``test_required_param_sources_drfs.py``.
+this package does not refuse it either.
 """
 
 from __future__ import annotations
@@ -88,8 +81,8 @@ def test_a_required_seed_parameter_is_filled_by_dispatch() -> None:
 
 
 def test_a_required_data_parameter_without_a_validator_receives_an_empty_payload() -> None:
-    # Unlike the drf-services path, which refused a bundled service requiring
-    # ``data`` with no ``input_serializer``: the kernel always seeds ``data``.
+    # The kernel always seeds ``data`` for a service, so a spec with no
+    # Validator still has a payload to hand over, and it is empty.
     assert _served(_service(lambda *, data: dict(data)), {}) == {}
 
 

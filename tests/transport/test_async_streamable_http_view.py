@@ -1,16 +1,10 @@
-"""The async streamable HTTP view, serving the kernel twins of the test app's operations.
+"""The async streamable HTTP view, serving the test app's kernel operations.
 
 Every call here reaches a kernel spec registered with ``register_tool`` or
-``register_resource``: ``build_kernel_server`` mounted on the async URL conf,
-whose ``invoices.create`` and ``invoice`` resource carry the names the
-drf-services server gives them. The drf-services original read
-``tests.testapp.async_urls`` and is kept beside this file as
-``test_async_streamable_http_view_drfs.py``.
+``register_resource``: ``build_kernel_server`` mounted on the async URL conf.
 
-One of its questions is gone: an exception inside an action being routed
-through DRF's ``handle_exception``. The view is a plain Django view now, which
-no DRF setting reaches, and what a tool raising is answered with is held by
-``test_dispatch_backstop.py``.
+The view is a plain Django view, which no framework setting reaches, and what a
+tool raising is answered with is held by ``test_dispatch_backstop.py``.
 """
 
 from __future__ import annotations
@@ -44,7 +38,7 @@ from tests.utils import nested_past_the_decoders_limit_here, on_a_bounded_stack
 
 @pytest.fixture
 def async_urlconf():
-    """Mount the kernel twin server on the async URL conf for one test."""
+    """Mount the kernel server on the async URL conf for one test."""
     with override_settings(ROOT_URLCONF=urlconf_for(build_kernel_server(), is_async=True)):
         yield
 

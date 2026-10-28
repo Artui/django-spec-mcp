@@ -44,8 +44,9 @@ def _read_resource(token: object) -> str | None:
     """Audience getter matching ``_FakeToken``.
 
     Passed explicitly wherever enforcement is exercised, because ``_FakeToken``
-    carries a ``resource`` attribute that DOT's real ``AccessToken`` does not —
-    see ``test_dot_access_token_has_no_resource_field``. Relying on the default
+    carries a ``resource`` attribute that DOT's real ``AccessToken`` has only from
+    3.4 (``test_the_resource_field_premise_is_pinned_to_reality`` pins that).
+    Relying on the default
     getter here is what let the audience path look tested while being
     unsatisfiable in production.
     """

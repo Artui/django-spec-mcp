@@ -3,13 +3,12 @@
 Asked here of kernel specs: the tools are kernel ``ServiceSpec`` and
 ``SelectorSpec`` objects registered with ``register_tool``, and their call runs
 through the kernel's ``dispatch``. The vocabulary questions name no spec and are
-asked as the original asks them.
+asked without one.
 
-The original's binary-resource questions, a base64 body and a non-bytes return
-under ``encoding=BLOB`` with its ``mime_type``, are asked of a kernel resource in
+The binary-resource questions, a base64 body and a non-bytes return under
+``encoding=BLOB`` with its ``mime_type``, are asked of a kernel resource in
 ``tests/output/test_encode_resource_contents.py``, since both reads encode
-through ``encode_resource_contents``. The original is kept beside this file as
-``test_content_blocks_drfs.py``.
+through ``encode_resource_contents``.
 """
 
 from __future__ import annotations

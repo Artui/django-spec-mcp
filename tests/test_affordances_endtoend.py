@@ -10,10 +10,9 @@ it describes?
 Asked of kernel specs: a retrieve, a list and a paged list selector tool, and a
 service tool presenting through its output selector, each declaring ``cancel``.
 A kernel selector carries affordance answers on model instances and mappings, and
-its ``DataclassPresenter`` reads by attribute, so the row is an ``Invoice`` where
-the drf-services original rendered a mapping. The declarations are the kernel
-ones in ``tests/testapp/affordances.py``. The original is kept beside this file
-as ``test_affordances_endtoend_drfs.py``.
+its ``DataclassPresenter`` reads by attribute, so the row is an ``Invoice``
+rather than a mapping. The declarations are in
+``tests/testapp/affordances.py``.
 """
 
 from __future__ import annotations

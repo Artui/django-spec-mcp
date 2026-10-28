@@ -5,11 +5,9 @@ The spec attaches ``icons`` to four listable types plus the server's own
 a single spot-check would not have caught the one that was missed.
 
 The tools and resources are kernel specs registered with ``register_tool`` and
-``register_resource``, where the drf-services original registered drf-services
-specs. A kernel resource is a ``RETRIEVE`` selector, so the fixed-URI resource
-is one reading nothing, where the original's was a ``LIST``. The prompt and
-server cases build no spec and are carried unchanged. The original is kept
-beside this file as ``test_icons_endtoend_drfs.py``.
+``register_resource``. A kernel resource is a ``RETRIEVE`` selector, so the
+fixed-URI resource is one reading nothing. The prompt and server cases build no
+spec.
 """
 
 from __future__ import annotations

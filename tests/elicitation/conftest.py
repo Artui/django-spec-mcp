@@ -44,7 +44,7 @@ class DeleteRows:
 
 
 def delete_rows_kernel(*, count: int, confirmed: bool = False, reason: str = "") -> dict[str, Any]:
-    """The kernel twin of ``fixtures_drfs.delete_rows``: the same two questions, asked of spread arguments."""
+    """A service that asks to confirm a large delete, and for a reason on a larger one."""
     if count > 100 and not confirmed:
         raise AdditionalInputRequired(
             f"{count} rows match. Confirm to proceed.",
@@ -59,12 +59,12 @@ def delete_rows_kernel(*, count: int, confirmed: bool = False, reason: str = "")
 
 
 def vague_kernel(*, count: int, confirmed: bool = False, reason: str = "") -> dict[str, Any]:  # noqa: ARG001
-    """The kernel twin of ``fixtures_drfs.unspecific_service``."""
+    """A service that asks for input it cannot describe in a schema."""
     raise AdditionalInputRequired("This needs something I cannot describe.")
 
 
 def unrenderable_kernel(*, count: int, confirmed: bool = False, reason: str = "") -> dict[str, Any]:  # noqa: ARG001
-    """The kernel twin of ``fixtures_drfs.unrenderable_service``."""
+    """A service that asks for input whose schema no form can render."""
     raise AdditionalInputRequired(
         "Tell me about yourself.",
         schema={"profile": {"type": "object", "properties": {"name": {"type": "string"}}}},
@@ -72,7 +72,7 @@ def unrenderable_kernel(*, count: int, confirmed: bool = False, reason: str = ""
 
 
 def build_kernel_server() -> MCPServer:
-    """The kernel twin of ``fixtures_drfs``' ``server`` fixture: the same three tools, as kernel specs."""
+    """The elicitation server: the delete, vague and unrenderable tools, as kernel specs."""
     built = MCPServer(
         name="elicitation-kernel",
         auth_backend=AllowAnyBackend(),

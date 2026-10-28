@@ -8,19 +8,16 @@ which status was committed.
 
 The tools are kernel specs registered with ``register_tool``, and a kernel
 service asks for the reporter by declaring ``progress``, which ``adispatch``
-fills. The drf-services original asked the same of ``register_service_tool``
-and ``register_selector_tool``, and is kept beside this file as
-``test_progress_stream_drfs.py``.
+fills.
 
 What the kernel adds is a second permission stack. A kernel binding's own
 ``permissions`` hold only its ``scopes=`` gate, and the spec's
 permission checks run inside ``adispatch``, after a stream has committed
 its ``200``. So the pre-flight runs the kernel's own prelude as well
 (``test_a_spec_check_denying_a_streamed_call_keeps_its_403_and_challenge`` and
-the cases after it). The drf-services original's pre-flight of a ``UrlKwarg``
-route has no kernel counterpart, since a kernel spec declares its reads as
-arguments; ``test_a_check_reading_arguments_is_judged_on_the_servers_value``
-asks the kernel's form of that question.
+the cases after it). A kernel spec declares its reads as arguments, and
+``test_a_check_reading_arguments_is_judged_on_the_servers_value`` asks that the
+pre-flight judges them on the server's value.
 """
 
 from __future__ import annotations

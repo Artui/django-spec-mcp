@@ -7,15 +7,12 @@ pipeline's pagination. These tests prove the methods delegate to the wire
 handlers (the behaviour itself is covered under ``tests/handlers/``) and build
 the call context correctly off-HTTP.
 
-The drf-services original is kept beside this file as
-``test_mcp_server_in_process_drfs.py``. Three of its questions change shape on
-the kernel: ordering came from a ``filter_set``'s ``OrderingFilter``, which a
-kernel spec does not have, so the read extras asked here are pagination alone;
-the transport-level ``MCPPermission`` gate is the ``scopes=`` gate; and a DRF
-``permission_classes`` denial is the kernel spec's own ``PermissionCheck``. The
-DB-backed listing permission (``DjangoPermRequired``) has no kernel binding
-counterpart, because a kernel binding's only listing gate is its scopes, which
-read the token and never the database.
+A kernel spec has no ``filter_set`` ordering, so the read extras asked here are
+pagination alone; the transport-level gate is ``scopes=``, and a denial by the
+spec is its own ``PermissionCheck``. The DB-backed listing permission
+(``DjangoPermRequired``) is not asked of a kernel binding, because a kernel
+binding's only listing gate is its scopes, which read the token and never the
+database.
 """
 
 from __future__ import annotations

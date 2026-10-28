@@ -148,7 +148,7 @@ def test_content_that_is_not_an_object_is_treated_as_empty() -> None:
 )
 def test_who_may_be_asked(capabilities: dict[str, Any], expected: bool) -> None:
     """``{}`` means yes. Form was the only mode before this revision added URL
-    mode, so a client that omits the sub-keys is declaring the original
+    mode, so a client that omits the sub-keys is declaring the form-only
     behaviour — which is exactly what the schema's "form mode only (implicit)"
     example shows. A *non-empty* object is an enumeration, so url-only is a
     client this package cannot ask."""

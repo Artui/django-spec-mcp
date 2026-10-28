@@ -8,8 +8,7 @@ Asked of kernel tools registered with a ``task_policy`` (``policy_server``
 and tools each test registers), and without a spec where the question names
 none: the store, the transitions, the worker token, the store being durable
 before the hand-off, and ``run_task`` on a task naming no live tool or on a
-server with no store. The original is kept beside this file as
-``test_task_lifecycle_drfs.py``.
+server with no store.
 """
 
 from __future__ import annotations

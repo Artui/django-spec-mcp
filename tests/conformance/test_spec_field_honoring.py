@@ -1,9 +1,7 @@
 """End-to-end coverage: a kernel spec's ``permissions`` through HTTP.
 
 Unit tests pin how the server reads a spec's permissions; this file proves the
-spec's own check denies a real client request through the full transport. The
-drf-services original, asking the same of ``spec.permission_classes``, is kept
-beside this file as ``test_spec_field_honoring_drfs.py``.
+spec's own check denies a real client request through the full transport.
 """
 
 from __future__ import annotations

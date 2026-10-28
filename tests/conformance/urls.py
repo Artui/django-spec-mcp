@@ -2,7 +2,7 @@
 
 Mounted via ``@pytest.mark.urls("tests.conformance.urls")`` on conformance tests
 so each test's Django client can drive the actual URL resolution rather than
-calling views directly. The drf-services server is mounted by ``urls_drfs.py``.
+calling views directly.
 """
 
 from __future__ import annotations

@@ -1,9 +1,7 @@
 """``append_agent_conventions`` over a kernel spec's projection.
 
 The projection is the kernel's ``audience_projection_for_spec``, read off the
-``FieldMarking`` each presenter field declares in its ``Annotated`` extras,
-where the drf-services original read the markings off serializer ``style``.
-The original is kept beside this file as ``test_agent_conventions_drfs.py``.
+``FieldMarking`` each presenter field declares in its ``Annotated`` extras.
 """
 
 from __future__ import annotations

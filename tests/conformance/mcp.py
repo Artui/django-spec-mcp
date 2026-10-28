@@ -9,9 +9,6 @@ points at the right one:
   refused by its spec's own permission;
 - ``conformance.gated`` is registered alone and refuses an anonymous caller,
   which the wire answers with HTTP 403 and ``-32006``.
-
-The drf-services server this replaces is kept in ``mcp_drfs.py`` until the
-drfs path is deleted.
 """
 
 from __future__ import annotations

@@ -34,11 +34,8 @@ def build_server(
     own server (and mount it via ``urlconf_for``) rather than mutating
     ``settings.SPEC_MCP`` around an already-mounted one.
 
-    ``invoices.create`` and the ``invoice`` resource keep the names of the
-    drf-services server in ``mcp_drfs.py``, so a test can send one request to
-    both and compare what each answers. Its ``invoices`` list resource has no
-    twin, since a kernel resource is a ``RETRIEVE``; the list is the
-    ``invoices.list`` selector tool here, beside ``invoices.get``.
+    A kernel resource is a ``RETRIEVE``, so the list is the ``invoices.list``
+    selector tool, beside ``invoices.get`` and the ``invoice`` resource.
 
     The caller is whoever ``AllowAnyBackend`` resolves, the request's own user,
     unless ``auth_backend`` says otherwise.

@@ -1,6 +1,6 @@
 """A mounted kernel server that can push notifications, for the end-to-end suite.
 
-The kernel twin of ``urls_drfs.py``: ``open`` and ``gated`` are kernel
+``open`` and ``gated`` are kernel
 ``RETRIEVE`` resources, and ``gated``'s spec refuses every principal with its
 own ``PermissionCheck``, which is the gate a kernel read answers to. Module-level
 so the broker outlives a single request, as it does in a deployment: a

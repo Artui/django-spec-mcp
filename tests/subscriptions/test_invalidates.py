@@ -3,9 +3,7 @@
 Asked here of kernel service tools registered with ``register_tool``: their
 arguments validate through a dataclass and reach the service spread, a refusal
 is a kernel ``PermissionCheck``, and a selector tool is a kernel
-``SelectorSpec``. The rendering questions name no spec and are asked as the
-original asks them. The original, asking all of it of drf-services specs, is
-kept beside this file as ``test_invalidates_drfs.py``.
+``SelectorSpec``. The rendering questions name no spec.
 """
 
 from __future__ import annotations
@@ -380,8 +378,7 @@ async def test_a_server_with_no_broker_is_unaffected() -> None:
 def test_a_selector_tool_refuses_invalidates() -> None:
     """A read changes nothing, and accepting the knob would invite using it.
     ``register_tool`` takes both kinds of spec, so the knob is a keyword of it
-    and a selector spec is refused at registration, where the drf-services
-    ``register_selector_tool`` had no such keyword at all."""
+    and a selector spec is refused at registration."""
     server = MCPServer(name="sel", auth_backend=AllowAnyBackend())
     with pytest.raises(ImproperlyConfigured, match="invalidates belongs to a service tool"):
         server.register_tool(

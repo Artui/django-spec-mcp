@@ -2,8 +2,7 @@
 
 Asked here of kernel resources, mounted by ``kernel_urls.py``: ``gated``'s own
 spec permission refuses the caller, so dropping it from the first frame is the
-kernel read's gate answering the watch. The original, asking it of drf-services
-resources, is kept beside this file as ``test_subscriptions_endtoend_drfs.py``.
+kernel read's gate answering the watch.
 """
 
 from __future__ import annotations

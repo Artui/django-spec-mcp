@@ -3,10 +3,7 @@
 Each route a kernel tool can be registered by takes it: ``register_tool`` and a
 ``register_tools`` override. Each route is asked both halves, for a selector
 and a service: a bound value reaches the callable, and a binding that cannot
-hold is refused at registration naming the tool. The drf-services original
-also asked the decorators, ``register_specs`` and a ``ToolDefinition``, which
-go with drf-services; it is kept beside this file as
-``test_server_arguments_on_every_registrar_drfs.py``.
+hold is refused at registration naming the tool.
 """
 
 from __future__ import annotations

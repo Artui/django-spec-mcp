@@ -7,12 +7,8 @@ handle line, an unpaginated tool no scope sentence -- and the conventions decide
 reaching a place it should not, or failing to reach one it should, shows up as a
 difference.
 
-Asked of kernel specs (``tests/testapp/conventions.py``). The drf-services
-original is kept beside this file as ``test_agent_conventions_endtoend_drfs.py``;
-it also observes a selection the serializer refuses while rendering, which
-carries the scope sentence a second time. That refusal is a ``QueryParam``
-answer with no kernel counterpart, so here the scope sentence lands once, on the
-param.
+Asked of kernel specs (``tests/testapp/conventions.py``). The scope sentence
+lands once, on the param.
 """
 
 from __future__ import annotations

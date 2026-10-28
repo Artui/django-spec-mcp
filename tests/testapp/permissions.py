@@ -8,7 +8,7 @@ from django_service_specs import PermissionCheck
 
 
 class IsAuthenticated(PermissionCheck):
-    """Grant an authenticated principal only, as DRF's ``IsAuthenticated`` does.
+    """Grant an authenticated principal only.
 
     A kernel ``PermissionCheck`` refusing raises ``NotPermitted``, which the
     wire answers as ``-32006`` with HTTP 403.

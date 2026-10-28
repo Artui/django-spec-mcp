@@ -2,8 +2,7 @@
 
 The conftest's kernel server, mounted once at import as a deployment would
 mount it, so the retry of an input round trip reaches the same server as a
-second, independent request. The drf-services server is mounted by
-``urls_drfs.py`` until the drfs path is deleted.
+second, independent request.
 """
 
 from __future__ import annotations

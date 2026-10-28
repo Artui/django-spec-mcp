@@ -1,4 +1,4 @@
-"""A JSON-RPC client for the kernel-twin mounts, choosing the caller per request."""
+"""A JSON-RPC client for the kernel mounts, choosing the caller per request."""
 
 from __future__ import annotations
 

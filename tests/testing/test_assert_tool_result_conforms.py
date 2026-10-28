@@ -6,13 +6,9 @@ suite writes on its own passes it, and this helper fails it. Everything else
 here covers the edges of the message that failure carries.
 
 The two cases calling a tool register a kernel list selector presenting through
-``InvoiceOutput``, the kernel twin of the ``InvoiceOutputSerializer`` the
-drf-services original read. The type break is a presenter formatting the amount
-on the way out, as the original's ``LedgerSerializer`` does in
-``to_representation``: the advertised schema comes from the declared dataclass
-and goes on saying ``integer``. The other cases build no spec and are carried
-unchanged. The original is kept beside this file as
-``test_assert_tool_result_conforms_drfs.py``.
+``InvoiceOutput``. The type break is a presenter formatting the amount on the
+way out: the advertised schema comes from the declared dataclass and goes on
+saying ``integer``. The other cases build no spec.
 """
 
 from __future__ import annotations

@@ -3,9 +3,7 @@
 The schema is the kernel's ``spec_output_schema`` under the binding's
 projection, which ``kernel_tool_output_schema`` asks for and the listing serves;
 the handle wording is this transport's, the server's
-``AgentConventions.handle_field_description``. The drf-services original, which
-asked the same of ``build_output_schema`` over serializers, is kept beside this
-file as ``test_agent_output_schema_drfs.py``.
+``AgentConventions.handle_field_description``.
 """
 
 from __future__ import annotations
@@ -98,7 +96,7 @@ def test_an_unmarked_presenter_is_described_in_full() -> None:
 
 
 def test_no_presenter_yields_no_schema() -> None:
-    # The kernel twin of "no output serializer": a spec that declares nothing
+    # A spec that declares nothing
     # about its result is advertised with no ``outputSchema`` at all.
     server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
     server.register_tool(

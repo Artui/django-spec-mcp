@@ -116,8 +116,8 @@ def test_a_kernel_read_named_after_a_reserved_seed_is_refused_by_the_kernel(name
 
 @pytest.mark.django_db
 def test_a_validator_field_named_after_a_seed_is_the_callers_and_the_keyword_is_the_seeds() -> None:
-    # Changed by design: the drfs registrars refused a field named after a seed,
-    # and the kernel (0.18.0) instead seats it as the caller's. It validates into
+    # The kernel (0.18.0) seats a field named after a seed as the caller's,
+    # rather than refusing it. It validates into
     # ``data`` and never reaches the service under that name, so the ``tenant``
     # keyword reads the seed's value while the caller's own is in ``data``.
     def service(*, data: Any, tenant: str) -> dict[str, Any]:

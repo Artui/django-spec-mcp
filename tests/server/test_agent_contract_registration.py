@@ -1,23 +1,18 @@
 """A kernel spec's audience markings reach the tool through every registrar.
 
-What a caller with no HTTP request has to be told about a result (which field
-names the record, which is a handle, which it never sees) is declared once, in
-the presenter's dataclass, as ``Annotated`` markings (``AgentInvoiceOutput``, the
-kernel twin of ``AgentInvoiceSerializer``). These cases check that the mount
-reads it through each public entry point, ``register_tool`` and a
-``register_tools`` entry, as far as the served payload, because a shared
-declaration nobody reads is worse than none. It is asked of a selector tool and
-of a service tool, which present through the same declaration.
+What a caller with no HTTP request has to be told about a result (which field names the
+record, which is a handle, which it never sees) is declared once, in the presenter's
+dataclass, as ``Annotated`` markings (``AgentInvoiceOutput``). These cases check that
+the mount reads it through each public entry point, ``register_tool`` and a
+``register_tools`` entry, as far as the served payload, because a shared declaration
+nobody reads is worse than none. It is asked of a selector tool and of a service tool,
+which present through the same declaration.
 
-The drf-services original asked this of an entry's ``OfflineContract`` and is
-kept beside this file as ``test_agent_contract_registration_drfs.py``. Its
-``url_kwargs`` and ``query_params`` have no kernel counterpart, since a kernel
-spec declares its route and query values as ``reads``, which the schema lane
-asks; nor does overriding the contract per mount, since ``field_audiences`` is
-not a knob a kernel tool keeps. Its ``test_the_decorator_form_forwards_it`` has
-no counterpart either: a kernel spec registers through ``register_tool`` and
-``register_tools`` and has no decorator form to forward the markings through.
-Two labels raising naming the tool is asked at
+A kernel spec declares its route and query values as ``reads``, which the schema
+tests ask, and the contract is not overridden per mount, since
+``field_audiences`` is not a knob a kernel tool keeps. A kernel spec registers
+through ``register_tool`` and ``register_tools`` only, so there is no other form
+to forward the markings through. Two labels raising naming the tool is asked at
 registration in ``test_registration_compiles_the_spec.py``.
 """
 

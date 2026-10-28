@@ -10,10 +10,8 @@ never named; ``always_listed`` is never reported; and the async twin answers as
 the sync one does, taking no executor hop when no tool declares anything to ask.
 
 Asked of kernel specs, whose ``affordances`` are the kernel's own. The
-drf-services original is kept beside this file as
-``test_mcp_server_unavailable_tools_drfs.py``; its transport-level
-``MCPPermission`` that hides a tool from the caller is the ``scopes=`` gate
-here, the one listing gate a kernel binding carries.
+transport-level gate that hides a tool from the caller is ``scopes=``, the one
+listing gate a kernel binding carries.
 """
 
 from __future__ import annotations
@@ -50,7 +48,7 @@ _ROW_ONLY = Affordance(code="never", reason="Matches no row.", when=Q(pk__in=[])
 
 
 _DENIED = object()
-"""Stands where the original's denying ``MCPPermission`` stood: a scope no caller holds."""
+"""A scope no caller holds, so the tool carrying it is hidden from every caller."""
 
 
 @dataclass
@@ -82,7 +80,7 @@ def order_selector_spec(kind: SelectorKind) -> SelectorSpec:
 def _register(
     server: MCPServer, *, name: str, spec: Any, permissions: list[Any], **knobs: Any
 ) -> None:
-    """The original's ``register_*_tool(name=, spec=, permissions=)`` call, on ``register_tool``."""
+    """``register_tool``, with a scope no caller holds when ``permissions`` is non-empty."""
     if permissions:
         knobs["scopes"] = ("denied",)
     server.register_tool(spec, name=name, description="d", **knobs)

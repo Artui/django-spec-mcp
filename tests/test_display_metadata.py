@@ -5,11 +5,8 @@ consumer to read (django-spec-agents' tool catalog reads both off each binding),
 and the server never emits them on the wire. They carry onto the kernel path:
 a kernel spec has no label field of its own, so they stay registration knobs.
 
-The drf-services original asked the same of
-``register_service_tool``, ``register_selector_tool``, ``ToolDefinition`` and the
-module ``register_tools``; it is kept beside this file as
-``test_display_metadata_drfs.py``. ``ToolDefinition`` has no kernel counterpart:
-``register_tools(registry, overrides=)`` takes its place, and is asked here.
+Both are asked of ``register_tool`` and of ``register_tools(registry,
+overrides=)``.
 """
 
 from __future__ import annotations

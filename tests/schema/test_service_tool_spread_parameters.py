@@ -1,15 +1,13 @@
 """A kernel service tool's arguments are its parameters, at the top level.
 
-The kernel spreads a service's input: a Validator's fields are the tool's
-arguments, and the service receives each validated value as its own keyword.
-There is no ``argument_binding`` to choose, so a service never bundles its
-input under ``data``: one spec has one schema on every transport. The schema lists every parameter, less what the server fills
-whatever the caller sends, and does not require one a provider may fill.
+The kernel spreads a service's input: a Validator's fields are the tool's arguments, and
+the service receives each validated value as its own keyword. There is no
+``argument_binding`` to choose, so a service never bundles its input under ``data``: one
+spec has one schema on every transport. The schema lists every parameter, less what the
+server fills whatever the caller sends, and does not require one a provider may fill.
 
-The drf-services original, which asked this of each ``ArgumentBinding`` and of
-a serializer-less service's reflected signature, is kept beside this file as
-``test_service_tool_spread_parameters_drfs.py``. Every test reads what a client
-is served, through ``MCPServer.list_tools`` and the call routes.
+Every test reads what a client is served, through ``MCPServer.list_tools`` and
+the call routes.
 """
 
 from __future__ import annotations
@@ -80,9 +78,9 @@ def _register(server: MCPServer, **declared: Any) -> None:
 
 
 def test_a_service_lists_its_validators_fields_at_the_top_level() -> None:
-    # Changed by design: the drf-services default bundled these under
-    # ``data``. A field without a default is required, because nothing but the
-    # caller fills it, and the schema is closed, as the call's argument set is.
+    # Not bundled under ``data``. A field without a default is required,
+    # because nothing but the caller fills it, and the schema is closed, as the
+    # call's argument set is.
     server = _server()
     _register(server)
 
@@ -94,13 +92,12 @@ def test_a_service_lists_its_validators_fields_at_the_top_level() -> None:
 
 
 def test_a_field_named_like_a_registered_seed_is_still_the_callers() -> None:
-    # Changed by design: the drf-services path subtracted a registered seed's
-    # name from a spread service's parameters. On the kernel a Validator field
-    # of that name is the caller's to send: dispatch validates it, and the
-    # seed fills only the service's keyword (``server_owned_keys``). Asked of
-    # the builder with the seeds handed in, since the listing does not pass the
-    # server's yet (``test_kernel_tool_input_schema.py``); the reflected read
-    # of the same name is the control that shows they reached it.
+    # A registered seed's name is not subtracted from a spread service's parameters. A
+    # Validator field of that name is the caller's to send: dispatch validates it, and
+    # the seed fills only the service's keyword (``server_owned_keys``). Asked of the
+    # builder with the seeds handed in, since the listing does not pass the server's yet
+    # (``test_kernel_tool_input_schema.py``); the reflected read of the same name is the
+    # control that shows they reached it.
     seeds = DEFAULT_POOL_SEEDS.extend(tenant=lambda: 1)
     server = _server()
     _register(

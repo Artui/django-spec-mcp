@@ -1,13 +1,10 @@
 """What ``resources/read`` serves in its one ``contents`` block.
 
-``build_resource_contents`` encodes the block for every resource that is not
-the kernel's: a view, which reads with nothing of drf-services, and a resource
-lifted from a drf-services ``SelectorSpec``, whose output serializer renders
-first (``render_drfs_resource_output``, asked in
-``test_render_drfs_resource_output_drfs.py``). So the encoding is asked of the
-function directly here: ``JSON`` pretty-prints, ``TEXT`` is verbatim, ``BLOB``
-is base64, a body of the wrong type is a clean error, and the block carries the
-URI, the MIME type and a copy of the binding's ``_meta``.
+``build_resource_contents`` encodes the block for a resource that is not a kernel
+spec's, a view. So the encoding is asked of the function directly here: ``JSON``
+pretty-prints, ``TEXT`` is verbatim, ``BLOB`` is base64, a body of the wrong type is a
+clean error, and the block carries the URI, the MIME type and a copy of the binding's
+``_meta``.
 
 A kernel read builds its block in ``kernel_utils.resource_read_result``, so the
 same questions are asked of ``resources/read`` on a registered kernel resource,
@@ -17,17 +14,11 @@ which is the answer a client gets:
 - the block echoes the URI asked for, with the binding's ``mimeType``;
 - the binding's ``_meta`` is carried, and omitted when empty.
 
-The original's questions of ``encoding=TEXT`` and ``encoding=BLOB`` and of a
-``mime_type`` other than JSON are asked of a kernel resource in
-``test_encode_resource_contents.py``, since both reads encode through
-``encode_resource_contents``. Two have no kernel counterpart: an
-``output_serializer`` rendering a ``RETRIEVE`` or a ``LIST``, because the
-registrar refuses that knob (the spec's presenter renders the row, and a kernel
-resource is a ``RETRIEVE``), and whether the block's ``_meta`` is a copy of the
-binding's, which the original asks of the returned dataclass, where a kernel
-read hands a client only the encoded body, which holds no reference to share.
-The original's rendering cases are asked in
-``test_render_drfs_resource_output_drfs.py``.
+``encoding=TEXT``, ``encoding=BLOB`` and a ``mime_type`` other than JSON are
+asked of a kernel resource in ``test_encode_resource_contents.py``, since both
+reads encode through ``encode_resource_contents``. Whether the block's ``_meta``
+is a copy of the binding's is asked only of the function, because a kernel read
+hands a client only the encoded body, which holds no reference to share.
 """
 
 from __future__ import annotations
