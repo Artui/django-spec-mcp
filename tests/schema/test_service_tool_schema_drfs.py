@@ -21,7 +21,7 @@ from django_spec_mcp import QueryParam, UrlKwarg
 from django_spec_mcp.registry.types.tool_binding import ToolBinding
 from django_spec_mcp.schema.input_schema import build_input_schema
 from django_spec_mcp.schema.service_tool_schema import build_service_tool_input_schema
-from tests.testapp.serializers import InvoiceInputSerializer
+from tests.testapp.serializers_drfs import InvoiceInputSerializer
 
 
 def _binding(spec: ServiceSpec, **kwargs: Any) -> ToolBinding:

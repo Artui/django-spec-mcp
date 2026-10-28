@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-pytestmark = pytest.mark.urls("tests.conformance.urls")
+pytestmark = pytest.mark.urls("tests.conformance.urls_drfs")
 
 
 @pytest.mark.django_db(transaction=True)

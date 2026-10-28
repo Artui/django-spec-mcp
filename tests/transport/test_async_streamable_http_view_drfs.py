@@ -18,7 +18,7 @@ from django_spec_mcp.transport.async_streamable_http_viewset import (
     AsyncStreamableHttpViewSet,
 )
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
-from tests.testapp.mcp import build_server
+from tests.testapp.mcp_drfs import build_server
 from tests.testapp.urlconf_for import urlconf_for
 from tests.utils import nested_past_the_decoders_limit_here, on_a_bounded_stack
 
@@ -26,7 +26,7 @@ from tests.utils import nested_past_the_decoders_limit_here, on_a_bounded_stack
 @pytest.fixture
 def async_urlconf():
     """Switch the test app to its async URL conf for the duration of one test."""
-    with override_settings(ROOT_URLCONF="tests.testapp.async_urls"):
+    with override_settings(ROOT_URLCONF="tests.testapp.async_urls_drfs"):
         yield
 
 

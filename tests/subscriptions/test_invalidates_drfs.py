@@ -25,7 +25,7 @@ from django_spec_mcp.subscriptions.in_memory_subscription_broker import (
 from django_spec_mcp.subscriptions.render_invalidations import render_invalidations
 from django_spec_mcp.subscriptions.utils import topic_for_resource
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
-from tests.subscriptions.test_subscription_core import _context
+from tests.utils import call_context
 
 # ----- rendering -----
 
@@ -145,7 +145,9 @@ async def test_a_successful_call_announces_both_declared_uris() -> None:
     instance = await broker.subscribe(frozenset({topic_for_resource("invoices://1")}))
     collection = await broker.subscribe(frozenset({topic_for_resource("invoices://")}))
 
-    await handle_tools_call_async({"name": "invoices.create", "arguments": {}}, _context(server))
+    await handle_tools_call_async(
+        {"name": "invoices.create", "arguments": {}}, call_context(server)
+    )
     assert instance.get_nowait()["params"]["uri"] == "invoices://1"
     assert collection.get_nowait()["params"]["uri"] == "invoices://"
 
@@ -159,7 +161,7 @@ async def test_a_failed_tool_announces_nothing() -> None:
     server = _server(broker)
     queue = await broker.subscribe(frozenset({topic_for_resource("invoices://1")}))
     result = await handle_tools_call_async(
-        {"name": "invoices.broken", "arguments": {}}, _context(server)
+        {"name": "invoices.broken", "arguments": {}}, call_context(server)
     )
     assert result["isError"] is True
     assert queue.qsize() == 0
@@ -201,7 +203,7 @@ async def test_only_a_completed_result_announces(
         invalidates=("invoices://",),
     )
     queue = await broker.subscribe(frozenset({topic_for_resource("invoices://")}))
-    context = _context(server, client_capabilities={"elicitation": {}})
+    context = call_context(server, client_capabilities={"elicitation": {}})
     params: dict[str, Any] = {"name": "invoices.confirm", "arguments": arguments}
 
     if is_async:
@@ -232,7 +234,7 @@ async def test_a_non_dict_result_announces_nothing() -> None:
     queue = await broker.subscribe(frozenset({topic_for_resource("invoices://")}))
 
     result: Any = await handle_tools_call_async(
-        {"name": "invoices.denied", "arguments": {}}, _context(server)
+        {"name": "invoices.denied", "arguments": {}}, call_context(server)
     )
 
     assert result.code == -32006
@@ -244,7 +246,7 @@ async def test_a_binding_that_declares_nothing_publishes_nothing() -> None:
     broker = InMemorySubscriptionBroker()
     server = _server(broker)
     queue = await broker.subscribe(frozenset({topic_for_resource("invoices://1")}))
-    await handle_tools_call_async({"name": "invoices.quiet", "arguments": {}}, _context(server))
+    await handle_tools_call_async({"name": "invoices.quiet", "arguments": {}}, call_context(server))
     assert queue.qsize() == 0
 
 
@@ -252,7 +254,7 @@ async def test_a_binding_that_declares_nothing_publishes_nothing() -> None:
 async def test_an_unknown_tool_does_not_reach_the_publisher() -> None:
     broker = InMemorySubscriptionBroker()
     server = _server(broker)
-    result = await handle_tools_call_async({"name": "nope", "arguments": {}}, _context(server))
+    result = await handle_tools_call_async({"name": "nope", "arguments": {}}, call_context(server))
     assert result.code == -32602
 
 
@@ -265,7 +267,7 @@ def test_the_sync_path_announces_too() -> None:
     from asgiref.sync import async_to_sync
 
     queue = async_to_sync(broker.subscribe)(frozenset({topic_for_resource("invoices://")}))
-    handle_tools_call({"name": "invoices.create", "arguments": {}}, _context(server))
+    handle_tools_call({"name": "invoices.create", "arguments": {}}, call_context(server))
     assert queue.qsize() == 1
 
 
@@ -281,7 +283,7 @@ def test_nothing_is_published_until_the_transaction_commits() -> None:
 
     queue = async_to_sync(broker.subscribe)(frozenset({topic_for_resource("invoices://")}))
     with transaction.atomic():
-        handle_tools_call({"name": "invoices.create", "arguments": {}}, _context(server))
+        handle_tools_call({"name": "invoices.create", "arguments": {}}, call_context(server))
         assert queue.qsize() == 0, "published before commit"
     assert queue.qsize() == 1
 
@@ -299,7 +301,7 @@ def test_a_rolled_back_write_announces_nothing() -> None:
         pass
 
     with pytest.raises(_Rollback), transaction.atomic():
-        handle_tools_call({"name": "invoices.create", "arguments": {}}, _context(server))
+        handle_tools_call({"name": "invoices.create", "arguments": {}}, call_context(server))
         raise _Rollback
     assert queue.qsize() == 0
 
@@ -321,7 +323,7 @@ def test_the_async_path_announces_on_the_thread_that_did_the_write() -> None:
     queue = async_to_sync(broker.subscribe)(frozenset({topic_for_resource("invoices://")}))
     with transaction.atomic():
         async_to_sync(handle_tools_call_async)(
-            {"name": "invoices.create", "arguments": {}}, _context(server)
+            {"name": "invoices.create", "arguments": {}}, call_context(server)
         )
         assert queue.qsize() == 0, "announced before commit"
     assert queue.qsize() == 1
@@ -349,7 +351,7 @@ async def test_a_server_with_no_broker_is_unaffected() -> None:
         invalidates=("invoices://{pk}",),
     )
     result = await handle_tools_call_async(
-        {"name": "invoices.create", "arguments": {}}, _context(server)
+        {"name": "invoices.create", "arguments": {}}, call_context(server)
     )
     assert result["structuredContent"] == {"pk": 1}
 

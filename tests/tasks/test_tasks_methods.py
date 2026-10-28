@@ -25,6 +25,7 @@ from django_spec_mcp.tasks.types.task_record import TaskRecord
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from django_spec_mcp.types.task_status import TaskStatus
 from tests.tasks.conftest import RecordingExecutor, context
+from tests.tasks.fixtures_drfs import server  # noqa: F401
 
 HANDLERS = [handle_tasks_get, handle_tasks_cancel, handle_tasks_update]
 

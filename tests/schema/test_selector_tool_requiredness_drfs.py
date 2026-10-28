@@ -38,7 +38,7 @@ from typing_extensions import NotRequired, TypedDict
 from django_spec_mcp import MCPServer, UrlKwarg
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from tests.testapp.models import Invoice
-from tests.testapp.serializers import InvoiceOutputSerializer
+from tests.testapp.serializers_drfs import InvoiceOutputSerializer
 
 if TYPE_CHECKING:
     # Imported for annotations only, where flake8-type-checking rules move such

@@ -56,7 +56,7 @@ from django_spec_mcp.transport.in_memory_session_store import InMemorySessionSto
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from tests.conftest import post_jsonrpc
 from tests.testapp.models import Invoice
-from tests.testapp.serializers import InvoiceOutputSerializer
+from tests.testapp.serializers_drfs import InvoiceOutputSerializer
 from tests.testapp.urlconf_for import urlconf_for
 from tests.utils import tool_error
 

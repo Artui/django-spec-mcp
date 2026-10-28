@@ -18,7 +18,7 @@ from rest_framework_services.types.service_spec import ServiceSpec
 
 from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
 from django_spec_mcp.registry.types.tool_binding import ToolBinding
-from tests.testapp.serializers import InvoiceOutputSerializer
+from tests.testapp.serializers_drfs import InvoiceOutputSerializer
 
 
 def _out_spec(**kw: Any) -> SelectorSpec:

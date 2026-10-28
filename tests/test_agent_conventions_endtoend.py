@@ -21,7 +21,7 @@ from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.tasks.create_task import create_task
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from tests.tasks.conftest import RecordingExecutor
-from tests.testapp.conventions import REFUSED_SELECTION, conventions_server
+from tests.testapp.conventions_drfs import REFUSED_SELECTION, conventions_server
 from tests.testapp.models import Invoice
 from tests.utils import tool_error
 

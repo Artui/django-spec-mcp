@@ -29,7 +29,7 @@ from rest_framework_services import (
 )
 
 from django_spec_mcp.server.mcp_server import MCPServer
-from tests.testapp.serializers import AgentInvoiceSerializer
+from tests.testapp.serializers_drfs import AgentInvoiceSerializer
 
 
 def _selector_spec() -> SelectorSpec:

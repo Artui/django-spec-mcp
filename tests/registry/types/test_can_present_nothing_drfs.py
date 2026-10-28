@@ -21,7 +21,7 @@ from rest_framework_services.types.service_spec import ServiceSpec
 
 from django_spec_mcp.registry.types.utils import can_present_nothing
 from tests.testapp.models import Invoice
-from tests.testapp.serializers import InvoiceOutputSerializer
+from tests.testapp.serializers_drfs import InvoiceOutputSerializer
 
 
 def _all() -> Any:

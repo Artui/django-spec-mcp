@@ -9,9 +9,13 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import pytest
-from rest_framework.permissions import BasePermission
+from django.http import HttpRequest
 
+from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.conf import get_setting
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
 
 
 def tool_error(out: Any) -> dict[str, Any]:
@@ -29,22 +33,31 @@ def tool_error(out: Any) -> dict[str, Any]:
     return json.loads(out["content"][0]["text"])["error"]
 
 
-def granting_route(key: str, value: Any, seen: list[dict[str, Any]]) -> type[BasePermission]:
-    """A DRF permission granting a route whose ``view.kwargs[key]`` is ``value``.
+def call_context(server: MCPServer, **overrides: Any) -> MCPCallContext:
+    """A context for calling ``server``'s handlers in process, as an anonymous caller.
 
-    Records every ``view.kwargs`` it is shown into ``seen``: a class rather than
-    an instance is what a spec declares, and the paths instantiate it at
-    different times, so the record lives outside the instance. Reads with
-    ``.get`` so a check made against ``{}`` denies rather than raising, which is
-    what the routes this stands in for looked like before they were bound.
+    It declares the tasks extension and carries the server's own task store,
+    subscription broker and config, so a handler sees what the server's view
+    would hand it; ``overrides`` replace any field. ``tests.tasks.conftest``'s
+    ``context`` differs on purpose: it carries the task executor and no broker.
     """
-
-    class _GrantsOneRoute(BasePermission):
-        def has_permission(self, request: Any, view: Any) -> bool:
-            seen.append(dict(view.kwargs))
-            return view.kwargs.get(key) == value
-
-    return _GrantsOneRoute
+    request = HttpRequest()
+    request.method = "POST"
+    request.user = None
+    base: dict[str, Any] = {
+        "http_request": request,
+        "token": TokenInfo(user=None),
+        "tools": server._tools,
+        "resources": server._resources,
+        "prompts": server._prompts,
+        "protocol_version": "2026-07-28",
+        "client_capabilities": {"extensions": {TASKS_EXTENSION_ID: {}}},
+        "tasks": server.task_store,
+        "subscriptions": server.subscription_broker,
+        "config": server._config,
+    }
+    base.update(overrides)
+    return MCPCallContext(**base)
 
 
 class RefusingRateLimit:

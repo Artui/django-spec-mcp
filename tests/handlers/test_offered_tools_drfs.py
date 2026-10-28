@@ -33,7 +33,7 @@ from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
 from django_spec_mcp.handlers.types.context import MCPCallContext
-from tests.testapp.affordances import order_selector_spec
+from tests.testapp.affordances_drfs import order_selector_spec
 from tests.utils import tool_error
 
 _POOL = "django_spec_mcp.handlers.offered_tools.base_pool"

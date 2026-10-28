@@ -29,7 +29,7 @@ from django_spec_mcp.registry.tool_registry import ToolRegistry
 from django_spec_mcp.registry.types.prompt_binding import PromptBinding
 from django_spec_mcp.registry.types.resource_binding import ResourceBinding
 from django_spec_mcp.registry.types.tool_binding import ToolBinding
-from tests.utils import granting_route
+from tests.utils_drfs import granting_route
 
 
 class _DenyAll:

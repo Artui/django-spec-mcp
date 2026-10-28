@@ -32,7 +32,7 @@ from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
-from tests.subscriptions.test_subscription_core import _context
+from tests.utils import call_context
 
 OPEN = [Unrestricted()]
 _ACCOUNT = {"account": {"type": "string"}}
@@ -101,12 +101,12 @@ Call = Callable[[MCPServer, dict[str, Any]], Any]
 
 
 def _sync(server: MCPServer, params: dict[str, Any]) -> Any:
-    return handle_tools_call(params, _context(server, client_capabilities={"elicitation": {}}))
+    return handle_tools_call(params, call_context(server, client_capabilities={"elicitation": {}}))
 
 
 def _async(server: MCPServer, params: dict[str, Any]) -> Any:
     return async_to_sync(handle_tools_call_async)(
-        params, _context(server, client_capabilities={"elicitation": {}})
+        params, call_context(server, client_capabilities={"elicitation": {}})
     )
 
 

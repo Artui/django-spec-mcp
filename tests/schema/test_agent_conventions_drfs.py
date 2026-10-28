@@ -7,7 +7,7 @@ from rest_framework import serializers
 from rest_framework_services import MARKING, build_audience_projection
 
 from django_spec_mcp.schema.agent_conventions import append_agent_conventions
-from tests.testapp.serializers import AgentInvoiceSerializer, InvoiceOutputSerializer
+from tests.testapp.serializers_drfs import AgentInvoiceSerializer, InvoiceOutputSerializer
 
 
 def test_a_tool_with_handles_gains_the_line() -> None:

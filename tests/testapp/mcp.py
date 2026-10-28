@@ -20,7 +20,7 @@ from django_spec_mcp.config.types.mcp_config import MCPConfig
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.testapp.auth_backend import HeaderAuthBackend
 from tests.testapp.kernel_shapes import InvoiceInput, InvoiceOutput
-from tests.testapp.serializers import InvoiceInputSerializer, InvoiceOutputSerializer
+from tests.testapp.serializers_drfs import InvoiceInputSerializer, InvoiceOutputSerializer
 from tests.testapp.services import (
     create_invoice,
     get_invoice,

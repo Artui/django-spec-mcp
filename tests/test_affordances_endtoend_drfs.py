@@ -18,7 +18,7 @@ from rest_framework_services.types.service_spec import ServiceSpec
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.testing import assert_tool_result_conforms
-from tests.testapp.affordances import fresh_server, order_selector_spec
+from tests.testapp.affordances_drfs import fresh_server, order_selector_spec
 
 
 def _server() -> MCPServer:

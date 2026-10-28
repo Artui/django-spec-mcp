@@ -38,7 +38,7 @@ from django_spec_mcp.registry.resource_registry import ResourceRegistry
 from django_spec_mcp.registry.tool_registry import ToolRegistry
 from django_spec_mcp.registry.types.tool_binding import ToolBinding
 from django_spec_mcp.testing import assert_tool_result_conforms
-from tests.testapp.serializers import InvoiceInputSerializer
+from tests.testapp.serializers_drfs import InvoiceInputSerializer
 from tests.testapp.urlconf_for import urlconf_for
 from tests.utils import tool_error
 

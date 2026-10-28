@@ -1,10 +1,9 @@
 """The drf-services ``server`` fixture of the tasks suite, kept until the deletion.
 
 Every tool on it carries a ``task_policy``, which a kernel spec does not take
-yet, so it has no kernel twin. ``conftest.py`` re-exports it and
-``slow_service`` under the names the ``_drfs`` originals and the files beside
-them were written against; the deletion takes this file and those lines
-together.
+yet, so it has no kernel twin. A test using it, or ``slow_service``, imports it
+from here; ``conftest.py`` imports nothing from this module, so the deletion
+takes this file and leaves the conftest collectable.
 """
 
 from __future__ import annotations

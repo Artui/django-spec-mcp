@@ -3,9 +3,11 @@
 The executors here are the point of the seam: neither imports a queue, and the
 package never learns which one it got.
 
-The ``server`` fixture and ``slow_service`` are drf-services', since every tool on
-that server carries a ``task_policy`` a kernel spec does not take yet. They live
-in ``fixtures_drfs.py`` until the deletion and are re-exported here.
+The drf-services ``server`` fixture and ``slow_service`` live in
+``fixtures_drfs.py``, since every tool on that server carries a ``task_policy`` a
+kernel spec does not take yet. Nothing here imports them, so deleting the
+``*_drfs.py`` files leaves this conftest collectable; a test using them imports
+them from that module itself.
 """
 
 from __future__ import annotations
@@ -19,7 +21,6 @@ from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
-from tests.tasks.fixtures_drfs import server, slow_service
 
 
 class RecordingExecutor:
@@ -94,7 +95,5 @@ __all__ = [
     "RecordingExecutor",
     "context",
     "executor",
-    "server",
-    "slow_service",
     "store",
 ]
