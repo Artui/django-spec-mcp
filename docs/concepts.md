@@ -553,9 +553,67 @@ other than what was declared:
 | Refused | Why |
 | --- | --- |
 | A `LIST` spec | A resource reads one row by URI. Register a `LIST` as a selector tool, which paginates. |
-| `mime_type=` or `encoding=` beside a spec | A presented row is JSON, so a resource is served as `application/json`. An HTML view is [`register_ui_resource`](#interactive-views-mcp-apps). |
+| `encoding=TEXT` or `BLOB` beside a spec declaring `affordances` or `allow_none` | The kernel adds affordances to a presented object, and under `allow_none` a missing row presents as `None` without the presenter running; neither is a document or bytes. Serve either as JSON. |
+| `selector=` or `output_serializer=` beside a spec | The spec declares its own selector and presenter. |
 | `permissions=` beside a spec | The spec's own `permissions` are the resource's guard. |
 | A URI variable no read or shape declares, or one the server fills | See above: every read would be refused, or would serve the server's value for any URI. |
+
+#### The body a read serves { #the-body-a-read-serves }
+
+`encoding=` decides how the presented value becomes the `contents` entry, and
+`mime_type=` is advertised as given, on the read and in both listings, never
+inferred or checked:
+
+| `encoding=` | The presenter returns | Served as |
+| --- | --- | --- |
+| `ResourceEncoding.JSON`, the default | anything JSON-encodable | `text`, the value as JSON |
+| `ResourceEncoding.TEXT` | a `str`: Markdown, CSV, HTML, plain text | `text`, the string as written |
+| `ResourceEncoding.BLOB` | `bytes`, `bytearray` or a `memoryview` | `blob`, base64, and no `text` |
+
+```python
+from django_service_specs import (
+    Output,
+    Parameter,
+    Parameters,
+    Presenter,
+    SelectorKind,
+    SelectorSpec,
+)
+
+from django_spec_mcp import ResourceEncoding
+
+
+class InvoiceMarkdown(Presenter):
+    def output(self) -> Output:
+        return Output()  # a document, not an object of fields
+
+    def present(self, value):
+        return f"# Invoice {value.number}\n\nTotal: {value.total}"
+
+
+server.register_resource(
+    SelectorSpec(
+        kind=SelectorKind.RETRIEVE,
+        selector=get_invoice,
+        reads=Parameters([Parameter("pk", "integer", required=True)]),
+        presenter=InvoiceMarkdown(),
+        permissions=[IsBillingStaff()],
+    ),
+    name="invoice-summary",
+    uri_template="invoices://{pk}/summary",
+    mime_type="text/markdown",
+    encoding=ResourceEncoding.TEXT,
+)
+```
+
+A spec with no presenter serves its selector's value the same way. A `TEXT`
+resource under the default `application/json` is still served verbatim, since
+the mime type is never checked against the body. A presenter returning the
+wrong type for its encoding, a dict under `TEXT` or a `str` under `BLOB`, is
+answered `-32603` naming the presenter, a well-formed error rather than a 500,
+because only a read can find it out. The result ceiling and the cache hints
+apply to every encoding alike. An HTML view the host renders is
+[`register_ui_resource`](#interactive-views-mcp-apps), which sets both.
 
 ### Registering a whole `SpecRegistry`
 
@@ -829,13 +887,16 @@ is no further round to ask in.
 one, often the very request a view is serving, so the call never writes its
 user to it. The call works on a copy whose `user` is the `user=` the call runs
 as: a view handing its own request keeps serving as its own user after the
-call, and two concurrent calls sharing one request each see their own. The copy
-shares the session and any `POST` or `FILES` already parsed. An unread body
-whose size is known and within `DATA_UPLOAD_MAX_MEMORY_SIZE` stays readable to
-the caller: it is read once on the original, which caches it as any first read
-does, and each copy reads a stream of its own. A body over that limit, or of
-unknown size, is left unread and **shared**, so a spec that reads it consumes
-it for the caller. With no request handed, a minimal `POST` `HttpRequest`
+call, and two concurrent calls sharing one request each see their own. Apart
+from the user, the copy is the handed request for everything a call reads from
+it: the session, the body, the stream and the parsed `GET`, `POST` and `FILES`
+are the caller's, so a body a spec reads is read for the caller, a stream it
+drains is drained for the caller, and a body no spec reads stays unread for the
+view. An attribute a spec sets on the copy stays on the copy, and one the
+caller sets once the call has its copy is not seen by it. The copy is an
+instance of the handed request's class, so `isinstance` holds where
+`type(request) is WSGIRequest` does not, and it does not pickle. With no
+request handed, a minimal `POST` `HttpRequest`
 bearing `user=` is synthesised. The spec finds the copy, or the synthesised
 request, as `call_context["request"]`, with no `mcp_token` on it: `call_tool`
 has no token.
