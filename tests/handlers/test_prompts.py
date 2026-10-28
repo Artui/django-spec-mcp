@@ -381,3 +381,44 @@ async def test_a_prompt_permission_is_judged_on_the_request_and_token_alone(
     assert isinstance(out, JsonRpcError) and out.code == JsonRpcErrorCode.FORBIDDEN
     assert out.data is None
     assert permission.seen == [(context.http_request, context.token)]
+
+
+@pytest.mark.parametrize("is_async", [False, True])
+async def test_a_render_declaring_request_receives_the_transports_http_request(
+    is_async: bool,
+) -> None:
+    # The plain ``HttpRequest`` the kernel tool path hands a spec, with the
+    # resolved token on it as ``mcp_token``; no DRF ``Request`` is built. ``user``
+    # is the token's principal, while ``request.user`` is left as the endpoint
+    # set it, so a render wanting the caller declares ``user``.
+    seen: dict[str, Any] = {}
+
+    def render(request: Any, user: Any) -> str:
+        seen.update(request=request, user=user)
+        return "hello"
+
+    server = _server()
+    server.register_prompt(name="p", render=render)
+    http_request = HttpRequest()
+    session_user = object()
+    http_request.user = session_user
+    context = MCPCallContext(
+        http_request=http_request,
+        token=TokenInfo(user=object()),
+        tools=server.tools,
+        resources=server.resources,
+        prompts=server.prompts,
+        protocol_version="2025-11-25",
+    )
+
+    params: dict[str, Any] = {"name": "p"}
+    if is_async:
+        out = await handle_prompts_get_async(params, context)
+    else:
+        out = await sync_to_async(handle_prompts_get)(params, context)
+
+    assert not isinstance(out, JsonRpcError), out
+    assert seen["request"] is http_request
+    assert seen["request"].mcp_token is context.token
+    assert seen["user"] is context.token.user
+    assert seen["request"].user is session_user

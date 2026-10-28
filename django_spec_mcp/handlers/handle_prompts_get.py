@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from rest_framework_services import build_offline_context, resolve_callable_kwargs
+from django_service_specs import resolve_callable_kwargs
 
 from django_spec_mcp._compat.tracing import span
 from django_spec_mcp.handlers.handle_tools_call import _span_attrs
+from django_spec_mcp.handlers.kernel_utils import carry_token
 from django_spec_mcp.handlers.render_prompt_messages import normalize_render_result
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import (
@@ -101,15 +102,14 @@ def handle_prompts_get(
                 data={"retryAfter": retry_after},
             )
 
-        drf_request = build_offline_context(
-            context.token.user,
-            None,
-            http_request=context.http_request,
-            # A prompt renders messages, so nothing here reads
-            # ``request.query_params``. Passed anyway so the endpoint's own
-            # query string can never reach one if that changes.
-            query_params={},
-        ).request
+        # The request the kernel tool path hands a spec: the transport's own
+        # ``HttpRequest``, the resolved token on it as ``mcp_token``
+        # (``test_a_render_declaring_request_receives_the_transports_http_request``).
+        # Its ``user`` is whatever the endpoint set, which a bearer token does
+        # not, so the caller is the ``user`` seed beside it, and its query
+        # string is the endpoint's: a render reads the prompt's arguments by
+        # name, never off the request.
+        request = carry_token(context.http_request, context.token)
         # The transport's seeds are applied *after* the client-supplied
         # arguments, so an argument named ``user`` or ``request`` shadows
         # nothing — the precedence ``RESERVED_POOL_SEEDS`` enforces on the
@@ -118,7 +118,7 @@ def handle_prompts_get(
         # authenticated principal, never a value the caller chose.
         pool: dict[str, Any] = {
             **arguments_raw,
-            "request": drf_request,
+            "request": request,
             "user": context.token.user,
         }
         kwargs: dict[str, Any] = resolve_callable_kwargs(binding.render, pool)
