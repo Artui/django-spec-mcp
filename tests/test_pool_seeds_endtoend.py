@@ -14,9 +14,10 @@ its call somewhere else:
   refuses a URI variable a seed occupies.
 
 Asked of kernel specs registered with ``register_tool`` and ``register_resource``,
-where the drf-services original registered drf-services specs. Three of its
-questions have no kernel counterpart. The task worker: ``register_tool`` refuses a
-``task_policy`` for a kernel spec, so no kernel tool runs as a task yet. A
+where the drf-services original registered drf-services specs. Its task-worker
+case is asked of a kernel tool beside the other worker questions, as
+``tests/tasks/test_task_lifecycle.py::test_a_task_worker_hands_the_seeds_to_the_tool_it_runs``.
+Two of its questions have no kernel counterpart. A
 ``UrlKwarg`` or ``QueryParam`` named after a seed: neither knob exists on the
 kernel, where an argument is a ``Parameter`` in ``reads`` and the kernel refuses
 one a seed occupies. An ``input_serializer`` beside a selector: a kernel selector
@@ -56,7 +57,6 @@ from django_spec_mcp.handlers.handle_completion_complete import handle_completio
 from django_spec_mcp.handlers.handle_prompts_get import handle_prompts_get
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
-from django_spec_mcp.types.task_policy import TaskPolicy
 from tests.testapp.urlconf_for import urlconf_for
 
 MODERN = "2026-07-28"
@@ -245,14 +245,6 @@ def test_acall_tool_hands_the_seeds_to_a_service_and_a_selector() -> None:
     for name in ("tenant.whoami", "tenant.scope"):
         result = async_to_sync(server.acall_tool)(name, {}, user=None)
         assert _structured(result) == {"tenant": "acme"}
-
-
-def test_a_kernel_tool_cannot_run_as_a_task_yet() -> None:
-    # Why the drf-services original's task-worker case has no kernel twin.
-    server = MCPServer(name="t", pool_seeds=SEEDS)
-
-    with pytest.raises(ImproperlyConfigured, match="not yet supported for a kernel spec"):
-        server.register_tool(_service(), name="tenant.whoami", task_policy=TaskPolicy.OPTIONAL)
 
 
 # ----- client input cannot occupy a seed -----
