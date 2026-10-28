@@ -290,6 +290,32 @@ def test_sync_call_tool_hands_a_copy_carrying_the_acting_user(users: None) -> No
 
 
 @pytest.mark.django_db
+def test_sync_call_tool_drops_the_handed_requests_token(users: None) -> None:
+    """A token on the handed request is the outer caller's, so the spec's copy
+    carries none, and the handed request keeps its own."""
+    model = get_user_model()
+    caller = model.objects.get(username="token-caller")
+    owner = model.objects.get(username="cookie-owner")
+    server = _server([])
+    server.register_tool(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=lambda *, request: {"token": hasattr(request, "mcp_token")},
+            permissions=[Unrestricted()],
+        ),
+        name="sync_token",
+    )
+    handed = _handed(owner)
+    token = object()
+    handed.mcp_token = token
+
+    result = server.call_tool("sync_token", user=caller, request=handed)
+
+    assert result.structured_content == {"token": False}
+    assert handed.mcp_token is token
+
+
+@pytest.mark.django_db
 def test_sync_call_tool_with_no_request_hands_one_carrying_the_acting_user(users: None) -> None:
     """With no request handed, sync ``call_tool`` synthesises one bearing the
     user, as ``acall_tool`` and the drf-services path do, rather than handing
