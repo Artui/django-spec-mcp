@@ -149,8 +149,9 @@ carries; releases up to 0.54.0 are in
   `server_arguments` answers for, the error is the server's and is raised as before:
   a `-32603` on the wire. Anything else a presenter raises stays the server's.
   A kernel resource answers the same refusal of a shape its URI carried as the
-  `-32602` `Invalid arguments` its shape check gives that variable, keyed by it;
-  with no shape in the URI it is raised.
+  `-32602` `Invalid arguments` its shape check gives that variable, keyed by it,
+  or by `non_field_errors` when the URI carries several; with no shape in the
+  URI it is raised.
 
 ### Changed
 

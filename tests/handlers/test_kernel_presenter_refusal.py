@@ -136,7 +136,11 @@ def test_on_a_paged_tool_the_refusal_says_what_the_shape_applies_to(path: str) -
     error = tool_error(_call(server, {"fields": ["total"]}, path))
     scope = AgentConventions().query_param_on_pages
     assert scope is not None
-    assert error["message"].endswith(f"{REFUSAL} {scope}")
+    assert error == {
+        "type": "validation_error",
+        "message": f"`fields` was rejected while rendering the result: {REFUSAL} {scope}",
+        "detail": {"fields": [REFUSAL]},
+    }
 
 
 @_PATHS
@@ -144,7 +148,11 @@ def test_the_servers_conventions_word_the_sentence(path: str) -> None:
     custom = AgentConventions(query_param_on_pages="Per row.")
     server = _server(paginate=True, conventions=custom)
     error = tool_error(_call(server, {"fields": ["total"]}, path))
-    assert error["message"].endswith(f"{REFUSAL} Per row.")
+    assert error == {
+        "type": "validation_error",
+        "message": f"`fields` was rejected while rendering the result: {REFUSAL} Per row.",
+        "detail": {"fields": [REFUSAL]},
+    }
 
 
 @_PATHS
@@ -204,14 +212,19 @@ def _row() -> _Row:
     return _Row(id=1)
 
 
-def _resource_server(uri_template: str, *, shapes: tuple[str, ...] = ("fields",)) -> MCPServer:
+def _resource_server(
+    uri_template: str,
+    *,
+    shapes: tuple[str, ...] = ("fields",),
+    error: Exception | None = None,
+) -> MCPServer:
     server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
     server.register_resource(
         SelectorSpec(
             kind=SelectorKind.RETRIEVE,
             selector=_row,
             shapes=Parameters([Parameter(name, "string") for name in shapes]),
-            presenter=_StrictPresenter(),
+            presenter=_StrictPresenter(error),
             permissions=[Unrestricted()],
         ),
         name="row",
@@ -254,3 +267,29 @@ def test_a_resource_naming_several_shapes_keys_the_refusal_under_none_of_them(
 def test_a_resource_whose_uri_carries_no_shape_raises_the_refusal(is_async: bool) -> None:
     with pytest.raises(ServiceValidationError):
         _read(_resource_server("rows://all"), "rows://all", is_async=is_async)
+
+
+@_READS
+@pytest.mark.parametrize(
+    "detail",
+    [{"total": ["Not a field."]}, ["Not a field.", "Nor this."]],
+    ids=["dict", "list"],
+)
+def test_a_resource_refusals_structured_detail_is_kept_as_raised(
+    is_async: bool, detail: Any
+) -> None:
+    # A detail already structured is placed under the shape as it is; only a
+    # bare message is wrapped in a list, as the shape check words its own.
+    server = _resource_server("rows://{fields}", error=ServiceValidationError(detail))
+    error = _read(server, "rows://total", is_async=is_async)
+    assert isinstance(error, JsonRpcError)
+    assert error.data == {"detail": {"fields": detail}}
+
+
+@_READS
+def test_a_resource_presenter_error_that_is_not_a_validation_error_is_raised(
+    is_async: bool,
+) -> None:
+    server = _resource_server("rows://{fields}", error=ValueError("boom"))
+    with pytest.raises(ValueError, match="boom"):
+        _read(server, "rows://total", is_async=is_async)
