@@ -1,3 +1,11 @@
+"""The default mount, end to end: the kernel test server through the live transport.
+
+``ROOT_URLCONF`` mounts ``tests.testapp.mcp.build_server``, whose tools and
+resource are kernel specs. The drf-services original, run against the same
+requests on the drf-services server, is kept beside this file as
+``test_endtoend_drfs.py``.
+"""
+
 from __future__ import annotations
 
 import json

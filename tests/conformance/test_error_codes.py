@@ -17,32 +17,27 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator
-from typing import Any
 
 import pytest
 from django.test import Client, override_settings
-from django_service_specs import PermissionCheck, ServiceSpec
+from django_service_specs import ServiceSpec
 
 from tests.kernel_client import PROTOCOL_VERSION, KernelClient
 from tests.testapp.mcp import build_kernel_server
+from tests.testapp.permissions import IsAuthenticated
 from tests.testapp.urlconf_for import urlconf_for
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
 
-# Changed by design: the original's denial was DRF's ``IsAuthenticated`` on a
-# drf-services spec, asserted only as "not -32002" with an HTTP 403; this is a
-# kernel ``PermissionCheck``, whose ``NotPermitted`` the wire maps to -32006.
-class _IsAuthenticated(PermissionCheck):
-    def has_permission(self, principal: Any, spec: Any) -> bool:
-        return bool(principal.is_authenticated)
-
-
 @pytest.fixture(params=[False, True], ids=["sync", "async"])
 def mount(request: pytest.FixtureRequest) -> Iterator[None]:
     server = build_kernel_server()
+    # Changed by design: the original's denial was DRF's ``IsAuthenticated`` on a
+    # drf-services spec, asserted only as "not -32002" with an HTTP 403; this is a
+    # kernel ``PermissionCheck``, whose ``NotPermitted`` the wire maps to -32006.
     server.register_tool(
-        ServiceSpec(service=lambda: {"ok": "true"}, permissions=[_IsAuthenticated()]),
+        ServiceSpec(service=lambda: {"ok": "true"}, permissions=[IsAuthenticated()]),
         name="gated",
     )
     with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=request.param)):
