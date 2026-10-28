@@ -10,6 +10,7 @@ missing-``kind`` breakage.
 
 from __future__ import annotations
 
+import ast
 import json
 import os
 import subprocess
@@ -24,6 +25,35 @@ _EXAMPLES = [
     pytest.param("invoicing", "invoicing.settings", "invoices.mcp", id="invoicing"),
     pytest.param("job_status", "job_status.settings", "jobs.mcp", id="job_status"),
 ]
+
+
+# What the examples declare their operations with is the kernel, so nothing in
+# them may reach for DRF or drf-services: the transport is the only part of the
+# stack that may still name either, and it is not the examples' to name.
+_NOT_THE_KERNEL = ("rest_framework", "rest_framework_services", "rest_framework_dataclasses")
+
+
+def _foreign_imports(root: Path) -> list[str]:
+    """``path: module`` for every import under ``root`` from DRF or drf-services."""
+    found: list[str] = []
+    for source in sorted(root.rglob("*.py")):
+        for node in ast.walk(ast.parse(source.read_text())):
+            if isinstance(node, ast.ImportFrom):
+                modules = [node.module or ""]
+            elif isinstance(node, ast.Import):
+                modules = [alias.name for alias in node.names]
+            else:
+                continue
+            found.extend(
+                f"{source.relative_to(root)}: {module}"
+                for module in modules
+                if module.split(".")[0] in _NOT_THE_KERNEL
+            )
+    return found
+
+
+def test_no_example_imports_drf_or_drf_services() -> None:
+    assert _foreign_imports(_EXAMPLES_DIR) == []
 
 
 @pytest.mark.parametrize(("project", "settings_module", "mcp_module"), _EXAMPLES)
