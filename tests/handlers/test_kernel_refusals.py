@@ -304,7 +304,7 @@ def _refused(error: dict[str, Any]) -> dict[str, Any]:
 
 
 @pytest.mark.parametrize(
-    ("exc", "name", "drfs_served"),
+    ("exc", "name", "expected"),
     [
         (
             ServiceError("The ledger is closed"),
@@ -337,10 +337,10 @@ def _refused(error: dict[str, Any]) -> dict[str, Any]:
     ],
 )
 def test_a_service_refusal_is_answered_with_its_wire_body(
-    client: Client, exc: ServiceError, name: str, drfs_served: dict[str, Any]
+    client: Client, exc: ServiceError, name: str, expected: dict[str, Any]
 ) -> None:
-    """``drfs_served`` is what a tool whose service raises ``exc`` serves."""
-    assert _served(client, _build(), name) == drfs_served
+    """``expected`` is what a tool whose service raises ``exc`` serves."""
+    assert _served(client, _build(), name) == expected
 
 
 def test_a_denial_is_answered_with_insufficient_permission(client: Client) -> None:

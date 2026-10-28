@@ -125,9 +125,9 @@ def test_kernel_service_input_rounds_still_merge(call: Call) -> None:
 def test_a_kernel_selector_asking_for_input_is_answered_as_a_service_error(
     call: Call,
 ) -> None:
-    by_kernel = call(_server(), {"name": "kernel.asks", "arguments": {}})
+    served = call(_server(), {"name": "kernel.asks", "arguments": {}})
     # A selector raising ``AdditionalInputRequired`` serves the service error, not a question.
-    by_drfs = {
+    expected = {
         "content": [
             {
                 "type": "text",
@@ -138,5 +138,5 @@ def test_a_kernel_selector_asking_for_input_is_answered_as_a_service_error(
         ],
         "isError": True,
     }
-    assert by_kernel == by_drfs
-    assert "inputRequests" not in by_kernel
+    assert served == expected
+    assert "inputRequests" not in served
