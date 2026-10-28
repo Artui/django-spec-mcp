@@ -152,9 +152,11 @@ obtain would change the answer.
 for the call's context by declaring a keyword `call_context`. Over HTTP its
 `"request"` is the Django `HttpRequest`, carrying the backend's `TokenInfo` as
 `request.mcp_token`; `request.user` and `request.auser()` are the token's
-principal from authentication on, whatever the session cookie names. Off HTTP,
-`"request"` is `None`, so a check reading the token decides for itself what
-that means:
+principal from authentication on, whatever the session cookie names. An
+in-process `call_tool` or `acall_tool` is not over HTTP: its `"request"` may be
+`None`, or a request whose `mcp_token`, when it has one, carries the `scopes=`
+the call passed and `raw=None`. So a check reading the token decides for itself
+what an in-process call means, and never tells one apart by `request is None`:
 
 ```python
 from django_service_specs import PermissionCheck

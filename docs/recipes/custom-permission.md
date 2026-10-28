@@ -122,9 +122,10 @@ evaluation time, for the reason above.
 - **Cheap to construct, side-effect-free at evaluation.** A check is built once,
   with its spec, so any expensive lookup belongs in `has_permission` (and even
   then, cache it).
-- **Don't read mutable settings in `__init__`.** Any per-process changes (test
-  settings overrides, etc.) won't be observed if you snapshot them there. Read
-  settings each call when you need them.
+- **A value passed to `__init__` is read once, when the spec is built.** That
+  suits a fixed deployment value like the tenant above. For one a test overrides
+  or that changes while the process runs, read it inside `has_permission`
+  instead, where every call sees the current value.
 - **Surface scopes only when they're actually scope-shaped.** A row-level rule
   like `TenantMatches` belongs on the spec, not in `scopes=`: the failing client
   can't fix it by obtaining a different scope.

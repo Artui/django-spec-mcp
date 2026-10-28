@@ -128,7 +128,7 @@ Note that server-wide `INCLUDE_OUTPUT_SCHEMA=True` with
 `INCLUDE_STRUCTURED_CONTENT=False` is **legal** — it just requires every binding
 to override the content back on. The error names the binding that did not.
 
-### "paginate and max_page_size belong to a LIST selector tool"
+### "paginate and max_page_size belong to a LIST selector tool", or "invalidates belongs to a service tool"
 
 `register_tool` refuses a knob of the other kind of tool: `paginate` or
 `max_page_size` on a service tool, whose result is never paginated, and
@@ -145,7 +145,7 @@ spec when it is built. Rename the read, or give the list another name on the
 spec:
 
 ```python
-from django_service_specs import DataclassValidator, ServiceSpec
+from django_service_specs import DataclassValidator, ServiceSpec, Unrestricted
 
 ServiceSpec(
     service=create_invoices,
