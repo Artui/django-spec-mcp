@@ -1,39 +1,39 @@
 # A selector tool with filtering, ordering, and pagination
 
-Service tools wrap **mutations** — `register_service_tool` runs the
-spec's `service` callable inside `transaction.atomic()` and renders the
-result through an output serializer.
+A service tool wraps a **mutation**: `register_tool` with a kernel
+`ServiceSpec` runs the spec's `service` callable, inside
+`transaction.atomic()` by default, and presents its result.
 
 For **reads** you want a different shape. A "list invoices" tool is
 read-only and benefits from filtering, ordering, and pagination — none
-of which belong inside the selector. `register_selector_tool` keeps the
-selector tiny (return a queryset) and gives the tool layer the
-post-fetch knobs.
+of which belong inside the selector. A `LIST` `SelectorSpec` keeps the
+selector tiny (return a queryset); the spec's `filter_set` narrows and
+orders it, and `paginate=True` at registration pages it.
 
 ```text
-arguments → validate(merged inputSchema)
-          → run_selector
+arguments → the kernel's argument check (the spec's reads, the FilterSet's filters)
+          → run the selector
           → FilterSet(data=…).qs    (if spec.filter_set)
           → FilterSet applies ordering  (if it declares an OrderingFilter)
           → paginate                (if paginate=True)
-          → output_serializer(many=True)
+          → the presenter, per row
           → ToolResult
 ```
 
-Each knob is opt-in. A bare `register_selector_tool` with no
-filter/order/paginate behaves like a plain RPC read.
+Each piece is opt-in. A `SelectorSpec` with no filter set registered
+without `paginate` behaves like a plain RPC read.
 
 ## Install django-filter
 
-`spec.filter_set` requires `django-filter`, which this package does not pull in:
+`filter_set=` takes a `django-filter` `FilterSet`, which the kernel's `filter`
+extra installs:
 
 ```bash
-pip install django-filter
+pip install "django-service-specs[filter]"
 ```
 
-Without it, importing `django_spec_mcp` still works — the
-`ImportError` only fires when a selector spec actually carries a
-`filter_set`.
+Nothing in this package imports it, so a project with no filter set does not
+need it.
 
 ## Define the pieces
 
@@ -51,19 +51,21 @@ class Invoice(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 ```
 
-An output serializer:
+What a row renders as, through the kernel's `DataclassPresenter`:
 
 ```python
-# invoices/serializers.py
-from rest_framework import serializers
+# invoices/shapes.py
+from dataclasses import dataclass
+from datetime import datetime
 
-from invoices.models import Invoice
 
-
-class InvoiceOutputSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Invoice
-        fields = ["id", "number", "amount_cents", "sent", "created_at"]
+@dataclass
+class InvoiceOutput:
+    id: int
+    number: str
+    amount_cents: int
+    sent: bool
+    created_at: datetime
 ```
 
 A scoped selector — returns a raw queryset, no filtering or ordering:
@@ -94,11 +96,9 @@ class InvoiceFilterSet(django_filters.FilterSet):
     min_amount = django_filters.NumberFilter(field_name="amount_cents", lookup_expr="gte")
     max_amount = django_filters.NumberFilter(field_name="amount_cents", lookup_expr="lte")
     created_after = django_filters.DateTimeFilter(field_name="created_at", lookup_expr="gte")
-    # Ordering is declared here, like any other filter. `OrderingFilter`
-    # subclasses `ChoiceFilter`, so it is reflected into the tool's
-    # `inputSchema` as a choice over the names on the left — the public
-    # vocabulary, not the ORM paths behind them — each carrying the label
-    # django-filter derives for it.
+    # Ordering is declared here, like any other filter. The kernel reads it
+    # into the tool's `inputSchema` as a choice over the names on the left —
+    # the public vocabulary, not the ORM paths behind them.
     ordering = django_filters.OrderingFilter(
         fields=(("created_at", "created"), ("amount_cents", "amount")),
     )
@@ -111,106 +111,83 @@ class InvoiceFilterSet(django_filters.FilterSet):
 ## Register the selector tool
 
 ```python
-from django_service_specs import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
-from django_spec_mcp import MCPServer
+from django_service_specs import DataclassPresenter, SelectorKind, SelectorSpec, Unrestricted
 
+from django_spec_mcp import MCPServer
 from invoices.filters import InvoiceFilterSet
 from invoices.selectors import list_invoices
-from invoices.serializers import InvoiceOutputSerializer
+from invoices.shapes import InvoiceOutput
 
-server = MCPServer(name="invoicing")
+server = MCPServer(name="invoicing", auth_backend=my_auth_backend)
 
-server.register_selector_tool(
-    name="invoices.list",
-    spec=SelectorSpec(
+server.register_tool(
+    SelectorSpec(
         kind=SelectorKind.LIST,
         selector=list_invoices,
-        output_serializer=InvoiceOutputSerializer,
         filter_set=InvoiceFilterSet,
+        presenter=DataclassPresenter(InvoiceOutput),
+        permissions=[Unrestricted()],
     ),
+    name="invoices.list",
     description="List invoices, optionally filtered / ordered / paginated.",
     paginate=True,
 )
 ```
 
-`filter_set` lives on the `SelectorSpec` (since
-`djangorestframework-services` 0.18), so the same declaration drives the
-HTTP transport and MCP — declare the filterable shape once. Ordering
-rides along with it: nothing about ordering appears on the registration
-call, because the `OrderingFilter` already declared it. `paginate` is
-the one MCP-only pipeline mechanic left here.
+`filter_set` lives on the `SelectorSpec`, so the same declaration drives every
+transport that serves the spec — declare the filterable shape once. Its
+filters are reads: the kernel reads each one as an optional `Parameter`, so the
+`inputSchema` lists it and the closed argument set admits it. Ordering rides
+along with it: nothing about ordering appears on the registration call,
+because the `OrderingFilter` already declared it. `paginate` is the one
+MCP-only pipeline mechanic left here.
+
+A `LIST` selector tool registered without `paginate=True` warns
+`UnboundedListWarning`, and `SPEC_MCP["REQUIRE_LIST_PAGINATION"]` refuses it:
+an unpaged list grows with the table until one call no longer fits a client's
+context.
 
 ### Two ways to offer ordering
 
 Ordering is not a registration knob, and there are two channels that
-need none. Both are reflected into the tool's `inputSchema`, so one
-declaration serves the HTTP transport and every agent transport.
+need none. Both reach the tool's `inputSchema`, so one declaration serves
+every transport.
 
 1. **An `OrderingFilter` on the `FilterSet`** — the one above. **Prefer
-   this wherever there is a `FilterSet`**: the value is validated against
+   this wherever there is a `FilterSet`**: the value is checked against
    a published set of choices before anything reaches the ORM, and the
    choices are consumer-facing names rather than column paths.
-2. **A sort parameter the selector declares itself** — for a project with
-   no `django-filter` dependency. drf-services reflects the callable's
-   own parameters, so this needs nothing at registration either:
+2. **A sort read the spec declares itself** — for a project with no
+   `django-filter` dependency. A `Parameter` with `choices` is checked
+   before the selector runs, so only the names you list reach it:
 
     ```python
-    def list_invoices(*, user, sort: str = "-created_at"):
+    from django_service_specs import Parameter, Parameters
+
+    SORTS = {"newest": "-created_at", "amount": "amount_cents"}
+
+
+    def list_invoices(*, user, sort: str = "newest"):
         """List the caller's invoices, newest first by default."""
-        return Invoice.objects.for_user(user).order_by(sort)
+        return Invoice.objects.for_user(user).order_by(SORTS[sort])
+
+
+    SelectorSpec(
+        kind=SelectorKind.LIST,
+        selector=list_invoices,
+        reads=Parameters([Parameter("sort", "string", choices=tuple(SORTS))]),
+        presenter=DataclassPresenter(InvoiceOutput),
+        permissions=[Unrestricted()],
+    )
     ```
 
-    The trade-off is the validation: whatever the model sends reaches
-    `.order_by()` with only the checking the selector itself does, so
-    constrain it there (an allowlist, or a `ChoiceField` on an
-    `input_serializer`) rather than passing it straight through.
+!!! warning "Do not name that read `page` or `limit`"
 
-!!! warning "Do not name that parameter `page` or `limit`"
-
-    Those two names belong to a `LIST` selector tool's read pipeline and
-    are stripped from the arguments the selector is called with, so that a
-    `**kwargs` selector never receives them. The strip goes by name, so a
-    `LIST` selector declaring `page` as a parameter of its own would never
-    receive the caller's value, and registration refuses it. A `RETRIEVE`
-    tool cannot paginate, so its selector may take either name.
-
-    **`ordering` is not reserved.** It was, while `ordering_fields`
-    existed and the pipeline sorted the queryset itself. Sorting now
-    belongs to whatever declares it, under whatever name it likes, so
-    name the parameter `ordering` if that reads best.
-
-!!! warning "`ordering_fields` was removed"
-
-    The registration once took `ordering_fields=[...]`, a list of raw ORM
-    paths handed to `.order_by()`. That was a third vocabulary for the
-    same `ordering` argument, deprecated in 0.30.0 and removed since —
-    passing it now raises `TypeError` at registration.
-
-    Migrate by moving the field list into an `OrderingFilter` on the
-    `FilterSet`, as above, mapping each ORM path to the public name you
-    want the model to use — or, with no `FilterSet`, onto a sort parameter
-    of the selector's own. A model's `Meta.ordering` covers the default
-    order without any argument at all.
-
-The decorator form is symmetric with `@server.service_tool`. It
-auto-builds the `SelectorSpec` from `kind` + the wrapped function, so it
-covers `paginate` but **not** `filter_set` (a
-`FilterSet` belongs on the spec). A decorated selector orders through its
-own sort parameter; for the `FilterSet` route, use the explicit
-`register_selector_tool` form above, or hand the decorator a ready
-`spec=` that carries the `filter_set`:
-
-```python
-@server.selector_tool(
-    name="invoices.list",
-    kind=SelectorKind.LIST,
-    output_serializer=InvoiceOutputSerializer,
-    paginate=True,
-)
-def list_invoices(*, user):
-    return Invoice.objects.for_user(user)
-```
+    Those two names belong to a paginated tool's pipeline, which takes both
+    from the arguments before the selector runs. A spec declaring a read
+    named either is refused when it is registered with `paginate=True`. A
+    `RETRIEVE` tool cannot paginate, so its selector may take either name.
+    `ordering` is not reserved: name a read `ordering` if that reads best.
 
 ## Generated `inputSchema`
 
@@ -222,11 +199,17 @@ def list_invoices(*, user):
   "properties": {
     "sent": {"type": "boolean"},
     "min_amount": {
-      "type": "number",
+      "type": "string",
+      "format": "decimal",
+      "minimum": -1e50,
+      "maximum": 1e50,
       "description": "Matches `amount_cents` with the `gte` lookup."
     },
     "max_amount": {
-      "type": "number",
+      "type": "string",
+      "format": "decimal",
+      "minimum": -1e50,
+      "maximum": 1e50,
       "description": "Matches `amount_cents` with the `lte` lookup."
     },
     "created_after": {
@@ -235,33 +218,30 @@ def list_invoices(*, user):
       "description": "Matches `created_at` with the `gte` lookup."
     },
     "ordering": {
-      "oneOf": [
-        {"const": "created", "title": "Created"},
-        {"const": "-created", "title": "Created (descending)"},
-        {"const": "amount", "title": "Amount"},
-        {"const": "-amount", "title": "Amount (descending)"}
-      ],
-      "title": "Ordering"
+      "type": "array",
+      "items": {"type": "string", "enum": ["created", "-created", "amount", "-amount"]},
+      "maxItems": 1000
     },
     "page": {"type": "integer", "minimum": 1},
     "limit": {"type": "integer", "minimum": 1, "maximum": 100}
-  }
+  },
+  "additionalProperties": false
 }
 ```
 
 Filter properties are always optional — they narrow the queryset but
-aren't required to call the tool. Ordering accepts both ascending
-(`field`) and descending (`-field`) variants, and each variant carries
-its label, so a model is told that `-amount` means descending rather
-than having to infer it from the sign. `page` defaults to `1` and
-`limit` to `100` when the model omits it.
+aren't required to call the tool. Ordering takes a list of names, each
+ascending (`field`) or descending (`-field`): `["-amount"]` is the largest
+first. `page` defaults to `1` and `limit` to `100` when the model omits it.
 
-The `description` on `min_amount`, `max_amount` and `created_after` is
-derived, not written: where a filter's own name does not give away which
-column it matches or with which lookup, drf-services states both. A
-filter whose name, field and lookup already agree — `sent` — says nothing
-extra, and a `help_text` you write yourself always wins over the derived
-wording. A `label` becomes `title` the same way.
+A number filter is a `decimal` string, which its form field reads exactly; a
+JSON number is still taken. The `description` on `min_amount`, `max_amount`
+and `created_after` is derived, not written: where a filter's own name does
+not give away which column it matches or with which lookup, the kernel states
+both. A filter whose name, field and lookup already agree — `sent` — says
+nothing extra. The kernel's
+[declaring guide](https://artui.github.io/django-service-specs/declaring/)
+has the full filter-to-`Parameter` mapping.
 
 `limit`'s `maximum` is the effective [`MAX_PAGE_SIZE`](../reference/settings.md#outbound-bounds)
 — the server-wide setting, or the `max_page_size=` passed at registration.
@@ -270,83 +250,62 @@ schema entirely when the bound is `None`. It is unrelated to `PAGE_SIZE`,
 which bounds listing calls such as `tools/list` and never reaches a selector
 tool's `limit`.
 
-## Filter type mapping
-
-The schema generator reads `FilterSet.base_filters` — no FilterSet
-instantiation, so a `Meta`-driven set without an explicit queryset
-still works. Common filter classes are mapped accurately:
-
-| `django_filters` class       | JSON Schema fragment                              |
-|------------------------------|---------------------------------------------------|
-| `CharFilter`                 | `{"type": "string"}`                              |
-| `BooleanFilter`              | `{"type": "boolean"}`                             |
-| `NumberFilter`               | `{"type": "number"}`                              |
-| `DateFilter`                 | `{"type": "string", "format": "date"}`            |
-| `DateTimeFilter`             | `{"type": "string", "format": "date-time"}`       |
-| `TimeFilter`                 | `{"type": "string", "format": "time"}`            |
-| `UUIDFilter`                 | `{"type": "string", "format": "uuid"}`            |
-| `ChoiceFilter`               | `{"oneOf": [{"const": <value>, "title": <label>}, …]}`, or `{"enum": [<values>]}` when the labels only restate their values (or `{"type":"string"}` if choices are deferred) |
-| `MultipleChoiceFilter`       | `{"type": "array", "items": <the ChoiceFilter shape>}` |
-| `BaseInFilter` (CSV)         | `{"type": "array", "items": <scalar>}`           |
-| `BaseRangeFilter`            | `{"type": "object", "properties": {"min": <scalar>, "max": <scalar>}}` |
-| `ModelChoiceFilter`          | `{"type": "string"}` (FK PK; coerced by FilterSet at dispatch) |
-
-Custom filter classes that don't match any of the above fall through
-to `{}` (JSON Schema's "any value" shape) so a niche filter never
-breaks tool discovery — discoverability degrades gracefully rather
-than failing the whole `tools/list` call.
-
 ## Paginated response shape
 
-When `paginate=True`, `tools/call` wraps the rendered list in a
+When `paginate=True`, `tools/call` wraps the presented rows in a
 pagination envelope:
 
 ```json
 {
-  "items": [<rendered objects>],
+  "items": [<presented rows>],
   "page": 1,
   "totalPages": 7,
   "hasNext": true
 }
 ```
 
-Without `paginate`, the response is the rendered list directly. Choose
+Without `paginate`, the response is the presented list directly. Choose
 based on how many rows your selector can return — paginate as soon as
 the list could outgrow a single tool-call response.
 
-## Combining with `input_serializer`
+## Arguments beside the filters
 
-`spec.filter_set` only describes the filter shape. If your tool also needs
-non-filter arguments, declare them through `input_serializer=` — the
-two schemas merge in `inputSchema` and the validated payload reaches
-the selector via the kwargs pool.
+`filter_set` only describes the filter shape. If the tool also needs
+arguments that are not filters, declare them as the spec's `reads`: they
+join the FilterSet's filters in the `inputSchema`, and the selector receives
+each one by name.
 
 ```python
-class InvoiceListInput(serializers.Serializer):
-    include_drafts = serializers.BooleanField(required=False, default=False)
+from django_service_specs import Parameter, Parameters
 
 
-server.register_selector_tool(
-    name="invoices.list",
-    spec=SelectorSpec(
+def list_invoices(*, user, include_drafts: bool = False):
+    invoices = Invoice.objects.for_user(user)
+    return invoices if include_drafts else invoices.exclude(number__startswith="DRAFT-")
+
+
+server.register_tool(
+    SelectorSpec(
         kind=SelectorKind.LIST,
         selector=list_invoices,
-        output_serializer=InvoiceOutputSerializer,
+        reads=Parameters([Parameter("include_drafts", "boolean", default=False)]),
         filter_set=InvoiceFilterSet,
+        presenter=DataclassPresenter(InvoiceOutput),
+        permissions=[Unrestricted()],
     ),
-    input_serializer=InvoiceListInput,
+    name="invoices.list",
+    description="List invoices, optionally with drafts.",
     paginate=True,
 )
 ```
 
-`include_drafts` lands in `data` for the selector to consume (or any
-`**kwargs`-shaped argument the selector declares); FilterSet-driven
-properties are applied after the selector returns its base queryset.
+FilterSet-driven filters are applied after the selector returns its base
+queryset. A read named like one of the FilterSet's filters but declared
+differently is refused when the spec is built.
 
 ## When to reach for a service tool instead
 
-If the operation creates / updates / deletes rows, use
-`register_service_tool`. The service-tool path runs inside
-`transaction.atomic()` (by default) and renders through an output
-*serializer*, not a queryset pipeline. Selector tools are the
+If the operation creates / updates / deletes rows, register a `ServiceSpec`.
+A service tool runs inside `transaction.atomic()` (by default) and presents
+the service's return, not a queryset pipeline. Selector tools are the
 read-shaped sibling — they should never have side effects.

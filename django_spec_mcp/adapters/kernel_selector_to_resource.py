@@ -9,6 +9,7 @@ from django_service_specs import SelectorKind, SelectorSpec, UnsetType
 from django_spec_mcp.protocol.types.icon import Icon
 from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
 from django_spec_mcp.registry.types.utils import kernel_scope_gate
+from django_spec_mcp.types.resource_encoding import ResourceEncoding
 
 
 def kernel_selector_to_resource(
@@ -26,6 +27,8 @@ def kernel_selector_to_resource(
     cache_ttl_ms: int | UnsetType,
     completions: dict[str, Callable[..., Any]] | None,
     scopes: str | Sequence[str] | None,
+    mime_type: str,
+    encoding: ResourceEncoding,
 ) -> KernelResourceBinding:
     """Build the binding ``MCPServer.register_resource`` registers for a kernel spec.
 
@@ -33,7 +36,9 @@ def kernel_selector_to_resource(
     ``TypeError``, a ``LIST`` one, since a resource read answers one document
     for one URI, and ``scopes=()``, which reads as a gate and admits everyone.
     The URI-template variables are the arguments the read dispatches with, so
-    the spec's ``reads`` name them.
+    the spec's ``reads`` name them. ``mime_type`` and ``encoding`` are the
+    binding's as given: the presenter renders the row, and ``encoding`` says
+    whether what it returns is a JSON value, a document or bytes.
     """
     if not isinstance(spec, SelectorSpec):
         raise TypeError(
@@ -64,6 +69,8 @@ def kernel_selector_to_resource(
         always_listed=always_listed,
         cache_ttl_ms=cache_ttl_ms,
         completions=dict(completions or {}),
+        mime_type=mime_type,
+        encoding=encoding,
     )
 
 

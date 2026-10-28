@@ -2,44 +2,32 @@
 
 Tool, resource, and prompt lookup, plus session storage and SSE infrastructure.
 
-`ToolBinding` wraps a `ServiceSpec` (mutation tools);
-`SelectorToolBinding` wraps a `SelectorSpec` and exposes the read-shaped
-pipeline knobs — `filter_set` is read from the spec, and carries ordering
-with it via an `OrderingFilter` (a selector declaring its own sort
-parameter is the other ordering route, and likewise needs no knob);
-`paginate` is the one binding-level MCP mechanic. The shared
-`ToolRegistry` accepts either kind and is what `tools/list` and
-`tools/call` iterate.
+`register_tool` holds a kernel spec in a `KernelToolBinding`: a `ServiceSpec`
+for a mutation tool, a `SelectorSpec` for a read. The spec carries what the
+operation takes, who may run it and what it returns; the binding carries the
+MCP knobs, the facts of the binding rather than of the operation. A selector
+tool's read-shaped pipeline is the spec's: `filter_set` is read from it, and
+carries ordering with it via an `OrderingFilter` (a sort read the spec
+declares is the other ordering route, and likewise needs no knob);
+`paginate` is the one binding-level MCP mechanic. `register_resource` holds a
+kernel `RETRIEVE` `SelectorSpec` in a `KernelResourceBinding`. See
+[Kernel specs](../concepts.md#kernel-specs).
 
-Both bindings carry `server_arguments`, a
+A tool binding carries `server_arguments`, a
 [`ServerArguments`][django_service_specs.ServerArguments] naming the declared
 parameters the server answers for, so no caller does. `ToolRegistry.register`
-checks it, whichever registrar built the binding. See
-[Server-supplied arguments](../concepts.md#server-arguments).
+checks it. See [Server-supplied arguments](../concepts.md#server-arguments).
 
-`paginate` also decides what a `QueryParam` shapes. On a paged binding the
-serializer renders each row and the page envelope (`items`, `page`,
-`totalPages`, `hasNext`) is built around the result, so a query param applies
-to each item in `items`, never to the envelope — and its description in the
+`paginate` also decides what a spec's `shapes` apply to. On a paged binding
+the presenter renders each row and the page envelope (`items`, `page`,
+`totalPages`, `hasNext`) is built around the result, so a shape applies to
+each item in `items`, never to the envelope — and its description in the
 `inputSchema` says so. See
 [Query params on a paged tool](../concepts.md#query-param-per-item).
 
-::: django_spec_mcp.registry.types.tool_binding.ToolBinding
-::: django_spec_mcp.registry.types.selector_tool_binding.SelectorToolBinding
-
-A kernel spec registered through `register_tool` or `register_resource` is held
-by a binding of its own, which the same registries accept beside the others. See
-[Kernel specs](../concepts.md#kernel-specs).
-
+[](){#django_spec_mcp.registry.types.tool_binding.ToolBinding.always_listed}
 ::: django_spec_mcp.registry.types.kernel_tool_binding.KernelToolBinding
 ::: django_spec_mcp.registry.types.kernel_resource_binding.KernelResourceBinding
-::: rest_framework_services.types.url_kwarg.UrlKwarg
-::: rest_framework_services.types.query_param.QueryParam
-
-A `UrlKwarg` or `QueryParam` may not take a name the DRF edge fills on every
-call; registration refuses one that does.
-
-::: django_spec_mcp.types.TOOL_EDGE_SEEDS
 ::: django_spec_mcp.registry.tool_registry.ToolRegistry
 ::: django_spec_mcp.registry.types.resource_binding.ResourceBinding
 ::: django_spec_mcp.registry.resource_registry.ResourceRegistry
@@ -82,53 +70,34 @@ describes for anyone declining it.
 
 ## Bulk registration
 
-`register_tools(server, definitions, *, selector_defaults=None, service_defaults=None)`
-is an additive entry point for registering many tools in one call. Pass
-a list of `ToolDefinition.service(...)` / `ToolDefinition.selector(...)`
-instances plus per-kind `ServiceDefaults` / `SelectorDefaults` that fill
-in fields each definition leaves as `None`. Returns the resulting
-bindings in input order.
+`MCPServer.register_tools(registry, *, overrides=None)` registers every spec in
+a kernel [`SpecRegistry`][django_service_specs.SpecRegistry] as a tool, in
+order, each under its registry name and through `register_tool`, so an entry
+and a direct registration of the same spec are the same tool. `overrides` maps
+a tool name to the `register_tool` knobs for it. A key the registry does not
+hold raises `ValueError`, and a refusal of any entry registers none of them.
+See [Register tools from a shared spec registry](../recipes/register-from-spec-registry.md).
 
-::: django_spec_mcp.registry.register_tools.register_tools
-::: django_spec_mcp.registry.types.tool_definition.ToolDefinition
-::: django_spec_mcp.registry.types.service_defaults.ServiceDefaults
-::: django_spec_mcp.registry.types.selector_defaults.SelectorDefaults
-::: django_spec_mcp.types.ToolKind
-
-`ArgumentBinding` is re-exported from `djangorestframework-services`, whose
-`dispatch_spec` owns it, and `UnknownArguments` from `django-service-specs`,
-the kernel that drf-services dispatches through and that owns it; import both
-from `django_spec_mcp`. `ArgumentBinding.SPREAD_CALLER_WINS` and
-`UnknownArguments.PASSTHROUGH` are retired: registering a tool with either,
-directly, through a `ToolDefinition` or through `ServiceDefaults` /
-`SelectorDefaults`, raises `ImproperlyConfigured` naming the tool.
+`unknown_arguments=` takes the kernel's `UnknownArguments`, imported from
+`django_service_specs`: `REJECT`, the default, closes the advertised schema and
+refuses a call naming an undeclared argument.
 
 ::: django_service_specs.types.unknown_arguments.UnknownArguments
-::: rest_framework_services.types.argument_binding.ArgumentBinding
 
-## Selector-tool schema
+## Tool schemas
 
-Builds the merged `inputSchema` for selector tools — exposed for projects
-that want to introspect property generation outside of the registration flow.
-The selector's own signature (its declared parameters and an `**extras:
-Unpack[TypedDict]`, plus the FilterSet fields) is reflected via
-`djangorestframework-services`'
-[`spec_to_json_schema`](https://github.com/Artui/djangorestframework-services)
-— the same reflection the Pydantic-AI toolset consumes — with ordering /
-pagination knobs and any explicit `input_serializer` / `UrlKwarg` layered on
-top, so the shape is described the same way across transports.
-
-::: django_spec_mcp.schema.selector_tool_schema.build_selector_tool_input_schema
-
-## Output schema
-
-Builds a tool's `outputSchema` from its output serializer, kind-aware like the
-input side. `may_be_empty=True` is what `tools/list` passes for a tool that can
-present nothing (each binding answers it as `can_present_nothing`): the root
-stays an object schema and admits the `{}` such a call is served as
+What a kernel tool advertises, built from the kernel's own `spec_input_schema`
+and `spec_output_schema` with the MCP binding's answers applied: the names the
+server fills itself leave the `inputSchema`, a paginated tool gains `page` and
+`limit`, and its `outputSchema` describes the page envelope. Exposed for
+projects that want to introspect a tool's schema outside the listing.
+`tools/list` passes a tool that can present nothing (each binding answers it as
+`can_present_nothing`) an `outputSchema` whose root stays an object schema and
+admits the `{}` such a call is served as
 ([Concepts](../concepts.md#dispatch-flow)).
 
-::: django_spec_mcp.schema.output_schema.build_output_schema
+::: django_spec_mcp.schema.kernel_tool_input_schema.kernel_tool_input_schema
+::: django_spec_mcp.schema.kernel_tool_output_schema.kernel_tool_output_schema
 
 ## Session stores
 

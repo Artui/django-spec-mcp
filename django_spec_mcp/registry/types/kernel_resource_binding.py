@@ -18,6 +18,10 @@ class KernelResourceBinding(ResourceBinding[Any]):
     read any other. ``resources/read`` runs ``spec`` through the kernel's
     ``dispatch`` / ``adispatch`` instead of calling ``selector`` directly, so the
     spec's own permissions, reads, shaping and presenter answer the read.
+    ``mime_type`` and ``encoding`` are a resource's as on any binding, applied
+    to what the presenter returns: ``TEXT`` serves its ``str`` verbatim and
+    ``BLOB`` base64-encodes its bytes, on a binding built by hand as on a
+    registered one.
 
     ``selector`` and ``kind`` are the spec's, set at registration, and nothing on
     this path calls ``selector`` itself. ``permissions`` is not a constructor
