@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import pickle
 import tempfile
 from collections.abc import Callable
 from typing import Any
@@ -360,6 +361,32 @@ async def test_deleting_an_attribute_on_the_copy_leaves_the_caller_its_own() -> 
 
     assert await _call("call_tool", spec, handed) is False
     assert handed.note == "kept"  # type: ignore[attr-defined]
+
+
+async def test_an_attribute_the_caller_sets_after_the_copy_is_not_the_copys() -> None:
+    handed = _wsgi()
+
+    def spec(request: Any) -> bool:
+        handed.late = "set by the caller"  # type: ignore[attr-defined]
+        return hasattr(request, "late")
+
+    assert await _call("call_tool", spec, handed) is False
+
+
+async def test_a_copy_does_not_pickle() -> None:
+    """Pickling looks the copy's class up by its name, which finds the handed
+    request's class rather than the copy's."""
+
+    def spec(request: Any) -> str:
+        with pytest.raises(pickle.PicklingError):
+            pickle.dumps(request)
+        return "refused"
+
+    handed = _wsgi()
+
+    assert await _call("call_tool", spec, handed) == "refused"
+    # Where the request it copies pickles.
+    assert pickle.loads(pickle.dumps(handed)).path == "/view"
 
 
 _EMPTY = object()

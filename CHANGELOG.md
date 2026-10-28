@@ -273,9 +273,11 @@ carries; releases up to 0.54.0 are in
   drains it for the caller, and a body no spec reads is left unread, exactly as
   if the request had been handed over. Upload handlers Django initialises
   during a call are bound to the handed request, so a handler reading
-  `self.request.user` reads the caller's. Any other attribute is the copy's own
-  from the moment it is made: one a spec sets stays on the copy, and one the
-  caller sets afterwards is not seen by it. The copy is an instance of a
+  `self.request.user` reads the caller's. Every other attribute starts as the
+  very object the handed request holds: one a spec sets or deletes is rebound
+  on the copy alone, and one the caller sets afterwards is not seen by it, but
+  an object a spec mutates through one, such as `META` or the session, is the
+  caller's. The copy is an instance of a
   subclass of the handed request's class under the same name, so `isinstance`
   holds where `type(request) is WSGIRequest` does not, and it does not pickle.
   A DRF `Request` is copied with the `HttpRequest` it wraps, whose `user` its

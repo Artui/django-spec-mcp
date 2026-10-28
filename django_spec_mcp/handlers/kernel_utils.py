@@ -254,8 +254,9 @@ _REQUEST_SHARES: frozenset[str] = frozenset(
 # DRF's ``Request`` parse cache, the same way: what ``data``, ``POST``,
 # ``FILES`` and ``stream`` cache under these names, so a spec parsing through a
 # copy leaves the parse on the caller's wrapper rather than a consumed stream
-# for it to parse again. ``_content_type`` is written only in ``__init__``,
-# so a copy can never hold a value of its own for it, and it is not here.
+# for it to parse again. ``_content_type`` is never written by a parse: only
+# ``__init__`` writes it, and DRF's ``clone_request`` on the new request it
+# builds, so a copy never holds a value of its own for it, and it is not here.
 _WRAPPER_SHARES: frozenset[str] = frozenset({"_data", "_files", "_full_data", "_stream"})
 
 
@@ -371,20 +372,23 @@ def copy_request(request: Any, classes: dict[tuple[type, frozenset[str]], type])
     write them on ``self``. Everything else is a shallow copy of the
     ``__dict__``, taken onto an instance made with ``object.__new__``, which
     skips ``__init__`` and the ``__reduce_ex__`` route ``copy.copy`` takes.
-    So ``META`` and the session are the same objects, but every other
-    attribute is the copy's from the moment it is made: besides the user
-    the call seats, an attribute a spec sets or deletes on the copy stays on
-    the copy
+    So every other attribute holds, when the copy is made, the very object
+    the handed request's does, and the line falls between rebinding and
+    mutating: an attribute a spec sets or deletes on the copy, the user the
+    call seats among them, is rebound on the copy alone
     (``test_deleting_an_attribute_on_the_copy_leaves_the_caller_its_own``),
-    and one the caller sets on its request after the copy is made is not
-    seen by it.
+    and one the caller sets after the copy is made is not seen by it
+    (``test_an_attribute_the_caller_sets_after_the_copy_is_not_the_copys``);
+    but an object a spec mutates through one, ``META``, the session, the
+    message storage, the cookies once read, is the caller's own.
 
     The copy is an instance of a subclass of the handed request's class,
     under its name, qualified name and module, made once per server and kept
     in ``classes`` (``test_a_copy_reads_as_the_request_it_copies``). So
     ``isinstance(copy, WSGIRequest)`` holds where ``type(copy) is
     WSGIRequest`` does not, and a copy does not pickle: pickling looks its
-    class up by name and finds the handed request's.
+    class up by name and finds the handed request's
+    (``test_a_copy_does_not_pickle``).
 
     A wrapped request, DRF's ``Request``, keeps its ``HttpRequest`` as
     ``_request`` and its ``user`` setter writes through to it, so the wrapped
