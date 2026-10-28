@@ -206,7 +206,8 @@ The direct paths are direct for structural reasons, not by neglect:
   spec it was lifted from, so there is no spec to dispatch. One that needs nothing
   from drf-services (`reads_through_drfs` is false: no output serializer, no
   `kwargs` provider, no `DRFPermissionAdapter`, and no selector parameter a keyword
-  could fill, which every UI view is) reads on the kernel alone: `carry_token`,
+  could fill, which every UI view is unless it holds a `DRFPermissionAdapter`)
+  reads on the kernel alone: `carry_token`,
   `base_pool`, `run_selector`, then `build_resource_contents` to encode. Every other
   one reads through `read_drfs_resource`, which composes
   `base_serializer_context` for rendering and resolves the output declaration

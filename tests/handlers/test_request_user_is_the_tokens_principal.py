@@ -13,6 +13,7 @@ a client logged in as someone the token does not name.
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import Iterator
 from typing import Any
 
@@ -80,6 +81,15 @@ def _server(seen: list[Any], drfs_read: list[Any] | None = None) -> MCPServer:
         completions={"topic": lambda request: [f"{_whoami(request)}/{_async_name(request)}"]},
     )
     server.register_ui_resource(name="board", uri="ui://board.html", html="<p>board</p>")
+    server.register_resource(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=lambda *, request: {"user": f"{_whoami(request)}/{_async_name(request)}"},
+            permissions=[Unrestricted()],
+        ),
+        name="kernel_read",
+        uri_template="k://who",
+    )
     # A selector taking ``request`` routes the read through drf-services, whose
     # DRF ``Request`` wraps a copy of the request it is built over.
     kept = drfs_read if drfs_read is not None else []
@@ -130,12 +140,14 @@ def _answers(client: Client, *, token_user: str | None, is_async: bool) -> dict[
         seen.clear()
         caller.post("resources/read", {"uri": "ui://board.html"})
         caller.post("resources/read", {"uri": "d://who"})
+        kernel_read = caller.post("resources/read", {"uri": "k://who"}).json()["result"]
     return {
         "tool": tool,
         "prompt": prompt["messages"][0]["content"]["text"],
         "completion": completion["completion"]["values"][0],
         "view_seed": f"{_whoami(seen[0])}/{_async_name(seen[0])}",
         "drfs_read": f"{_whoami(drfs_read[0])}/{_async_name(drfs_read[0])}",
+        "kernel_read": json.loads(kernel_read["contents"][0]["text"])["user"],
     }
 
 
@@ -146,7 +158,8 @@ def test_every_path_sees_the_tokens_principal_not_the_sessions(
     answers = _answers(client, token_user="token-caller", is_async=is_async)
 
     assert answers == dict.fromkeys(
-        ("tool", "prompt", "completion", "view_seed", "drfs_read"), "token-caller/token-caller"
+        ("tool", "prompt", "completion", "view_seed", "drfs_read", "kernel_read"),
+        "token-caller/token-caller",
     )
 
 
@@ -157,7 +170,8 @@ def test_a_caller_the_token_names_no_one_is_anonymous_not_the_sessions_user(
     answers = _answers(client, token_user=None, is_async=is_async)
 
     assert answers == dict.fromkeys(
-        ("tool", "prompt", "completion", "view_seed", "drfs_read"), "anonymous/anonymous"
+        ("tool", "prompt", "completion", "view_seed", "drfs_read", "kernel_read"),
+        "anonymous/anonymous",
     )
 
 

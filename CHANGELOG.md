@@ -174,12 +174,21 @@ carries; releases up to 0.54.0 are in
   the MCP endpoint's own query string, and there is no `request.query_params`.
   `request.user` is the token's principal, as before, and never a session
   cookie's user: `AnonymousUser` when the token names no one. Declare `user` or
-  read `request.user`, either works. A pool seed declaring `request` is handed
-  the same `HttpRequest` on `resources/read` of a resource that needs nothing
-  from drf-services: no output serializer, no `kwargs` provider, no
-  `DRFPermissionAdapter` and a selector taking nothing, which every view
-  registered with `register_ui_resource` is. Such a read's answer is otherwise
-  unchanged.
+  read `request.user`, either works. The same holds for a kernel tool's and a
+  kernel resource's `call_context["request"].user`, and for the request a
+  resource read routed through drf-services builds on. A pool seed declaring
+  `request` is handed the same `HttpRequest` on `resources/read` of a resource
+  that needs nothing from drf-services: no output serializer, no `kwargs`
+  provider, no `DRFPermissionAdapter` and a selector taking nothing, which
+  every view registered with `register_ui_resource` is unless it holds a
+  `DRFPermissionAdapter`. Such a read's answer is otherwise unchanged.
+- **An in-process call never writes to a request it is handed.** `call_tool`
+  and `acall_tool` work on a shallow copy of `request=`, whose `user` is the
+  `user=` the call runs as, so a view handing its own request keeps serving as
+  its user after the call, and concurrent calls sharing one request each see
+  their own. `acall_tool` used to hand the request itself through, and sync
+  `call_tool` handed a kernel tool's spec a request whose `user` could name
+  someone other than `user=`.
 
 ### Removed
 

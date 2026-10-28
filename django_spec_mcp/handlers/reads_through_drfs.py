@@ -18,9 +18,10 @@ def reads_through_drfs(binding: ResourceBinding) -> bool:
     Asked by both ``resources/read`` handlers of a binding ``runs_on_kernel``
     turned down. A binding answering ``False`` needs nothing drf-services
     builds, and reads with no offline request or view, no object-level guard
-    and no serializer: a view registered with ``register_ui_resource`` always
-    does, having no output serializer, no ``kwargs`` provider and a selector
-    taking nothing (``ui_view_to_resource`` refuses one that takes anything).
+    and no serializer: a view registered with ``register_ui_resource`` does,
+    having no output serializer, no ``kwargs`` provider and a selector taking
+    nothing (``ui_view_to_resource`` refuses one that takes anything), unless
+    its ``permissions`` hold a ``DRFPermissionAdapter``.
     A binding needs drf-services, and answers ``True``, when it holds any of:
 
     - an ``output_serializer``, which only drf-services renders
