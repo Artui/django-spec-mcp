@@ -7,14 +7,16 @@ the two paths share only the helpers they call by name.
 from __future__ import annotations
 
 import json
+import os
 from contextlib import suppress
 from dataclasses import dataclass, replace
 from io import BytesIO
 from itertools import islice
 from typing import Any
 
+from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
-from django.core.exceptions import ImproperlyConfigured, RequestDataTooBig
+from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import (
     DEFAULT_PAGE_SIZE,
     DispatchError,
@@ -221,35 +223,48 @@ def seat(request: Any, principal: Any) -> Any:
 
 
 def copy_request(request: Any) -> Any:
-    """A shallow copy of ``request`` for one in-process call to write to.
+    """A copy of ``request`` for one in-process call to write to.
 
     A request an in-process caller hands ``call_tool`` / ``acall_tool`` is the
-    caller's own, often the very request a view is serving, so nothing here
-    writes to it: writing the call's user onto it would leave the view serving
-    as someone else after the call
+    caller's own, often the very request a view is serving, so the call's user
+    is never written to it: writing it there would leave the view serving as
+    someone else after the call
     (``test_an_in_process_call_leaves_the_handed_request_as_it_was``), and two
     concurrent calls sharing it would each see the other's
     (``test_concurrent_in_process_calls_on_one_request_keep_their_own_users``).
 
     The ``__dict__`` is transplanted onto an instance made with
     ``object.__new__``, drf-services' recipe for the same copy, which skips
-    ``__init__`` and the ``__reduce_ex__`` route ``copy.copy`` takes. The clone
-    shares ``META``, the session, ``GET`` and the cookies with the original,
-    and gets its own of the two things a call can consume or write through:
+    ``__init__`` and the ``__reduce_ex__`` route ``copy.copy`` takes. The copy
+    shares ``META``, ``GET``, the cookies, the session and any ``POST`` or
+    ``FILES`` already parsed, and gets its own of what a call can consume or
+    write through:
 
-    - **The body.** An unread body is read on the original first and the clone
+    - **A body within the upload limit.** An unread body whose size is known
+      before anything is read and is within ``DATA_UPLOAD_MAX_MEMORY_SIZE`` is
+      read once on the original, as any first read caches it, and the copy
       reads a stream of its own over it, since reading through a shared
       ``_stream`` drained a WSGI original and closed an ASGI one
       (``test_a_spec_reading_the_body_leaves_the_handed_requests_body_intact``,
       ``test_a_spec_draining_the_stream_leaves_the_originals_stream_whole``).
-      A body over ``DATA_UPLOAD_MAX_MEMORY_SIZE`` is left unread and shared,
-      so a call that never reads it is not refused for it
-      (``test_an_oversized_unread_body_does_not_refuse_the_call``).
+      Any other body is left unread and **shared**, so a spec reading it
+      consumes it for the caller (``test_a_body_of_unknown_size_is_shared``):
+      one over the limit
+      (``test_an_oversized_body_is_left_unread_for_the_caller``), and one whose
+      size is unknown, a malformed or negative ``CONTENT_LENGTH`` or none over a
+      stream that cannot seek. Reading those is what Django refuses, or leaves
+      truncated or at the end of its stream. A pre-read that fails, a client
+      gone mid-body, is not raised here, where a call that never reads the
+      body would fail for it: the stream is gone either way, and the caller's
+      ``body`` then raises ``RawPostDataException``
+      (``test_an_unreadable_body_does_not_fail_the_call``).
     - **A wrapped request.** A DRF ``Request`` keeps its ``HttpRequest`` as
       ``_request`` and its ``user`` setter writes through to it, so the
       wrapped request is copied too, and a stream DRF opened over it is
       re-pointed at the copy (``test_a_handed_drf_request_keeps_its_user``,
-      ``test_a_drf_request_whose_stream_is_open_reads_through_its_copy``).
+      ``test_a_drf_request_whose_stream_is_open_reads_through_its_copy``); a
+      stream DRF found empty stays ``None``
+      (``test_a_drf_request_with_an_empty_body_still_parses_as_empty``).
     """
     own = request.__dict__
     clone: Any = object.__new__(type(request))
@@ -262,13 +277,46 @@ def copy_request(request: Any) -> Any:
     # ``_read_started`` is set by a request that has a stream at all, and is
     # true once anything has read it, the body included; a bare
     # ``HttpRequest()`` has none and no body to read.
-    if own.get("_read_started") is False:
-        with suppress(RequestDataTooBig):
+    if own.get("_read_started") is False and _body_within_limit(request):
+        with suppress(OSError):
             request.body  # noqa: B018 - reading caches ``_body`` on the original
     clone.__dict__.update(own)
     if "_body" in own:
         clone._stream = BytesIO(request._body)
     return clone
+
+
+def _body_within_limit(request: Any) -> bool:
+    """Whether ``request``'s unread body is known, before reading it, to fit the limit.
+
+    Its size is the declared ``CONTENT_LENGTH`` and, over a stream that can
+    seek, what is left of the stream, measured and then returned to where it
+    was. Both are checked, as Django's own ``body`` checks both: an ASGI
+    request's stream is the spooled body itself, whose length may be
+    understated (``test_an_understated_length_over_the_limit_is_left_unread``).
+    A length that is not a non-negative integer, or no length over a stream
+    that cannot seek, is a size not known, and so not known to fit.
+    """
+    sizes: list[int] = []
+    length = request.META.get("CONTENT_LENGTH")
+    if length:
+        try:
+            declared = int(length)
+        except ValueError:
+            return False
+        if declared < 0:
+            return False
+        sizes.append(declared)
+    stream = request._stream
+    seekable = getattr(stream, "seekable", None)
+    if seekable is not None and seekable():
+        position = stream.tell()
+        sizes.append(stream.seek(0, os.SEEK_END) - position)
+        stream.seek(position)
+    if not sizes:
+        return False
+    limit = settings.DATA_UPLOAD_MAX_MEMORY_SIZE
+    return limit is None or max(sizes) <= limit
 
 
 def admits_without_arguments(

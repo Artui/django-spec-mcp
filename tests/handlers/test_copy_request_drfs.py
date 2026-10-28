@@ -10,6 +10,7 @@ from django.contrib.auth.models import AnonymousUser
 from django.http import HttpRequest
 from django.test import RequestFactory
 from django_service_specs import SelectorKind, SelectorSpec, Unrestricted
+from rest_framework.parsers import JSONParser
 from rest_framework.request import Request
 
 from django_spec_mcp import MCPServer
@@ -46,11 +47,19 @@ def _server() -> MCPServer:
         ),
         name="drain",
     )
+    server.register_tool(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=lambda *, request: {"data": dict(request.data)},
+            permissions=[Unrestricted()],
+        ),
+        name="data",
+    )
     return server
 
 
 def _wrapped(user: Any, inner: HttpRequest | None = None) -> Request:
-    handed = Request(inner if inner is not None else HttpRequest())
+    handed = Request(inner if inner is not None else HttpRequest(), parsers=[JSONParser()])
     # Through DRF's setter, which writes the wrapped request's ``user`` too.
     handed.user = user
     return handed
@@ -84,3 +93,16 @@ def test_a_drf_request_whose_stream_is_open_reads_through_its_copy() -> None:
 
     assert result.structured_content == {"read": _BODY.decode()}
     assert handed.stream.read() == _BODY
+
+
+def test_a_drf_request_with_an_empty_body_still_parses_as_empty() -> None:
+    """DRF opens no stream over an empty body, ``_stream`` being ``None``; the
+    copy keeps that rather than pointing it at a request with nothing to
+    parse."""
+    inner = RequestFactory().post("/view", data=b"", content_type="application/json")
+    handed = _wrapped(AnonymousUser(), inner)
+    assert handed.stream is None
+
+    result = _server().call_tool("data", user=None, request=handed)
+
+    assert result.structured_content == {"data": {}}
