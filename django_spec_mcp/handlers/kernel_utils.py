@@ -170,10 +170,12 @@ def carry_token(request: Any, token: Any) -> Any:
     Hangs the resolved ``TokenInfo`` on ``request`` as ``mcp_token``, and sets
     ``request.user`` (and ``request.auser``, its async reader) to the token's
     principal, ``principal_of(token.user)``: the user the call dispatches as,
-    or an ``AnonymousUser`` when the token names none. Every request this
-    package hands a consumer's code comes from here: a kernel spec's
-    ``call_context``, a prompt's ``render``, a completer and a pool seed on a
-    resource read. A spec reading the caller's token (its scopes, its
+    or an ``AnonymousUser`` when the token names none. The request a kernel
+    spec's ``call_context``, a prompt's ``render``, a completer, a pool seed on
+    a resource read and a read routed through drf-services are handed comes
+    from here, or, for sync ``call_tool``'s kernel tool, which has no token,
+    from ``seat`` on a copy. A drf-services tool call builds its DRF request
+    over the transport's own. A spec reading the caller's token (its scopes, its
     audience) reads it off this request, which is where a permission check
     over HTTP finds it.
 
