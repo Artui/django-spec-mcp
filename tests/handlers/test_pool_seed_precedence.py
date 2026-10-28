@@ -109,14 +109,15 @@ def test_prompt_argument_named_user_cannot_replace_the_caller() -> None:
 
 
 def test_prompt_argument_named_request_cannot_replace_the_request() -> None:
-    """The same key works for ``request``, which is what a ``render`` reading
-    ``request.user`` would otherwise be fooled by."""
+    """The same key works for ``request``: an argument of that name does not
+    replace the transport's request, whose ``user`` is the caller, so a
+    ``render`` reading ``request.user`` is not fooled by it."""
     seen: dict[str, Any] = {}
 
     server = _server()
 
-    def render(*, request: Any, topic: str) -> str:
-        seen["user"] = request.user
+    def render(*, request: Any, user: Any, topic: str) -> str:
+        seen.update(request=request, user=user)
         return topic
 
     server.register_prompt(
@@ -125,11 +126,14 @@ def test_prompt_argument_named_request_cannot_replace_the_request() -> None:
         arguments=[PromptArgument(name="topic", required=True)],
         permissions=[_AlwaysAllow()],
     )
+    context = _ctx(server)
 
     handle_prompts_get(
-        {"name": "scoped", "arguments": {"topic": "x", "request": "spoofed"}}, _ctx(server)
+        {"name": "scoped", "arguments": {"topic": "x", "request": "spoofed"}}, context
     )
 
+    assert seen["request"] is context.http_request
+    assert seen["request"].user == _CALLER
     assert seen["user"] == _CALLER
 
 

@@ -22,7 +22,7 @@ from django_spec_mcp.types.resource_encoding import ResourceEncoding
 # outcomes and is indistinguishable from success.
 _UNCARRIED_SPEC_FIELDS: tuple[tuple[str, Any], ...] = (
     # ``affordances`` answers are added by drf-services' renderer, and a resource
-    # renders in ``build_resource_contents`` instead, so a read would carry none.
+    # renders in ``render_drfs_resource_output`` instead, so a read would carry none.
     ("affordances", None),
     ("allow_none", False),
     ("annotations", None),

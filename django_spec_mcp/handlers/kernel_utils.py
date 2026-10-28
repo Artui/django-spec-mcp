@@ -170,15 +170,255 @@ def unguarded_grant(binding: Any, principal: Any, config: MCPConfig) -> Grant | 
 
 
 def carry_token(request: Any, token: Any) -> Any:
-    """Hang the resolved ``TokenInfo`` on ``request`` as ``mcp_token``, and return it.
+    """Make ``request`` the caller's: the token on it, and its principal as the user.
 
-    A spec reading the caller's token (its scopes, its audience) reads it off
-    the ``request`` in its ``call_context``, which is where a permission check
-    over HTTP finds it. Only the wire calls this: off HTTP there is neither a
-    request nor a token to carry.
+    Hangs the resolved ``TokenInfo`` on ``request`` as ``mcp_token``, and sets
+    ``request.user`` (and ``request.auser``, its async reader) to the token's
+    principal, ``principal_of(token.user)``: the user the call dispatches as,
+    or an ``AnonymousUser`` when the token names none. The request a kernel
+    spec's ``call_context``, a prompt's ``render``, a completer, a pool seed on
+    a resource read and a read routed through drf-services are handed comes
+    from here, or, for sync ``call_tool``'s kernel tool, which has no token,
+    from ``seat`` on a copy. A drf-services tool call builds its DRF request
+    over the transport's own. A spec reading the caller's token (its scopes, its
+    audience) reads it off this request, which is where a permission check
+    over HTTP finds it.
+
+    **The user is the token's, never the endpoint's.** Over the wire the
+    project's middleware resolved ``request.user`` from whatever the request
+    carried, a session cookie included, and that can name someone other than
+    the bearer token's principal, so code authorizing on ``request.user``
+    judged the wrong caller
+    (``test_every_path_sees_the_tokens_principal_not_the_sessions``); with no
+    principal it is anonymous, not the session's user
+    (``test_a_caller_the_token_names_no_one_is_anonymous_not_the_sessions_user``).
+    drf-mcp's DRF ``Request`` carried the token's user, and this keeps that.
+
+    The wire's inbound request is written to rather than copied, because a spec
+    reading ``call_context["request"]`` is handed the very request the
+    transport received
+    (``test_a_resource_permission_reads_the_request_the_read_arrived_on``).
+    Every call on one request carries the one token the transport resolved for
+    it, a batch's and a stream's included, so a second write sets what the
+    first did. The transport makes that first write the moment the request
+    authenticates (``carry_principal``), so an ``MCPPermission`` judged before
+    any handler runs sees the same principal. An in-process call's is a copy
+    already, made where its context is (``copy_request``).
     """
     request.mcp_token = token
+    return seat(request, principal_of(token.user))
+
+
+def seat(request: Any, principal: Any) -> Any:
+    """Set ``principal`` as ``request``'s user, for its sync and async readers both.
+
+    ``AuthenticationMiddleware`` sets ``request.auser`` beside ``request.user``,
+    and a request keeping the middleware's would answer an async reader with the
+    session's user while the sync one names the caller, so both are written.
+    """
+
+    async def auser() -> Any:
+        return principal
+
+    request.user = principal
+    request.auser = auser
     return request
+
+
+# What a handed request's body and parse state are stored under, which a copy
+# reads and writes on the handed request rather than holding its own: the
+# names ``HttpRequest`` reads and writes on ``self`` from Django 4.2 to 6.1, in
+# ``body``, ``read``, ``_load_post_and_files`` and the ``encoding``,
+# ``upload_handlers`` and ``multipart_parser_class`` setters, which a method
+# override on the copy could not reach. The configuration names go with the
+# parse they configure: the ``encoding`` setter discards the parsed ``POST``
+# and the decoded ``GET``, so ``GET`` is shared with it, and the other two
+# refuse once ``FILES`` is parsed, so a copy configuring itself alone would
+# discard or refuse on the caller's parse. ``ASGIRequest``'s
+# ``_post_parse_error`` is set in ``__init__`` and read by nothing, so it is
+# not here. The test holding each name is on ``copy_request``.
+_REQUEST_SHARES: frozenset[str] = frozenset(
+    {
+        "_body",
+        "_stream",
+        "_read_started",
+        "_post",
+        "_files",
+        "_encoding",
+        "GET",
+        "_upload_handlers",
+        "_multipart_parser_class",
+    }
+)
+
+# DRF's ``Request`` parse cache, the same way: what ``data``, ``POST``,
+# ``FILES`` and ``stream`` cache under these names, so a spec parsing through a
+# copy leaves the parse on the caller's wrapper rather than a consumed stream
+# for it to parse again. ``_content_type`` is never written by a parse: only
+# ``__init__`` writes it, and DRF's ``clone_request`` on the new request it
+# builds, so a copy never holds a value of its own for it, and it is not here.
+_WRAPPER_SHARES: frozenset[str] = frozenset({"_data", "_files", "_full_data", "_stream"})
+
+
+class _SharesBodyState:
+    """The base of a copy ``copy_request`` makes, sharing its shared names with the handed request.
+
+    Every read, write and delete of a name in ``_shared_names`` lands on the
+    handed request, held as ``_shares_with``; every other name is the copy's
+    own. A value written to a shared name that is itself a copy is written as
+    the request it copies, so the handed request never holds a copy, and with
+    it the call's user: DRF opens its stream over the request it wraps, which
+    for a copy is the wrapped request's copy.
+    """
+
+    _shared_names: frozenset[str]
+
+    def __getattribute__(self, name: str) -> Any:
+        return _holder(self, name).__getattribute__(name)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name in type(self)._shared_names and isinstance(value, _SharesBodyState):
+            value = object.__getattribute__(value, "_shares_with")
+        _holder(self, name).__setattr__(name, value)
+
+    def __delattr__(self, name: str) -> None:
+        _holder(self, name).__delattr__(name)
+
+    def _initialize_handlers(self) -> None:
+        """Initialise the handed request's upload handlers, bound to it rather than to the copy.
+
+        Django's ``upload_handlers`` getter fills ``_upload_handlers``, which is
+        shared, with handlers ``load_handler`` binds to ``self``. Bound to the
+        copy, they would stay in the caller's request, carrying the call's user
+        into every parse it runs afterwards
+        (``test_upload_handlers_a_spec_reads_are_bound_to_the_handed_request``).
+        So a multipart parse a spec triggers runs handlers bound to the handed
+        request, and a handler reading ``self.request.user`` reads the
+        caller's, as a parse through a DRF ``Request`` does.
+        """
+        object.__getattribute__(self, "_shares_with")._initialize_handlers()
+
+
+def _holder(clone: _SharesBodyState, name: str) -> Any:
+    """What ``name`` is read on for ``clone``: the handed request, or the copy itself."""
+    if name in type(clone)._shared_names:
+        return object.__getattribute__(clone, "_shares_with")
+    return super(_SharesBodyState, clone)
+
+
+def _sharing_class(
+    cls: type, shared: frozenset[str], classes: dict[tuple[type, frozenset[str]], type]
+) -> type:
+    """A subclass of ``cls`` whose instances share ``shared`` with the request they copy.
+
+    It takes ``cls``'s name, qualified name and module, so a copy's ``repr``
+    and any message naming its type read as the handed request's.
+
+    Made once per server and kept in ``classes``, the server's own, rather
+    than per copy or in a module-level cache, which the package does not keep.
+    A class is cyclic, so one made per copy outlives it until the collector
+    runs, and back-to-back calls pile them up; making one also runs the
+    request class's ``__init_subclass__``. Two threads making the first one at
+    once each make one, and ``setdefault`` keeps the first.
+    """
+    made = classes.get((cls, shared))
+    if made is None:
+        namespace = {
+            "__module__": cls.__module__,
+            "__qualname__": cls.__qualname__,
+            "_shared_names": shared,
+        }
+        made = classes.setdefault(
+            (cls, shared), type(cls.__name__, (_SharesBodyState, cls), namespace)
+        )
+    return made
+
+
+def copy_request(request: Any, classes: dict[tuple[type, frozenset[str]], type]) -> Any:
+    """A copy of ``request`` for one in-process call to write its user to.
+
+    A request an in-process caller hands ``call_tool`` / ``acall_tool`` is the
+    caller's own, often the very request a view is serving, so the call's user
+    is never written to it: writing it there would leave the view serving as
+    someone else after the call
+    (``test_an_in_process_call_leaves_the_handed_request_as_it_was``), and two
+    concurrent calls sharing it would each see the other's
+    (``test_concurrent_in_process_calls_on_one_request_keep_their_own_users``,
+    ``test_concurrent_calls_on_one_asgi_request_keep_their_own_users``).
+
+    The copy's body and parse state are the handed request's, read and
+    written there, so a spec reading or parsing it does so for the caller
+    exactly as if the request itself had been handed over: a body a spec
+    reads is cached for the caller, a stream it drains is drained for the
+    caller, and a body it does not read is left unread. The names shared are
+    ``_REQUEST_SHARES`` above, each held by a test:
+
+    - ``_body``, ``_stream``:
+      ``test_a_spec_reading_the_body_reads_it_for_the_caller``;
+    - ``_read_started``:
+      ``test_a_spec_draining_the_stream_drains_it_for_the_caller``;
+    - ``_post``, ``_files``:
+      ``test_a_form_a_spec_parsed_is_parsed_for_the_caller``;
+    - ``_encoding``, ``GET``: ``test_an_encoding_a_spec_sets_is_the_callers``;
+    - ``_upload_handlers``:
+      ``test_upload_handlers_a_spec_sets_are_the_callers``, the handlers
+      Django initialises being bound to the handed request
+      (``_SharesBodyState._initialize_handlers``);
+    - ``_multipart_parser_class``, Django 6.1's:
+      ``test_a_multipart_parser_a_spec_sets_is_the_callers``.
+
+    They are shared by name, through the copy's class, rather than by
+    overriding ``body`` or ``POST``, because Django's own methods read and
+    write them on ``self``. Everything else is a shallow copy of the
+    ``__dict__``, taken onto an instance made with ``object.__new__``, which
+    skips ``__init__`` and the ``__reduce_ex__`` route ``copy.copy`` takes.
+    So every other attribute holds, when the copy is made, the very object
+    the handed request's does, and the line falls between rebinding and
+    mutating: an attribute a spec sets or deletes on the copy, the user the
+    call seats among them, is rebound on the copy alone
+    (``test_deleting_an_attribute_on_the_copy_leaves_the_caller_its_own``),
+    and one the caller sets after the copy is made is not seen by it
+    (``test_an_attribute_the_caller_sets_after_the_copy_is_not_the_copys``);
+    but an object a spec mutates through one, ``META``, the session, the
+    message storage, the cookies once read, is the caller's own.
+
+    The copy is an instance of a subclass of the handed request's class,
+    under its name, qualified name and module, made once per server and kept
+    in ``classes`` (``test_a_copy_reads_as_the_request_it_copies``). So
+    ``isinstance(copy, WSGIRequest)`` holds where ``type(copy) is
+    WSGIRequest`` does not, and a copy does not pickle: pickling looks its
+    class up by name and finds the handed request's
+    (``test_a_copy_does_not_pickle``).
+
+    A wrapped request, DRF's ``Request``, keeps its ``HttpRequest`` as
+    ``_request`` and its ``user`` setter writes through to it, so the wrapped
+    request is copied too (``test_a_wrapped_request_keeps_its_user``), and the
+    wrapper shares its parse cache, ``_WRAPPER_SHARES``, with the handed
+    wrapper (``test_a_wrapped_requests_parse_is_the_callers``). A copy handed
+    on is copied from the request it copies, so a spec passing its request to
+    a further call shares the one body
+    (``test_a_spec_handing_its_request_on_shares_the_callers_body``).
+    """
+    if isinstance(request, _SharesBodyState):
+        cls: type = type(request)
+        shared = type(request)._shared_names
+        source = object.__getattribute__(request, "_shares_with")
+    else:
+        shared = _WRAPPER_SHARES if "_request" in request.__dict__ else _REQUEST_SHARES
+        cls = _sharing_class(type(request), shared, classes)
+        source = request
+    clone: Any = object.__new__(cls)
+    # Taken whole before it is filtered: another thread's call may be writing
+    # the handed request's shared names while this one copies it, and one
+    # C-level copy cannot see a write mid-way where iterating the live
+    # ``__dict__`` raises for it
+    # (``test_a_request_written_to_while_it_is_copied_is_copied_whole``).
+    own = request.__dict__.copy()
+    vars(clone).update((name, value) for name, value in own.items() if name not in shared)
+    object.__setattr__(clone, "_shares_with", source)
+    if "_request" in own:
+        clone._request = copy_request(clone._request, classes)
+    return clone
 
 
 def admits_without_arguments(
@@ -803,6 +1043,7 @@ __all__ = [
     "bound_unpaginated_rows",
     "call_context",
     "carry_token",
+    "copy_request",
     "invalid_arguments_error",
     "not_found_result",
     "on_the_wire",
@@ -811,6 +1052,7 @@ __all__ = [
     "present_tool_result",
     "resource_read_result",
     "resource_refusal",
+    "seat",
     "tool_result",
     "unguarded_grant",
 ]

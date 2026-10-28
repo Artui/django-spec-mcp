@@ -73,6 +73,7 @@ def call_spec_tool(
     config: MCPConfig,
     conventions: AgentConventions,
     pool_seeds: PoolSeeds = DEFAULT_POOL_SEEDS,
+    request_classes: dict[tuple[type, frozenset[str]], type],
 ) -> ToolResult:
     """Invoke a spec-backed tool through the transport-neutral dispatch core.
 
@@ -93,7 +94,8 @@ def call_spec_tool(
     wire handlers hand it, so a spec reading a registered seed runs the same
     in-process as over HTTP.
     ``conventions`` is the owning server's too, so a refused argument is worded
-    here as the wire words it.
+    here as the wire words it, and so is ``request_classes``, the classes a
+    kernel tool's copy of a handed request is made from (``copy_request``).
     """
     # The binding's ``server_arguments`` in place before anything below reads
     # the arguments, as on the wire (``apply_tool_server_arguments``).
@@ -109,6 +111,7 @@ def call_spec_tool(
             config=config,
             conventions=conventions,
             pool_seeds=pool_seeds,
+            request_classes=request_classes,
         )
     binding = cast(ToolBinding | SelectorToolBinding, binding)
     spec = binding.spec

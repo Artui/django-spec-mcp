@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 from django.http import HttpRequest
+from django_service_specs import PoolSeeds
 
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
@@ -13,6 +14,7 @@ from django_spec_mcp.handlers.handle_resources_list import handle_resources_list
 from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
 from django_spec_mcp.handlers.handle_resources_read_async import handle_resources_read_async
 from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.registry.types.ui_csp import UICsp
 from django_spec_mcp.registry.types.ui_resource_meta import UIResourceMeta
 from django_spec_mcp.server.mcp_server import MCPServer
@@ -20,6 +22,7 @@ from django_spec_mcp.transport.in_memory_session_store import InMemorySessionSto
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from django_spec_mcp.types.ui_meta_key import UI_META_KEY
 from django_spec_mcp.types.ui_resource_mime_type import UI_RESOURCE_MIME_TYPE
+from tests.utils import RefusingRateLimit
 
 VIEW = "<!doctype html><h1>Invoices</h1>"
 URI = "ui://invoices/table.html"
@@ -163,3 +166,128 @@ async def test_a_body_template_backed_view_serves_a_whole_document(reader: str) 
     assert text.startswith("<!doctype html>")
     assert '<div id="rows">Waiting for results.</div>' in text
     assert "ui/notifications/initialized" in text
+
+
+# ---------- the path a view reads on ----------
+
+
+async def _read(reader: str, ctx: MCPCallContext) -> Any:
+    if reader == "sync":
+        return handle_resources_read({"uri": URI}, ctx)
+    return await handle_resources_read_async({"uri": URI}, ctx)
+
+
+@pytest.mark.parametrize("reader", ["sync", "async"])
+async def test_a_view_reads_without_an_offline_request_or_view(
+    reader: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A view's read builds nothing of drf-services: no offline request and view."""
+
+    def _refuse(*_: Any, **__: Any) -> Any:
+        raise AssertionError("a view's read built an offline request and view")
+
+    monkeypatch.setattr("django_spec_mcp.auth.permissions.utils.DispatchShape.build", _refuse)
+
+    out = await _read(reader, _ctx(_server()))
+
+    assert _contents(out)["text"] == VIEW
+
+
+@pytest.mark.parametrize("reader", ["sync", "async"])
+async def test_a_pool_seed_resolved_on_a_view_read_is_handed_the_transports_request(
+    reader: str,
+) -> None:
+    # The server's seeds are resolved into every read's pool, a view's too, and
+    # one declaring ``request`` is handed the transport's ``HttpRequest`` with
+    # the token on it, as on a kernel tool call, rather than a DRF ``Request``.
+    seen: list[Any] = []
+
+    def tenant(request: Any) -> str:
+        seen.append(request)
+        return "acme"
+
+    server = _server()
+    http_request = HttpRequest()
+    ctx = MCPCallContext(
+        http_request=http_request,
+        token=TokenInfo(user=None),
+        tools=server.tools,
+        resources=server.resources,
+        prompts=server.prompts,
+        protocol_version="2025-11-25",
+        pool_seeds=PoolSeeds().extend(tenant=tenant),
+    )
+
+    out = await _read(reader, ctx)
+
+    assert _contents(out)["text"] == VIEW
+    assert seen == [http_request]
+    assert seen[0].mcp_token is ctx.token
+
+
+_SOURCES: dict[str, dict[str, Any]] = {
+    "html": {},
+    "template_name": {"html": None, "template_name": "mcp_ui/view.html"},
+    "body_template_name": {"html": None, "body_template_name": "mcp_ui/body.html"},
+    "selector": {"html": None, "selector": lambda: VIEW},
+}
+
+
+@pytest.mark.parametrize("reader", ["sync", "async"])
+@pytest.mark.parametrize("source", sorted(_SOURCES))
+async def test_every_view_source_serves_its_document_whole(reader: str, source: str) -> None:
+    # The whole answer, for each content source: the document the source
+    # produces, verbatim, under the Apps MIME type, the metadata on the block
+    # and the cache hints beside it.
+    server = _server(
+        **_SOURCES[source],
+        cache_ttl_ms=5000,
+        ui=UIResourceMeta(prefers_border=True),
+        meta={"k": 1},
+    )
+    resolved = server.resources.resolve(URI)
+    assert resolved is not None
+    document = resolved[0].selector()
+
+    out = await _read(reader, _ctx(server))
+
+    assert out == {
+        "contents": [
+            {
+                "uri": URI,
+                "mimeType": UI_RESOURCE_MIME_TYPE,
+                "text": document,
+                "_meta": {UI_META_KEY: {"prefersBorder": True}, "k": 1},
+            }
+        ],
+        "ttlMs": 5000,
+        "cacheScope": "private",
+    }
+
+
+@pytest.mark.parametrize("reader", ["sync", "async"])
+async def test_a_view_its_permission_refuses_is_refused_with_the_scopes(reader: str) -> None:
+    class _NeedsScope:
+        def has_permission(self, request: Any, token: Any) -> bool:
+            return False
+
+        def required_scopes(self) -> list[str]:
+            return ["views:read"]
+
+    out = await _read(reader, _ctx(_server(permissions=[_NeedsScope()])))
+
+    assert isinstance(out, JsonRpcError)
+    assert out.code == JsonRpcErrorCode.FORBIDDEN
+    assert out.data == {"requiredScopes": ["views:read"]}
+
+
+@pytest.mark.parametrize("reader", ["sync", "async"])
+async def test_a_view_over_its_rate_limit_is_refused_with_the_retry(reader: str) -> None:
+    limit = RefusingRateLimit()
+
+    out = await _read(reader, _ctx(_server(rate_limits=[limit])))
+
+    assert isinstance(out, JsonRpcError)
+    assert out.code == JsonRpcErrorCode.RATE_LIMITED
+    assert out.data == {"retryAfter": 30}
+    assert limit.consumed == 1

@@ -5,9 +5,7 @@ from dataclasses import dataclass
 from itertools import islice
 from typing import Any
 
-from django_service_specs import RESERVED_POOL_SEEDS, NotPermitted
-from rest_framework_services import build_offline_context, resolve_callable_kwargs
-from rest_framework_services.dispatch.utils import DROPPED_EDGE_SEEDS
+from django_service_specs import RESERVED_POOL_SEEDS, NotPermitted, resolve_callable_kwargs
 
 from django_spec_mcp._compat.tracing import span
 from django_spec_mcp.handlers.handle_tools_call import _span_attrs
@@ -24,6 +22,7 @@ from django_spec_mcp.handlers.utils import check_permissions, consume_rate_limit
 from django_spec_mcp.protocol.types.completion import Completion
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
+from django_spec_mcp.types.completion_edge_seeds import COMPLETION_EDGE_SEEDS
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from django_spec_mcp.types.max_completion_values import MAX_COMPLETION_VALUES
 
@@ -124,15 +123,15 @@ def handle_completion_complete(
                 data={"retryAfter": retry_after},
             )
 
-        drf_request = build_offline_context(
-            context.token.user,
-            None,
-            http_request=context.http_request,
-            # Same reasoning as ``prompts/get``: nothing here reads the query
-            # string, and an empty mapping guarantees the endpoint's own can
-            # never leak into a completer if that changes.
-            query_params={},
-        ).request
+        # The request the kernel tool path hands a spec: the transport's own
+        # ``HttpRequest``, the resolved token on it as ``mcp_token``
+        # (``test_a_completer_declaring_request_receives_the_transports_http_request``).
+        # Its ``user`` is the token's principal, and the ``user`` seed is that
+        # same principal, an anonymous caller included
+        # (``test_a_completers_user_and_request_user_agree_for_a_token_naming_no_one``).
+        # Its query string is the endpoint's: a completer reads what the client
+        # typed from ``value`` and ``arguments``, never from the request.
+        request = carry_token(context.http_request, context.token)
         # Every dispatcher-owned name is dropped from the client's siblings
         # before the spread, then the transport's own seeds are applied on top.
         # Re-seeding by hand covered only the names this handler happens to
@@ -140,8 +139,8 @@ def handle_completion_complete(
         # everywhere else, seeded nowhere here — still reached a completer under
         # a name the rest of the package treats as dispatcher-owned. Stripping
         # tracks ``RESERVED_POOL_SEEDS`` instead of a hand-picked subset of it,
-        # with drf-services' ``DROPPED_EDGE_SEEDS`` beside it: ``request`` and
-        # ``serializer`` left the kernel's set, and drf-services still drops a
+        # with ``COMPLETION_EDGE_SEEDS`` beside it: ``request`` and
+        # ``serializer`` are no kernel seeds, and the tool paths drop a
         # caller's key of either name
         # (``test_a_sibling_named_as_a_name_drf_services_drops_never_reaches_the_completer``).
         # ``arguments`` stays the client's mapping verbatim: it is documented as
@@ -151,10 +150,10 @@ def handle_completion_complete(
             **{
                 key: v
                 for key, v in resolved_siblings.items()
-                if key not in RESERVED_POOL_SEEDS | DROPPED_EDGE_SEEDS
+                if key not in RESERVED_POOL_SEEDS | COMPLETION_EDGE_SEEDS
             },
-            "request": drf_request,
-            "user": context.token.user,
+            "request": request,
+            "user": request.user,
             "value": value,
             "arguments": resolved_siblings,
         }

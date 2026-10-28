@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.http import HttpRequest
 from django_service_specs import DispatchError, PoolSeeds, ServiceError, dispatch
 
 from django_spec_mcp.config.types.mcp_config import MCPConfig
@@ -9,8 +10,11 @@ from django_spec_mcp.handlers.answer_kernel_refusal import answer_kernel_refusal
 from django_spec_mcp.handlers.kernel_utils import (
     admit_kernel_call,
     bound_unpaginated_rows,
+    copy_request,
     not_found_result,
     page_request,
+    principal_of,
+    seat,
     tool_result,
 )
 from django_spec_mcp.handlers.present_kernel_result import present_kernel_result
@@ -29,6 +33,7 @@ def call_kernel_tool(
     config: MCPConfig,
     conventions: AgentConventions,
     pool_seeds: PoolSeeds,
+    request_classes: dict[tuple[type, frozenset[str]], type],
 ) -> ToolResult:
     """The in-process ``call_tool`` of a kernel tool, through ``dispatch``.
 
@@ -47,7 +52,22 @@ def call_kernel_tool(
     to its own wire; every other refusal comes back as the ``isError`` result
     the wire serves. ``AdditionalInputRequired`` is a service error here, since
     there is no further round to ask in.
+
+    ``request_classes`` is the owning server's, the classes ``copy_request``
+    makes its copies of a handed request from.
     """
+    # A handed request is the caller's own, so the spec is handed a copy whose
+    # ``user`` is the one the call runs as, as ``acall_tool``'s is
+    # (``test_sync_call_tool_hands_a_copy_carrying_the_acting_user``); with
+    # none handed, a minimal one bearing that user is synthesised, as
+    # ``acall_tool`` and the drf-services path do
+    # (``test_sync_call_tool_with_no_request_hands_one_carrying_the_acting_user``).
+    if request is not None:
+        request = copy_request(request, request_classes)
+    else:
+        request = HttpRequest()
+        request.method = "POST"
+    request = seat(request, principal_of(user))
     dispatched, page = page_request(binding, arguments, config)
     try:
         # Inside the ``try``, so the one thing it raises, a denial, meets the

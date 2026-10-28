@@ -83,31 +83,6 @@ def test_prompt_argument_named_user_cannot_replace_the_caller() -> None:
     assert _rendered(out) == f"{_CALLER}:x"
 
 
-def test_prompt_argument_named_request_cannot_replace_the_request() -> None:
-    """The same key works for ``request``, which is what a ``render`` reading
-    ``request.user`` would otherwise be fooled by."""
-    seen: dict[str, Any] = {}
-
-    server = _server()
-
-    def render(*, request: Any, topic: str) -> str:
-        seen["user"] = request.user
-        return topic
-
-    server.register_prompt(
-        name="scoped",
-        render=render,
-        arguments=[PromptArgument(name="topic", required=True)],
-        permissions=[_AlwaysAllow()],
-    )
-
-    handle_prompts_get(
-        {"name": "scoped", "arguments": {"topic": "x", "request": "spoofed"}}, _ctx(server)
-    )
-
-    assert seen["user"] == _CALLER
-
-
 async def test_async_prompt_argument_named_user_cannot_replace_the_caller() -> None:
     server = _server_with_scoped_prompt()
 
