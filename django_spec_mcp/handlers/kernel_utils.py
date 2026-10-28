@@ -311,8 +311,7 @@ def _body_within_limit(request: Any) -> bool:
             return False
         sizes.append(declared)
     stream = request._stream
-    seekable = getattr(stream, "seekable", None)
-    if seekable is not None and seekable():
+    if _can_seek(stream):
         position = stream.tell()
         sizes.append(stream.seek(0, os.SEEK_END) - position)
         stream.seek(position)
@@ -320,6 +319,22 @@ def _body_within_limit(request: Any) -> bool:
         return False
     limit = settings.DATA_UPLOAD_MAX_MEMORY_SIZE
     return limit is None or max(sizes) <= limit
+
+
+def _can_seek(stream: Any) -> bool:
+    """Whether ``stream`` can be measured and returned to where it was.
+
+    A stream saying so through ``seekable()`` is taken at its word. One with no
+    ``seekable()`` can seek if it has ``seek`` and ``tell``: before Python 3.11
+    ``SpooledTemporaryFile``, which an ASGI request's stream is, has those and
+    no ``seekable()``
+    (``test_a_stream_that_seeks_without_saying_so_is_measured``), and a stream
+    missing either cannot (``test_a_body_of_unknown_size_is_shared``).
+    """
+    seekable = getattr(stream, "seekable", None)
+    if seekable is not None:
+        return bool(seekable())
+    return hasattr(stream, "seek") and hasattr(stream, "tell")
 
 
 def admits_without_arguments(

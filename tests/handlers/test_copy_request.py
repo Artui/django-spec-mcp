@@ -51,13 +51,15 @@ def _asgi(length: str | None = str(len(_BODY))) -> HttpRequest:
     return ASGIRequest(scope, body_file)
 
 
-class _Unseekable:
-    """A stream that reads and cannot seek, with or without saying so."""
+class _Stream:
+    """A body stream offering only the methods named, as streams in the wild do."""
 
-    def __init__(self, *, says: bool) -> None:
+    def __init__(self, *offers: str, seekable: bool | None = None) -> None:
         self._body = BytesIO(_BODY)
-        if says:
-            self.seekable = lambda: False
+        for name in offers:
+            setattr(self, name, getattr(self._body, name))
+        if seekable is not None:
+            self.seekable = lambda: seekable
 
     def read(self, *size: int) -> bytes:
         return self._body.read(*size)
@@ -215,8 +217,14 @@ def test_no_upload_limit_reads_every_body_of_known_size() -> None:
     [
         pytest.param(lambda: _with_length("abc"), id="malformed-length"),
         pytest.param(lambda: _with_length("-1"), id="negative-length"),
-        pytest.param(lambda: _with_stream(_Unseekable(says=True)), id="unseekable"),
-        pytest.param(lambda: _with_stream(_Unseekable(says=False)), id="no-seekable"),
+        pytest.param(lambda: _with_stream(_Stream(seekable=False)), id="unseekable"),
+        pytest.param(
+            lambda: _with_stream(_Stream("seek", "tell", seekable=False)),
+            id="says-unseekable-with-seek",
+        ),
+        pytest.param(lambda: _with_stream(_Stream()), id="no-seek"),
+        pytest.param(lambda: _with_stream(_Stream("seek")), id="seek-without-tell"),
+        pytest.param(lambda: _with_stream(_Stream("tell")), id="tell-without-seek"),
     ],
 )
 def test_a_body_of_unknown_size_is_shared(handed: Callable[[], HttpRequest]) -> None:
@@ -233,7 +241,7 @@ def test_a_body_of_unknown_size_is_shared(handed: Callable[[], HttpRequest]) -> 
 
 @override_settings(DATA_UPLOAD_MAX_MEMORY_SIZE=2)
 def test_an_unseekable_body_with_no_length_over_the_limit_is_not_truncated() -> None:
-    request = _with_stream(_Unseekable(says=True))
+    request = _with_stream(_Stream(seekable=False))
 
     _server().call_tool("ignore", user=None, request=request)
 
@@ -252,3 +260,18 @@ def test_an_unreadable_body_does_not_fail_the_call() -> None:
     assert result.structured_content == {"read": ""}
     with pytest.raises(RawPostDataException):
         request.body  # noqa: B018
+
+
+@pytest.mark.parametrize("limit", [100, 2], ids=["within", "over"])
+def test_a_stream_that_seeks_without_saying_so_is_measured(limit: int) -> None:
+    """``seek`` and ``tell`` with no ``seekable()``, the shape of
+    ``SpooledTemporaryFile`` before Python 3.11: measured, so a body within the
+    limit is read once, and one over it is left unread."""
+    request = _with_stream(_Stream("seek", "tell"))
+
+    with override_settings(DATA_UPLOAD_MAX_MEMORY_SIZE=limit):
+        result = _server().call_tool("drain", user=None, request=request)
+        left = request.read()
+
+    assert result.structured_content == {"read": _BODY.decode()}
+    assert left == (_BODY if limit == 100 else b"")
