@@ -5,7 +5,7 @@ advertise the bare item schema while serving an array. Every case registers a
 kernel spec with
 ``include_output_schema=True``, calls it, and runs the served payload through
 ``assert_tool_result_conforms``, which is what a client holding the schema
-would check, with each ``RETRIEVE`` twin riding along so a fix answering every
+would check, with each ``RETRIEVE`` sibling riding along so a fix answering every
 tool with an array fails too.
 
 The cases:

@@ -100,7 +100,7 @@ def _input_required(
     One condition, the round being there or not: held both ways by
     ``test_additional_input_required_asks_for_input`` (a wire service tool,
     which asks) and by ``test_call_tool_answers_a_request_for_input_as_a_service_error``
-    and ``test_a_kernel_selector_asking_for_input_is_answered_as_a_drfs_selector_is``
+    and ``test_a_kernel_selector_asking_for_input_is_answered_as_a_service_error``
     (no round, so a service error)."""
     if scene.input_round is None:
         return service_error_result(exc)
