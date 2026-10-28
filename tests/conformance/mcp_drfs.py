@@ -1,6 +1,8 @@
-"""MCP server factory for the conformance suite.
+"""The drf-services MCP server factory for the conformance suite, kept until the drfs path is deleted.
 
-Exercises every binding feature in one server so the conformance tests
+Mounted by ``urls_drfs.py`` for the ``*_drfs.py`` conformance tests; ``mcp.py``
+builds the kernel server the rest of the suite mounts. Exercises every binding
+feature in one server so the conformance tests
 can verify each binding contract end-to-end through the real Django
 URL conf + transport stack. Each tool is named for the feature it
 demonstrates so failing assertions point at the right binding.
