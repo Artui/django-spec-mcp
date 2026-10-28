@@ -1059,7 +1059,7 @@ def rendering_refusal_result(
     nothing the caller sent shaped the render and the refusal is a server bug.
     """
     # One branch arc to coverage, so the gate cannot see it removed. Held by the
-    # five tests in tests/handlers/test_render_time_query_params.py that assert
+    # five tests in tests/handlers/test_render_time_query_params_drfs.py that assert
     # the original error still escapes -- the three
     # ``test_render_error_with_nothing_supplied_still_raises*`` (sync selector,
     # async service, ``call_tool``), ``test_a_seeded_default_is_not_supplied`` and

@@ -36,10 +36,14 @@ from django_service_specs import (
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
+from django_spec_mcp.handlers.handle_resources_read_async import handle_resources_read_async
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.schema.types.agent_conventions import AgentConventions
-from tests.utils import call_context, tool_error
+from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
+from tests.utils import tool_error
 
 REFUSAL = "No such field: total."
 
@@ -98,7 +102,9 @@ def _server(**register: Any) -> MCPServer:
 
 def _wire(server: MCPServer, arguments: dict[str, Any], *, is_async: bool) -> Any:
     params = {"name": "rows", "arguments": arguments}
-    context = call_context(server)
+    # The server's own context, so its conventions word the refusal as they
+    # would on the wire (``test_the_servers_conventions_word_the_sentence``).
+    context = server._call_context(user=None)
     if is_async:
         return async_to_sync(handle_tools_call_async)(params, context)
     return handle_tools_call(params, context)
@@ -117,9 +123,11 @@ def _call(server: MCPServer, arguments: dict[str, Any], path: str) -> dict[str, 
 @_PATHS
 def test_a_refused_shape_is_a_validation_error_keyed_by_it(path: str) -> None:
     error = tool_error(_call(_server(), {"fields": ["total"]}, path))
-    assert error["type"] == "validation_error"
-    assert error["message"] == f"`fields` was rejected while rendering the result: {REFUSAL}"
-    assert error["detail"]["fields"] == [REFUSAL]
+    assert error == {
+        "type": "validation_error",
+        "message": f"`fields` was rejected while rendering the result: {REFUSAL}",
+        "detail": {"fields": [REFUSAL]},
+    }
 
 
 @_PATHS
@@ -132,11 +140,29 @@ def test_on_a_paged_tool_the_refusal_says_what_the_shape_applies_to(path: str) -
 
 
 @_PATHS
+def test_the_servers_conventions_word_the_sentence(path: str) -> None:
+    custom = AgentConventions(query_param_on_pages="Per row.")
+    server = _server(paginate=True, conventions=custom)
+    error = tool_error(_call(server, {"fields": ["total"]}, path))
+    assert error["message"].endswith(f"{REFUSAL} Per row.")
+
+
+@_PATHS
+def test_none_drops_the_sentence(path: str) -> None:
+    server = _server(paginate=True, conventions=AgentConventions(query_param_on_pages=None))
+    error = tool_error(_call(server, {"fields": ["total"]}, path))
+    assert error["message"] == f"`fields` was rejected while rendering the result: {REFUSAL}"
+
+
+@_PATHS
 def test_several_shapes_supplied_are_named_together(path: str) -> None:
     server = _server(spec=_selector(shapes=("fields", "expand")))
     error = tool_error(_call(server, {"fields": ["id"], "expand": ["owner"]}, path))
-    assert error["message"].startswith("`fields` or `expand` was rejected")
-    assert error["detail"]["non_field_errors"] == [REFUSAL]
+    assert error == {
+        "type": "validation_error",
+        "message": f"`fields` or `expand` was rejected while rendering the result: {REFUSAL}",
+        "detail": {"non_field_errors": [REFUSAL]},
+    }
 
 
 @_PATHS
@@ -169,3 +195,62 @@ def test_a_presenter_error_that_is_not_a_validation_error_is_raised(path: str) -
     server = _server(spec=_selector(error=ValueError(REFUSAL)))
     with pytest.raises(ValueError, match=REFUSAL):
         _call(server, {"fields": ["total"]}, path)
+
+
+# ----- a resource whose URI carries a shape -----
+
+
+def _row() -> _Row:
+    return _Row(id=1)
+
+
+def _resource_server(uri_template: str, *, shapes: tuple[str, ...] = ("fields",)) -> MCPServer:
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server.register_resource(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=_row,
+            shapes=Parameters([Parameter(name, "string") for name in shapes]),
+            presenter=_StrictPresenter(),
+            permissions=[Unrestricted()],
+        ),
+        name="row",
+        uri_template=uri_template,
+    )
+    return server
+
+
+_READS = pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
+
+
+def _read(server: MCPServer, uri: str, *, is_async: bool) -> Any:
+    params = {"uri": uri}
+    context = server._call_context(user=None)
+    if is_async:
+        return async_to_sync(handle_resources_read_async)(params, context)
+    return handle_resources_read(params, context)
+
+
+@_READS
+def test_a_resource_refusing_a_shape_its_uri_carried_is_invalid_params(is_async: bool) -> None:
+    # The ``-32602`` the shape check answers for the same variable, keyed by it.
+    error = _read(_resource_server("rows://{fields}"), "rows://total", is_async=is_async)
+    assert isinstance(error, JsonRpcError)
+    assert (error.code, error.message) == (JsonRpcErrorCode.INVALID_PARAMS, "Invalid arguments")
+    assert error.data == {"detail": {"fields": [REFUSAL]}}
+
+
+@_READS
+def test_a_resource_naming_several_shapes_keys_the_refusal_under_none_of_them(
+    is_async: bool,
+) -> None:
+    server = _resource_server("rows://{fields}/{expand}", shapes=("fields", "expand"))
+    error = _read(server, "rows://id/owner", is_async=is_async)
+    assert isinstance(error, JsonRpcError)
+    assert error.data == {"detail": {"non_field_errors": [REFUSAL]}}
+
+
+@_READS
+def test_a_resource_whose_uri_carries_no_shape_raises_the_refusal(is_async: bool) -> None:
+    with pytest.raises(ServiceValidationError):
+        _read(_resource_server("rows://all"), "rows://all", is_async=is_async)
