@@ -359,6 +359,14 @@ class _Source:
             id="server-arguments",
         ),
         pytest.param(_service(), {}, ValueError, "Duplicate MCP tool name", id="name-taken"),
+        # A declaration no call can run, refused by the kernel's ``check_seeds``.
+        pytest.param(
+            ServiceSpec(service=lambda *, other: other, permissions=OPEN),
+            {},
+            ImproperlyConfigured,
+            r"MCP tool 'late': .*\['other'\], which nothing fills",
+            id="a-keyword-nothing-fills",
+        ),
     ],
 )
 def test_register_tools_registers_nothing_when_an_entry_is_refused(
