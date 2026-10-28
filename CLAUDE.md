@@ -61,13 +61,21 @@ Rules are non-negotiable unless flagged as a heuristic.
     `validate_<field>` on a `DataclassSerializer` subclass. Bare
     `serializers.Serializer` subclasses are only allowed for *illustrative*
     test fixtures (and even there, prefer dataclass + `DataclassSerializer`).
-13. **Never `django.views.View` or `rest_framework.views.APIView`. Always
-    `ViewSet`.** Single-purpose endpoints become a one-action ViewSet; the
-    JSON-RPC transport endpoint is a custom ViewSet routed through a single
-    URL. This forces every HTTP endpoint through DRF's router / permission /
-    renderer chain so cross-cutting concerns (auth, throttling, content
-    negotiation, schema introspection) land in one place. New endpoints MUST
-    be ViewSets; legacy `View` subclasses are migrated as they're touched.
+13. **Endpoints are plain Django views, never DRF views or viewsets.** The MCP
+    endpoint (`StreamableHttpViewSet`, `AsyncStreamableHttpViewSet`) and the
+    protected-resource metadata view subclass `django.views.View` and import
+    nothing from DRF or drf-services: the package serves kernel specs and drops
+    DRF from its dependencies, and a DRF view would let a project's
+    `REST_FRAMEWORK` settings (throttles, authentication classes, renderers,
+    the exception handler) decide what the endpoint answers, where the package's
+    own auth backend, rate limits and JSON-RPC backstop are what must. Each
+    keeps its `as_view(actions, **initkwargs)` routing map, which is what
+    `MCPServer` passes, and does for itself what DRF did for it: the `406` for
+    an `Accept` it cannot answer, `Allow` on every `405`, the CSRF and
+    login-required opt-outs, and the token's principal on `request.user` from
+    the moment the request authenticates (`transport/utils.py`). The class
+    names keep their `ViewSet` suffix only because the server and the API
+    reference name them.
 
 ## No view-layer coupling
 

@@ -1,6 +1,6 @@
 """An exception escaping dispatch is still answered with a JSON-RPC reply.
 
-Every case goes through the real URL conf, on both viewsets and in both eras,
+Every case goes through the real URL conf, on both views and in both eras,
 because the defect lived at the HTTP edge: the handlers were never asked to
 catch everything, and before the backstop an escaping DRF ``APIException`` was
 rendered by DRF's ``handle_exception`` as a bare DRF body (a ``400`` reading
@@ -27,9 +27,9 @@ counterpart:
 - an escaping DRF ``APIException``, the reported case, since nothing on the
   kernel path raises one. A presenter raising while it renders is asked
   instead (``test_a_presenter_that_raises_is_a_json_rpc_internal_error``);
-- a DRF throttle reaching these viewsets through ``DEFAULT_THROTTLE_CLASSES``,
-  which is a property of the viewsets being DRF's rather than of anything a
-  kernel tool declares. A kernel tool's limit is ``rate_limits=``
+- a DRF throttle reaching the endpoints through ``DEFAULT_THROTTLE_CLASSES``,
+  which they no longer do: they are plain Django views, so no DRF setting
+  reaches them. A tool's limit is ``rate_limits=``
   (``test_a_rate_limit_keeps_its_error_and_retry_hint``).
 """
 
