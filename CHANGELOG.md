@@ -293,10 +293,11 @@ carries; releases up to 0.54.0 are in
 - **Only Django's `PermissionDenied` is a denial.** A
   `django.core.exceptions.PermissionDenied` raised from inside a permission
   check is answered `-32006` under a `403` with its challenge, as before. DRF's
-  `rest_framework.exceptions.PermissionDenied`, which is not a subclass of it, is no longer recognised: it reaches the
-  transport's backstop as any other exception does, and is answered as a server
-  error, `-32603`, logged at `ERROR`, where it was a `403` and `-32006`. A check
-  that raised DRF's class returns `False` or raises Django's instead.
+  `rest_framework.exceptions.PermissionDenied`, which is not a subclass of it,
+  is no longer recognised: it reaches the transport's backstop as any other
+  exception does, and is answered as a server error, `-32603`, logged at
+  `ERROR`, where it was a `403` and `-32006`. A check that raised DRF's class
+  returns `False` or raises Django's instead.
 - **A completer receives a sibling argument named `serializer`.** The arguments
   a client resolved reach a completer's keyword pool under their own names, less
   the kernel's `RESERVED_POOL_SEEDS`, and `serializer` is no longer stripped
@@ -318,20 +319,23 @@ carries; releases up to 0.54.0 are in
   `register_selector_tool` and `register_specs`, the decorators
   `MCPServer.service_tool`, `selector_tool` and `resource`, and the `selector=`
   form of `register_resource` are gone, and so is the root function
-  `register_tools(server, definitions, *, selector_defaults=, service_defaults=)`
-  with the `ToolDefinition`, `ToolKind`, `ServiceDefaults` and `SelectorDefaults`
-  it took. Declare each operation as a kernel `ServiceSpec` or `SelectorSpec`
-  and register it with `MCPServer.register_tool(spec, *, name, ...)`, or a
-  kernel `SpecRegistry` of them with
-  `MCPServer.register_tools(registry, *, overrides=)`: the method keeps the removed function's name with a different
-  shape, and the knobs a defaults record held are passed per tool, under its
-  name in `overrides`. A resource is a kernel `RETRIEVE` `SelectorSpec`
-  registered with `register_resource(spec, /, *, name, uri_template, ...)`; one
-  over a bare callable is a `ResourceBinding` built by hand and passed to
-  `server.resources.register`. `django_spec_mcp.adapters` no longer exports
-  `service_spec_to_tool` or `selector_to_resource`, and
-  `django_spec_mcp.schema` no longer exports `build_input_schema` or
-  `build_output_schema`: a kernel tool's schemas are the kernel's.
+  `register_tools(server, definitions, *, selector_defaults=,
+  service_defaults=)` with the `ToolDefinition`, `ToolKind`, `ServiceDefaults`
+  and `SelectorDefaults` it took. Declare each operation as a kernel
+  `ServiceSpec` or `SelectorSpec` and register it with
+  `MCPServer.register_tool(spec, *, name, ...)`, or a kernel `SpecRegistry` of
+  them with `MCPServer.register_tools(registry, *, overrides=)`: the method
+  keeps the removed function's name with a different shape, and the knobs a
+  defaults record held are passed per tool, under its name in `overrides`. A
+  resource is a kernel `RETRIEVE` `SelectorSpec` registered with
+  `register_resource(spec, /, *, name, uri_template, ...)`, a bare callable
+  included, wrapped in a `SelectorSpec` with its permissions. A
+  `ResourceBinding` built by hand and passed to `server.resources.register` is
+  registered unchecked, so it carries its own `permissions`.
+  `django_spec_mcp.adapters` no longer exports `service_spec_to_tool` or
+  `selector_to_resource`, and `django_spec_mcp.schema` no longer exports
+  `build_input_schema` or `build_output_schema`: a kernel tool's schemas are the
+  kernel's.
 
 - **The drf-services bindings and the declarations they carried.** `ToolBinding`
   and `SelectorToolBinding` are gone, so every tool is a `KernelToolBinding`.

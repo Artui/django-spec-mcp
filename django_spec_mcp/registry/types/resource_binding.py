@@ -25,6 +25,14 @@ class ResourceBinding(Generic[ResultT]):
     verbatim on the listing entry, and ``meta`` also on the ``contents`` block
     of ``resources/read``.
 
+    One built by hand and passed straight to ``server.resources.register`` is
+    registered unchecked: the registrars' refusals (an undeclared permission
+    under ``REQUIRE_TOOL_PERMISSIONS``, a template variable naming a seed, a
+    completer for no variable) are not asked, and no kernel spec stands behind
+    it to refuse an unguarded call, so it carries its own ``permissions``. A
+    bare callable meant to be served with those checks is a ``RETRIEVE``
+    ``SelectorSpec`` registered with ``register_resource``.
+
     The generic parameter is purely informational, letting callers pin the
     selector's return type for type-checker help.
     """

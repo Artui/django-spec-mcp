@@ -8,6 +8,7 @@ each of those paths for a view.
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from typing import Any
 
@@ -89,11 +90,13 @@ def test_a_view_read_over_the_result_ceiling_is_a_server_error(is_async: bool) -
 
 
 def test_an_async_view_selector_is_awaited_on_the_async_read() -> None:
+    # The exact body: an unawaited coroutine encodes as its ``repr``, which
+    # names this test and so would satisfy any substring of it.
     async def page() -> dict[str, str]:
-        return {"title": "async"}
+        return {"title": "awaited"}
 
     out = _read(_context(_view(page)), is_async=True)
-    assert "async" in out["contents"][0]["text"]
+    assert json.loads(out["contents"][0]["text"]) == {"title": "awaited"}
 
 
 @pytest.mark.parametrize("listed", [True, False])

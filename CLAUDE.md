@@ -182,7 +182,8 @@ covered.
 | Path | Dispatch |
 | --- | --- |
 | `tools/call` (`handle_tools_call*.py` → `run_kernel_tool*.py`) | `dispatch` / `adispatch` |
-| In-process `call_tool` / `acall_tool` (`call_kernel_tool.py`) | `dispatch` / `adispatch` |
+| In-process `call_tool` (`call_kernel_tool.py`) | `dispatch` |
+| In-process `acall_tool` (`handle_tools_call_async.py` → `run_kernel_tool_async.py`) | `adispatch` |
 | A task's worker (`tasks/run_task.py`, re-entering `handle_tools_call` below the task decision) | `dispatch` |
 | `resources/read` of a kernel resource (`read_kernel_resource*.py`) | `dispatch` / `adispatch` |
 | `resources/read` of a view (`handle_resources_read*.py`) | **direct** `run_selector` |
