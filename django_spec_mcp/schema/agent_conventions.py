@@ -42,9 +42,10 @@ the result is, and a field-selection param names fields. So the one shape a mode
 has been shown is exactly the wrong one to select against: ``{items{id, name}}``
 reads naturally off the schema, and a serializer rendering one row at a time has
 no ``items`` field. This sentence says which of the two shapes the param
-addresses, beside the param (``selector_tool_schema``) and again in the
-``isError`` text when a selection is refused while rendering
-(``handlers.utils.read_shaping_error_result``), which is where a model that got
+addresses, beside the param (``selector_tool_schema``, and a kernel tool's
+``shapes`` in ``kernel_tool_input_schema``) and again in the ``isError`` text
+when a selection is refused while rendering
+(``handlers.utils.rendering_refusal_result``), which is where a model that got
 it wrong reads next.
 
 Only a paged tool gets it. A service tool's result and an unpaginated list have

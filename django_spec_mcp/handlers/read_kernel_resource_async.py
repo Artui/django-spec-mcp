@@ -2,13 +2,21 @@ from __future__ import annotations
 
 from typing import Any
 
-from django_service_specs import DispatchError, ServiceError, adispatch, apresent, coerce_flat
+from django_service_specs import (
+    DispatchError,
+    ServiceError,
+    ServiceValidationError,
+    adispatch,
+    apresent,
+    coerce_flat,
+)
 
 from django_spec_mcp.handlers.kernel_utils import (
     KernelAdmission,
     resource_read_result,
     resource_refusal,
 )
+from django_spec_mcp.handlers.resource_presentation_refusal import resource_presentation_refusal
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.types.kernel_refusal_scene import KernelRefusalScene
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
@@ -45,7 +53,12 @@ async def read_kernel_resource_async(
                 arguments=variables, config=context.config, conventions=context.conventions
             ),
         )
-    payload: Any = None if result.kind == "not_found" else await apresent(binding.spec, result)
+    payload: Any = None
+    if result.kind != "not_found":
+        try:
+            payload = await apresent(binding.spec, result)
+        except ServiceValidationError as exc:
+            return resource_presentation_refusal(exc, binding, variables, context.config)
     return resource_read_result(binding, uri, result, payload, context)
 
 
