@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
-from functools import cache
 from itertools import islice
 from typing import Any
 
@@ -288,10 +287,9 @@ def _holder(clone: _SharesBodyState, name: str) -> Any:
     return super(_SharesBodyState, clone)
 
 
-# One class per handed request's class, made once: the copy's class is what an
-# ``isinstance`` and a ``type(...)`` read, and a class made per call would be
-# as many classes as calls. A cache of pure results, as ``build_app_document``'s.
-@cache
+# Made per copy rather than cached, as the package keeps no module-level
+# mutable state: a class is cheap beside the call it serves, and is collected
+# with the copy. A copy of a copy reuses its class (``copy_request``).
 def _sharing_class(cls: type, shared: frozenset[str]) -> type:
     """A subclass of ``cls`` whose instances share ``shared`` with the request they copy.
 
