@@ -165,6 +165,18 @@ carries; releases up to 0.54.0 are in
   deploy therefore drops every live session, in-flight task, rate-limit window and
   pending elicitation**: clients start a new session, and a pending elicitation is
   asked again.
+- **A prompt's `render` and a completer declaring `request` receive the
+  transport's Django `HttpRequest`**, the one a kernel tool's spec finds in its
+  `call_context`, with the caller's token on it as `request.mcp_token`; they
+  received a DRF `Request` before. A callable reading `request.data` reads the
+  prompt's arguments by name instead, and a completer reads what was typed from
+  `value` and the client's resolved siblings from `arguments`; one reading
+  `request.query_params` has nothing to read, since `request.GET` is the MCP
+  endpoint's own query string. **Declare `user` for the caller**:
+  `request.user` is whatever the endpoint's middleware set, which a bearer
+  token does not, so over the wire it is not the token's principal. A pool seed
+  declaring `request` is handed the same `HttpRequest` when a view registered
+  with `register_ui_resource` is read; a view's answer is otherwise unchanged.
 
 ### Removed
 
