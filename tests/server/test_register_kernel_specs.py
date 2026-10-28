@@ -255,10 +255,11 @@ def test_register_resource_refuses_an_empty_scope_tuple() -> None:
         )
 
 
+# ``selector=`` is refused the same way, held by the ``_drfs`` original of this
+# file: it is the drf-services form's own argument, which goes with that form.
 @pytest.mark.parametrize(
     ("knob", "value"),
     [
-        ("selector", object()),
         ("output_serializer", object),
         ("permissions", []),
         ("mime_type", "text/csv"),

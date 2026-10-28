@@ -1,13 +1,19 @@
-"""The mount whose one tool needs a confirmation, named by the HTTP suite.
+"""A mounted server whose ``rows.delete`` needs a confirmation, for the HTTP suite.
 
-Its drf-services server is kept in ``urls_drfs.py`` until the drfs path is
-deleted, and re-exported here so ``test_elicitation_endtoend.py`` still mounts
-it under the name it was written against. The deletion drops these lines with
-that file.
+The conftest's kernel server, mounted once at import as a deployment would
+mount it, so the retry of an input round trip reaches the same server as a
+second, independent request. The drf-services server is mounted by
+``urls_drfs.py`` until the drfs path is deleted.
 """
 
 from __future__ import annotations
 
-from tests.elicitation.urls_drfs import SERVER, urlpatterns
+from typing import Any
 
-__all__ = ["SERVER", "urlpatterns"]
+from django.urls import path
+
+from tests.elicitation.conftest import build_kernel_server
+
+SERVER = build_kernel_server()
+
+urlpatterns: list[Any] = [path("mcp/", SERVER.urls)]
