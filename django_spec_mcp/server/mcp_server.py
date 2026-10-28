@@ -237,6 +237,10 @@ class MCPServer:
         self._tools: ToolRegistry = ToolRegistry(pool_seeds=pool_seeds)
         self._resources: ResourceRegistry = ResourceRegistry()
         self._prompts: PromptRegistry = PromptRegistry()
+        # The classes ``copy_request`` makes an in-process call's copy of a
+        # handed request from, one per request class, kept here because the
+        # package keeps no module-level state.
+        self._request_classes: dict[tuple[type, frozenset[str]], type] = {}
         # ``resource_url`` configures the *default* backend; a custom backend
         # owns its own audience policy, so there is nowhere to forward it to.
         # Refusing beats leaving audience enforcement quietly unconfigured.
@@ -1107,6 +1111,7 @@ class MCPServer:
             config=self._config,
             conventions=self._conventions,
             pool_seeds=self._pool_seeds,
+            request_classes=self._request_classes,
         )
 
     # ----- in-process transport invocation -----
@@ -1280,7 +1285,9 @@ class MCPServer:
         the server's first (most preferred) supported version, not a
         hardcoded literal.
         """
-        http_request: HttpRequest = copy_request(request) if request is not None else HttpRequest()
+        http_request: HttpRequest = (
+            copy_request(request, self._request_classes) if request is not None else HttpRequest()
+        )
         if request is None:
             http_request.user = user
             http_request.method = "POST"

@@ -20,6 +20,7 @@ from asgiref.sync import sync_to_async
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.files.uploadhandler import MemoryFileUploadHandler
 from django.core.handlers.asgi import ASGIRequest
+from django.core.handlers.wsgi import WSGIRequest
 from django.http import HttpRequest
 from django.http.multipartparser import MultiPartParser
 from django.http.request import RawPostDataException
@@ -194,6 +195,24 @@ async def test_an_encoding_a_spec_sets_is_the_callers(how: str) -> None:
 
 
 @_HOW
+async def test_upload_handlers_a_spec_reads_are_bound_to_the_handed_request(how: str) -> None:
+    """Django binds each upload handler to the request it initialises them
+    on; the handlers a spec's read initialises are the caller's to parse with
+    afterwards, so they are bound to the handed request, never to the copy
+    and its user."""
+    handed = _form()
+    handed.user = _User("owner")
+
+    read = await _call(
+        how, lambda request: len(request.upload_handlers), handed, user=_User("call")
+    )
+
+    assert read == len(handed.upload_handlers)
+    assert all(handler.request is handed for handler in handed.upload_handlers)
+    assert handed.FILES["f"].read() == b"xyz"
+
+
+@_HOW
 async def test_upload_handlers_a_spec_sets_are_the_callers(how: str) -> None:
     handlers = [MemoryFileUploadHandler()]
 
@@ -268,17 +287,65 @@ async def test_a_spec_handing_its_request_on_shares_the_callers_body(how: str) -
 
 
 async def test_a_copy_reads_as_the_request_it_copies() -> None:
-    """The copy is an instance of the handed request's class, under its name."""
+    """The copy is an instance of the handed request's class, under its name,
+    qualified name and module, and every call on one server makes its copy
+    from one class, made once."""
+    made: list[type] = []
+
+    class _Request(WSGIRequest):
+        """Nested, so its qualified name is not its name, and counting the
+        subclasses made of it."""
+
+        def __init_subclass__(cls, **kwargs: Any) -> None:
+            super().__init_subclass__(**kwargs)
+            made.append(cls)
+
+    def handed_one() -> HttpRequest:
+        request = _wsgi()
+        request.__class__ = _Request
+        return request
+
     seen: list[Any] = []
+    server = _server(lambda request: seen.append(request) or repr(request))
+    handed = handed_one()
+
+    first = await sync_to_async(server.call_tool)("t", user=None, request=handed)
+    await server.acall_tool("t", user=None, request=handed_one())
+
+    assert first.structured_content["read"] == repr(handed)
+    copied = type(seen[0])
+    assert isinstance(seen[0], _Request)
+    assert copied is not _Request
+    assert (copied.__name__, copied.__qualname__, copied.__module__) == (
+        _Request.__name__,
+        _Request.__qualname__,
+        _Request.__module__,
+    )
+    assert type(seen[1]) is copied
+    assert made == [copied]
+
+
+@_HOW
+async def test_a_request_written_to_while_it_is_copied_is_copied_whole(how: str) -> None:
+    """Another thread's call may write the handed request's shared names while
+    this one copies it; the copy is taken whole first, so the write cannot
+    land mid-way through it."""
+
+    class _WrittenMidCopy(dict):
+        """A ``__dict__`` written to between two steps of iterating it, where
+        a thread switch can put another call's write."""
+
+        def items(self) -> Any:
+            for step, item in enumerate(dict.items(self)):
+                if step == 1:
+                    self["_post"] = "another call's parse"
+                yield item
+
     handed = _wsgi()
+    handed.__dict__ = _WrittenMidCopy(handed.__dict__)
 
-    def spec(request: Any) -> str:
-        seen.append(request)
-        return repr(request)
-
-    assert await _call("call_tool", spec, handed) == repr(handed)
-    assert isinstance(seen[0], type(handed))
-    assert type(seen[0]).__name__ == type(handed).__name__
+    assert await _call(how, lambda request: request.body.decode(), handed) == _BODY.decode()
+    assert handed.body == _BODY
 
 
 async def test_deleting_an_attribute_on_the_copy_leaves_the_caller_its_own() -> None:

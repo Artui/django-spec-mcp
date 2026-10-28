@@ -265,21 +265,27 @@ carries; releases up to 0.54.0 are in
   shares everything of the body with it.** `call_tool` and `acall_tool` work
   on a copy of `request=` whose `user` is the `user=` the call runs as, so a
   view handing its own request keeps serving as its user after the call, and
-  concurrent calls sharing one request each see their own. The user is all
-  the copy owns: its body, its stream and whatever has been parsed from them
-  (`POST` and `FILES`, the upload handlers they are parsed with, and the
-  encoding they and `GET` are decoded with) are read and written on the handed
-  request itself, so a spec reading
-  `request.body` caches it for the caller, a spec draining the stream drains it
-  for the caller, and a body no spec reads is left unread, exactly as if the
-  request had been handed over. A DRF `Request` is copied with the
-  `HttpRequest` it wraps, whose `user` its setter would otherwise write through
-  to, and shares its parse cache with the handed one, so `request.data` parsed
-  by a spec is the caller's `data` rather than a consumed stream to parse
-  again. `acall_tool` used to hand the request itself through, and sync
-  `call_tool` handed a kernel tool's spec a request whose `user` could name
-  someone other than `user=`, or `None` when no request was handed, where it
-  now synthesises one bearing `user=` as `acall_tool` does.
+  concurrent calls sharing one request each see their own. The copy's body,
+  its stream and whatever has been parsed from them (`POST` and `FILES`, the
+  upload handlers they are parsed with, and the encoding they and `GET` are
+  decoded with) are read and written on the handed request itself, so a spec
+  reading `request.body` caches it for the caller, a spec draining the stream
+  drains it for the caller, and a body no spec reads is left unread, exactly as
+  if the request had been handed over. Upload handlers Django initialises
+  during a call are bound to the handed request, so a handler reading
+  `self.request.user` reads the caller's. Any other attribute is the copy's own
+  from the moment it is made: one a spec sets stays on the copy, and one the
+  caller sets afterwards is not seen by it. The copy is an instance of a
+  subclass of the handed request's class under the same name, so `isinstance`
+  holds where `type(request) is WSGIRequest` does not, and it does not pickle.
+  A DRF `Request` is copied with the `HttpRequest` it wraps, whose `user` its
+  setter would otherwise write through to, and shares its parse cache with the
+  handed one, so `request.data` parsed by a spec is the caller's `data` rather
+  than a consumed stream to parse again. `acall_tool` used to hand the request
+  itself through, and sync `call_tool` handed a kernel tool's spec a request
+  whose `user` could name someone other than `user=`, or `None` when no request
+  was handed, where it now synthesises one bearing `user=` as `acall_tool`
+  does.
 
 ### Removed
 

@@ -33,6 +33,7 @@ def call_kernel_tool(
     config: MCPConfig,
     conventions: AgentConventions,
     pool_seeds: PoolSeeds,
+    request_classes: dict[tuple[type, frozenset[str]], type],
 ) -> ToolResult:
     """The in-process ``call_tool`` of a kernel tool, through ``dispatch``.
 
@@ -51,6 +52,9 @@ def call_kernel_tool(
     to its own wire; every other refusal comes back as the ``isError`` result
     the wire serves. ``AdditionalInputRequired`` is a service error here, since
     there is no further round to ask in.
+
+    ``request_classes`` is the owning server's, the classes ``copy_request``
+    makes its copies of a handed request from.
     """
     # A handed request is the caller's own, so the spec is handed a copy whose
     # ``user`` is the one the call runs as, as ``acall_tool``'s is
@@ -59,7 +63,7 @@ def call_kernel_tool(
     # ``acall_tool`` and the drf-services path do
     # (``test_sync_call_tool_with_no_request_hands_one_carrying_the_acting_user``).
     if request is not None:
-        request = copy_request(request)
+        request = copy_request(request, request_classes)
     else:
         request = HttpRequest()
         request.method = "POST"

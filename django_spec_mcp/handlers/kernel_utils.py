@@ -254,8 +254,8 @@ _REQUEST_SHARES: frozenset[str] = frozenset(
 # DRF's ``Request`` parse cache, the same way: what ``data``, ``POST``,
 # ``FILES`` and ``stream`` cache under these names, so a spec parsing through a
 # copy leaves the parse on the caller's wrapper rather than a consumed stream
-# for it to parse again. ``_content_type`` is set in ``__init__`` and read by
-# nothing, so it is not here.
+# for it to parse again. ``_content_type`` is written only in ``__init__``,
+# so a copy can never hold a value of its own for it, and it is not here.
 _WRAPPER_SHARES: frozenset[str] = frozenset({"_data", "_files", "_full_data", "_stream"})
 
 
@@ -283,6 +283,20 @@ class _SharesBodyState:
     def __delattr__(self, name: str) -> None:
         _holder(self, name).__delattr__(name)
 
+    def _initialize_handlers(self) -> None:
+        """Initialise the handed request's upload handlers, bound to it rather than to the copy.
+
+        Django's ``upload_handlers`` getter fills ``_upload_handlers``, which is
+        shared, with handlers ``load_handler`` binds to ``self``. Bound to the
+        copy, they would stay in the caller's request, carrying the call's user
+        into every parse it runs afterwards
+        (``test_upload_handlers_a_spec_reads_are_bound_to_the_handed_request``).
+        So a multipart parse a spec triggers runs handlers bound to the handed
+        request, and a handler reading ``self.request.user`` reads the
+        caller's, as a parse through a DRF ``Request`` does.
+        """
+        object.__getattribute__(self, "_shares_with")._initialize_handlers()
+
 
 def _holder(clone: _SharesBodyState, name: str) -> Any:
     """What ``name`` is read on for ``clone``: the handed request, or the copy itself."""
@@ -291,24 +305,35 @@ def _holder(clone: _SharesBodyState, name: str) -> Any:
     return super(_SharesBodyState, clone)
 
 
-# Made per copy rather than cached, as the package keeps no module-level
-# mutable state: a class is cheap beside the call it serves, and is collected
-# with the copy. A copy of a copy reuses its class (``copy_request``).
-def _sharing_class(cls: type, shared: frozenset[str]) -> type:
+def _sharing_class(
+    cls: type, shared: frozenset[str], classes: dict[tuple[type, frozenset[str]], type]
+) -> type:
     """A subclass of ``cls`` whose instances share ``shared`` with the request they copy.
 
     It takes ``cls``'s name, qualified name and module, so a copy's ``repr``
     and any message naming its type read as the handed request's.
+
+    Made once per server and kept in ``classes``, the server's own, rather
+    than per copy or in a module-level cache, which the package does not keep.
+    A class is cyclic, so one made per copy outlives it until the collector
+    runs, and back-to-back calls pile them up; making one also runs the
+    request class's ``__init_subclass__``. Two threads making the first one at
+    once each make one, and ``setdefault`` keeps the first.
     """
-    namespace = {
-        "__module__": cls.__module__,
-        "__qualname__": cls.__qualname__,
-        "_shared_names": shared,
-    }
-    return type(cls.__name__, (_SharesBodyState, cls), namespace)
+    made = classes.get((cls, shared))
+    if made is None:
+        namespace = {
+            "__module__": cls.__module__,
+            "__qualname__": cls.__qualname__,
+            "_shared_names": shared,
+        }
+        made = classes.setdefault(
+            (cls, shared), type(cls.__name__, (_SharesBodyState, cls), namespace)
+        )
+    return made
 
 
-def copy_request(request: Any) -> Any:
+def copy_request(request: Any, classes: dict[tuple[type, frozenset[str]], type]) -> Any:
     """A copy of ``request`` for one in-process call to write its user to.
 
     A request an in-process caller hands ``call_tool`` / ``acall_tool`` is the
@@ -320,12 +345,12 @@ def copy_request(request: Any) -> Any:
     (``test_concurrent_in_process_calls_on_one_request_keep_their_own_users``,
     ``test_concurrent_calls_on_one_asgi_request_keep_their_own_users``).
 
-    The user is all the copy owns. Its body and parse state are the handed
-    request's, read and written there, so a spec reading or parsing it does
-    so for the caller exactly as if the request itself had been handed over:
-    a body a spec reads is cached for the caller, a stream it drains is
-    drained for the caller, and a body it does not read is left unread. The
-    names shared are ``_REQUEST_SHARES`` above, each held by a test:
+    The copy's body and parse state are the handed request's, read and
+    written there, so a spec reading or parsing it does so for the caller
+    exactly as if the request itself had been handed over: a body a spec
+    reads is cached for the caller, a stream it drains is drained for the
+    caller, and a body it does not read is left unread. The names shared are
+    ``_REQUEST_SHARES`` above, each held by a test:
 
     - ``_body``, ``_stream``:
       ``test_a_spec_reading_the_body_reads_it_for_the_caller``;
@@ -335,7 +360,9 @@ def copy_request(request: Any) -> Any:
       ``test_a_form_a_spec_parsed_is_parsed_for_the_caller``;
     - ``_encoding``, ``GET``: ``test_an_encoding_a_spec_sets_is_the_callers``;
     - ``_upload_handlers``:
-      ``test_upload_handlers_a_spec_sets_are_the_callers``;
+      ``test_upload_handlers_a_spec_sets_are_the_callers``, the handlers
+      Django initialises being bound to the handed request
+      (``_SharesBodyState._initialize_handlers``);
     - ``_multipart_parser_class``, Django 6.1's:
       ``test_a_multipart_parser_a_spec_sets_is_the_callers``.
 
@@ -343,12 +370,21 @@ def copy_request(request: Any) -> Any:
     overriding ``body`` or ``POST``, because Django's own methods read and
     write them on ``self``. Everything else is a shallow copy of the
     ``__dict__``, taken onto an instance made with ``object.__new__``, which
-    skips ``__init__`` and the ``__reduce_ex__`` route ``copy.copy`` takes:
-    ``META`` and the session are the same objects, and an attribute the copy
-    sets or deletes is its own
-    (``test_deleting_an_attribute_on_the_copy_leaves_the_caller_its_own``).
+    skips ``__init__`` and the ``__reduce_ex__`` route ``copy.copy`` takes.
+    So ``META`` and the session are the same objects, but every other
+    attribute is the copy's from the moment it is made: besides the user
+    the call seats, an attribute a spec sets or deletes on the copy stays on
+    the copy
+    (``test_deleting_an_attribute_on_the_copy_leaves_the_caller_its_own``),
+    and one the caller sets on its request after the copy is made is not
+    seen by it.
+
     The copy is an instance of a subclass of the handed request's class,
-    named as it is (``test_a_copy_reads_as_the_request_it_copies``).
+    under its name, qualified name and module, made once per server and kept
+    in ``classes`` (``test_a_copy_reads_as_the_request_it_copies``). So
+    ``isinstance(copy, WSGIRequest)`` holds where ``type(copy) is
+    WSGIRequest`` does not, and a copy does not pickle: pickling looks its
+    class up by name and finds the handed request's.
 
     A wrapped request, DRF's ``Request``, keeps its ``HttpRequest`` as
     ``_request`` and its ``user`` setter writes through to it, so the wrapped
@@ -365,15 +401,19 @@ def copy_request(request: Any) -> Any:
         source = object.__getattribute__(request, "_shares_with")
     else:
         shared = _WRAPPER_SHARES if "_request" in request.__dict__ else _REQUEST_SHARES
-        cls = _sharing_class(type(request), shared)
+        cls = _sharing_class(type(request), shared, classes)
         source = request
     clone: Any = object.__new__(cls)
-    vars(clone).update(
-        (name, value) for name, value in request.__dict__.items() if name not in shared
-    )
+    # Taken whole before it is filtered: another thread's call may be writing
+    # the handed request's shared names while this one copies it, and one
+    # C-level copy cannot see a write mid-way where iterating the live
+    # ``__dict__`` raises for it
+    # (``test_a_request_written_to_while_it_is_copied_is_copied_whole``).
+    own = request.__dict__.copy()
+    vars(clone).update((name, value) for name, value in own.items() if name not in shared)
     object.__setattr__(clone, "_shares_with", source)
-    if "_request" in vars(clone):
-        clone._request = copy_request(clone._request)
+    if "_request" in own:
+        clone._request = copy_request(clone._request, classes)
     return clone
 
 
