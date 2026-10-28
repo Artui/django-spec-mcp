@@ -17,9 +17,14 @@ from django.utils import timezone
 from jobs.models import Job
 
 
-def start_job(*, data: dict[str, Any], request: Any) -> Job:
-    """Create a job, schedule its work, and return immediately."""
-    job: Job = Job.objects.create(duration_seconds=data["duration_seconds"])
+def start_job(*, duration_seconds: int, request: Any) -> Job:
+    """Create a job, schedule its work, and return immediately.
+
+    ``duration_seconds`` is the spec's read. ``request`` is the call's own
+    HTTP request, which dispatch seeds for any spec that declares it; the
+    session id it carries is where the completion notice is pushed.
+    """
+    job: Job = Job.objects.create(duration_seconds=duration_seconds)
 
     # The MCP server is wired into the request via the URL conf — we
     # reach it through the project's URL conf module. In a real project

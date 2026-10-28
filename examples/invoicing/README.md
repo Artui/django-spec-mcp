@@ -99,14 +99,15 @@ Export the session id and walk through the surfaces:
 
 ```bash
 SID=<paste from above>
-H='-H Content-Type: application/json
-   -H Mcp-Protocol-Version: 2025-11-25
-   -H Origin: http://localhost
-   -H Mcp-Session-Id: '"$SID"
+# An array, so each header stays one argument once the shell expands it
+H=(-H 'Content-Type: application/json'
+   -H 'Mcp-Protocol-Version: 2025-11-25'
+   -H 'Origin: http://localhost'
+   -H "Mcp-Session-Id: $SID")
 
 # Create three invoices
 for n in A B C; do
-  curl -s -X POST http://localhost:8000/mcp/ $H \
+  curl -s -X POST http://localhost:8000/mcp/ "${H[@]}" \
     -d "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",
          \"params\":{\"name\":\"invoices.create\",
                      \"arguments\":{\"number\":\"INV-$n\",\"amount_cents\":${RANDOM:0:4}00}}}"
@@ -116,7 +117,7 @@ done
 # JSON-RPC error: `"isError": true`, and in the text block
 # {"error": {"type": "validation_error", "message": "Invalid arguments",
 #            "detail": {"amount_cents": ["Ensure this value is greater than or equal to 0."]}}}
-curl -s -X POST http://localhost:8000/mcp/ $H \
+curl -s -X POST http://localhost:8000/mcp/ "${H[@]}" \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/call",
        "params":{"name":"invoices.create",
                  "arguments":{"number":"INV-X","amount_cents":-5}}}'
@@ -124,7 +125,7 @@ curl -s -X POST http://localhost:8000/mcp/ $H \
 # List with the selector tool — filter, sort, paginate. Ordering reads one
 # key holding several names, so it is an array; a number filter is a decimal
 # string, as its form field reads one.
-curl -s -X POST http://localhost:8000/mcp/ $H \
+curl -s -X POST http://localhost:8000/mcp/ "${H[@]}" \
   -d '{"jsonrpc":"2.0","id":3,"method":"tools/call",
        "params":{"name":"invoices.list",
                  "arguments":{"sent":false,"min_amount":"100","ordering":["-created"],
@@ -132,19 +133,19 @@ curl -s -X POST http://localhost:8000/mcp/ $H \
 
 # Select fields. The tool pages, so `fields` names an invoice's fields and
 # applies to each item in `items`; its advertised description says so.
-curl -s -X POST http://localhost:8000/mcp/ $H \
+curl -s -X POST http://localhost:8000/mcp/ "${H[@]}" \
   -d '{"jsonrpc":"2.0","id":4,"method":"tools/call",
        "params":{"name":"invoices.list","arguments":{"fields":["id","number"]}}}'
 
 # Selecting the page envelope instead is refused as an `isError` result with
 # `"type": "validation_error"` and `detail.fields`, which a model can correct
 # from, rather than answered with a page of empty rows
-curl -s -X POST http://localhost:8000/mcp/ $H \
+curl -s -X POST http://localhost:8000/mcp/ "${H[@]}" \
   -d '{"jsonrpc":"2.0","id":5,"method":"tools/call",
        "params":{"name":"invoices.list","arguments":{"fields":["items"]}}}'
 
 # Mark one as sent
-curl -s -X POST http://localhost:8000/mcp/ $H \
+curl -s -X POST http://localhost:8000/mcp/ "${H[@]}" \
   -d '{"jsonrpc":"2.0","id":6,"method":"tools/call",
        "params":{"name":"invoices.mark_sent","arguments":{"pk":1}}}'
 
@@ -152,18 +153,18 @@ curl -s -X POST http://localhost:8000/mcp/ $H \
 # service's own keywords, and the schema is closed, so adding e.g. "memo" is
 # refused as an `isError` `validation_error` keyed by it.
 # A credit covering the whole amount deletes the invoice and answers `{}`.
-curl -s -X POST http://localhost:8000/mcp/ $H \
+curl -s -X POST http://localhost:8000/mcp/ "${H[@]}" \
   -d '{"jsonrpc":"2.0","id":7,"method":"tools/call",
        "params":{"name":"invoices.apply_credit",
                  "arguments":{"number":"INV-B","credit_cents":100}}}'
 
 # Read it back via the resource template
-curl -s -X POST http://localhost:8000/mcp/ $H \
+curl -s -X POST http://localhost:8000/mcp/ "${H[@]}" \
   -d '{"jsonrpc":"2.0","id":8,"method":"resources/read",
        "params":{"uri":"invoices://1"}}'
 
 # Render the email prompt
-curl -s -X POST http://localhost:8000/mcp/ $H \
+curl -s -X POST http://localhost:8000/mcp/ "${H[@]}" \
   -d '{"jsonrpc":"2.0","id":9,"method":"prompts/get",
        "params":{"name":"compose_invoice_email","arguments":{"pk":"1"}}}'
 ```

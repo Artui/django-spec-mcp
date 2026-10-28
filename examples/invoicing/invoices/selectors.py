@@ -8,7 +8,6 @@ the tool layer's job.
 from __future__ import annotations
 
 from django.db.models import QuerySet, Sum
-from django_service_specs import ServiceError
 
 from invoices.models import Invoice
 from invoices.shapes import OutstandingTotal
@@ -24,12 +23,13 @@ def list_invoices() -> QuerySet[Invoice]:
     return Invoice.objects.all()
 
 
-def get_invoice(*, pk: int) -> Invoice:
-    """Single invoice by primary key — backs the ``invoice`` resource."""
-    try:
-        return Invoice.objects.get(pk=int(pk))
-    except Invoice.DoesNotExist as exc:
-        raise ServiceError(f"Invoice {pk} not found") from exc
+def get_invoice(*, pk: int) -> QuerySet[Invoice]:
+    """Single invoice by primary key — backs the ``invoice`` resource.
+
+    Returned as a queryset, so a URI naming no invoice is the kernel's
+    not-found, which ``resources/read`` answers as a missing resource.
+    """
+    return Invoice.objects.filter(pk=pk)
 
 
 def invoice_by_number(*, number: str) -> QuerySet[Invoice]:

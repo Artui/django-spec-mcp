@@ -151,8 +151,9 @@ def test_invoicing_field_selection_is_per_item_and_refuses_the_envelope() -> Non
 # Runs inside the invoicing project, like the script above: the tool listing and
 # ``tools/call`` posts, printed as JSON for the assertions below. ``post``
 # reads ``result`` and nothing else, so a call answered with a JSON-RPC error
-# fails the script rather than reaching an assertion. The client half is shared
-# by the two scripts that follow; each adds the calls it prints.
+# fails the script rather than reaching an assertion; ``rpc`` is the whole
+# reply, for the one read that is meant to be an error. The client half is
+# shared by the three scripts that follow; each adds the calls it prints.
 _INVOICING_CLIENT = textwrap.dedent(
     """
     import json
@@ -171,7 +172,7 @@ _INVOICING_CLIENT = textwrap.dedent(
     Invoice.objects.create(number="INV-B", amount_cents=50, sent=True)
     client = Client(HTTP_ORIGIN="http://localhost")
 
-    def post(method, params):
+    def rpc(method, params):
         response = client.post(
             "/mcp/",
             data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}),
@@ -181,7 +182,10 @@ _INVOICING_CLIENT = textwrap.dedent(
             **({"HTTP_MCP_NAME": params.get("name") or params["uri"]}
                if "name" in params or "uri" in params else {}),
         )
-        return response.json()["result"]
+        return response.json()
+
+    def post(method, params):
+        return rpc(method, params)["result"]
 
     META = {
         "io.modelcontextprotocol/protocolVersion": "2026-07-28",
@@ -369,6 +373,7 @@ _INVOICING_RESOURCE_PROMPT_AND_SEND = _INVOICING_CLIENT + textwrap.dedent(
     print(json.dumps({
         "pk": pk,
         "read": post("resources/read", {"uri": f"invoices://{pk}", "_meta": META}),
+        "missing": rpc("resources/read", {"uri": "invoices://999", "_meta": META}),
         "prompt": post(
             "prompts/get",
             {"name": "compose_invoice_email", "arguments": {"pk": str(pk)}, "_meta": META},
@@ -384,7 +389,8 @@ def test_invoicing_serves_its_resource_prompt_and_send_tool() -> None:
     """The ``invoice`` resource, the email prompt and ``invoices.mark_sent``.
 
     The resource reads one row through the URI template's ``pk``, presented by
-    the same dataclass as the tools; the prompt renders from the database; and
+    the same dataclass as the tools, and a URI naming no invoice is a missing
+    resource; the prompt renders from the database; and
     marking an invoice sent twice is a ``service_error`` result the second time.
     """
     result = subprocess.run(
@@ -409,6 +415,9 @@ def test_invoicing_serves_its_resource_prompt_and_send_tool() -> None:
         "sent": False,
     }
 
+    assert replies["missing"]["error"]["code"] == -32602
+    assert replies["missing"]["error"]["message"] == "Resource not found: 'invoices://999'"
+
     [message] = replies["prompt"]["messages"]
     assert message["role"] == "user"
     assert "Invoice INV-A for $1.00 is now ready." in message["content"]["text"]
@@ -420,3 +429,110 @@ def test_invoicing_serves_its_resource_prompt_and_send_tool() -> None:
         "type": "service_error",
         "message": f"Invoice {pk} is already sent",
     }
+
+
+# Runs inside the job_status project on a database file, not ``:memory:``: the
+# job runs on a worker thread, which opens a connection of its own and would
+# see an empty in-memory database. A modern-era call carries no session, so the
+# worker has nobody to notify and only the row's status moves.
+_JOB_STATUS = textwrap.dedent(
+    """
+    import json
+    import sys
+    import time
+
+    import django
+    from django.conf import settings
+
+    settings.DATABASES["default"]["NAME"] = sys.argv[1]
+    django.setup()
+
+    from django.core.management import call_command
+    from django.test import Client
+
+    call_command("migrate", verbosity=0)
+    client = Client(HTTP_ORIGIN="http://localhost")
+    META = {
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientInfo": {"name": "smoke", "version": "0"},
+        "io.modelcontextprotocol/clientCapabilities": {},
+    }
+
+    def rpc(method, params, name):
+        response = client.post(
+            "/mcp/",
+            data=json.dumps({
+                "jsonrpc": "2.0", "id": 1, "method": method, "params": {**params, "_meta": META},
+            }),
+            content_type="application/json",
+            HTTP_MCP_PROTOCOL_VERSION="2026-07-28",
+            HTTP_MCP_METHOD=method,
+            HTTP_MCP_NAME=name,
+        )
+        return response.json()
+
+    def call(name, arguments):
+        return rpc("tools/call", {"name": name, "arguments": arguments}, name)["result"]
+
+    def read(uri):
+        return rpc("resources/read", {"uri": uri}, uri)
+
+    started = call("jobs.start", {"duration_seconds": 1})
+    job_id = started["structuredContent"]["id"]
+    # Bounded: a job of one second that has not finished in twenty is a failure.
+    for _ in range(200):
+        row = json.loads(read(f"jobs://{job_id}")["result"]["contents"][0]["text"])
+        if row["status"] == "done":
+            break
+        time.sleep(0.1)
+    print(json.dumps({
+        "started": started,
+        "refused": call("jobs.start", {"duration_seconds": 0}),
+        "row": row,
+        "done": call("jobs.list", {"status": "done"}),
+        "queued": call("jobs.list", {"status": "queued"}),
+        "missing": read("jobs://00000000-0000-0000-0000-000000000000"),
+    }))
+    """
+)
+
+
+def test_job_status_starts_a_job_and_serves_its_status(tmp_path: Path) -> None:
+    """``jobs.start`` answers at once, the resource follows the job, ``jobs.list`` filters.
+
+    The start returns the queued row with its id as a string, before the work
+    runs; an out-of-range duration is a ``validation_error`` result; reading
+    ``jobs://{job_id}`` follows the row to ``done``; the FilterSet's
+    ``status`` narrows the list; and a job that does not exist is a missing
+    resource.
+    """
+    result = subprocess.run(
+        [sys.executable, "-c", _JOB_STATUS, str(tmp_path / "jobs.sqlite3")],
+        cwd=_EXAMPLES_DIR / "job_status",
+        env={**os.environ, "DJANGO_SETTINGS_MODULE": "job_status.settings"},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    replies = json.loads(result.stdout)
+
+    started = replies["started"]["structuredContent"]
+    assert started["status"] == "queued"
+    assert started["duration_seconds"] == 1
+    assert started["finished_at"] is None
+
+    refused = replies["refused"]
+    assert refused["isError"] is True
+    assert json.loads(refused["content"][0]["text"])["error"]["detail"] == {
+        "duration_seconds": ["Ensure this value is greater than or equal to 1."]
+    }
+
+    row = replies["row"]
+    assert row["id"] == started["id"]
+    assert row["status"] == "done"
+    assert row["finished_at"] is not None
+
+    assert [item["id"] for item in replies["done"]["structuredContent"]["items"]] == [started["id"]]
+    assert replies["queued"]["structuredContent"]["items"] == []
+
+    assert replies["missing"]["error"]["code"] == -32602
