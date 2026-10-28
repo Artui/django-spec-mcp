@@ -1492,7 +1492,8 @@ class MCPServer:
         declares for itself, or that a presented row fixes (``selector``,
         ``output_serializer``, ``permissions``, ``mime_type`` and
         ``encoding``), are refused beside a positional spec, as ``scopes`` is
-        beside ``selector=``.
+        beside ``selector=``. A spec no read can run as written is refused
+        naming the resource, as ``register_tool`` refuses one.
         """
         if spec is not None:
             return self._register_kernel_resource(
@@ -1659,6 +1660,15 @@ class MCPServer:
             raise ImproperlyConfigured(
                 f"Resource {name!r}: uri_template " + "; and uri_template ".join(refusals) + "."
             )
+        # After the template's own checks, so a variable is refused in their
+        # words: a selector no read can run as written is refused as
+        # ``register_tool`` refuses one, by the kernel's reader with this
+        # server's seeds
+        # (``test_a_selector_no_read_can_run_is_refused_at_registration``).
+        try:
+            check_seeds(spec, pool_seeds=self._pool_seeds)
+        except ImproperlyConfigured as exc:
+            raise ImproperlyConfigured(f"Resource {name!r}: {exc}") from exc
         # The spec's own permissions are the guard, as for ``register_tool``.
         if check_kernel_spec_guarded(
             binding.name, spec, require=self._config.require_tool_permissions, kind="resource"

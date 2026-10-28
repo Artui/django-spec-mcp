@@ -241,7 +241,9 @@ def _resource_server(selector: Any, **knobs: Any) -> MCPServer:
     ids=["non-dict-params", "missing-uri", "unknown-uri"],
 )
 async def test_a_malformed_or_unknown_read_is_refused(params: Any, code: int) -> None:
-    out = await handle_resources_read_async(params, _ctx(_resource_server(dict)))
+    out = await handle_resources_read_async(
+        params, _ctx(_resource_server(lambda *, pk: {"pk": pk}))
+    )
     assert isinstance(out, JsonRpcError)
     assert out.code == code
 

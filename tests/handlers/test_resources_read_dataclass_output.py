@@ -30,9 +30,11 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest
 from django_service_specs import (
+    DEFAULT_POOL_SEEDS,
     DataclassPresenter,
     Parameter,
     Parameters,
+    PoolSeeds,
     SelectorKind,
     SelectorSpec,
     Unrestricted,
@@ -148,6 +150,48 @@ def test_a_template_variable_no_read_declares_is_refused_at_registration() -> No
             name="bad",
             uri_template="bad://{pk}",
         )
+
+
+def _requires_an_owner(*, pk: int, owner: str) -> Invoice:
+    return Invoice(number=f"{owner}-{pk}", amount_cents=100)
+
+
+@pytest.mark.parametrize(
+    ("spec", "seeds", "offender"),
+    [
+        pytest.param(
+            SelectorSpec(
+                kind=SelectorKind.RETRIEVE,
+                selector=_requires_an_owner,
+                reads=_PK,
+                permissions=OPEN,
+            ),
+            DEFAULT_POOL_SEEDS,
+            "owner",
+            id="a-keyword-nothing-fills",
+        ),
+        pytest.param(
+            SelectorSpec(
+                kind=SelectorKind.RETRIEVE,
+                selector=lambda *, pk, tenant: Invoice(number=tenant, amount_cents=pk),
+                reads=Parameters([*_PK, Parameter("tenant", "string", required=True)]),
+                permissions=OPEN,
+            ),
+            DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme"),
+            "tenant",
+            id="a-read-a-registered-seed-occupies",
+        ),
+    ],
+)
+def test_a_selector_no_read_can_run_is_refused_at_registration(
+    spec: SelectorSpec, seeds: PoolSeeds, offender: str
+) -> None:
+    # Neither name is a template variable, so the variable checks above pass
+    # it; the kernel's ``check_seeds``, asked with the server's seeds, does not.
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), pool_seeds=seeds)
+    with pytest.raises(ImproperlyConfigured, match=rf"Resource 'bad': .*\['{offender}'\]"):
+        server.register_resource(spec, name="bad", uri_template="bad://{pk}")
+    assert len(server.resources) == 0
 
 
 def test_the_refusal_names_the_resource_and_each_variable_no_read_declares() -> None:
