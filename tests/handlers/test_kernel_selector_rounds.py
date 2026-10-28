@@ -4,11 +4,15 @@ A retry's ``inputResponses`` and ``requestState`` reach every ``tools/call``, an
 the service path folds them into the arguments. A selector reads: drf-services
 never lets one elicit or merge an answer, and the kernel path matches it, so
 the same call with and without a round trip's fields is answered alike, and a
-selector asking for input is a service error rather than a question.
+selector asking for input is a service error rather than a question: the result
+a drf-services selector asking for input served, written out here as a literal.
+The comparison against a live drf-services selector is kept in
+``test_kernel_selector_rounds_drfs.py`` until the drfs path is deleted.
 """
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -25,7 +29,6 @@ from django_service_specs import (
     ServiceSpec,
     Unrestricted,
 )
-from rest_framework_services.types.selector_spec import SelectorSpec as DrfSelectorSpec
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
@@ -84,16 +87,6 @@ def _server() -> MCPServer:
         name="kernel.asks",
         description="Ask while reading.",
     )
-    server.register_selector_tool(
-        name="drfs.read",
-        spec=DrfSelectorSpec(kind=SelectorKind.LIST, selector=lambda: [{"pk": 1}]),
-        description="Read the rows.",
-    )
-    server.register_selector_tool(
-        name="drfs.asks",
-        spec=DrfSelectorSpec(kind=SelectorKind.LIST, selector=_asks),
-        description="Ask while reading.",
-    )
     return server
 
 
@@ -117,13 +110,10 @@ def call(request: pytest.FixtureRequest) -> Call:
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("round_trip", ROUNDS, ids=["accept", "decline"])
-@pytest.mark.parametrize(("name", "arguments"), [("kernel.read", {"pk": 1}), ("drfs.read", {})])
-def test_a_kernel_selector_ignores_a_round_trip(
-    call: Call, round_trip: dict[str, Any], name: str, arguments: dict[str, Any]
-) -> None:
+def test_a_kernel_selector_ignores_a_round_trip(call: Call, round_trip: dict[str, Any]) -> None:
     server = _server()
-    plain = call(server, {"name": name, "arguments": arguments})
-    retried = call(server, {"name": name, "arguments": arguments, **round_trip})
+    plain = call(server, {"name": "kernel.read", "arguments": {"pk": 1}})
+    retried = call(server, {"name": "kernel.read", "arguments": {"pk": 1}, **round_trip})
     assert retried == plain
     assert "isError" not in plain
 
@@ -138,9 +128,18 @@ def test_kernel_service_input_rounds_still_merge(call: Call) -> None:
 def test_a_kernel_selector_asking_for_input_is_answered_as_a_drfs_selector_is(
     call: Call,
 ) -> None:
-    server = _server()
-    by_kernel = call(server, {"name": "kernel.asks", "arguments": {}})
-    by_drfs = call(server, {"name": "drfs.asks", "arguments": {}})
+    by_kernel = call(_server(), {"name": "kernel.asks", "arguments": {}})
+    # What a drf-services selector raising the same ``AdditionalInputRequired`` served.
+    by_drfs = {
+        "content": [
+            {
+                "type": "text",
+                "text": json.dumps(
+                    {"error": {"message": "Which account?", "type": "service_error"}}, indent=2
+                ),
+            }
+        ],
+        "isError": True,
+    }
     assert by_kernel == by_drfs
-    assert by_kernel["isError"] is True
     assert "inputRequests" not in by_kernel
