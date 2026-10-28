@@ -3,11 +3,10 @@
 The executors here are the point of the seam: neither imports a queue, and the
 package never learns which one it got.
 
-The drf-services ``server`` fixture and ``slow_service`` live in
-``fixtures_drfs.py``, since every tool on that server carries a ``task_policy`` a
-kernel spec does not take yet. Nothing here imports them, so deleting the
-``*_drfs.py`` files leaves this conftest collectable; a test using them imports
-them from that module itself.
+``policy_server`` is the kernel twin of the drf-services ``server`` fixture in
+``fixtures_drfs.py``: one kernel tool per ``TaskPolicy``. Nothing here imports
+that module, so deleting the ``*_drfs.py`` files leaves this conftest
+collectable; a test using it imports it from that module itself.
 """
 
 from __future__ import annotations
@@ -15,12 +14,14 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from django_service_specs import ServiceSpec, Unrestricted
 
-from django_spec_mcp import MCPServer
+from django_spec_mcp import MCPServer, TaskPolicy
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
 
 
@@ -78,6 +79,39 @@ def server(store: InMemoryTaskStore, executor: RecordingExecutor) -> MCPServer:
     )
 
 
+def done() -> dict[str, str]:
+    return {"done": "yes"}
+
+
+def register_kernel_tool(server: MCPServer, name: str, service: Any, **kwargs: Any) -> None:
+    """Register ``service`` as an open kernel service tool, with ``kwargs`` as its knobs."""
+    server.register_tool(
+        ServiceSpec(service=service, permissions=[Unrestricted()], atomic=False),
+        name=name,
+        description="x",
+        **kwargs,
+    )
+
+
+@pytest.fixture
+def policy_server(store: InMemoryTaskStore, executor: RecordingExecutor) -> MCPServer:
+    """A task-running server with one kernel tool per policy, each answering ``done``."""
+    built = MCPServer(
+        name="tasks-policies",
+        auth_backend=AllowAnyBackend(),
+        session_store=InMemorySessionStore(),
+        task_store=store,
+        task_executor=executor,
+    )
+    for name, policy in (
+        ("tasks.optional", TaskPolicy.OPTIONAL),
+        ("tasks.required", TaskPolicy.REQUIRED),
+        ("tasks.inline", TaskPolicy.FORBIDDEN),
+    ):
+        register_kernel_tool(built, name, done, task_policy=policy)
+    return built
+
+
 def context(
     server: MCPServer,
     *,
@@ -111,7 +145,10 @@ __all__ = [
     "BrokenExecutor",
     "RecordingExecutor",
     "context",
+    "done",
     "executor",
+    "policy_server",
+    "register_kernel_tool",
     "server",
     "store",
 ]

@@ -729,9 +729,15 @@ class MCPServer:
         for ``REQUIRE_TOOL_PERMISSIONS``, which reads the spec's own
         ``permissions``.
 
-        ``task_policy`` other than ``FORBIDDEN`` is refused: the task path does
-        not run a kernel spec yet. Every other knob means what it means on
-        ``register_service_tool`` / ``register_selector_tool``.
+        ``task_policy`` means what it means on ``register_service_tool`` /
+        ``register_selector_tool``, for a service tool and a selector tool
+        alike: ``OPTIONAL`` answers a client that declared the tasks extension
+        with a task handle and runs inline for one that did not, and
+        ``REQUIRED`` refuses the latter with ``-32021``. The spec's own checks
+        are asked before the task is created, and the worker runs an
+        ``OPTIONAL`` tool's call through the same ``dispatch`` a direct call takes, under the server's
+        ``pool_seeds`` and ``conventions``. Every other knob means what it means
+        there too.
 
         A refusal from ``dispatch`` is answered as the drf-services path answers
         its counterpart: ``NotPermitted`` and ``PrincipalUnavailable`` as

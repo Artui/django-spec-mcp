@@ -94,8 +94,9 @@ class KernelToolBinding:
     (``handlers.utils.apply_tool_server_arguments``) and left out of the
     advertised ``inputSchema``."""
     task_policy: TaskPolicy = TaskPolicy.FORBIDDEN
-    """Always ``FORBIDDEN``: registration refuses any other policy, because the
-    task path does not run kernel specs yet."""
+    """See ``ToolBinding.task_policy``. Read by ``maybe_create_task``, which asks
+    a kernel spec's own checks before it creates the task; the worker runs an
+    ``OPTIONAL`` tool's call through the same ``dispatch`` an inline call takes."""
     permissions: tuple[Any, ...] = field(init=False)
     """The transport checks the shared shell judges, derived from ``scopes``.
 
