@@ -28,7 +28,7 @@ from django_spec_mcp.auth.permissions.scope_required import ScopeRequired
 from django_spec_mcp.conf import get_setting
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.testapp.models import Invoice
-from tests.testapp.serializers import InvoiceInputSerializer, InvoiceOutputSerializer
+from tests.testapp.serializers_drfs import InvoiceInputSerializer, InvoiceOutputSerializer
 
 
 class OrderedInvoiceFilterSet(django_filters.FilterSet):

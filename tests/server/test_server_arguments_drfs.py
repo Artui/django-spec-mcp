@@ -39,7 +39,8 @@ from django_spec_mcp.registry.types.tool_binding import ToolBinding
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
 from tests.testapp.urlconf_for import urlconf_for
-from tests.utils import granting_route, tool_error
+from tests.utils import tool_error
+from tests.utils_drfs import granting_route
 
 _MODERN = "2026-07-28"
 

@@ -17,7 +17,7 @@ def _ctx_from_test_app() -> MCPCallContext:
     from django.http import HttpRequest
 
     from django_spec_mcp.auth.types.token_info import TokenInfo
-    from tests.testapp.urls import server
+    from tests.testapp.urls_drfs import server
 
     return MCPCallContext(
         http_request=HttpRequest(),
@@ -108,13 +108,14 @@ def test_handle_resources_list_returns_concrete() -> None:
 
 
 @pytest.mark.django_db
+@pytest.mark.urls("tests.testapp.urls_drfs")
 def test_handle_tools_call_translates_service_error(jsonrpc, initialized_session: str) -> None:
     """A service that raises ``ServiceError`` returns a -32000 JSON-RPC error.
 
     Wires a one-shot tool through the running server so we exercise the full
     error mapping path inside the transport.
     """
-    from tests.testapp.urls import server
+    from tests.testapp.urls_drfs import server
 
     def boom() -> None:
         raise ServiceError("nope")

@@ -51,7 +51,8 @@ from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from tests.testapp.models import Invoice
 from tests.testapp.urlconf_for import urlconf_for
-from tests.utils import RefusingRateLimit, granting_route, tool_error
+from tests.utils import RefusingRateLimit, tool_error
+from tests.utils_drfs import granting_route
 
 MODERN = "2026-07-28"
 

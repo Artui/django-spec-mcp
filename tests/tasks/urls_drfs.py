@@ -16,7 +16,8 @@ from django_spec_mcp import MCPServer, TaskPolicy
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
-from tests.tasks.conftest import RecordingExecutor, slow_service
+from tests.tasks.conftest import RecordingExecutor
+from tests.tasks.fixtures_drfs import slow_service
 
 STORE = InMemoryTaskStore()
 EXECUTOR = RecordingExecutor(STORE)

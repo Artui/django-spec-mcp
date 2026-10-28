@@ -44,7 +44,7 @@ from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.registry.types.tool_binding import ToolBinding
 from django_spec_mcp.schema.service_tool_schema import build_service_tool_input_schema
 from tests.testapp.models import Invoice
-from tests.testapp.serializers import InvoiceOutputSerializer
+from tests.testapp.serializers_drfs import InvoiceOutputSerializer
 
 
 class _RenameInput(serializers.Serializer):

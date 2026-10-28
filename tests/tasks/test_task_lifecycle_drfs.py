@@ -22,7 +22,11 @@ from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from django_spec_mcp.tasks.transition_task import transition_task
 from django_spec_mcp.tasks.types.task_record import TaskRecord
 from django_spec_mcp.types.task_status import TaskStatus
-from tests.tasks.conftest import BrokenExecutor, RecordingExecutor, slow_service
+from tests.tasks.conftest import BrokenExecutor, RecordingExecutor
+from tests.tasks.fixtures_drfs import (
+    server,  # noqa: F401
+    slow_service,
+)
 
 
 def _register(server: MCPServer, name: str, service: Any, **kwargs: Any) -> None:

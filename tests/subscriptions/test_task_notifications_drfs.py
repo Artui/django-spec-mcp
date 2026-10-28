@@ -27,8 +27,9 @@ from django_spec_mcp.tasks.create_task import create_task
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from django_spec_mcp.tasks.transition_task import transition_task
 from django_spec_mcp.types.task_status import TaskStatus
-from tests.subscriptions.test_subscription_core import _context
-from tests.tasks.conftest import RecordingExecutor, slow_service
+from tests.tasks.conftest import RecordingExecutor
+from tests.tasks.fixtures_drfs import slow_service
+from tests.utils import call_context
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -136,7 +137,7 @@ def test_cancelling_announces() -> None:
     server = _server(broker, store)
     task = _task(store)
     queue = _watch(broker, task.task_id)
-    handle_tasks_cancel({"taskId": task.task_id}, _context(server))
+    handle_tasks_cancel({"taskId": task.task_id}, call_context(server))
     assert queue.get_nowait()["params"]["status"] == "cancelled"
 
 
@@ -148,7 +149,7 @@ def test_answering_an_input_request_announces() -> None:
     task = _task(store)
     transition_task(store, task.task_id, status=TaskStatus.INPUT_REQUIRED, input_requests={"k": {}})
     queue = _watch(broker, task.task_id)
-    handle_tasks_update({"taskId": task.task_id, "inputResponses": {"k": 1}}, _context(server))
+    handle_tasks_update({"taskId": task.task_id, "inputResponses": {"k": 1}}, call_context(server))
     assert queue.get_nowait()["params"]["status"] == "working"
 
 
@@ -197,7 +198,7 @@ def _listen(client: Any, task_ids: list[str], *, declares: bool) -> Any:
     )
 
 
-@pytest.mark.urls("tests.subscriptions.urls")
+@pytest.mark.urls("tests.subscriptions.urls_drfs")
 async def test_asking_for_task_notifications_without_the_capability_is_an_error() -> None:
     """The spec's one exception to "refused entries are dropped": this MUST
     be an error rather than a quiet omission from the acknowledgement."""
@@ -213,7 +214,7 @@ async def test_asking_for_task_notifications_without_the_capability_is_an_error(
     )
 
 
-@pytest.mark.urls("tests.subscriptions.urls")
+@pytest.mark.urls("tests.subscriptions.urls_drfs")
 async def test_declaring_the_capability_gets_a_stream_even_with_no_such_task() -> None:
     """The error turns on what the *client declared*, not on anything about the
     tasks it named — so it is not an oracle for which ids exist."""
@@ -232,5 +233,7 @@ def test_the_acknowledgement_lists_the_task_ids_it_agreed_to() -> None:
     broker, store = InMemorySubscriptionBroker(), InMemoryTaskStore()
     server = _server(broker, store)
     task = _task(store)
-    granted, _ = grant_subscription(SubscriptionFilter(task_ids=(task.task_id,)), _context(server))
+    granted, _ = grant_subscription(
+        SubscriptionFilter(task_ids=(task.task_id,)), call_context(server)
+    )
     assert granted.to_dict()["taskIds"] == [task.task_id]

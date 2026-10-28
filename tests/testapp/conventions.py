@@ -1,61 +1,67 @@
-"""A server with somewhere for each ``AgentConventions`` line to land.
+"""A server with somewhere for each ``AgentConventions`` line to land, on kernel specs.
 
-- ``invoices.list`` is a paged selector tool declaring a read-shaping
-  ``QueryParam``, so its param carries the scope sentence, and a selection its
-  serializer refuses while rendering carries it again in the ``isError`` text.
+- ``invoices.list`` is a paged selector tool declaring a read-shaping ``fields``
+  shape, so its param carries the scope sentence.
 - ``invoices.rename`` is a service tool resolving its target through a lookup
-  with no default, so a call leaving ``pk`` out earns the missing-argument
-  message.
-- Both render ``_Row``, whose ``id`` is a handle with no wording of its own, so
+  reading a required ``pk``, so a call leaving ``pk`` out earns the
+  missing-argument message.
+- Both present ``_Row``, whose ``id`` is a handle with no wording of its own, so
   each tool's ``outputSchema`` carries the handle description and its
   ``description`` the handle line.
+
+The drf-services server this replaces is kept in ``conventions_drfs.py`` until
+the drfs path is deleted. It also lands the scope sentence in the refusal of a
+selection its serializer rejects while rendering, which is a ``QueryParam``
+answer with no kernel counterpart.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from dataclasses import dataclass
+from typing import Annotated, Any
 
-from django_service_specs import FieldMarking, SelectorKind
-from rest_framework import serializers
-from rest_framework_services import MARKING
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_service_specs import (
+    DataclassPresenter,
+    DataclassValidator,
+    FieldMarking,
+    Parameter,
+    Parameters,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+)
 
-from django_spec_mcp import AgentConventions, MCPServer, QueryParam
+from django_spec_mcp import AgentConventions, MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from tests.testapp.models import Invoice
 
-REFUSED_SELECTION = "{items{id}}"
+OPEN = [Unrestricted()]
 
 
-class _Row(serializers.ModelSerializer):
-    """An invoice that refuses any ``fields`` selection while it renders."""
+@dataclass
+class _Row:
+    """An invoice, its ``id`` a handle with no wording of its own."""
 
-    class Meta:
-        model = Invoice
-        fields = ["id", "number"]
-        extra_kwargs = {"id": {"style": {MARKING: FieldMarking.handle()}}}
-
-    def to_representation(self, instance: Any) -> Any:
-        if self.context["request"].query_params.get("fields"):
-            raise serializers.ValidationError("`items` field is not found", code="not_found")
-        return super().to_representation(instance)
+    id: Annotated[int, FieldMarking.handle()]
+    number: str
 
 
-class _Rename(serializers.Serializer):
-    number = serializers.CharField()
+@dataclass
+class _Rename:
+    number: str
 
 
 def _invoices() -> Any:
     return Invoice.objects.order_by("pk")
 
 
-def _by_pk(*, pk: int) -> Invoice:
-    return Invoice.objects.get(pk=pk)
+def _by_pk(*, pk: int) -> Invoice | None:
+    return Invoice.objects.filter(pk=pk).first()
 
 
-def _rename(*, instance: Invoice, data: dict[str, Any]) -> Invoice:
-    instance.number = data["number"]
+def _rename(*, instance: Invoice, number: str) -> Invoice:
+    instance.number = number
     instance.save()
     return instance
 
@@ -75,25 +81,36 @@ def conventions_server(
         conventions=conventions,
         **server_kwargs,
     )
-    server.register_selector_tool(
+    server.register_tool(
+        SelectorSpec(
+            kind=SelectorKind.LIST,
+            selector=_invoices,
+            shapes=Parameters([Parameter("fields", "string", help="Fields to return.")]),
+            presenter=DataclassPresenter(_Row),
+            permissions=OPEN,
+        ),
         name="invoices.list",
         description="List invoices.",
-        spec=SelectorSpec(kind=SelectorKind.LIST, selector=_invoices, output_serializer=_Row),
         paginate=True,
-        query_params=(QueryParam("fields", description="Fields to return."),),
     )
-    server.register_service_tool(
-        name="invoices.rename",
-        description="Rename an invoice.",
-        spec=ServiceSpec(
+    server.register_tool(
+        ServiceSpec(
             service=_rename,
             atomic=False,
-            input_serializer=_Rename,
-            instance_selector_spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_by_pk),
-            output_selector_spec=SelectorSpec(kind=SelectorKind.RETRIEVE, output_serializer=_Row),
+            instance_selector_spec=SelectorSpec(
+                kind=SelectorKind.RETRIEVE,
+                selector=_by_pk,
+                reads=Parameters([Parameter("pk", "integer", required=True)]),
+                permissions=OPEN,
+            ),
+            validator=DataclassValidator(_Rename),
+            presenter=DataclassPresenter(_Row),
+            permissions=OPEN,
         ),
+        name="invoices.rename",
+        description="Rename an invoice.",
     )
     return server
 
 
-__all__ = ["REFUSED_SELECTION", "conventions_server"]
+__all__ = ["conventions_server"]

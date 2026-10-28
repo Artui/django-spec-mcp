@@ -2,6 +2,11 @@
 
 Handler-level, so the subject is the decision each one makes rather than the
 HTTP shell around it — the wire is covered end-to-end separately.
+
+Asked of the conftest's kernel ``server``, which carries a task store and no
+tool: each task here is created by name, so no handler asks a spec anything.
+The drf-services original, on ``fixtures_drfs``' task-policy tools, is kept
+beside this file as ``test_tasks_methods_drfs.py``.
 """
 
 from __future__ import annotations

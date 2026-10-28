@@ -30,7 +30,7 @@ from django_spec_mcp.transport.in_memory_session_store import InMemorySessionSto
 from django_spec_mcp.transport.progress_dispatch import preflight_permissions
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from tests.testapp.urlconf_for import urlconf_for
-from tests.utils import granting_route
+from tests.utils_drfs import granting_route
 
 _MODERN = "2026-07-28"
 _KINDS = ["service", "selector"]

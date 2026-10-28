@@ -21,11 +21,14 @@ out fails a named test even where the map stays total:
 - ``ServiceError`` (unanswered without it): ``test_a_service_error_is_a_service_result``
   and the totality test.
 
-Each row with a drf-services counterpart is also compared with what a drf-services
-tool serves for it: ``test_a_denial_is_answered_as_the_drf_services_path_answers_it``,
+Each row with a drf-services counterpart is also held to the answer a drf-services
+tool serves for it, written out here as the literal that tool served:
+``test_a_denial_is_answered_as_the_drf_services_path_answers_it``,
 ``test_invalid_arguments_carry_the_drf_services_detail_in_the_servers_own_wording`` and
 ``test_a_service_refusal_is_answered_as_the_drf_services_path_answers_it``. A bare
 ``DispatchError`` and a deactivated principal have none: drf-services raises neither.
+The comparison against a live drf-services tool is kept in
+``test_kernel_refusals_drfs.py`` until the drfs path is deleted.
 """
 
 from __future__ import annotations
@@ -54,9 +57,6 @@ from django_service_specs import (
     Unrestricted,
     unanswered_refusals,
 )
-from rest_framework import serializers
-from rest_framework.permissions import BasePermission
-from rest_framework_services.types.service_spec import ServiceSpec as DrfServiceSpec
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.handlers.kernel_refusals import KERNEL_REFUSALS
@@ -292,58 +292,80 @@ def test_a_retrieve_not_found_is_worded_as_a_missing_instance(kernel: KernelClie
     }
 
 
+def _refused(error: dict[str, Any]) -> dict[str, Any]:
+    """The JSON-RPC body of a tool result refusing the call with ``error``."""
+    text = json.dumps({"error": error}, indent=2)
+    return {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": {
+            "content": [{"type": "text", "text": text}],
+            "isError": True,
+            "resultType": "complete",
+        },
+    }
+
+
 @pytest.mark.parametrize(
-    ("exc", "name"),
+    ("exc", "name", "drfs_served"),
     [
-        (ServiceError("The ledger is closed"), "closed"),
-        (ActionUnavailable("Already sent", code="already_sent"), "sent"),
-        (ServiceValidationError("Too late to amend"), "late"),
-        (AdditionalInputRequired("Which account?", schema=_ACCOUNT), "asks"),
+        (
+            ServiceError("The ledger is closed"),
+            "closed",
+            _refused({"message": "The ledger is closed", "type": "service_error"}),
+        ),
+        (
+            ActionUnavailable("Already sent", code="already_sent"),
+            "sent",
+            _refused({"code": "already_sent", "message": "Already sent", "type": "service_error"}),
+        ),
+        (
+            ServiceValidationError("Too late to amend"),
+            "late",
+            _refused(
+                {
+                    "detail": "Too late to amend",
+                    "message": "Too late to amend",
+                    "type": "validation_error",
+                }
+            ),
+        ),
+        (
+            AdditionalInputRequired("Which account?", schema=_ACCOUNT),
+            "asks",
+            _refused(
+                {"message": "Which account?", "requestedInput": _ACCOUNT, "type": "input_required"}
+            ),
+        ),
     ],
 )
 def test_a_service_refusal_is_answered_as_the_drf_services_path_answers_it(
-    client: Client, exc: ServiceError, name: str
+    client: Client, exc: ServiceError, name: str, drfs_served: dict[str, Any]
 ) -> None:
-    drfs = MCPServer(name="drfs", auth_backend=build_kernel_server()._auth_backend)
-    drfs.register_service_tool(name=name, spec=DrfServiceSpec(service=_raising(exc)))
-    assert _served(client, _build(), name) == _served(client, drfs, name)
-
-
-class _DrfDeny(BasePermission):
-    def has_permission(self, request: Any, view: Any) -> bool:
-        return False
-
-
-class _NumberSerializer(serializers.Serializer):
-    number = serializers.CharField()
+    """``drfs_served`` is what a drf-services tool whose service raises ``exc`` served."""
+    assert _served(client, _build(), name) == drfs_served
 
 
 def test_a_denial_is_answered_as_the_drf_services_path_answers_it(client: Client) -> None:
-    drfs = MCPServer(name="drfs", auth_backend=build_kernel_server()._auth_backend)
-    drfs.register_service_tool(
-        name="denied", spec=DrfServiceSpec(service=lambda: None, permission_classes=[_DrfDeny])
-    )
-    assert _served(client, _build(), "denied") == _served(client, drfs, "denied")
+    """A drf-services tool whose permission class denies served this body."""
+    assert _served(client, _build(), "denied") == {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "error": {"code": -32006, "message": "Insufficient permission"},
+    }
 
 
 def test_invalid_arguments_carry_the_drf_services_detail_in_the_servers_own_wording(
     client: Client,
 ) -> None:
-    """The same missing field, refused by a serializer there and the kernel's
-    validator here, answers the same per-field detail. The wording differs by
-    design: the kernel reads the field as left out, so it is named in the
-    server's ``missing_arguments``, where the drf-services path keeps
-    ``Invalid arguments`` for a serializer's own field."""
-    drfs = MCPServer(name="drfs", auth_backend=build_kernel_server()._auth_backend)
-    drfs.register_service_tool(
-        name="validated",
-        spec=DrfServiceSpec(service=lambda **_: None, input_serializer=_NumberSerializer),
-    )
-    by_drfs = _error(_served(client, drfs, "validated", {"data": {}}))
+    """The same missing field, refused by a serializer on the drf-services path and the
+    kernel's validator here, answers the same per-field detail, which is what a
+    drf-services tool served for it. The wording differs by design: the kernel reads
+    the field as left out, so it is named in the server's ``missing_arguments``, where
+    the drf-services path keeps ``Invalid arguments`` for a serializer's own field."""
     by_kernel = _error(_served(client, _build(), "validated", {}))
-    assert by_kernel["detail"] == by_drfs["detail"] == {"number": ["This field is required."]}
-    assert by_kernel["type"] == by_drfs["type"] == "validation_error"
-    assert by_drfs["message"] == "Invalid arguments"
+    assert by_kernel["detail"] == {"number": ["This field is required."]}
+    assert by_kernel["type"] == "validation_error"
     assert by_kernel["message"] == "Missing required argument(s): `number`."
 
 

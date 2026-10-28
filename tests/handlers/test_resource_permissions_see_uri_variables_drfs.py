@@ -29,8 +29,9 @@ from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.subscriptions.grant_subscription import grant_subscription
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from tests.testapp.models import Invoice
-from tests.testapp.serializers import InvoiceOutputSerializer
-from tests.utils import RefusingRateLimit, granting_route
+from tests.testapp.serializers_drfs import InvoiceOutputSerializer
+from tests.utils import RefusingRateLimit
+from tests.utils_drfs import granting_route
 
 
 def _project_invoices(*, project_pk: str) -> Any:

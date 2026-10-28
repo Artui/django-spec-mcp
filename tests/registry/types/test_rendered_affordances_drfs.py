@@ -18,7 +18,7 @@ from rest_framework_services.types.service_spec import ServiceSpec
 
 from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
 from django_spec_mcp.registry.types.tool_binding import ToolBinding
-from tests.testapp.affordances import CANCEL_ORDER, OrderSerializer, order_selector_spec
+from tests.testapp.affordances_drfs import CANCEL_ORDER, OrderSerializer, order_selector_spec
 
 
 def _service(output_selector_spec: SelectorSpec[Any, Any] | None) -> ServiceSpec[Any, Any, Any]:

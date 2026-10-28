@@ -20,7 +20,7 @@ from django_spec_mcp.handlers.handle_initialize import handle_initialize
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
-from tests.utils import granting_route
+from tests.utils_drfs import granting_route
 
 LANGUAGES = ["python", "pytorch", "pyside", "ruby"]
 

@@ -16,12 +16,15 @@ from django_spec_mcp import MCPServer, SubscriptionFilter
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from django_spec_mcp.types.subscription_id_meta_key import SUBSCRIPTION_ID_META_KEY
-from tests.subscriptions.urls import SERVER
+from tests.subscriptions.urls_drfs import SERVER
 
 MODERN = "2026-07-28"
 LEGACY = "2025-11-25"
 
-pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.urls("tests.subscriptions.urls")]
+pytestmark = [
+    pytest.mark.django_db(transaction=True),
+    pytest.mark.urls("tests.subscriptions.urls_drfs"),
+]
 
 
 def _body(params: dict[str, Any], *, request_id: Any = 1) -> str:
@@ -302,7 +305,8 @@ async def test_the_capability_advertises_what_the_broker_makes_real() -> None:
 
 async def test_a_server_without_a_broker_advertises_no_subscription_support() -> None:
     from django_spec_mcp.handlers.handle_initialize import build_capabilities
-    from tests.subscriptions.test_subscription_core import _context, _server
+    from tests.subscriptions.test_subscription_core import _server
+    from tests.utils import call_context
 
-    caps = build_capabilities(_context(_server()), modern=True)
+    caps = build_capabilities(call_context(_server()), modern=True)
     assert caps.resources == {}

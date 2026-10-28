@@ -8,7 +8,7 @@ from django_service_specs import FieldAudience, FieldMarking, SelectorKind
 from rest_framework_services import SelectorSpec
 
 from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
-from tests.testapp.serializers import AgentInvoiceSerializer
+from tests.testapp.serializers_drfs import AgentInvoiceSerializer
 
 
 def _binding(**kwargs: object) -> SelectorToolBinding:

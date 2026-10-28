@@ -24,8 +24,7 @@ from django_spec_mcp.subscriptions.in_memory_subscription_broker import (
     InMemorySubscriptionBroker,
 )
 from django_spec_mcp.subscriptions.utils import topic_for_resource
-from tests.subscriptions.test_subscription_core import _context
-from tests.utils import tool_error
+from tests.utils import call_context, tool_error
 
 OPEN = [Unrestricted()]
 
@@ -63,8 +62,8 @@ def _server(**kwargs: Any) -> MCPServer:
 def _call(server: MCPServer, name: str, *, is_async: bool) -> Any:
     params = {"name": name, "arguments": {}}
     if is_async:
-        return async_to_sync(handle_tools_call_async)(params, _context(server))
-    return handle_tools_call(params, _context(server))
+        return async_to_sync(handle_tools_call_async)(params, call_context(server))
+    return handle_tools_call(params, call_context(server))
 
 
 @pytest.mark.django_db(transaction=True)

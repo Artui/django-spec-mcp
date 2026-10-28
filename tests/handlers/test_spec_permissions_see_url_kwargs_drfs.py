@@ -33,8 +33,9 @@ from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from tests.testapp.models import Invoice
-from tests.testapp.serializers import InvoiceOutputSerializer
-from tests.utils import granting_route, tool_error
+from tests.testapp.serializers_drfs import InvoiceOutputSerializer
+from tests.utils import tool_error
+from tests.utils_drfs import granting_route
 
 # Every entry point a tool call takes. ``call_tool`` was already right and is
 # here as the reference the other three are held to.

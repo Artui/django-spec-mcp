@@ -24,8 +24,10 @@ from django_spec_mcp.handlers.task_dispatch import maybe_create_task
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
-from tests.tasks.conftest import RecordingExecutor, context, slow_service
-from tests.utils import RefusingRateLimit, granting_route
+from tests.tasks.conftest import RecordingExecutor, context
+from tests.tasks.fixtures_drfs import slow_service
+from tests.utils import RefusingRateLimit
+from tests.utils_drfs import granting_route
 
 _KINDS = ["service", "selector"]
 

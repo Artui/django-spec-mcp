@@ -10,7 +10,7 @@ from rest_framework_services import MARKING, build_audience_projection
 
 from django_spec_mcp.schema.agent_conventions import HANDLE_DESCRIPTION
 from django_spec_mcp.schema.output_schema import build_output_schema
-from tests.testapp.serializers import AgentInvoiceSerializer, InvoiceOutputSerializer
+from tests.testapp.serializers_drfs import AgentInvoiceSerializer, InvoiceOutputSerializer
 
 PROJECTION = build_audience_projection(AgentInvoiceSerializer)
 
