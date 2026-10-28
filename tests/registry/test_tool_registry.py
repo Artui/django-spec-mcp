@@ -1,8 +1,4 @@
-"""``ToolRegistry`` holds kernel bindings by name, in registration order.
-
-The drf-services original asked the same of a ``ToolBinding`` over a drf-services
-spec and is kept beside this file as ``test_tool_registry_drfs.py``.
-"""
+"""``ToolRegistry`` holds kernel bindings by name, in registration order."""
 
 from __future__ import annotations
 

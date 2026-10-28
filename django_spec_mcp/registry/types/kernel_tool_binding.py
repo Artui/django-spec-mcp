@@ -36,14 +36,11 @@ class KernelToolBinding:
     tool takes are the spec's parameters, spread at the top level of
     ``arguments`` rather than nested under a ``data`` key.
 
-    Every other field is a fact of the MCP binding rather than of the operation,
-    and carries the meaning the same-named field has on ``ToolBinding`` /
-    ``SelectorToolBinding``. The names the shared ``tools/call`` shell reads off
-    any binding (``permissions``, ``rate_limits``, ``server_arguments``,
-    ``task_policy``, ``invalidates``, ``dispatch_timeout``, ``max_result_bytes``,
-    ``url_kwargs`` and ``query_params``) are kept, so the permission check, the
-    rate limits, the deadline, the result ceiling and the invalidation run for a
-    kernel binding exactly as for the others, and only the dispatch differs.
+    Every other field is a fact of the MCP binding rather than of the operation:
+    the scope gate (``permissions``), ``rate_limits``, ``server_arguments``,
+    ``task_policy``, ``invalidates``, ``dispatch_timeout`` and
+    ``max_result_bytes`` are read by the ``tools/call`` shell around the
+    dispatch, never by the spec.
     """
 
     name: str
@@ -60,6 +57,11 @@ class KernelToolBinding:
 
     icons: tuple[Icon, ...] = ()
     annotations: dict[str, Any] = field(default_factory=dict)
+    # A free-form dict rather than a dataclass because ``_meta`` is MCP's open
+    # extension namespace: each extension owns a top-level key, so the valid
+    # key set is unbounded by design. Typed helpers belong *above* this field —
+    # a caller builds a typed object and merges its ``to_dict()`` in via
+    # ``merge_meta`` — not in place of it.
     meta: dict[str, Any] = field(default_factory=dict)
     output_format: OutputFormat = OutputFormat.JSON
     content_kind: ToolContentKind = ToolContentKind.TEXT
@@ -67,11 +69,34 @@ class KernelToolBinding:
     include_structured_content: bool | None = None
     include_output_schema: bool | None = None
     invalidates: tuple[str, ...] = ()
-    """Service tools only; see ``ToolBinding.invalidates``."""
+    """Service tools only: URI templates naming the resources a successful call
+    changed.
+
+    Published as ``notifications/resources/updated`` once the transaction
+    commits, so subscribers re-read. Same ``{var}`` syntax as a resource's
+    ``uri_template``, rendered against the result merged with the call's
+    arguments:
+
+        invalidates=("invoices://{pk}", "invoices://")
+
+    **Name the collection too if you want it watched.** Topic matching is
+    exact: a prefix rule would match ``invoices://1`` against
+    ``invoices://11`` and miss a tenant-scoped scheme entirely.
+
+    Only calls that go through this server fire it. A management command, a
+    Celery job or an admin edit changes the same rows and publishes nothing;
+    ``MCPServer.notify_resource_updated`` covers those."""
     paginate: bool = False
-    """``LIST`` selector tools only; see ``SelectorToolBinding.paginate``."""
+    """``LIST`` selector tools only: serve the result a page at a time, under
+    the model-supplied ``page`` and ``limit``."""
     max_page_size: int | None | UnsetType = UNSET
-    """``LIST`` selector tools only; see ``SelectorToolBinding.max_page_size``."""
+    """``LIST`` selector tools only: the per-tool ceiling on the model-supplied
+    ``limit``. ``UNSET`` defers to the server's ``MAX_PAGE_SIZE``, ``None``
+    serves any ``limit`` the model asks for.
+
+    Only meaningful with ``paginate=True``: an unpaginated selector has no
+    ``limit`` to clamp, and clamping its result would drop rows with nothing in
+    the payload to say so (see ``UnboundedListWarning``)."""
     max_result_bytes: int | None | UnsetType = UNSET
     dispatch_timeout: float | None | UnsetType = UNSET
     always_listed: bool = False
@@ -144,18 +169,6 @@ class KernelToolBinding:
     def kind(self) -> SelectorKind | None:
         """A selector tool's ``RETRIEVE`` / ``LIST``; ``None`` for a service tool."""
         return self.spec.kind if isinstance(self.spec, SelectorSpec) else None
-
-    @property
-    def url_kwargs(self) -> tuple[()]:
-        """Always empty: a kernel spec declares its own reads, so no argument is
-        routed to a view's ``kwargs``. Read by the shared shell's
-        ``dispatch_shape``."""
-        return ()
-
-    @property
-    def query_params(self) -> tuple[()]:
-        """Always empty, for the reason ``url_kwargs`` is."""
-        return ()
 
     @cached_property
     def audience_projection(self) -> AudienceProjection:

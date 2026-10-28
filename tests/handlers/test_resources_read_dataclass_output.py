@@ -1,23 +1,15 @@
 """``resources/read`` renders a kernel resource through its spec's ``DataclassPresenter``.
 
-The original asked that a resource whose drf-services selector declares a raw
-dataclass as its ``output_serializer`` renders it, since the read resolved the
-output itself rather than through ``render_spec_output``. A kernel resource has
-no such step: ``register_resource(spec, uri_template=..., name=...)`` reads
-through the kernel's ``dispatch`` and the spec's presenter renders the row, so
-what is asked here is that both handlers serve what the presenter presents.
-
-The original's other questions, in their kernel form:
+``register_resource(spec, uri_template=..., name=...)`` reads through the
+kernel's ``dispatch`` and the spec's presenter renders the row, so what is
+asked here is that both handlers serve what the presenter presents. Beside it:
 
 - a ``LIST`` of dataclasses: a kernel resource reads one row, so a ``LIST`` is
   refused at registration and served as a selector tool instead;
 - an output no read could render: a presenter that is not a ``Presenter`` is
-  refused when the spec is built, and ``output_serializer=`` beside a kernel
-  spec is refused at registration, since the spec declares its own presenter;
+  refused when the spec is built, since the spec declares its own presenter;
 - a declaration every read would fail on, refused at registration rather than
   at the first read: a template variable no read declares.
-
-The original is kept beside this file as ``test_resources_read_dataclass_output_drfs.py``.
 """
 
 from __future__ import annotations
@@ -128,17 +120,6 @@ def test_a_presenter_no_read_could_render_through_is_refused_when_the_spec_is_bu
             selector=lambda: {},
             presenter=Invoice,  # ty: ignore[invalid-argument-type] - the refusal under test
             permissions=OPEN,
-        )
-
-
-def test_an_output_serializer_beside_a_kernel_spec_is_refused() -> None:
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend())
-    with pytest.raises(TypeError, match="output_serializer"):
-        server.register_resource(
-            SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda: {}, permissions=OPEN),
-            name="bad",
-            uri_template="bad://x",
-            output_serializer=Invoice,
         )
 
 

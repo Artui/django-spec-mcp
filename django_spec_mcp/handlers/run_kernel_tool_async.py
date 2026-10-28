@@ -42,16 +42,16 @@ async def run_kernel_tool_async(
     merged a retry's answers, asked the spec's checks and charged the rate
     limits, so this is only the call: the kernel's ``adispatch`` under
     ``admission``, as in the sync sibling, a refusal answered through
-    ``KERNEL_REFUSALS``, a ``not_found`` worded as the drf-services path words
-    it, and the presented value as the tool result.
+    ``KERNEL_REFUSALS``, a ``not_found`` worded by ``not_found_result``, and the
+    presented value as the tool result.
     """
     dispatched, page = page_request(binding, arguments, context.config)
     scene = KernelRefusalScene(
         arguments=arguments,
         config=context.config,
         conventions=context.conventions,
-        # A selector asks for nothing, as a drf-services selector does not: a
-        # request for input from one is a service error, not a round trip
+        # A selector asks for nothing: a request for input from one is a
+        # service error, not a round trip
         # (``test_a_kernel_selector_ignores_a_round_trip``).
         input_round=None
         if binding.is_selector

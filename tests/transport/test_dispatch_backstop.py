@@ -19,18 +19,11 @@ content type) rather than by re-raising the handler's exception into the test.
 
 The tools and the resource are kernel specs registered with ``register_tool``
 and ``register_resource``, and a consumer permission is a kernel
-``PermissionCheck`` on the spec rather than an entry in ``permissions=``. The
-drf-services original is kept beside this file as
-``test_dispatch_backstop_drfs.py``. Two of its questions have no kernel
-counterpart:
-
-- an escaping DRF ``APIException``, the reported case, since nothing on the
-  kernel path raises one. A presenter raising while it renders is asked
-  instead (``test_a_presenter_that_raises_is_a_json_rpc_internal_error``);
-- a DRF throttle reaching the endpoints through ``DEFAULT_THROTTLE_CLASSES``,
-  which they no longer do: they are plain Django views, so no DRF setting
-  reaches them. A tool's limit is ``rate_limits=``
-  (``test_a_rate_limit_keeps_its_error_and_retry_hint``).
+``PermissionCheck`` on the spec. A presenter raising while it renders is asked
+in ``test_a_presenter_that_raises_is_a_json_rpc_internal_error``. The
+endpoints are plain Django views, so no framework throttle setting reaches them;
+a tool's limit is ``rate_limits=``
+(``test_a_rate_limit_keeps_its_error_and_retry_hint``).
 """
 
 from __future__ import annotations
@@ -70,8 +63,8 @@ MODERN = "2026-07-28"
 # A string id, so a reply echoing a default ``1`` or ``null`` cannot pass.
 REQUEST_ID = "backstop-7"
 # What django-restql 0.18.0 raises from ``to_representation`` for a selection
-# naming a field the serializer lacks: the drf-services original's reported
-# case, kept as the text a raising presenter carries.
+# naming a field the serializer lacks: the reported case, kept as the text a
+# raising presenter carries.
 RESTQL_TEXT = "`items` field is not found"
 # Stands in for whatever a real exception carries that a client must not read.
 SECRET = "could not connect to db-primary.internal:5432"
@@ -126,10 +119,16 @@ def _upstream_forbidden() -> Any:
     raise _UpstreamForbidden(SECRET)
 
 
-# A library's own ``PermissionDenied``: the name DRF's carries, from another
-# module, so only the module half of ``is_raised_denial``'s check refuses it.
+# A library's own ``PermissionDenied``: Django's name, on a class that is not
+# Django's, so ``is_raised_denial`` answers it a fault.
 _NamesakeForbidden: type[Exception] = type(
     "PermissionDenied", (_UpstreamForbidden,), {"__module__": "some_sdk.errors"}
+)
+
+# DRF's ``PermissionDenied`` by module and name, raised from a check as a DRF
+# permission class would: not a subclass of Django's, so a fault as well.
+_DrfForbidden: type[Exception] = type(
+    "PermissionDenied", (Exception,), {"__module__": "rest_framework.exceptions"}
 )
 
 
@@ -142,6 +141,13 @@ class _UpstreamForbiddenCheck(PermissionCheck):
 
     def has_permission(self, *args: Any, **kwargs: Any) -> bool:
         raise _UpstreamForbidden(SECRET)
+
+
+class _DrfForbiddenCheck(PermissionCheck):
+    """A check written for DRF, refusing by raising DRF's class."""
+
+    def has_permission(self, *args: Any, **kwargs: Any) -> bool:
+        raise _DrfForbidden(SECRET)
 
 
 def _explode() -> list[dict[str, Any]]:
@@ -205,6 +211,9 @@ def _server() -> MCPServer:
     server.register_tool(_selector(_namesake_forbidden), name="boom.namesake_body")
     server.register_tool(
         _selector(_rows, permissions=[_UpstreamForbiddenCheck()]), name="boom.upstream_check"
+    )
+    server.register_tool(
+        _selector(_rows, permissions=[_DrfForbiddenCheck()]), name="boom.drf_check"
     )
     server.register_tool(_selector(_rows, permissions=[_ExplodingCheck()]), name="boom.permission")
     server.register_tool(_selector(_rows), name="ok.gated", scopes="mcp:admin")
@@ -385,11 +394,11 @@ async def test_a_presenter_that_raises_is_a_json_rpc_internal_error(
 ) -> None:
     """The kernel form of the reported case: an exception raised while rendering.
 
-    The original raised DRF's ``ValidationError``, which DRF rendered as a
-    ``400`` with a bare list for a body before the backstop. A presenter's
-    exception is the server's fault, the one exception being a
-    ``ServiceValidationError`` refusing a shape the caller sent, which is the
-    caller's ``validation_error`` (``test_kernel_presenter_refusal.py``).
+    Before the backstop such an exception came back as a ``400`` with a bare
+    list for a body. A presenter's exception is the server's fault, the one
+    exception being a ``ServiceValidationError`` refusing a shape the caller
+    sent, which is the caller's ``validation_error``
+    (``test_kernel_presenter_refusal.py``).
     """
     caplog.set_level(logging.ERROR, logger="django_spec_mcp")
     response = await _post(
@@ -439,8 +448,9 @@ async def test_any_other_escaping_exception_is_a_json_rpc_internal_error(
         ("boom.upstream_body", _UpstreamForbidden),
         ("boom.upstream_check", _UpstreamForbidden),
         ("boom.namesake_body", _NamesakeForbidden),
+        ("boom.drf_check", _DrfForbidden),
     ],
-    ids=["body", "check", "namesake"],
+    ids=["body", "check", "namesake", "drf"],
 )
 async def test_an_exception_declaring_a_403_is_still_a_server_fault(
     is_async: bool,
@@ -455,7 +465,7 @@ async def test_an_exception_declaring_a_403_is_still_a_server_fault(
     from a tool's body or from a check calling out, and answering it with a
     ``403`` and a Bearer challenge would tell the caller to fetch a token that
     cannot help, logged below ``ERROR`` where nobody looks. Nor is a class
-    merely named ``PermissionDenied``: only DRF's, by module and name.
+    merely named ``PermissionDenied``: only Django's, so DRF's is a fault too.
     """
     caplog.set_level(logging.ERROR, logger="django_spec_mcp")
     response = await _post(

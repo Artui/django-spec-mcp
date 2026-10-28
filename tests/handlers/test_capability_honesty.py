@@ -7,13 +7,10 @@ modern-only method. ``extensions`` is not even a field on the legacy
 nothing on its path can deliver, and a client acting on it does not get a clean
 error — for ``listChanged`` it gets silence, which is worse.
 
-The kernel version of the drf-services original, kept beside it as
-``test_capability_honesty_drfs.py``. It asks the same questions of a server whose
-resources and tool are registered with ``register_resource`` and
-``register_tool`` on kernel specs. The original borrowed its server, context and
-executor from the subscriptions and tasks suites and mounted the subscriptions
-suite's URL conf; here they are local, so this file reads no other suite's
-drf-services fixtures.
+These ask it of a server whose resources and tool are registered with
+``register_resource`` and ``register_tool`` on kernel specs. The server,
+context and executor are local to this file, so it reads no other suite's
+fixtures.
 """
 
 from __future__ import annotations

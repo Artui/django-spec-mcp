@@ -1,11 +1,9 @@
 """Per-binding rate limits on kernel tools and resources, and on prompts, over both handlers.
 
-Asks of specs registered with ``register_tool`` / ``register_resource`` what the
-original, kept beside this file as ``test_rate_limits_drfs.py``, asks of
-hand-built drf-services bindings: ``rate_limits=`` stays a per-binding knob, and
-a limiter reporting the limit spent answers ``-32005`` with its ``retryAfter``
-before the spec runs. ``consume_rate_limits`` and the prompt cases name no spec,
-and are asked here as the original asks them so they outlive it.
+Asks of specs registered with ``register_tool`` / ``register_resource``:
+``rate_limits=`` is a per-binding knob, and a limiter reporting the limit spent
+answers ``-32005`` with its ``retryAfter`` before the spec runs.
+``consume_rate_limits`` and the prompt cases name no spec.
 """
 
 from __future__ import annotations

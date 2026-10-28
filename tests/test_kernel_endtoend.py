@@ -1,4 +1,4 @@
-"""A kernel-twin mount through the real JSON-RPC view, asserting the served payloads."""
+"""A kernel mount through the real JSON-RPC view, asserting the served payloads."""
 
 from __future__ import annotations
 

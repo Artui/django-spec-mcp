@@ -8,11 +8,6 @@
 - Both present ``_Row``, whose ``id`` is a handle with no wording of its own, so
   each tool's ``outputSchema`` carries the handle description and its
   ``description`` the handle line.
-
-The drf-services server this replaces is kept in ``conventions_drfs.py`` until
-the drfs path is deleted. It also lands the scope sentence in the refusal of a
-selection its serializer rejects while rendering, which is a ``QueryParam``
-answer with no kernel counterpart.
 """
 
 from __future__ import annotations

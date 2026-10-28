@@ -82,7 +82,7 @@ def build_tool_result(
     advertised ``outputSchema`` of those tools admits the ``{}``
     (``build_output_schema(may_be_empty=...)``). A service with no re-read that
     returns ``None`` without declaring ``allow_none`` is served ``{}`` too,
-    against a schema that still requires its fields, because drf-services
+    against a schema that still requires its fields, because the kernel
     presents an undeclared ``None`` rather than refusing it
     (``test_an_undeclared_none_is_still_served_empty_against_a_strict_schema``);
     ``allow_none=True``

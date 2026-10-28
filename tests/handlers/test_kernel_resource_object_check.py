@@ -1,14 +1,7 @@
 """What a kernel spec's permission check is asked on the wire.
 
-Two answers the drfs originals held with a stand-in view and have no kernel
-counterpart for, since a kernel ``PermissionCheck`` is asked about a principal
-and a spec, never about a view: ``test_offline_object_permissions_drfs.py`` held
-that ``resources/read`` runs the object-level half of a check against the
-resolved row, and ``test_the_stand_in_sees_what_the_dispatch_view_sees_drfs.py``
-held that a check reads one request and is asked once. They are kept beside this
-file under those names.
-
-The kernel version asks both over HTTP, on the sync and the async mount: a
+A kernel ``PermissionCheck`` is asked about a principal and a spec, never about
+a view. Two answers are asked over HTTP, on the sync and the async mount: a
 RETRIEVE resource whose check refuses the row answers ``-32006``, and a check
 declaring ``request`` is handed the ``HttpRequest`` the call arrived on and is
 asked once.

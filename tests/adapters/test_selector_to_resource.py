@@ -7,11 +7,8 @@ read, the presenter renders the row and queryset shaping is applied. Asked here:
 a spec declaring any of those registers, and a read runs its precondition and
 its presenter.
 
-The drf-services original pinned the opposite: ``selector_to_resource`` held a
-bare selector callable and refused at registration every spec field the read
-path could not apply, since dropping a precondition silently looks like
-success. With nothing dropped there is nothing to refuse. It is kept beside
-this file as ``test_selector_to_resource_drfs.py``.
+Nothing the spec declares is dropped, so there is nothing to refuse at
+registration: dropping a precondition silently would look like success.
 """
 
 from __future__ import annotations
@@ -87,9 +84,7 @@ def _closed(**_: Any) -> None:
         ("metadata", {"k": "v"}),
     ],
 )
-def test_a_spec_field_the_drfs_read_path_refused_registers_and_is_kept(
-    field: str, value: Any
-) -> None:
+def test_every_declared_spec_field_registers_and_is_kept(field: str, value: Any) -> None:
     spec = _spec(**{field: value})
     server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
 

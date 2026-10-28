@@ -10,16 +10,16 @@ from __future__ import annotations
 
 from django_spec_mcp.handlers.is_binding_listable import is_binding_listable
 from django_spec_mcp.handlers.types.context import MCPCallContext
-from django_spec_mcp.registry.tool_registry import ToolBindingLike
+from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 
 
-def listable_tool_bindings(context: MCPCallContext) -> list[ToolBindingLike]:
+def listable_tool_bindings(context: MCPCallContext) -> list[KernelToolBinding]:
     """Every registered tool, less those ``FILTER_LISTINGS_BY_PERMISSIONS`` hides.
 
     Registry order is kept, so pagination over the result behaves as it does over
     the registry. With the flag off, which is the default, nothing is filtered.
     """
-    bindings: list[ToolBindingLike] = list(context.tools.all())
+    bindings: list[KernelToolBinding] = list(context.tools.all())
     if context.config.filter_listings_by_permissions:
         bindings = [
             b

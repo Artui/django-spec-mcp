@@ -21,7 +21,7 @@ def encode_resource_contents(
     """Encode a resource's rendered ``payload`` into its one ``resources/read`` block.
 
     The encode step both reads share: ``build_resource_contents`` calls it on
-    what the drf-services read's serializer rendered, and
+    what a view's selector returned, and
     ``kernel_utils.resource_read_result`` on what a kernel spec's presenter
     presented. One function, so an encoding changes for both reads at once.
 

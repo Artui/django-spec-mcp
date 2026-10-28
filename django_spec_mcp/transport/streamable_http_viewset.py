@@ -246,7 +246,7 @@ class StreamableHttpViewSet(View):
     instructions: str | None = None
     config: MCPConfig | None = None
     # The owning server's ``pool_seeds=``, read into every context this view
-    # builds. drf-services' default for a hand-wired view, which is exactly
+    # builds. The kernel's default for a hand-wired view, which is exactly
     # the seeds dispatch would use with none passed.
     pool_seeds: PoolSeeds = DEFAULT_POOL_SEEDS
     # The owning server's ``conventions=``, read into every context this view

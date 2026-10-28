@@ -1,7 +1,8 @@
 """Helpers the kernel dispatch path shares across its sync, async and in-process callers.
 
-Kept apart from ``handlers/utils.py``, which serves the drf-services path, so
-the two paths share only the helpers they call by name.
+Kept apart from ``handlers/utils.py``, which holds the transport's own checks
+and result shapes shared with prompts, views and completions, so a helper here
+is one only a call reaching ``dispatch`` needs.
 """
 
 from __future__ import annotations
@@ -177,10 +178,9 @@ def carry_token(request: Any, token: Any) -> Any:
     principal, ``principal_of(token.user)``: the user the call dispatches as,
     or an ``AnonymousUser`` when the token names none. The request a kernel
     spec's ``call_context``, a prompt's ``render``, a completer, a pool seed on
-    a resource read and a read routed through drf-services are handed comes
-    from here, or, for sync ``call_tool``'s kernel tool, which has no token,
-    from ``seat`` on a copy. A drf-services tool call builds its DRF request
-    over the transport's own. A spec reading the caller's token (its scopes, its
+    a resource read and a view are handed comes from here, or, for sync
+    ``call_tool``'s kernel tool, which has no token, from ``seat`` on a copy.
+    A spec reading the caller's token (its scopes, its
     audience) reads it off this request, which is where a permission check
     over HTTP finds it.
 
@@ -536,9 +536,7 @@ def admit_kernel_call(
     The kernel's ``dispatch`` checks a call's arguments before it asks the
     spec's checks, and a kernel binding's own ``permissions`` hold only its
     ``scopes=`` gate. So every route that charges a rate limit, creates a task
-    or answers a missing argument asks the spec first, here, as the
-    drf-services path judged the spec's permission classes in the binding's
-    stack: a caller the tool is not for is refused before it is charged
+    or answers a missing argument asks the spec first, here: a caller the tool is not for is refused before it is charged
     (``test_a_caller_the_spec_refuses_is_not_charged``) and before it learns
     which arguments the tool takes
     (``test_a_caller_the_spec_denies_is_refused_before_the_argument_is_checked``).
@@ -561,8 +559,7 @@ def admit_kernel_call(
     ``-32006`` before the charge, exactly when that listing would hide the
     tool from this caller
     (``test_a_call_failing_its_shape_is_refused_first_exactly_when_the_listing_hides_it``),
-    or, when it admits, the shape check's, from dispatch after the charge, as
-    drf-services answered an admitted caller's missing argument
+    or, when it admits, the shape check's, from dispatch after the charge
     (``test_an_admitted_caller_missing_an_argument_is_charged_and_told_which``).
     dispatch is then handed what it would have been handed without this step.
 
@@ -719,7 +716,7 @@ def page_request(
     Every other binding's arguments are returned whole, with no page. The clamps
     and the envelope arithmetic are ``paginate_output``'s; this only reads the
     two untyped values as ints, falling back to the first page and the kernel's
-    default size, as the drf-services path's ``_coerce_int`` does.
+    default size.
     """
     if not binding.paginate:
         return arguments, None
@@ -742,8 +739,7 @@ def present_tool_result(
 
     A list-shaped spec that presents nothing is served the empty list, which
     its ``outputSchema`` advertises as ``"array"`` (``kernel_tool_output_schema``),
-    rather than the ``{}`` a ``None`` becomes: the result drf-services' ``many``
-    serves for the same declaration
+    rather than the ``{}`` a ``None`` becomes
     (``test_a_list_that_presents_nothing_conforms_to_its_schema``).
     """
     if page is None:
@@ -849,7 +845,7 @@ def _over_row_ceiling(binding: KernelToolBinding, max_rows: int) -> ToolResult:
 
 
 def not_found_result(binding: KernelToolBinding) -> ToolResult:
-    """A ``not_found`` dispatch result, worded as the drf-services path words it.
+    """A ``not_found`` dispatch result as the tool's ``not_found`` error result.
 
     A ``LIST`` has no instance to miss, so its wording is the selector tool's
     ``not found``; a ``RETRIEVE`` and a service tool's instance selector both
@@ -906,15 +902,15 @@ def resource_read_result(
     A ``not_found`` is the resource-not-found error the protocol version names,
     with the URI in ``data``, as an unknown URI is answered. Otherwise the
     presented ``payload`` is the one ``contents`` block, encoded per the
-    binding's ``encoding`` by ``encode_resource_contents``, the step the
-    drf-services read shares: pretty-printed JSON by default, the presented
+    binding's ``encoding`` by ``encode_resource_contents``, the step a view's
+    read shares: pretty-printed JSON by default, the presented
     ``str`` verbatim for ``TEXT``, presented bytes base64-encoded into ``blob``
     for ``BLOB``. The kernel's ``present`` hands a presenter's ``str`` or bytes
     through as returned, and a spec with no presenter its selector's value. A
     presented value of the wrong type for the encoding is the
     ``INTERNAL_ERROR`` that function answers, naming the presenter. Every
     encoding carries the binding's ``_meta``, the cache hints and the server's
-    result ceiling, as the drf-services read builds them.
+    result ceiling, as a view's read does.
     """
     if result.kind == "not_found":
         return JsonRpcError(
@@ -953,8 +949,8 @@ def resource_refusal(exc: DispatchError | ServiceError, scene: KernelRefusalScen
 
     Otherwise the map's answer when it is a JSON-RPC error, which is a denied or
     deactivated principal's ``-32006``. Any other refusal is raised on, to the
-    transport's internal error, which is how the drf-services read answers a
-    selector that raises.
+    transport's internal error, as a view's read answers a selector that
+    raises.
     """
     if isinstance(exc, InvalidArguments):
         return invalid_arguments_error(exc.detail, scene.arguments, scene.config)
@@ -1017,9 +1013,9 @@ def admitted_arguments(binding: KernelToolBinding, pool_seeds: PoolSeeds) -> fro
 def _coerce_int(value: Any, *, default: int) -> int:
     """``value`` as an int, or ``default`` for anything that is not one.
 
-    Stands in for ``selector_tool_dispatch._coerce_int``, which is private to the
-    drf-services path: a bool is refused, since ``True`` is an ``int``, and a
-    numeric string is read.
+    Answering a malformed argument is the transport's policy, so it stays here
+    rather than in the kernel's ``paginate_output``: a bool is refused, since
+    ``True`` is an ``int``, and a numeric string is read.
     """
     if isinstance(value, bool):
         return default

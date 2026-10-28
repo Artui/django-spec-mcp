@@ -25,17 +25,15 @@ def present_kernel_result(
 
     A spec's ``shapes`` are read while the result is presented, after
     ``dispatch`` has returned, so a presenter refusing one fails outside every
-    arm that decides whether a failure is the caller's to fix. As on the
-    drf-services path's read-shaping ``QueryParam``, a ``ServiceValidationError``
-    from the presenter is answered through ``rendering_refusal_result``: an
+    arm that decides whether a failure is the caller's to fix. So a
+    ``ServiceValidationError`` from the presenter is answered through ``rendering_refusal_result``: an
     ``isError`` ``validation_error`` naming the shapes the caller sent, and the
     error raised unchanged when they sent none. Anything else a presenter
     raises is the server's and escapes as it did.
 
     "Sent" is read off ``arguments``, the call's own, less every name the
     binding's ``server_arguments`` answers for, because a value the server
-    supplied is not the caller's to correct; a ``null`` is not sent, as on the
-    drf-services path. Every path a kernel tool is presented on calls this:
+    supplied is not the caller's to correct; a ``null`` is not sent. Every path a kernel tool is presented on calls this:
     ``run_kernel_tool``, its async sibling and the in-process
     ``call_kernel_tool``.
     """

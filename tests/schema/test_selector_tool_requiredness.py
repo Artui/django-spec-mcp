@@ -14,13 +14,8 @@ things answer for a read instead of the caller:
   provider whose keys cannot be read, is offered and not required, because
   dispatch does not demand it of the caller.
 
-The drf-services original asked the same of a reflected signature, a
-``UrlKwarg``, ``spec_kwargs_provides=`` and an ``input_serializer``'s
-defaults, none of which a kernel spec has; it is kept beside this file as
-``test_selector_tool_requiredness_drfs.py``. Its run of the concepts page's
-example is not carried, because that example declares a drf-services spec;
-the kernel example the page owes gets the same test when it is written. Built through
-``MCPServer.list_tools``, so each test reads what a client is served.
+Built through ``MCPServer.list_tools``, so each test reads what a client is
+served.
 """
 
 from __future__ import annotations
@@ -108,10 +103,9 @@ def test_a_read_declared_optional_stays_optional() -> None:
 
 
 def test_a_selector_parameter_no_read_declares_is_not_advertised() -> None:
-    # Changed by design: the drf-services reflection advertised every parameter
-    # of the selector's signature. A kernel spec takes the arguments it
-    # declares and no others, so ``tenant``, which ``_rows`` takes with a
-    # default, is never offered and the closed set refuses it.
+    # A kernel spec takes the arguments it declares and no others, not every
+    # parameter of the selector's signature, so ``tenant``, which ``_rows``
+    # takes with a default, is never offered and the closed set refuses it.
     server = _server()
     _register(server, _PK)
 
@@ -121,9 +115,8 @@ def test_a_selector_parameter_no_read_declares_is_not_advertised() -> None:
 
 
 def test_a_read_named_like_a_dispatcher_seed_is_refused_when_the_spec_is_built() -> None:
-    # Changed by design: the drf-services reflection skipped a seed named in a
-    # signature. A kernel read named like one is a declaration dispatch could
-    # never honour, so the spec refuses it before any tool is registered.
+    # A kernel read named like a seed is a declaration dispatch could never
+    # honour, so the spec refuses it before any tool is registered.
     with pytest.raises(ImproperlyConfigured, match="user"):
         SelectorSpec(
             kind=SelectorKind.LIST,
@@ -255,9 +248,7 @@ def test_the_call_serves_the_providers_value_whatever_the_caller_sends() -> None
     "provider", [_maybe_provider, _maybe_union_provider, _generic_declining_provider]
 )
 def test_a_key_the_provider_may_decline_is_offered_but_not_required(provider: Any) -> None:
-    # Changed by design: drf-services kept a key its selector marked
-    # ``InputRequired`` required beside a provider that may decline it. A
-    # kernel read declared ``required=True`` is relaxed at dispatch when a
+    # A kernel read declared ``required=True`` is relaxed at dispatch when a
     # provider may fill it, so a call without it is not refused for it, and
     # the schema says what dispatch demands, as django-spec-agents' does.
     server = _server()

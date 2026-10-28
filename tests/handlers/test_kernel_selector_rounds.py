@@ -1,13 +1,10 @@
-"""A kernel selector tool takes no part in an input round trip, as a drf-services one does not.
+"""A kernel selector tool takes no part in an input round trip.
 
 A retry's ``inputResponses`` and ``requestState`` reach every ``tools/call``, and
-the service path folds them into the arguments. A selector reads: drf-services
-never lets one elicit or merge an answer, and the kernel path matches it, so
-the same call with and without a round trip's fields is answered alike, and a
-selector asking for input is a service error rather than a question: the result
-a drf-services selector asking for input served, written out here as a literal.
-The comparison against a live drf-services selector is kept in
-``test_kernel_selector_rounds_drfs.py`` until the drfs path is deleted.
+the service path folds them into the arguments. A selector reads: it never
+elicits or merges an answer, so the same call with and without a round trip's
+fields is answered alike, and a selector asking for input is a service error
+rather than a question: the result served is written out here as a literal.
 """
 
 from __future__ import annotations
@@ -125,12 +122,12 @@ def test_kernel_service_input_rounds_still_merge(call: Call) -> None:
 
 
 @pytest.mark.django_db
-def test_a_kernel_selector_asking_for_input_is_answered_as_a_drfs_selector_is(
+def test_a_kernel_selector_asking_for_input_is_answered_as_a_service_error(
     call: Call,
 ) -> None:
-    by_kernel = call(_server(), {"name": "kernel.asks", "arguments": {}})
-    # What a drf-services selector raising the same ``AdditionalInputRequired`` served.
-    by_drfs = {
+    served = call(_server(), {"name": "kernel.asks", "arguments": {}})
+    # A selector raising ``AdditionalInputRequired`` serves the service error, not a question.
+    expected = {
         "content": [
             {
                 "type": "text",
@@ -141,5 +138,5 @@ def test_a_kernel_selector_asking_for_input_is_answered_as_a_drfs_selector_is(
         ],
         "isError": True,
     }
-    assert by_kernel == by_drfs
-    assert "inputRequests" not in by_kernel
+    assert served == expected
+    assert "inputRequests" not in served

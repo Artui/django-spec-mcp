@@ -1,14 +1,13 @@
 """Kernel ``RETRIEVE`` selector tools: a missing row, and ``allow_none``.
 
-The original's questions, asked of a kernel ``SelectorSpec`` registered with
+Asked of a kernel ``SelectorSpec`` registered with
 ``register_tool``, whose ``DataclassPresenter`` renders an ``Invoice`` row: a
 missing row (``None``, an empty queryset, ``Http404`` or ``DoesNotExist``) is a
-tool-level ``not_found`` worded as the drf-services path words it; under
+tool-level ``not_found``; under
 ``allow_none`` it is the empty result instead; a queryset is materialized to
 its row; and a ``LIST`` has no row to miss, so ``allow_none`` does not turn
 its ``Http404`` into an empty result and its ``DoesNotExist`` is the author's
-error. Each on the sync and the async handler. The original is kept beside
-this file as ``test_retrieve_tool_missing_drfs.py``.
+error. Each on the sync and the async handler.
 """
 
 from __future__ import annotations

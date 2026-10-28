@@ -185,7 +185,6 @@ def test_the_unguarded_mark_cannot_be_set_at_construction(kind: str) -> None:
                 uri_template="open://",
                 description="Read.",
                 selector=spec.selector,
-                kind=SelectorKind.RETRIEVE,
                 spec=spec,
                 **{"unguarded": True},
             )

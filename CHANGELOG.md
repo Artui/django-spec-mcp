@@ -17,13 +17,19 @@ carries; releases up to 0.54.0 are in
   takes a `django_service_specs` `ServiceSpec` or `SelectorSpec`, and the spec's
   class decides whether it is a service tool or a selector tool;
   `MCPServer.register_tools(registry, *, overrides=)` registers every entry of a
-  kernel `SpecRegistry`; and `register_resource` takes a `RETRIEVE` spec
-  positionally, beside its `selector=` form. The call runs through the kernel's
+  kernel `SpecRegistry`; and `register_resource` takes a kernel `RETRIEVE`
+  `SelectorSpec` positionally. The call runs through the kernel's
   `dispatch` / `adispatch` with the token's user as the principal and the request,
   carrying the token as `request.mcp_token`, in `call_context`; the advertised
   schemas are the kernel's, so a service tool's arguments sit at the top level
-  with no `data` key. Each kernel refusal is answered as the drf-services path
-  answers its counterpart. `scopes=` gates a tool or resource on every scope it
+  with no `data` key. A refusal the kernel raises on a tool call is answered:
+  `-32006` for a principal its checks deny (`NotPermitted`) or that is
+  deactivated (`PrincipalUnavailable`); an `isError` `validation_error` result
+  for arguments it refuses (`InvalidArguments`, or any other `DispatchError`) and
+  for a service's own `ServiceValidationError`; MRTR's `input_required` for an
+  `AdditionalInputRequired`; and an `isError` `service_error` result for any
+  other `ServiceError`, carrying the `code` an `ActionUnavailable` declares.
+  `scopes=` gates a tool or resource on every scope it
   names, answering `-32006` with `requiredScopes`; a `KernelToolBinding` or
   `KernelResourceBinding` built by hand derives the same gate from its own
   `scopes`, and refuses `scopes=()`. Registration refuses a spec
@@ -46,9 +52,7 @@ carries; releases up to 0.54.0 are in
   tool's shapes say they apply to each item in the server's
   `AgentConventions.query_param_on_pages` wording. A `many` or `returns_many`
   service declared `allow_none` advertises an `outputSchema` of
-  type `"array"` and serves `[]` when it presents nothing, as the drf-services
-  path does for the same declaration.
-  The drf-services registration methods are unchanged.
+  type `"array"` and serves `[]` when it presents nothing.
 - **Listings are filtered by a kernel spec's checks.** With
   `FILTER_LISTINGS_BY_PERMISSIONS` on, a kernel binding is listed only to a
   caller its spec's checks admit, asked with no arguments through `authorize`
@@ -123,8 +127,7 @@ carries; releases up to 0.54.0 are in
   call refused for leaving arguments out is answered in the server's
   `AgentConventions.missing_arguments`, ``Missing required argument(s): `pk`.``
   by default, read off the kernel's `InvalidArguments.missing`, with the per-field
-  detail as before. That includes a Validator field, which the drf-services
-  path answers as `Invalid arguments`.
+  detail as before. That includes a field the spec's Validator declares.
 - **An unpaginated kernel `LIST` tool is held to the row ceiling.** Its own
   `max_page_size`, deferring to the server's `MAX_PAGE_SIZE`, is the most rows
   one result carries. A result over it is refused as `result_too_large` rather
@@ -142,9 +145,8 @@ carries; releases up to 0.54.0 are in
 - **A presenter refusing a caller's shape is the caller's `validation_error`.** A
   `ServiceValidationError` a kernel tool's presenter raises while rendering is
   answered as an `isError` `validation_error` naming the `shapes` the caller sent,
-  with the server's `query_param_on_pages` sentence on a paged tool, as the
-  drf-services path answers a refused read-shaping `QueryParam`, on the wire and
-  from `call_tool` alike. With no shape sent, a `null` one or one the server's
+  with the server's `query_param_on_pages` sentence on a paged tool, on the wire
+  and from `call_tool` alike. With no shape sent, a `null` one or one the server's
   `server_arguments` answers for, the error is the server's and is raised as before:
   a `-32603` on the wire. Anything else a presenter raises stays the server's.
   A kernel resource answers the same refusal of a shape its URI carried as the
@@ -153,8 +155,8 @@ carries; releases up to 0.54.0 are in
   URI it is raised.
 
 - **A kernel tool can run as a task.** `register_tool` and `register_tools`'
-  `overrides` take `task_policy=` for a kernel `ServiceSpec` or `SelectorSpec`,
-  meaning what it means on the drf-services registrars: `OPTIONAL` answers a
+  `overrides` take `task_policy=` for a kernel `ServiceSpec` or `SelectorSpec`:
+  `FORBIDDEN`, the default, never runs it as one; `OPTIONAL` answers a
   client that declared the tasks extension with a task handle and runs inline for
   one that did not, and `REQUIRED` refuses the latter `-32021`, or `-32603` on a
   server with no task store and executor. The `scopes=` gate and the spec's own
@@ -163,8 +165,8 @@ carries; releases up to 0.54.0 are in
   the call, under either policy, through the kernel's `dispatch`, under the server's `pool_seeds` and
   `conventions`, asking the spec's permissions again and handing a service that
   declares `progress` the task's reporter, so its reports reach `tasks/get`.
-- **A kernel resource can serve a document or bytes.** The kernel form of
-  `register_resource` takes `encoding=` and `mime_type=` and applies them to
+- **A kernel resource can serve a document or bytes.** `register_resource`
+  takes `encoding=` and `mime_type=` and applies them to
   what the spec's presenter returns, or its selector's value when it declares
   none. `ResourceEncoding.JSON` stays the default.
   `ResourceEncoding.TEXT` serves a presented `str` verbatim, so a presenter
@@ -174,7 +176,7 @@ carries; releases up to 0.54.0 are in
   no `text`. The mime type is advertised as given in `resources/read`,
   `resources/list` and `resources/templates/list`, and never inferred from or
   checked against the encoding, so `TEXT` under the default `application/json` serves a `str` that
-  is already JSON as it is, as on the `selector=` form. `TEXT` and `BLOB` are
+  is already JSON as it is, as it does on a view resource. `TEXT` and `BLOB` are
   refused at registration, naming both, beside a spec declaring `affordances` or
   `allow_none`, since neither an object carrying affordances nor the `None` a
   missing row presents as is a document or bytes. A presented value of the
@@ -182,8 +184,8 @@ carries; releases up to 0.54.0 are in
   hints apply as they do to JSON, and a presenter refusing a shape the URI
   carried, or a missing row, are answered as on a JSON resource. A
   `KernelResourceBinding` built by hand is encoded by its own `encoding` and
-  `mime_type`, as a registered one is. Both forms encode through one step,
-  so the two cannot drift.
+  `mime_type`, as a registered one is. A kernel resource and a view encode
+  through one step, so the two cannot drift.
 
 ### Changed
 
@@ -220,9 +222,11 @@ carries; releases up to 0.54.0 are in
   bearer token's principal from the moment the request authenticates, so an
   `MCPPermission` never judges the user a session cookie names, and the auth
   backend is handed an anonymous request whatever the cookie says.
-- **`django-service-specs` 0.18.0 is the floor.** Its root holds every kernel name
-  this package reads, and it reserves `shapes` as a pool name, so a `PoolSeeds`
-  entry named `shapes` is refused when it is built, as one named `user` is.
+- **`django-service-specs` 0.19.0 is the floor.** Its root holds every kernel name
+  this package reads, among them the `check_seeds` registration asks and the
+  `InvalidArguments.missing` a missing-argument message is worded from. It
+  reserves `shapes` as a pool name, so a `PoolSeeds` entry named `shapes` is
+  refused when it is built, as one named `user` is.
 - **The package is `django-spec-mcp`, imported as `django_spec_mcp`.** Every
   import of `rest_framework_mcp` becomes `django_spec_mcp`, with the same module
   paths below it, `constants` apart. The settings key is `SPEC_MCP`; a `REST_FRAMEWORK_MCP` setting
@@ -232,9 +236,9 @@ carries; releases up to 0.54.0 are in
 - **`rest_framework_mcp.constants` has no counterpart.** Its enums and constants
   are importable from `django_spec_mcp.types`, each from a module of its own
   (`django_spec_mcp.types.output_format` for `OutputFormat`), and the names the
-  root exported from it still are. `ArgumentBinding`, `UnknownArguments` and
-  `RESERVED_POOL_SEEDS` were re-exports: the root exports the first two, and
-  `django_service_specs`, which defines the third, exports it.
+  root exported from it still are. `UnknownArguments` and `RESERVED_POOL_SEEDS`
+  were re-exports of names `django_service_specs` defines: import both from it.
+  `ArgumentBinding` has no counterpart, as **Removed** says.
 - **Every name stored outside the process is new**: the cache and Redis
   prefixes are `spec-mcp:session:`, `spec-mcp:task:`, `spec-mcp:sse`,
   `spec-mcp:sse-replay`, `spec-mcp:sub`, `spec-mcp:rl`, `spec-mcp:rl-sw` and
@@ -253,14 +257,12 @@ carries; releases up to 0.54.0 are in
   cookie's user: `AnonymousUser` when the token names no one. Declare `user` or
   read `request.user`, either works: a `user` seed is that same principal, so
   for a token naming no one it is now `AnonymousUser` rather than `None`, and a
-  render testing `user is None` reads `user.is_authenticated` instead. The same holds for a kernel tool's and a
-  kernel resource's `call_context["request"].user`, and for the request a
-  resource read routed through drf-services builds on. A pool seed declaring
-  `request` is handed the same `HttpRequest` on `resources/read` of a resource
-  that needs nothing from drf-services: no output serializer, no `kwargs`
-  provider, no `DRFPermissionAdapter` and a selector taking nothing, which
-  every view registered with `register_ui_resource` is unless it holds a
-  `DRFPermissionAdapter`. Such a read's answer is otherwise unchanged.
+  render testing `user is None` reads `user.is_authenticated` instead. The same
+  holds for a kernel tool's and a kernel resource's
+  `call_context["request"].user`. A pool seed declaring `request` is handed the
+  same `HttpRequest` on `resources/read` of a view, one registered with
+  `register_ui_resource` or a `ResourceBinding` built by hand. Such a read's
+  answer is otherwise unchanged.
 - **An in-process call never writes its user to a request it is handed, and
   shares everything of the body with it.** `call_tool` and `acall_tool` work
   on a copy of `request=` whose `user` is the `user=` the call runs as, so a
@@ -288,8 +290,86 @@ carries; releases up to 0.54.0 are in
   whose `user` could name someone other than `user=`, or `None` when no request
   was handed, where it now synthesises one bearing `user=` as `acall_tool`
   does.
+- **Only Django's `PermissionDenied` is a denial.** A
+  `django.core.exceptions.PermissionDenied` raised from inside a permission
+  check is answered `-32006` under a `403` with its challenge, as before. DRF's
+  `rest_framework.exceptions.PermissionDenied`, which is not a subclass of it,
+  is no longer recognised: it reaches the transport's backstop as any other
+  exception does, and is answered as a server error, `-32603`, logged at
+  `ERROR`, where it was a `403` and `-32006`. A check that raised DRF's class
+  returns `False` or raises Django's instead.
+- **A completer receives a sibling argument named `serializer`.** The arguments
+  a client resolved reach a completer's keyword pool under their own names, less
+  the kernel's `RESERVED_POOL_SEEDS`, and `serializer` is no longer stripped
+  beside them, so a completer declaring `serializer` is handed the client's value
+  of that name like any other. The transport's own `request`, `user`, `value`
+  and `arguments` are still written over a sibling of the same name.
+- **Two registration refusals name only what this package takes.** A prompt
+  registered with no `permissions=` is refused, or warned about with
+  `REQUIRE_TOOL_PERMISSIONS` off, in a message that names no
+  `spec.permission_classes` and no DRF default permission classes; a
+  `permissions=` entry on a prompt or a `register_ui_resource` view that cannot
+  answer `has_permission(request, token)` is refused in one that names no
+  `DRFPermissionAdapter`. A warnings filter or a test matching either message's
+  old wording matches neither.
 
 ### Removed
+
+- **The drf-services registrars.** `MCPServer.register_service_tool`,
+  `register_selector_tool` and `register_specs`, the decorators
+  `MCPServer.service_tool`, `selector_tool` and `resource`, and the `selector=`
+  form of `register_resource` are gone, and so is the root function
+  `register_tools(server, definitions, *, selector_defaults=,
+  service_defaults=)` with the `ToolDefinition`, `ToolKind`, `ServiceDefaults`
+  and `SelectorDefaults` it took. Declare each operation as a kernel
+  `ServiceSpec` or `SelectorSpec` and register it with
+  `MCPServer.register_tool(spec, *, name, ...)`, or a kernel `SpecRegistry` of
+  them with `MCPServer.register_tools(registry, *, overrides=)`: the method
+  keeps the removed function's name with a different shape, and the knobs a
+  defaults record held are passed per tool, under its name in `overrides`. A
+  resource is a kernel `RETRIEVE` `SelectorSpec` registered with
+  `register_resource(spec, /, *, name, uri_template, ...)`, a bare callable
+  included, wrapped in a `SelectorSpec` with its permissions. A
+  `ResourceBinding` built by hand and passed to `server.resources.register` is
+  registered unchecked, so it carries its own `permissions`.
+  `django_spec_mcp.adapters` no longer exports `service_spec_to_tool` or
+  `selector_to_resource`, and `django_spec_mcp.schema` no longer exports
+  `build_input_schema` or `build_output_schema`: a kernel tool's schemas are the
+  kernel's.
+
+- **The drf-services bindings and the declarations they carried.** `ToolBinding`
+  and `SelectorToolBinding` are gone, so every tool is a `KernelToolBinding`.
+  `ResourceBinding` loses `kind`, `output_serializer` and `kwargs_provider`, and
+  `QueryParam` and `UrlKwarg` go with the tool bindings' `query_params` and
+  `url_kwargs`. Each is now declared on the spec: its `reads` are the arguments
+  a call takes, a URL lookup among them; its `shapes` are the read-shaping
+  arguments a caller may send; its presenter is what a result is rendered as;
+  its `kwargs=` provider fills keys from the server's side; and a resource's
+  kind is its spec's `RETRIEVE`.
+
+- **`DRFPermissionAdapter`.** A DRF permission class does not gate anything
+  here. A spec's guard is the kernel `PermissionCheck`s in its own
+  `permissions=`, with `scopes=` at registration for an OAuth scope gate; a
+  prompt or a view takes an `MCPPermission`, such as `ScopeRequired` or
+  `DjangoPermRequired`, in `permissions=`.
+
+- **`ArgumentBinding`, and the root re-export of `UnknownArguments`.** A kernel
+  tool's arguments always sit at the top level, so there is no binding to
+  choose and no `argument_binding` to pass. Import `UnknownArguments` from
+  `django_service_specs`, which defines it.
+
+- **`TOOL_EDGE_SEEDS` and `COMPLETION_EDGE_SEEDS`.** Both named what the DRF
+  edge filled itself (`request`, `view` and `serializer`). A kernel spec's
+  reads are checked against the kernel's `RESERVED_POOL_SEEDS` and the server's
+  `pool_seeds` instead, and the kernel refuses a read named `request` or `view`
+  when the spec is built. `RESOURCE_EDGE_SEEDS` (`request`) stays:
+  `register_resource` reserves it, so a URI-template variable of that name is
+  refused.
+
+- **The dependencies on djangorestframework, djangorestframework-services and
+  djangorestframework-dataclasses.** None is in the package's requirements or
+  its lock, and nothing in it imports them, so a project that listed
+  `"rest_framework"` in `INSTALLED_APPS` only for this package can drop it.
 
 - **The bundled authorization-server pieces, `rest_framework_mcp.contrib`.** Dynamic
   Client Registration (`DynamicClientRegistrationViewSet` and its serializer and
@@ -316,17 +396,17 @@ carries; releases up to 0.54.0 are in
   `tools/call` and the availability check. A chain ran its steps outside the
   spec dispatch every other tool goes through, so each spec-level behaviour had
   to be re-implemented for it. To run several operations as one tool, write one
-  service spec whose service calls the others, and register it with
-  `register_service_tool`: it is judged, validated and rendered like any other
+  kernel `ServiceSpec` whose service calls the others, and register it with
+  `register_tool`: it is judged, validated and presented like any other
   service tool, and its `atomic` flag owns the transaction.
 
 - **The `jwt`, `spectacular` and `filter` extras.** `jwt` only installed
-  djangorestframework-simplejwt for the cookie adapter removed above. The other
-  two only re-exposed a package drf-services already reads: a tool's
-  `inputSchema` still honours `@extend_schema_*` annotations, and a selector
-  spec's `FilterSet` still runs. A project using either has the package
-  installed already; one that does not runs `pip install drf-spectacular` or
-  `pip install django-filter`.
+  djangorestframework-simplejwt for the cookie adapter removed above.
+  `spectacular` installed drf-spectacular, which nothing here reads: a tool's
+  `inputSchema` is the kernel's schema of its spec, and `@extend_schema_*`
+  annotations do not reach it. `filter` installed django-filter, which the
+  kernel reads: a `SelectorSpec`'s `filter_set=` runs a `FilterSet`, installed
+  with `pip install "django-service-specs[filter]"`.
 
 ### Fixed
 

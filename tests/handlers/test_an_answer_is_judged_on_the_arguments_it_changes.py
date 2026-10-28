@@ -9,18 +9,11 @@ project ``"7"`` refuses ``"8"`` whether it was sent plainly or answered over an
 admitted ``"7"``, and admits ``"7"`` answered over a refused ``"8"``, on either
 handler, either view and over a stream.
 
-The drf-services original asked this of a per-binding ``DRFPermissionAdapter``
-and a spec's ``permission_classes`` reading ``request.data`` and a
-``QueryParam`` value off the dispatch view's stand-in, which the transport
-judged before the merge and again after it. A kernel check reads the
-arguments rather than a request, and ``QueryParam`` has no kernel counterpart.
-The original is kept beside this file as
-``test_an_answer_is_judged_on_the_arguments_it_changes_drfs.py``.
+A kernel check reads the arguments rather than a request, so there is nothing
+to judge before the merge for an answer to slip past.
 
-Its last question, that a caller the spec refuses is not charged the rate
-limit, is asked as it was, answered or not: the shell asks a kernel spec's
-checks before the charge (``admit_kernel_call``), as drfs judged them in the
-binding's stack.
+A caller the spec refuses is not charged the rate limit, answered or not: the
+shell asks a kernel spec's checks before the charge (``admit_kernel_call``).
 """
 
 from __future__ import annotations

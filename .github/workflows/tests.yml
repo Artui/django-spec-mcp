@@ -43,9 +43,10 @@ jobs:
       - name: Install with docs group
         run: uv sync --all-groups
       - name: mkdocs build --strict
-        # mkdocstrings imports the package, which transitively imports DRF;
-        # DRF reads ``settings.REST_FRAMEWORK`` at import time, so we point at
-        # the test settings module to keep the build hermetic.
+        # mkdocstrings imports the package, whose auth backends import
+        # ``django.contrib.auth``'s models, and those need configured settings
+        # and a ready app registry; the test settings module keeps the build
+        # hermetic.
         run: DJANGO_SETTINGS_MODULE=tests.conftest_settings uv run mkdocs build --strict
       - name: Check doc snippets against the installed packages
         # mkdocs --strict validates links and structure, not claims about an
@@ -132,24 +133,24 @@ jobs:
           import django
           from django.conf import settings
 
-          # DRF reads settings.REST_FRAMEWORK at import, so a bare import of
-          # this package cannot run unconfigured.
+          # The auth backends import ``django.contrib.auth``'s models, so a
+          # bare import of this package cannot run unconfigured.
           settings.configure(
               SECRET_KEY="x",
               INSTALLED_APPS=[
                   "django.contrib.contenttypes",
                   "django.contrib.auth",
-                  "rest_framework",
               ],
               DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}},
               SPEC_MCP={"ALLOWED_ORIGINS": ["*"], "SERVER_INFO": {}},
           )
           django.setup()
 
+          import importlib.util
+
           import django_spec_mcp
-          from rest_framework.permissions import AllowAny
+          from django_service_specs import ServiceSpec, Unrestricted
           from django_spec_mcp import MCPServer, ToolRegistry
-          from rest_framework_services import ServiceSpec
 
           # Touch the public surface rather than only the package root: an
           # upstream symbol that moved would be imported by a leaf module, and
@@ -157,13 +158,18 @@ jobs:
           # full spec reflection, so it exercises the sister package's dispatch
           # surface rather than only the import of it.
           server = MCPServer(name="floor")
-          server.register_service_tool(
+          server.register_tool(
+              ServiceSpec(service=lambda: None, permissions=[Unrestricted()]),
               name="noop",
               description="Probe tool for the base install at its floors.",
-              spec=ServiceSpec(service=lambda: None, permission_classes=[AllowAny]),
           )
           assert server.tools.get("noop") is not None
           assert isinstance(server.tools, ToolRegistry)
+
+          # No DRF in the resolve: the package serves kernel specs, and a
+          # dependency that pulled DRF back in would pass every check above.
+          for name in ("rest_framework", "rest_framework_services"):
+              assert importlib.util.find_spec(name) is None, f"{name} is installed"
 
           print("BASE IMPORT OK", django_spec_mcp.__version__, django.get_version())
           PY
@@ -255,7 +261,6 @@ jobs:
               INSTALLED_APPS=[
                   "django.contrib.contenttypes",
                   "django.contrib.auth",
-                  "rest_framework",
               ],
               DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}},
               # Only scalars. The auth backend and session store are
@@ -277,16 +282,15 @@ jobs:
           from django_spec_mcp.transport.django_cache_session_store import (
               DjangoCacheSessionStore,
           )
-          from rest_framework.permissions import AllowAny
-          from rest_framework_services.types.service_spec import ServiceSpec
+          from django_service_specs import ServiceSpec, Unrestricted
 
           server = MCPServer(name="smoke")
-          # Permissions are required since 0.25.0. Declaring AllowAny here keeps
-          # the smoke test about *imports without optional extras*, which is its
-          # subject, rather than about the permission default.
-          server.register_service_tool(
+          # A tool must declare its permissions. Declaring ``Unrestricted`` here
+          # keeps the smoke test about *imports without optional extras*, which
+          # is its subject, rather than about the permission default.
+          server.register_tool(
+              ServiceSpec(service=lambda: None, permissions=[Unrestricted()]),
               name="noop",
-              spec=ServiceSpec(service=lambda: None, permission_classes=[AllowAny]),
           )
           assert server.tools.get("noop") is not None
 

@@ -6,7 +6,6 @@ from typing import Any
 
 import pytest
 from django.template import TemplateDoesNotExist
-from django_service_specs import SelectorKind
 
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.registry.types.ui_csp import UICsp
@@ -51,10 +50,6 @@ class TestDefaults:
     def test_encodes_the_body_as_text(self) -> None:
         """HTML under JSON encoding comes back as a quoted string literal."""
         assert _register(_make()).encoding is ResourceEncoding.TEXT
-
-    def test_is_a_retrieve(self) -> None:
-        """A view is one document, not a collection."""
-        assert _register(_make()).kind is SelectorKind.RETRIEVE
 
     def test_is_unguarded_by_default(self) -> None:
         """A view is a static asset on an already-authenticated session, and

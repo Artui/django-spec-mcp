@@ -3,19 +3,13 @@
 Asked here of kernel specs: the resources a subscription names are kernel
 ``RETRIEVE`` selectors registered with ``register_resource``, and the tools that
 make ``toolsListChanged`` grantable are kernel service specs registered with
-``register_tool``. The filter, topic and broker questions name no spec and are
-asked as the original asks them.
+``register_tool``. The filter, topic and broker questions name no spec.
 
 **Who may watch a kernel resource is who may read it**, and a kernel read is
 judged by the spec's own permissions in the kernel's ``dispatch``, not by the
 binding's ``permissions``, which hold only its scope gate. So the denied
 caller, the deactivated one and a hand-built unguarded binding are each asked
-here as well as the scope gate; the original asked only the gate a drf-services
-resource carries on its binding (an ``MCPPermission`` in ``permissions=``),
-which a kernel resource does not take.
-
-The original, asking all of it of drf-services resources and tools, is kept
-beside this file as ``test_subscription_core_drfs.py``.
+here as well as the scope gate.
 """
 
 from __future__ import annotations
@@ -355,7 +349,6 @@ async def test_a_handbuilt_unguarded_kernel_resource_fails_the_watch_as_the_read
             uri_template="bare://{pk}",
             description=None,
             selector=_thing,
-            kind=SelectorKind.RETRIEVE,
             spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_thing, reads=_PK),
         )
     )

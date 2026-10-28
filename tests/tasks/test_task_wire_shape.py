@@ -4,14 +4,11 @@ The remaining corners: the status-specific field ``Task.to_dict`` emits, the
 ``OPTIONAL`` fallbacks that quietly run a tool inline, the ``REQUIRED`` denial,
 the async path's task branch, and settings whose ``None`` is meaningful.
 
-Asked of kernel tools registered with a ``task_policy``. The drf-services
-original's permission denial, a permission class refusing with its required
-scopes, is the ``scopes=`` gate here, which answers with the scopes it declares;
-a kernel spec's own refusal before a task exists is
+Asked of kernel tools registered with a ``task_policy``. The permission
+denial is the ``scopes=`` gate, which answers with the scopes it declares; a
+kernel spec's own refusal before a task exists is
 ``tests/handlers/test_a_kernel_spec_answers_before_the_charge.py``'s. The
-``REQUIRED`` refusals, which the original asked over HTTP, are asked here at the
-decision as well. The original is kept beside this file as
-``test_task_wire_shape_drfs.py``.
+``REQUIRED`` refusals are asked here at the decision.
 """
 
 from __future__ import annotations

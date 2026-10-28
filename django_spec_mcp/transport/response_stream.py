@@ -160,12 +160,12 @@ async def _run(coro: Awaitable[Any], queue: asyncio.Queue[Any], *, request_id: A
 class _StreamReporter:
     """The ``ProgressReporter`` handed to the dispatched callable.
 
-    **Called from a worker thread, not the event loop.** ``adispatch_spec``
+    **Called from a worker thread, not the event loop.** the kernel's ``adispatch``
     bridges sync services off-loop and ``asyncio.Queue`` is not thread-safe, so
     every frame goes through ``call_soon_threadsafe``.
 
     **The counters are guarded by a lock, not by an assumption.** Today
-    ``adispatch_spec`` bridges to a single thread, so the read-modify-write on
+    ``adispatch`` bridges to a single thread, so the read-modify-write on
     ``_remaining`` and the monotonicity check does not race — but that is a
     property of a collaborator, and a service fanning reports across a thread
     pool would over-emit past the cap or slip a non-increasing frame through.

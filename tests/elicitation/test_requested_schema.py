@@ -25,8 +25,8 @@ def test_the_properties_are_wrapped_in_the_objects_the_spec_expects() -> None:
 
 
 def test_a_property_with_a_default_is_not_required() -> None:
-    """The only signal available, and the same one the dict would carry as a
-    serializer field: a default says what to do without an answer."""
+    """The only signal available, and the same one a Validator field
+    would carry: a default says what to do without an answer."""
     built = build_requested_schema(
         {"confirmed": {"type": "boolean"}, "reason": {"type": "string", "default": ""}}
     )
@@ -134,7 +134,7 @@ def test_a_property_the_tool_admits_passes() -> None:
 
 
 def test_no_admitted_set_judges_the_schema_alone() -> None:
-    """``None`` is a caller that does not know the set, a drf-services tool or a
-    kernel one passing unknown arguments through, and asks nothing of the names."""
+    """``None`` is a caller that does not know the set, such as a tool passing
+    unknown arguments through, and asks nothing of the names."""
     built = build_requested_schema({"anything": {"type": "boolean"}}, admitted=None)
     assert built["properties"] == {"anything": {"type": "boolean"}}

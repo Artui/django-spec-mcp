@@ -73,7 +73,6 @@ def _resource(permissions: Any, *, scopes: Any = None) -> KernelResourceBinding:
         uri_template="hand://",
         description="Read.",
         selector=spec.selector,
-        kind=spec.kind,
         spec=spec,
         scopes=scopes,
     )

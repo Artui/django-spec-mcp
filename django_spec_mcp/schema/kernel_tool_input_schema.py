@@ -45,8 +45,7 @@ def kernel_tool_input_schema(
       ``test_a_lookup_read_beside_an_untyped_provider_is_offered_and_not_required``),
       and each seat's keys are its own
       (``test_a_key_one_seat_may_decline_is_still_required_by_another``);
-    - a paginated ``LIST`` tool advertises ``page`` and ``limit``, as the
-      drf-services selector schema does, ``limit`` bounded by ``max_page_size``
+    - a paginated ``LIST`` tool advertises ``page`` and ``limit``, ``limit`` bounded by ``max_page_size``
       when there is one, and each of its ``shapes`` says it applies to every
       item rather than to the envelope the ``outputSchema`` describes, in the
       words of ``query_param_on_pages`` (the server's
@@ -90,7 +89,7 @@ def _on_each_item(fragment: dict[str, Any], scope: str) -> dict[str, Any]:
 
     Appended to the declared description rather than replacing it, which says
     what the shape is where this says where it lands, and standing alone when
-    the shape declares none, as a ``QueryParam`` is on the drf-services path.
+    the shape declares none.
     """
     declared: str | None = fragment.get("description")
     return {**fragment, "description": f"{end_sentence(declared)} {scope}" if declared else scope}

@@ -1,27 +1,21 @@
 """A caller a kernel spec's permission denies learns nothing about the target it named.
 
-The original asked it of drf-services permission classes judged against a
-dispatch view: that a denied caller is answered ``-32006`` alike for a row that
-exists and one that does not, that the class-level check is asked once and not
-again on the resolved row, that the object-level check still refuses a row,
-that a list target is not judged row by row, and that a denied caller is
-refused before its input is validated. The kernel's ``dispatch`` fixes that
-order itself - class-level authorization, target resolution, object-level
-authorization, then validation - so these ask it of kernel ``ServiceSpec`` and
-``SelectorSpec`` tools on every route.
+A denied caller is answered ``-32006`` alike for a row that exists and one that
+does not, the class-level check is asked once and not again on the resolved
+row, the object-level check still refuses a row, a list target is not judged
+row by row, and a denied caller is refused before its input is validated. The
+kernel's ``dispatch`` fixes that order itself - class-level authorization,
+target resolution, object-level authorization, then validation - so these ask
+it of kernel ``ServiceSpec`` and ``SelectorSpec`` tools on every route.
 
-Asked as the original asked it: a denied caller is not told which argument
-it left out. The kernel's ``dispatch`` runs its shape check before
+A denied caller is also not told which argument it left out. The kernel's ``dispatch`` runs its shape check before
 authorization, so the transport asks the spec's class-level checks itself
 first (``admit_kernel_call``), on every route, and a caller they deny missing
 a required read is refused for its permission. A caller they admit is still
 refused for its shape, and neither reaches the lookup.
 
-Not carried: a spec with no permission classes being guarded by nothing. A
-kernel spec declares ``permissions=None`` only under
+A kernel spec declares ``permissions=None``, guarded by nothing, only under
 ``REQUIRE_TOOL_PERMISSIONS=False``, which ``test_kernel_unguarded.py`` asks.
-
-The original is kept beside this file as ``test_a_denied_caller_learns_nothing_of_the_target_drfs.py``.
 """
 
 from __future__ import annotations

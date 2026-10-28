@@ -11,9 +11,7 @@ the model there is more, while a silently shortened unpaginated list looks
 complete to the model reading it.
 
 Asked here of kernel specs registered with ``register_tool`` and
-``register_tools``, which reach one binding builder. The drf-services original
-asked it of ``register_selector_tool`` and is kept beside this file as
-``test_unbounded_list_warning_drfs.py``.
+``register_tools``, which reach one binding builder.
 """
 
 from __future__ import annotations

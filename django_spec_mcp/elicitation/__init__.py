@@ -21,7 +21,7 @@ What the pieces here do, in the order a call meets them:
 
 **The service's involvement is one ``raise``.** It never holds a callback and is
 never resumed — it re-runs from the top with the answer present as an ordinary
-argument, which is why the transport-neutral half of this lives in drf-services
+argument, which is why the transport-neutral half of this lives in the kernel
 as a bare exception carrying a message and a schema.
 """
 

@@ -1,10 +1,8 @@
 """Pagination wired through tools/list, resources/list, resources/templates/list, on kernel specs.
 
-The kernel version of the drf-services original, kept beside it as
-``test_pagination_handlers_drfs.py``: the same pages and cursor refusals, over
-tools and resources registered with ``register_tool`` and ``register_resource``.
-A kernel resource reads one row, so the concrete resources here are ``RETRIEVE``
-specs with no variables where the original's were ``LIST`` selectors; the
+Pages and cursor refusals, over tools and resources registered with
+``register_tool`` and ``register_resource``. A kernel resource reads one row, so
+the concrete resources here are ``RETRIEVE`` specs with no variables; the
 listing pages over bindings, not over what they read.
 """
 

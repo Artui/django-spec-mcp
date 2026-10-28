@@ -22,7 +22,6 @@ from django_spec_mcp.handlers.utils import check_permissions, consume_rate_limit
 from django_spec_mcp.protocol.types.completion import Completion
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
-from django_spec_mcp.types.completion_edge_seeds import COMPLETION_EDGE_SEEDS
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from django_spec_mcp.types.max_completion_values import MAX_COMPLETION_VALUES
 
@@ -105,9 +104,7 @@ def handle_completion_complete(
                 data={"requiredScopes": required_scopes} if required_scopes else None,
             )
 
-        # Before the charge, where the read now asks the spec's checks and where
-        # the drf-services completion judged the spec's permission classes, in
-        # the binding's own stack above
+        # Before the charge, where the read asks the spec's checks too
         # (``test_a_kernel_resources_spec_is_asked_before_its_rate_limit``).
         refused: JsonRpcError | None = _refused_by_the_spec(target, context)
         if refused is not None:
@@ -138,20 +135,14 @@ def handle_completion_complete(
         # supply, so a sibling called ``instance`` or ``collection`` — reserved
         # everywhere else, seeded nowhere here — still reached a completer under
         # a name the rest of the package treats as dispatcher-owned. Stripping
-        # tracks ``RESERVED_POOL_SEEDS`` instead of a hand-picked subset of it,
-        # with ``COMPLETION_EDGE_SEEDS`` beside it: ``request`` and
-        # ``serializer`` are no kernel seeds, and the tool paths drop a
-        # caller's key of either name
-        # (``test_a_sibling_named_as_a_name_drf_services_drops_never_reaches_the_completer``).
+        # tracks ``RESERVED_POOL_SEEDS`` instead of a hand-picked subset of it.
+        # ``request`` is no kernel seed, and needs no strip: the seed below is
+        # written over a sibling of that name.
         # ``arguments`` stays the client's mapping verbatim: it is documented as
         # the siblings the client resolved, and a completer reading it knows it
         # is reading caller input.
         pool: dict[str, Any] = {
-            **{
-                key: v
-                for key, v in resolved_siblings.items()
-                if key not in RESERVED_POOL_SEEDS | COMPLETION_EDGE_SEEDS
-            },
+            **{key: v for key, v in resolved_siblings.items() if key not in RESERVED_POOL_SEEDS},
             "request": request,
             "user": request.user,
             "value": value,

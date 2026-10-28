@@ -40,7 +40,7 @@ def _reading_order(payload: Any) -> Any:
 def encode_json(payload: Any) -> str:
     """Encode ``payload`` as a stable, pretty JSON string.
 
-    ``default=str`` renders DRF outputs containing ``Decimal``, ``UUID`` or
+    ``default=str`` renders a presented value containing ``Decimal``, ``UUID`` or
     ``datetime`` without raising; keys are sorted so the output is
     deterministic. A payload ``sort_keys`` can sort is written by it unchanged,
     so its bytes and its nesting limit are ``json.dumps``'s own

@@ -23,8 +23,8 @@ class KernelResourceBinding(ResourceBinding[Any]):
     ``BLOB`` base64-encodes its bytes, on a binding built by hand as on a
     registered one.
 
-    ``selector`` and ``kind`` are the spec's, set at registration, and nothing on
-    this path calls ``selector`` itself. ``permissions`` is not a constructor
+    ``selector`` is the spec's, set at registration, and nothing on this path
+    calls it itself. ``permissions`` is not a constructor
     argument here: it holds only the scope gate built from ``scopes``, derived
     when the binding is built, so one built by hand and passed to
     ``server.resources.register`` gates its reads as a registered one does

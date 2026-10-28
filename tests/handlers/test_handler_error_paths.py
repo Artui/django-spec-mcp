@@ -1,12 +1,10 @@
-"""The handlers' guard paths, called directly against the kernel-twin server's registries.
+"""The handlers' guard paths, called directly against the kernel server's registries.
 
-Asks of ``build_kernel_server`` what the original, kept beside this file as
-``test_handler_error_paths_drfs.py``, asks of the drf-services test app's
-server: each handler names a malformed request as a ``-32602`` (or an unknown
-URI as ``-32002``) before any spec is reached, and a kernel service raising
-``ServiceError`` is a tool-level ``isError`` result rather than a JSON-RPC error.
-The concrete resource listed is a kernel ``RETRIEVE`` with no URI variable, since
-the kernel twins have no list resource.
+Asks of ``build_kernel_server``: each handler names a malformed request as a
+``-32602`` (or an unknown URI as ``-32002``) before any spec is reached, and a
+kernel service raising ``ServiceError`` is a tool-level ``isError`` result rather
+than a JSON-RPC error. The concrete resource listed is a kernel ``RETRIEVE`` with
+no URI variable, since the kernel server has no list resource.
 """
 
 from __future__ import annotations

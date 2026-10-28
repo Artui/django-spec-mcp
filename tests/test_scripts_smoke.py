@@ -55,9 +55,8 @@ def test_a_script_imports_only_module_paths_that_exist(script: str) -> None:
     "script", sorted(p.name for p in _SCRIPTS.glob("*.py")), ids=lambda name: name
 )
 def test_a_script_imports_neither_drf_nor_drf_services(script: str) -> None:
-    # The scripts drive kernel specs, as the package does once its own
-    # drf-services path is gone, so a script still naming either would stop
-    # running the day the dependency goes.
+    # The scripts drive kernel specs and have no use for either library, so a
+    # script importing one is a leftover.
     imported: list[str] = []
     for node in ast.walk(ast.parse((_SCRIPTS / script).read_text())):
         if isinstance(node, ast.ImportFrom):

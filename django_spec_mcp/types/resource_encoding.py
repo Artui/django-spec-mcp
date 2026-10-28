@@ -8,10 +8,9 @@ from enum import Enum
 class ResourceEncoding(str, Enum):
     """How a resource's rendered value becomes the ``resources/read`` body.
 
-    The rendered value is a selector's return after any ``output_serializer``
-    on the ``selector=`` form of ``register_resource``, and what the spec's
-    presenter returns on the kernel form (its selector's value, when it
-    declares no presenter). Declared separately from the binding's
+    The rendered value is what the spec's presenter returns (its selector's
+    value, when it declares no presenter), and a view's selector's return as
+    it is. Declared separately from the binding's
     ``mimeType`` rather than sniffed from it — sniffing would silently change
     behaviour for anyone already advertising a non-JSON type.
 

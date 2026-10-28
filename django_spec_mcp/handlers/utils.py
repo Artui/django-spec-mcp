@@ -1,38 +1,19 @@
 from __future__ import annotations
 
 import asyncio
-import dataclasses
-from collections.abc import Awaitable, Iterable, Mapping, Sequence
+from collections.abc import Awaitable, Iterable, Mapping
 from typing import Any
 
 from django.http import HttpRequest
 from django_service_specs import (
-    RESERVED_POOL_SEEDS,
     ActionUnavailable,
-    PoolSeeds,
     ServiceError,
     ServiceValidationError,
-    UnknownArguments,
     UnsetType,
     apply_server_arguments,
 )
-from rest_framework import serializers as drf_serializers
-from rest_framework_dataclasses.serializers import DataclassSerializer
-from rest_framework_services import ArgumentBinding
-
-# Not a top-level export of the sister package, so this reaches past its stable
-# dispatch surface on purpose. It is the single implementation of "can this
-# spec's declared key set be enumerated?", which is exactly the question
-# ``advertises_closed_schema`` has to answer, and a local copy of that logic is
-# what would let the advertisement drift away from the enforcement again. A
-# rename upstream breaks this import loudly at start-up rather than quietly at
-# the wire, which is the failure mode to prefer here.
-from rest_framework_services.dispatch.utils import DROPPED_EDGE_SEEDS, declared_input_keys
-from rest_framework_services.types.service_spec import ServiceSpec
 
 from django_spec_mcp._compat.reject_awaitable import reject_awaitable
-from django_spec_mcp.auth.permissions.drf_permission_adapter import DRFPermissionAdapter
-from django_spec_mcp.auth.permissions.utils import DispatchShape
 from django_spec_mcp.auth.rate_limits.types.mcp_rate_limit import MCPRateLimit
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.config.types.mcp_config import MCPConfig
@@ -42,19 +23,13 @@ from django_spec_mcp.output.enforce_result_bytes import enforce_result_bytes
 from django_spec_mcp.output.error_tool_result import build_error_tool_result
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.protocol.types.tool_result import ToolResult
-from django_spec_mcp.registry.types.prompt_binding import PromptBinding
-from django_spec_mcp.registry.types.query_param import QueryParam
-from django_spec_mcp.registry.types.resource_binding import ResourceBinding
-from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
-from django_spec_mcp.registry.types.tool_binding import ToolBinding
-from django_spec_mcp.registry.types.url_kwarg import UrlKwarg
+from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from django_spec_mcp.schema.types.agent_conventions import AgentConventions
-from django_spec_mcp.schema.utils import declares_default, end_sentence, required_arguments
+from django_spec_mcp.schema.utils import end_sentence
 from django_spec_mcp.types.cache_scope import CacheScope
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from django_spec_mcp.types.modern_protocol_versions import MODERN_PROTOCOL_VERSIONS
 from django_spec_mcp.types.output_format import OutputFormat
-from django_spec_mcp.types.reserved_post_fetch_keys import RESERVED_POST_FETCH_KEYS
 
 logger = get_logger(__name__)
 
@@ -64,17 +39,12 @@ def apply_tool_server_arguments(binding: Any, arguments: dict[str, Any]) -> dict
 
     The first thing every ``tools/call`` route does with the arguments, once it
     knows they are an object: ``handle_tools_call`` and its async sibling
-    before a task is created and before the permission check, ``call_spec_tool``
-    before it builds the dispatch view. So everything after reads the server's
-    value - the binding's stand-in and the spec's permission classes, the
-    strict ``split_url_kwargs`` of a ``required=True`` URL kwarg, and
-    ``refuse_missing_arguments`` - and a bound value fills a required read
-    rather than being refused as missing before it arrives
-    (``test_a_binding_fills_a_required_read_over_the_wire``, whose cases are
-    sized so each of those two checks is the one that would answer). The
-    service routes call it again on the arguments a retry's answers produce,
-    because that merge takes any key
-    (``test_an_answer_cannot_replace_a_bound_value``).
+    before a task is created, the in-process ``MCPServer.call_tool`` before it
+    runs the tool. So everything after reads the server's value - the kernel's
+    admission and its required-argument check - and a bound value fills a
+    required read rather than being refused as missing before it arrives. A
+    task is recorded with the arguments this returns, so it runs with the
+    bound value (``test_a_kernel_task_is_recorded_and_run_with_the_bound_value``).
 
     The rule is the kernel's ``apply_server_arguments``: the caller's value for
     every bound or withheld name is dropped before anything reads it, so a
@@ -85,13 +55,11 @@ def apply_tool_server_arguments(binding: Any, arguments: dict[str, Any]) -> dict
     argument names, never the values**, which are the consumer's data. A
     withheld name is logged whenever the caller sent it; a bound one when the
     caller's value is not the one the server applies, compared by ``repr`` as
-    ``same_arguments`` compares, so a task worker replaying the arguments this
-    already applied logs nothing a second time. One arc to coverage: without
-    the withheld condition a withheld ``"null"`` goes unlogged
-    (``test_the_bound_project_wins_and_the_withheld_sibling_is_dropped`` on a
-    drfs tool, ``test_the_bound_value_wins_and_the_withheld_one_is_dropped`` on a
-    kernel one), and without the comparison a caller restating the bound value is
-    logged (``test_a_caller_restating_the_bound_value_is_not_logged`` and
+    a task worker replaying the arguments this already applied logs nothing a
+    second time. One arc to coverage: without the withheld condition a withheld
+    ``"null"`` goes unlogged
+    (``test_the_bound_value_wins_and_the_withheld_one_is_dropped``), and without the comparison a caller restating the bound value is
+    logged (``test_the_server_arguments_are_laid_without_a_second_warning`` and
     ``test_a_caller_restating_a_bound_value_with_another_is_logged_once``).
 
     A binding that binds nothing gets its arguments back untouched, the same
@@ -115,248 +83,6 @@ def apply_tool_server_arguments(binding: Any, arguments: dict[str, Any]) -> dict
             ", ".join(dropped),
         )
     return applied
-
-
-def split_url_kwargs(
-    arguments: dict[str, Any],
-    url_kwargs: tuple[UrlKwarg, ...],
-    *,
-    refuse_missing: bool = True,
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Split ``arguments`` into ``(params, url_kwarg_values)``.
-
-    Each declared kwarg takes the model's value, else its ``default``, else stays
-    absent; the name is removed from ``params`` so the value routes only through
-    ``view.kwargs`` (authoritative over params) and never also reaches the spec
-    as an ordinary input. Non-mutating.
-
-    A ``required=True`` kwarg the model omitted is refused here rather than
-    failing further down: ``required`` in the schema is only a hint, and
-    registration forbids pairing it with a ``default``. The refusal is the one
-    ``refuse_missing_arguments`` raises for a selector parameter, DRF's
-    ``ValidationError`` keyed by the argument, so a client reads one shape for
-    a missing argument whichever way it was declared
-    (``test_a_missed_required_url_kwarg_is_answered_in_the_same_shape``).
-    ``refuse_missing=False`` returns what the call delivered instead, for a
-    caller that has to answer something else first (``call_spec_tool``, whose
-    permission check reads the context built from it).
-
-    **An explicit ``null`` is not a supplied value.** A URL kwarg stands in for
-    a route capture, and a route capture can never be null: over HTTP the
-    segment either matched or the URL did not resolve. Off-HTTP a model that
-    emits ``{"pk": null}`` is saying it has no value, so the kwarg falls through
-    to its ``default`` and then to the ``required`` check, exactly as an omitted
-    key does. Routing the ``None`` on instead would satisfy ``required=True``
-    with nothing, and would reach the ORM as ``IS NULL`` — an unscoped read that
-    answers successfully with the wrong rows. ``split_query_params`` applies the
-    same rule for a different reason, which its own docstring gives.
-    """
-    if not url_kwargs:
-        return arguments, {}
-    names = {uk.name for uk in url_kwargs}
-    values: dict[str, Any] = {}
-    missing: list[str] = []
-    for url_kwarg in url_kwargs:
-        supplied: Any = arguments.get(url_kwarg.name)
-        if supplied is not None:
-            values[url_kwarg.name] = supplied
-        elif declares_default(url_kwarg.default):
-            values[url_kwarg.name] = url_kwarg.default
-        elif url_kwarg.required:
-            missing.append(url_kwarg.name)
-    if missing and refuse_missing:
-        raise _missing_arguments_error(sorted(missing))
-    params = {key: value for key, value in arguments.items() if key not in names}
-    return params, values
-
-
-def same_arguments(answered: Mapping[str, Any], delivered: Mapping[str, Any]) -> bool:
-    """Whether a retry's answers left the arguments exactly as the call delivered them.
-
-    ``tools/call`` judges the permission again only when this is ``False``, so
-    arguments it calls the same are ones nothing judges. That is sound because
-    the stand-in is built from the arguments and the call's context alone, so
-    arguments this calls the same build the request the first check judged:
-    the same route, query values and ``request.data``. The whole arguments
-    rather than the route, since the stand-in reads all three
-    (``test_an_answer_changing_a_value_the_permission_reads_is_refused``).
-
-    Not ``==``: ``1``, ``1.0`` and ``True`` are equal in Python, while a target
-    lookup through a ``CharField`` reads ``str()`` of the value, so each names
-    another row, ``"1"``, ``"1.0"`` or ``"True"``, and a permission comparing
-    ``request.data`` by type tells them apart too. Nor ``==`` beside a type
-    check, because ``0.0`` and ``-0.0`` are equal floats and read ``"0.0"`` and
-    ``"-0.0"``
-    (``test_an_answer_equal_to_the_route_but_naming_another_row_is_judged_again``).
-    So each value is compared by ``repr``, which for anything a JSON body
-    decodes into is the same only for the same value of the same type, nested
-    values included.
-
-    Where the two disagree they err toward judging again, which costs one more
-    permission check: an object whose ``repr`` is its address, or a nested
-    mapping whose keys arrive in another order, is a change. An answer
-    restating what the call sent is still judged once
-    (``test_an_answer_leaving_the_arguments_unchanged_is_not_judged_again``).
-
-    The two conditions are one branch arc, so each is held by a test of its
-    own:
-
-    - the same names: an answer adding a key, or one of ``null`` for a URL
-      kwarg the call sent, changes the names while every shared value stays
-      (``test_an_answer_adding_an_argument_is_judged_again`` and
-      ``test_an_answer_clearing_a_route_kwarg_is_judged_on_the_route_it_leaves``);
-    - each value spelled the same (the equal-value test above, and
-      ``test_an_answer_changing_a_value_the_permission_reads_is_refused``).
-    """
-    return answered.keys() == delivered.keys() and all(
-        repr(answered[name]) == repr(delivered[name]) for name in answered
-    )
-
-
-def split_query_params(
-    arguments: dict[str, Any], query_params: tuple[QueryParam, ...]
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Split ``arguments`` into ``(params, query_param_values)``.
-
-    The sibling of ``split_url_kwargs``, minus the ``required`` flag a
-    [`QueryParam`][rest_framework_services.types.query_param.QueryParam] does not carry.
-    Popping the name also keeps a query param out of ``unknown_arguments``.
-
-    A ``filter_set`` field is **not** a query param. Filter fields are already in
-    the tool schema and flow through as ordinary ``params``, which is where
-    ``dispatch_spec`` reads them (as ``filter_data``); declaring one here pops it
-    out of the args and it silently stops filtering.
-
-    **An explicit ``null`` is not a supplied value**, which is the contract
-    ``QueryParam`` itself states for every transport: over HTTP a query param is
-    always a string, so nothing a caller sends there means null, and off-HTTP
-    ``{"fields": null}`` is how a model says it chose not to fill an optional
-    param. So a null falls through to the ``default`` and otherwise produces no
-    value, exactly as an omitted key does. Routing it on is not harmless:
-    ``build_offline_context`` stringifies every value as HTTP would, so the
-    serializer read the four characters ``None`` — which a selection parser
-    refuses as malformed (django-restql does), failing the render of a call whose
-    caller asked for nothing. The name is still popped from ``params`` either way.
-    """
-    if not query_params:
-        return arguments, {}
-    names = {qp.name for qp in query_params}
-    values: dict[str, Any] = {}
-    for query_param in query_params:
-        supplied: Any = arguments.get(query_param.name)
-        if supplied is not None:
-            values[query_param.name] = supplied
-        elif declares_default(query_param.default):
-            values[query_param.name] = query_param.default
-    params = {key: value for key, value in arguments.items() if key not in names}
-    return params, values
-
-
-def binding_input_serializer(binding: SelectorToolBinding) -> type | None:
-    """The serializer a selector binding validates ``arguments`` against.
-
-    The MCP-only ``binding.input_serializer``. ``None`` means there is nothing to
-    validate against. A service tool is not asked: drf-services validates its
-    ``spec.input_serializer`` and checks unknown arguments against the set the
-    spec declares, with or without one.
-    """
-    return binding.input_serializer
-
-
-def advertises_closed_schema(binding: Any) -> bool:
-    """Whether ``tools/list`` may stamp ``additionalProperties: false`` for ``binding``.
-
-    A ``many=True`` service spec is closed whatever its policy. Its list travels
-    under ``spec.many_argument``, and drf-services refuses any argument beside it
-    under every ``unknown_arguments`` value; URL kwargs and query params are split
-    out before dispatch and advertised as properties of their own. The policy
-    governs the keys inside each item there, which ``advertises_closed_items``
-    answers. Everything below describes the arguments of every other binding.
-
-    A **service** tool is closed exactly where its dispatch refuses an
-    undeclared name, and the answer is read the way dispatch reads it rather
-    than restated: the ``(argument_binding, unknown_arguments)`` pair
-    ``services_dispatch_policies`` hands ``dispatch_spec``, and drf-services'
-    ``declared_input_keys`` for the spec under that binding, which is the set
-    its ``resolve_unknown_arguments`` refuses against. Two conjuncts, one
-    branch arc, so each names the test that fails without it:
-
-    - the policy dispatch receives is ``REJECT``: ``IGNORE`` drops an
-      undeclared name rather than refusing it. The ``IGNORE`` rows of
-      ``test_the_advertised_properties_are_the_keys_dispatch_admits``.
-    - the declared set is enumerable under the binding dispatch runs: a target
-      lookup taking a bare ``**kwargs`` or carrying a ``filter_set`` opens it,
-      and so does a spread service's own bare ``**kwargs``, and an open set
-      refuses no undeclared name: drf-services drops it before any callable
-      runs, a bare ``**kwargs`` included. The ``var-keyword`` rows under
-      ``SPREAD_AUTHOR_WINS`` and
-      ``test_a_bare_var_keyword_keeps_the_schema_open_and_refuses_no_key``;
-      passing the binding is what makes ``BUNDLE`` close the same service.
-
-    An ``input_serializer`` is not a condition: without one, drf-services
-    declares the target lookup's keys and, under a ``SPREAD_*`` binding, the
-    service's own parameters, and ``REJECT`` refuses everything else
-    (``test_a_serializer_less_service_refuses_an_undeclared_argument``).
-    ``build_service_tool_input_schema`` lists the same set, so the properties of
-    a closed schema are the names a call may carry
-    (``test_the_advertised_properties_are_the_keys_dispatch_admits``, over
-    every binding and policy).
-
-    A **selector** binding enforces ``REJECT`` in this package,
-    against its own input serializer (``build_validated_input_serializer``), so
-    it is closed under ``REJECT`` with one to validate against, and open without
-    one, where nothing checks the keys. The same two conjuncts, each held by its
-    own test: the policy by
-    ``test_selector_tool_schema_stays_open_under_a_permissive_policy``, and the
-    serializer by
-    ``test_selector_tool_schema_additional_properties_true_when_serializerless_reject``.
-    """
-    if takes_list_payload(binding):
-        return True
-    return _enforces_unknown_keys(binding)
-
-
-def advertises_closed_items(binding: Any) -> bool:
-    """Whether each item of a ``many=True`` service tool's list may be advertised closed.
-
-    drf-services checks ``unknown_arguments`` against every item as it checks a
-    single-item call's arguments, against the same child serializer and the same
-    declared key set, so the item gets the answer a single-item spec would.
-    """
-    return _enforces_unknown_keys(binding)
-
-
-def takes_list_payload(binding: Any) -> bool:
-    """Whether ``binding`` is a service tool whose spec validates a list (``many=True``).
-
-    Selector bindings never do: a selector spec has no ``many``.
-    """
-    spec: Any = getattr(binding, "spec", None)
-    return isinstance(spec, ServiceSpec) and spec.many
-
-
-def _enforces_unknown_keys(binding: Any) -> bool:
-    spec: Any = getattr(binding, "spec", None)
-    if isinstance(spec, ServiceSpec):
-        # Asked of the sister package with the pair its dispatch is handed,
-        # rather than recomputed here: a second reading would drift into
-        # advertising what the runtime stopped enforcing. Neither the serializer
-        # nor the reserved seeds can change whether the set is enumerable, since
-        # one only adds declared names and the other only removes them, so the
-        # question needs neither.
-        argument_binding, unknown_arguments = services_dispatch_policies(binding)
-        return (
-            unknown_arguments is UnknownArguments.REJECT
-            and declared_input_keys(spec, serializer=None, argument_binding=argument_binding)
-            is not None
-        )
-    # Selector bindings enforce the closed set in this package, via
-    # ``build_validated_input_serializer``, which has nothing to check against
-    # without a serializer.
-    return (
-        binding.unknown_arguments is UnknownArguments.REJECT
-        and binding_input_serializer(binding) is not None
-    )
 
 
 def validate_output_format(params: dict[str, Any]) -> JsonRpcError | None:
@@ -390,27 +116,6 @@ def validate_output_format(params: dict[str, Any]) -> JsonRpcError | None:
     return None
 
 
-def services_dispatch_policies(binding: Any) -> tuple[ArgumentBinding, UnknownArguments]:
-    """The ``(argument_binding, unknown_arguments)`` to pass ``dispatch_spec``.
-
-    The binding value passes straight through. A **selector** is already
-    validated by the MCP layer against its own ``inputSchema``, which is wider
-    than the selector signature (filter / ordering / pagination), so the
-    neutral core must not re-reject: always ``IGNORE``. A **service** passes its
-    registered ``unknown_arguments`` through unchanged, with or without an
-    ``input_serializer``: drf-services declares a serializer-less spec's input
-    itself, the target lookup's keys and, under a ``SPREAD_*`` binding, the
-    service's own parameters (``declared_input_keys``), so ``REJECT`` refuses
-    a name outside that set as it does beside a serializer.
-    ``advertises_closed_schema`` reads this pair, so the schema closes where
-    this policy refuses.
-    """
-    argument_binding = binding.argument_binding
-    if not isinstance(binding.spec, ServiceSpec):
-        return argument_binding, UnknownArguments.IGNORE
-    return argument_binding, binding.unknown_arguments
-
-
 def permission_verdict(perm: Any, result: Any, *, method: str, effect: str) -> Any:
     """A permission hook's answer, refusing one that must be awaited.
 
@@ -441,51 +146,18 @@ def check_permissions(
     permissions: tuple[Any, ...],
     http_request: HttpRequest,
     token: TokenInfo,
-    *,
-    shape: DispatchShape | None = None,
 ) -> tuple[bool, list[str]]:
     """Return ``(allowed, required_scopes)`` after evaluating every permission.
 
     Permissions are AND-combined. The aggregated ``required_scopes`` from any
     permission that would deny is returned so the transport can surface them in
-    the ``WWW-Authenticate`` header.
-
-    **``shape`` is the request the check names**, and every
-    [`DRFPermissionAdapter`][django_spec_mcp.auth.permissions.drf_permission_adapter.DRFPermissionAdapter]
-    among ``permissions`` is judged against a copy whose stand-in is built from
-    it, as the view the request dispatches with is. The ``tools/call`` paths
-    pass one through ``judge_tool_permissions``: the arguments in
-    ``request.data``, the routed ``QueryParam`` values in
-    ``request.query_params``, the URL kwargs in ``view.kwargs`` and the tool's
-    name in ``view.action``. ``resources/read`` and a subscription pass
-    ``resource_shape``, the one the read's own view is built from, except a
-    read that needs nothing from drf-services, which holds no adapter to judge
-    and passes ``None``; ``prompts/get`` passes ``prompt_shape``. A spec permission scoping by a
-    route capture reads ``view.kwargs["project_pk"]``, as it would over HTTP,
-    and judged against ``{}`` it denied a caller it admits. Any other
-    permission is judged as it is, since an ``MCPPermission`` judges the
-    request and token and has no view. ``None`` judges every permission as
-    registered, for the paths that name nothing: ``completion/complete`` and a
-    listing.
-
-    The registered adapters are never written to, because every concurrent
-    call to the binding shares them, and the wrapped DRF permission is not
-    instantiated again (``test_the_registered_adapter_is_left_unbound``,
-    ``test_the_permission_is_not_instantiated_again_nor_a_subclass_state_dropped``).
+    the ``WWW-Authenticate`` header. An ``MCPPermission`` judges the request
+    and token and is handed no arguments, so one check answers a binding
+    whatever the call carries.
     """
     required: list[str] = []
     allowed: bool = True
-    for registered in permissions:
-        perm: Any = registered
-        # Both conjuncts hold a test: without the ``None`` check every adapter
-        # on a path naming nothing is bound to ``None``
-        # (``test_without_a_shape_every_adapter_is_judged_on_an_empty_route``),
-        # and without the ``isinstance`` an ``MCPPermission``, which has no view,
-        # is handed one (``test_a_shape_reaches_every_adapter_and_passes_the_rest_through``).
-        if shape is not None and isinstance(registered, DRFPermissionAdapter):
-            # The adapter's private hook, and this is its one caller: binding a
-            # call is how a check is made, not something a consumer composes.
-            perm = registered._bound_to(shape)  # noqa: SLF001
+    for perm in permissions:
         # Do not gate this loop on ``isinstance(perm, MCPPermission)``: the
         # Protocol is ``runtime_checkable``, so that demands *every* member
         # including ``required_scopes``, and a gate-only permission would be
@@ -505,106 +177,29 @@ def check_permissions(
     return allowed, required
 
 
-def dispatch_shape(
-    binding: ToolBinding | SelectorToolBinding, arguments: dict[str, Any]
-) -> DispatchShape:
-    """What a service or selector tool's dispatch request and view are built from.
-
-    The one split every route makes, so the binding's stand-in and the dispatch
-    view are built from the same values and cannot drift: the wire handlers,
-    ``acall_tool`` and ``call_tool`` build the view the spec runs with from it,
-    and ``judge_tool_permissions`` the stand-in the binding's wrapped classes
-    judge. DRF's layout, on every route: a URL kwarg in ``kwargs``, a
-    ``QueryParam`` value in ``query_params``, and the rest of the arguments in
-    ``data``. A selector tool once put the first two in ``data`` as well
-    (``test_request_data_holds_no_route_or_query_value``).
-
-    Not refusing a missing ``required=True`` URL kwarg: the permission answers
-    before a missing argument is named, and each route refuses it after with a
-    strict ``split_url_kwargs``. ``query_params`` is always a mapping, so an
-    empty one still *replaces* the query string the client hung off the MCP
-    endpoint's URL.
-    """
-    params, url_kwarg_values = split_url_kwargs(arguments, binding.url_kwargs, refuse_missing=False)
-    params, query_param_values = split_query_params(params, binding.query_params)
-    # A ``QueryParam`` the spec declares and the binding does not route (one
-    # named like a selector parameter, or one a deprecated ``query_params=``
-    # left out) stays among the arguments, and drf-services writes the sent
-    # value onto the dispatch request's query string from the declaration. The
-    # stand-in and the spec's class-level check judge this shape before that
-    # happens, so it carries the value too
-    # (``test_a_specs_own_query_param_naming_a_selector_parameter_is_served_on_every_route``).
-    # A read the binding routes was popped by the split, so it is not met here.
-    # One arc to coverage: without the first condition a ``UrlKwarg`` read a
-    # deprecated ``url_kwargs=`` left out lands in the query string
-    # (``test_a_url_kwarg_read_never_reaches_the_query_string``); without the
-    # second a null is a value, which ``split_query_params`` says it is not
-    # (``test_a_null_for_a_specs_own_query_param_is_no_query_value``).
-    for read in binding.spec.reads or ():
-        if isinstance(read, QueryParam) and params.get(read.name) is not None:
-            query_param_values = {**query_param_values, read.name: params[read.name]}
-    # A copy, because both splits hand back the mapping they were given when
-    # the binding declares nothing to split, and ``request.data`` is that
-    # mapping uncopied: a permission writing into it wrote into the caller's
-    # ``arguments`` and the next check's request
-    # (``test_a_permission_writing_request_data_reaches_neither_the_next_check_nor_the_caller``).
-    return DispatchShape(
-        data=dict(params),
-        kwargs=url_kwarg_values,
-        query_params=query_param_values,
-        action=binding.name,
-    )
-
-
-def resource_shape(binding: ResourceBinding, variables: Mapping[str, Any]) -> DispatchShape:
-    """What a ``resources/read`` request and view are built from, for one URI.
-
-    The read's own view and every check made of the resource's permissions
-    are built from this, so they judge one request: the URI's variables in
-    ``view.kwargs``, the resource's name in ``view.action``, ``{}`` as
-    ``request.data`` and an empty query string, which replaces the endpoint's.
-    The check once judged ``action=None`` and the endpoint's query string,
-    and the view carried no ``request.auth``, so a permission reading any of
-    those refused every caller in one check or the other
-    (``test_a_resource_permission_reads_one_request_in_both_checks``). A
-    subscription to the URI judges the same request
-    (``test_a_subscription_reads_the_request_the_read_does``).
-
-    A resource URI *is* a locator, so per-call read-shaping belongs in its URI
-    template, whose variables already route to ``view.kwargs``: a resource
-    takes no query value.
-    """
-    return DispatchShape(kwargs=dict(variables), query_params={}, action=binding.name)
-
-
-def prompt_shape(binding: PromptBinding, arguments: Mapping[str, Any]) -> DispatchShape:
-    """What a ``prompts/get`` check's stand-in is built from.
-
-    The prompt's arguments as ``request.data``, its name as ``view.action``
-    and an empty query string. Judged against ``{}``, a permission refusing on
-    an argument admitted every call
-    (``test_a_prompt_permission_reads_the_prompts_arguments``).
-    """
-    return DispatchShape(data=dict(arguments), query_params={}, action=binding.name)
-
-
 def judge_tool_permissions(
-    binding: Any, arguments: dict[str, Any], context: MCPCallContext
+    binding: KernelToolBinding, context: MCPCallContext
 ) -> tuple[bool, list[str]]:
-    """A tool binding's permissions, judged against stand-ins of the call's dispatch views.
+    """A tool binding's ``permissions``, its scope gate, judged for this call.
 
     Every check a ``tools/call`` makes of ``binding.permissions`` goes through
-    this, so none judges a stand-in another check does not: the sync and async
-    handlers (before a retry's answers are read, and again on the route an
-    answer moves to), the streamed call's pre-flight and the check made before
-    a task is created.
-
+    this: the sync and async handlers, the streamed call's pre-flight and the
+    check made before a task is created. The spec's own checks are the
+    kernel's, asked after it (``admit_kernel_tool_call``).
     """
-    return check_permissions(
-        binding.permissions,
-        context.http_request,
-        context.token,
-        shape=dispatch_shape(binding, arguments),
+    return check_permissions(binding.permissions, context.http_request, context.token)
+
+
+def forbidden(required_scopes: list[str]) -> JsonRpcError:
+    """The ``-32006`` for a caller a binding's ``permissions`` deny.
+
+    Every route answers the scope gate this way: both ``tools/call`` handlers,
+    the streamed call's pre-flight and a task's creation.
+    """
+    return JsonRpcError(
+        JsonRpcErrorCode.FORBIDDEN,
+        "Insufficient permission",
+        data={"requiredScopes": required_scopes} if required_scopes else None,
     )
 
 
@@ -655,131 +250,12 @@ def effective_rate_limits(binding: Any, context: MCPCallContext) -> tuple[Any, .
     return binding.rate_limits if context.enforce_rate_limits else ()
 
 
-def build_validated_input_serializer(
-    arguments: dict[str, Any],
-    input_serializer: type | None,
-    *,
-    unknown_arguments: UnknownArguments = UnknownArguments.REJECT,
-    additional_known_keys: frozenset[str] = frozenset(),
-    partial: bool = False,
-    context: Mapping[str, Any] | None = None,
-) -> tuple[Any, drf_serializers.Serializer | None]:
-    """Validate ``arguments``; return ``(validated, bound_serializer)``.
-
-    The validator for the read-shaped path (selector tools),
-    where the input is a flat, instance-free arg map. Service-tool validation
-    flows through drf-services' ``dispatch_spec`` instead.
-
-    Args:
-        arguments: The raw arg map off the wire.
-        input_serializer: A DRF serializer class, a bare ``@dataclass`` (wrapped
-            in a ``DataclassSerializer``), or ``None``.
-        unknown_arguments: What to do with keys outside the declared set.
-            Reserved pool seeds and post-fetch keys are always exempt: the
-            dispatch pipeline owns them, so a client must not be able to poison
-            them. ``PASSTHROUGH`` raises ``ValueError``, as drf-services' own
-            dispatch does for it, so a binding built by hand with it is not run
-            as ``IGNORE`` without a word.
-        additional_known_keys: Widens the known set beyond the serializer's own
-            fields; selector tools pass their filter / ordering / pagination keys.
-        partial: Relaxes required-field validation. MCP has no HTTP method to
-            derive partiality from, so the read paths default to full validation.
-        context: Serializer context — callers pass ``base_serializer_context`` so
-            a validator reading ``self.context["request"]`` behaves as it does
-            behind a DRF view.
-
-    Returns:
-        The dataclass instance for a ``DataclassSerializer``, the
-        ``validated_data`` dict for a plain ``Serializer``, or ``None`` for no
-        serializer; paired with the bound serializer.
-
-    Raises:
-        drf_serializers.ValidationError: On invalid or, under ``REJECT``,
-            unknown input.
-        ValueError: For ``UnknownArguments.PASSTHROUGH``, with or without a
-            serializer
-            (``test_the_read_path_under_passthrough_raises_as_drf_services_dispatch_does``).
-    """
-    if unknown_arguments is UnknownArguments.PASSTHROUGH:
-        # drf-services' wording (``refuse_retired_modes``), so a project meets
-        # one message whichever path refused the policy.
-        raise ValueError(
-            "UnknownArguments.PASSTHROUGH is retired: an argument the spec does not declare "
-            "never reaches a callable. Declare it (a reads entry, a serializer field or a "
-            "parameter), then pass UnknownArguments.IGNORE or UnknownArguments.REJECT."
-        )
-    if input_serializer is None:
-        return None, None
-    target: type = input_serializer
-    if dataclasses.is_dataclass(target) and not isinstance(target, type):  # pragma: no cover
-        raise TypeError("input_serializer must be a class")
-    serializer_kwargs: dict[str, Any] = {"data": arguments, "partial": partial}
-    if context is not None:
-        serializer_kwargs["context"] = dict(context)
-    if isinstance(target, type) and dataclasses.is_dataclass(target):
-        wrapper_cls: type[drf_serializers.Serializer] = type(
-            f"{target.__name__}Serializer",
-            (DataclassSerializer,),
-            {"Meta": type("Meta", (), {"dataclass": target})},
-        )
-        serializer = wrapper_cls(**serializer_kwargs)
-    else:
-        serializer = target(**serializer_kwargs)
-
-    declared_fields: set[str] = set(serializer.fields.keys())
-    # ``DROPPED_EDGE_SEEDS`` (``request``, ``serializer``) beside the kernel's seeds:
-    # drf-services drops a caller's key of either name as it drops a reserved seed's,
-    # on the service path and the selector path alike, so refusing it here would make
-    # a selector tool's input serializer refuse what the service path quietly drops
-    # (``test_a_name_drf_services_drops_is_not_refused_as_unknown``).
-    known: set[str] = (
-        declared_fields
-        | set(additional_known_keys)
-        | RESERVED_POOL_SEEDS
-        | DROPPED_EDGE_SEEDS
-        | RESERVED_POST_FETCH_KEYS
-    )
-    unknown_keys: set[str] = set(arguments.keys()) - known
-
-    if unknown_keys and unknown_arguments is UnknownArguments.REJECT:
-        offenders: str = ", ".join(sorted(unknown_keys))
-        raise drf_serializers.ValidationError(
-            {"non_field_errors": [f"Unknown argument(s): {offenders}"]}
-        )
-
-    serializer.is_valid(raise_exception=True)
-    return serializer.validated_data, serializer
-
-
-def validate_input_against_serializer(
-    arguments: dict[str, Any],
-    input_serializer: type | None,
-    *,
-    unknown_arguments: UnknownArguments = UnknownArguments.REJECT,
-    additional_known_keys: frozenset[str] = frozenset(),
-    context: Mapping[str, Any] | None = None,
-) -> Any:
-    """Validate ``arguments`` against ``input_serializer``; return ``validated`` only.
-
-    Thin wrapper over ``build_validated_input_serializer`` (see there for the
-    full semantics) for callers that don't need the bound serializer.
-    """
-    validated, _serializer = build_validated_input_serializer(
-        arguments,
-        input_serializer,
-        unknown_arguments=unknown_arguments,
-        additional_known_keys=additional_known_keys,
-        context=context,
-    )
-    return validated
-
-
 def validation_error_data(detail: Any, value: Any, *, include_value: bool) -> dict[str, Any]:
     """Build the ``detail`` / ``value`` pair a validation failure reports.
 
     Merged into the ``error`` object of a ``validation_error`` tool result (see
-    ``validation_error_result``). Always carries the per-field ``detail`` shape
-    DRF produces. ``include_value`` (the server's
+    ``validation_error_result``). Always carries the per-field ``detail``
+    shape: a mapping of field name to a list of messages. ``include_value`` (the server's
     ``MCPConfig.include_validation_value``) also echoes ``value`` back; off by
     default because it may carry PII or secrets that must not flow back to the
     client or into client-side logs.
@@ -788,79 +264,6 @@ def validation_error_data(detail: Any, value: Any, *, include_value: bool) -> di
     if include_value:
         payload["value"] = value
     return payload
-
-
-def refuse_missing_arguments(
-    binding: SelectorToolBinding | ToolBinding,
-    present: Iterable[str],
-    *,
-    pool_seeds: PoolSeeds,
-    input_serializer_runs: bool = True,
-) -> None:
-    """Refuse a call that leaves out an argument its selectors cannot run without.
-
-    A selector -- a selector tool's own, or the lookup a service tool resolves
-    its target through -- called without a parameter it has no default for
-    raises ``TypeError``, which no handler maps, so the call used to answer
-    HTTP 500 and JSON-RPC ``-32603`` on the wire and raise from ``call_tool``.
-    The names checked are the ones the tool's ``inputSchema`` requires of its
-    selectors (``schema.utils.required_arguments``), read from the same
-    reflection, so the rule enforced is the rule the client was told, and a name
-    the server fills is never among them.
-
-    Raised as DRF's ``ValidationError`` keyed by field with DRF's own
-    ``required`` message and code, the detail an input serializer gives a
-    missing field, so every caller's existing ``ValidationError`` arm catches
-    it; ``validation_error_result`` reads it as this check's refusal and words
-    it with the server's ``missing_arguments``. ``present`` is every name the
-    call delivers to the selector: the arguments left after the channel splits
-    plus the ``UrlKwarg`` values, which reach the pool through ``view.kwargs``.
-    ``input_serializer_runs=False`` is for ``call_tool``, which does not run a
-    selector tool's ``input_serializer``, so its defaults deliver nothing there
-    (``schema.utils.required_arguments``).
-
-    Called after the transport-level permissions on every route, so a caller
-    ``tools/list`` hides the tool from is refused for the permission before it
-    could learn from this answer that the tool exists
-    (``test_a_denied_caller_is_refused_before_the_argument_is_checked``).
-    """
-    delivered = frozenset(present)
-    required = required_arguments(
-        binding, pool_seeds=pool_seeds, input_serializer_runs=input_serializer_runs
-    )
-    missing = [name for name in required if name not in delivered]
-    if missing:
-        raise _missing_arguments_error(missing)
-
-
-def _missing_arguments_error(names: list[str]) -> drf_serializers.ValidationError:
-    """The refusal of a call that left ``names`` out.
-
-    Both checks that ask for an argument before anything runs raise this: the
-    selectors' (``refuse_missing_arguments``) and a ``UrlKwarg(required=True)``'s
-    (``split_url_kwargs``). Those are the two the Pydantic-AI toolset words as
-    ``Missing required argument(s): ...``, so both are answered that way here.
-    """
-    return _MissingArguments(names)
-
-
-class _MissingArguments(drf_serializers.ValidationError):
-    """DRF's ``ValidationError`` for arguments a call left out, marked as such.
-
-    The detail is DRF's own ``required`` message and code keyed by each name,
-    which is what an input serializer gives a missing field: a client reading
-    the detail reads one shape for both. A subclass because the detail cannot
-    tell them apart, and the message must: only this refusal gets the server's
-    ``missing_arguments``, while a serializer's own missing field keeps
-    ``"Invalid arguments"``
-    (``test_a_service_tools_serializer_keeps_the_generic_message_for_its_own_field``).
-    Every ``except ValidationError`` arm still catches it unchanged.
-    """
-
-    def __init__(self, names: Sequence[str]) -> None:
-        message = drf_serializers.Field.default_error_messages["required"]
-        super().__init__({name: [message] for name in names}, code="required")
-        self.names: tuple[str, ...] = tuple(names)
 
 
 def render_convention(template: str | None) -> str | None:
@@ -882,66 +285,39 @@ def render_convention(template: str | None) -> str | None:
 def missing_arguments_message(names: Iterable[str], conventions: AgentConventions) -> str:
     """The server's ``missing_arguments`` sentence for a call that left ``names`` out.
 
-    Sorted, each in backticks, joined with ", ": the Pydantic-AI toolset's
-    format, so one omission reads the same on both transports and on both
-    paths of this one
+    Each in backticks, joined with ", ", in the sorted order the kernel's
+    ``InvalidArguments.missing`` gives them: the Pydantic-AI toolset's format,
+    so one omission reads the same on both transports
     (``test_several_missing_names_are_sorted_and_joined``).
     """
-    listed = ", ".join(f"`{name}`" for name in sorted(names))
+    listed = ", ".join(f"`{name}`" for name in names)
     return conventions.missing_arguments.format(names=listed)
 
 
 def validation_error_result(
-    exc: drf_serializers.ValidationError | ServiceValidationError,
+    exc: ServiceValidationError,
     arguments: Any,
     *,
     config: MCPConfig,
-    conventions: AgentConventions,
 ) -> ToolResult:
-    """The ``isError`` result for a tool call whose arguments were refused.
+    """The ``isError`` result for a tool call whose arguments a service refused.
 
-    One answer for every way a call's input can be refused before or while it
-    is dispatched: DRF's ``ValidationError`` (an unexpected argument under
-    ``UnknownArguments.REJECT``, an ``input_serializer`` rejection, a value a
-    spec's ``FilterSet`` refuses) and drf-services' ``ServiceValidationError``
-    (a service's own validation, a missing ``InputRequired`` argument a
-    ``kwargs=`` provider might have filled). The MCP spec's tools "Error
-    Handling" section files "input validation errors (e.g., date in wrong
-    format, value out of range)" under tool execution errors, reported with ``isError: true`` so the
-    model can read them and correct its call; a JSON-RPC protocol error is for
-    an unknown tool or a request that fails the ``CallToolRequest`` schema. The
-    same rule holds in every served protocol version: 2025-06-18 lists "invalid
-    input data" under tool execution errors too.
+    The MCP spec's tools "Error Handling" section files "input validation
+    errors (e.g., date in wrong format, value out of range)" under tool
+    execution errors, reported with ``isError: true`` so the model can read
+    them and correct its call; a JSON-RPC protocol error is for an unknown tool
+    or a request that fails the ``CallToolRequest`` schema. The same rule holds
+    in every served protocol version: 2025-06-18 lists "invalid input data"
+    under tool execution errors too.
 
-    The ``error`` object carries ``type: "validation_error"``, the message, and
-    what ``validation_error_data`` builds: ``detail`` keyed by field as DRF
-    produces it, and ``value`` only under ``INCLUDE_VALIDATION_VALUE``. Those are
-    the names the ``-32602`` envelope's ``data`` carried, so a client reading
-    the detail finds it under the same key one level down. A DRF error has no
-    message of its own, so it keeps the one that envelope had, with one
-    exception: arguments a call left out before anything ran (a selector
-    parameter with no default, a service tool's target lookup, a
-    ``UrlKwarg(required=True)``) are named in the server's
-    ``conventions.missing_arguments``, ``Missing required argument(s): `pk`.``
-    by default. Only that refusal: an input serializer's, a missing field
-    included, is indistinguishable by its detail and keeps ``"Invalid
-    arguments"``, because the marker is the exception's type, not its codes.
-
-    Every argument-validation arm on the ``tools/call`` paths builds its result
-    here -- the service tool handlers sync and async, the in-process
-    ``call_tool`` and both selector tool siblings -- so a refused argument
-    answers the same way whichever path served it. A refusal while rendering
-    goes through ``read_shaping_error_result``.
+    The ``error`` object carries ``type: "validation_error"``, the service's
+    message, and what ``validation_error_data`` builds: ``detail`` keyed by
+    field, and ``value`` only under ``INCLUDE_VALIDATION_VALUE``. The kernel's
+    own argument refusals are worded in ``kernel_refusals``, which serves them
+    in the same shape.
     """
-    message: str
-    if isinstance(exc, _MissingArguments):
-        message = missing_arguments_message(exc.names, conventions)
-    elif isinstance(exc, ServiceValidationError):
-        message = exc.message
-    else:
-        message = "Invalid arguments"
     return build_error_tool_result(
-        message,
+        exc.message,
         error_type="validation_error",
         detail=validation_error_data(
             exc.detail, arguments, include_value=config.include_validation_value
@@ -954,22 +330,21 @@ def service_error_result(exc: ServiceError) -> ToolResult:
 
     ``type`` stays ``"service_error"`` for every member of the family, because
     that is what an existing client branches on. An
-    [`ActionUnavailable`][rest_framework_services.exceptions.action_unavailable.ActionUnavailable]
-    -- a declared affordance refusing the call -- also carries its ``code``: the
+    ``ActionUnavailable`` -- a declared affordance refusing the call -- also carries its ``code``: the
     message is the affordance's ``reason``, a sentence that gets reworded, and the
-    code is the stable name a client switches on. drf-services asks a transport
+    code is the stable name a client switches on. The kernel asks a transport
     serving an agent to pass on both, and every arm once passed on only the
     sentence.
 
     The key is **absent**, not ``null``, for any other ``ServiceError``. A
     ``ServiceConflict`` raised by hand from a precondition has no code and never
-    will, which is why drf-services made the code a subclass field rather than a
+    will, which is why the kernel made the code a subclass field rather than a
     nullable one on the parent; a ``null`` here would reintroduce the field that
     lies at every other call site.
 
-    Every ``ServiceError`` arm builds its result here -- the service tool paths
-    sync and async, the in-process ``call_tool`` and both selector tool siblings
-    -- so a refusal answers the same way whichever path served it.
+    Every ``ServiceError`` arm builds its result here -- the kernel tool's sync
+    and async runs and the in-process ``call_tool`` -- so a refusal answers the
+    same way whichever path served it.
     """
     error_detail: dict[str, Any] = {}
     if isinstance(exc, ActionUnavailable):
@@ -977,73 +352,8 @@ def service_error_result(exc: ServiceError) -> ToolResult:
     return build_error_tool_result(exc.message, error_type="service_error", detail=error_detail)
 
 
-def read_shaping_error_result(
-    exc: drf_serializers.ValidationError | ServiceValidationError,
-    *,
-    query_params: tuple[QueryParam, ...],
-    arguments: Mapping[str, Any],
-    paginated: bool,
-    config: MCPConfig,
-    conventions: AgentConventions,
-) -> ToolResult:
-    """The ``isError`` result for a validation error raised while *rendering*.
-
-    A read-shaping ``QueryParam`` is the one caller input used while the output is
-    rendered rather than while the spec is dispatched: a field selection, whichever
-    library parses it, is applied by the output serializer one row at a time, long
-    after ``dispatch_spec`` has returned. So a bad selection fails outside every
-    ``except`` that decides whether a failure is the caller's to fix, and it escaped
-    as whatever the transport made of an unhandled exception — a bare DRF body in
-    JSON mode, a ``-32603`` in a stream, a raised ``ValidationError`` from
-    ``acall_tool``. This turns it into the channel the dispatch path already uses
-    for "your argument was wrong": ``validation_error``, built exactly as the
-    ``ServiceValidationError`` arms build it, which an in-process toolset maps to a
-    retry the model can act on.
-
-    **Only when the caller shaped the render.** With no read-shaping value
-    supplied on this call nothing the model sends can change the outcome, so the
-    error is a server bug and is re-raised unchanged: a retry would spend the
-    model's budget on it and hide it from the operator. "Supplied" is read off
-    the raw ``arguments`` rather than the values ``split_query_params`` routed,
-    because that split seeds a ``QueryParam.default`` for an omitted name — a
-    value nobody sent, whose failure is a configuration bug and must stay loud.
-    An explicit ``null`` is not supplied either, as ``QueryParam``'s own contract
-    says a transport treats it. The split does not mutate its input, so every
-    call site still holds the unpopped mapping to pass here.
-
-    Validation errors only, never ``Exception``: an ``AttributeError`` in a
-    serializer is a server bug whatever the caller sent, so call sites catch
-    exactly DRF's ``ValidationError`` and ``ServiceValidationError``.
-
-    The detail is keyed under the supplied name when there is one. With several
-    it goes under ``non_field_errors`` and the message names them all, because
-    nothing in the error says which one the serializer refused, and keying it
-    under one would be a guess presented as a fact. On a paged tool the message
-    also says what the param applies to, since selecting the page envelope —
-    the shape the tool's ``outputSchema`` shows — is the likeliest way to get
-    here. That sentence is the server's ``conventions.query_param_on_pages``,
-    the one its ``tools/list`` appends to the param, and ``None`` drops it from
-    both.
-    """
-    # ``is not None`` rather than ``in``: the null rule is its own condition, held
-    # by ``test_an_explicit_null_is_not_supplied``, which fails with ``in``.
-    supplied: list[str] = [
-        query_param.name
-        for query_param in query_params
-        if arguments.get(query_param.name) is not None
-    ]
-    return rendering_refusal_result(
-        exc,
-        supplied=supplied,
-        arguments=arguments,
-        paginated=paginated,
-        config=config,
-        conventions=conventions,
-    )
-
-
 def rendering_refusal_result(
-    exc: drf_serializers.ValidationError | ServiceValidationError,
+    exc: ServiceValidationError,
     *,
     supplied: list[str],
     arguments: Mapping[str, Any],
@@ -1053,21 +363,15 @@ def rendering_refusal_result(
 ) -> ToolResult:
     """The ``validation_error`` result for a refusal of ``supplied`` while rendering.
 
-    ``supplied`` is the caller's arguments the render read, as each path counts
-    them: a drf-services tool's read-shaping ``QueryParam`` values
-    (``read_shaping_error_result``), a kernel tool's ``shapes``
-    (``present_kernel_result``). Empty, ``exc`` is raised unchanged, because
-    nothing the caller sent shaped the render and the refusal is a server bug.
+    ``supplied`` is the caller's arguments the render read: the tool's
+    ``shapes`` the call carried (``present_kernel_result``). Empty, ``exc`` is
+    raised unchanged, because nothing the caller sent shaped the render and the
+    refusal is a server bug.
     """
-    # One branch arc to coverage, so the gate cannot see it removed. Held by the
-    # five tests in tests/handlers/test_render_time_query_params_drfs.py that assert
-    # the original error still escapes -- the three
-    # ``test_render_error_with_nothing_supplied_still_raises*`` (sync selector,
-    # async service, ``call_tool``), ``test_a_seeded_default_is_not_supplied`` and
-    # ``test_an_explicit_null_is_not_supplied`` -- and on a kernel tool by
+    # One branch arc to coverage, so the gate cannot see it removed. Held by
     # tests/handlers/test_kernel_presenter_refusal.py's
-    # ``test_a_refusal_with_no_shape_supplied_is_raised``, each of which fails
-    # when this guard is deleted.
+    # ``test_a_refusal_with_no_shape_supplied_is_raised``, which fails when this
+    # guard is deleted.
     if not supplied:
         raise exc
     detail: Any = exc.detail
@@ -1077,7 +381,7 @@ def rendering_refusal_result(
         f"{_readable_detail(detail)}"
     )
     # One branch arc for two conditions, so each is named by the test that fails
-    # without it: ``test_an_unpaged_selector_tool_gets_no_page_sentence``
+    # without it: ``test_a_refused_shape_is_a_validation_error_keyed_by_it``, on an unpaged tool
     # (``paginated``) and
     # ``test_none_drops_the_handle_wording_and_the_scope_sentence`` (the
     # ``None`` check, which would otherwise append the text "None").
@@ -1088,7 +392,7 @@ def rendering_refusal_result(
         message,
         error_type="validation_error",
         detail=validation_error_data(
-            # Normalised to DRF's per-field shape: a ``ServiceValidationError``
+            # Normalised to the per-field shape: a ``ServiceValidationError``
             # may carry a bare string, and a field's errors are always a list.
             {key: detail if isinstance(detail, (list, dict)) else [detail]},
             arguments,
@@ -1112,10 +416,9 @@ def _name_list(names: list[str]) -> str:
 def _readable_detail(detail: Any) -> str:
     """A validation ``detail`` as sentences a model reads, not as a ``repr``.
 
-    DRF's detail is an ``ErrorDetail`` string, a list of them, or a mapping of
-    field name to either; the ``repr`` of any of those is what an unhandled
-    render error used to put in front of the model, ``ErrorDetail(string=...,
-    code=...)`` included.
+    A ``ServiceValidationError``'s detail is a string, a list of them, or a
+    mapping of field name to either; the ``repr`` of any of those is what an
+    unhandled render error would put in front of the model.
     """
     if isinstance(detail, dict):
         return " ".join(f"`{key}`: {_readable_detail(value)}" for key, value in detail.items())
@@ -1207,33 +510,18 @@ async def run_with_deadline(coro: Awaitable[Any], seconds: float | None) -> Any:
 
 
 __all__ = [
-    "advertises_closed_items",
-    "advertises_closed_schema",
     "apply_tool_server_arguments",
-    "binding_input_serializer",
-    "build_validated_input_serializer",
     "check_permissions",
     "consume_rate_limits",
-    "dispatch_shape",
     "effective_rate_limits",
     "enforce_result_ceiling",
     "judge_tool_permissions",
     "missing_arguments_message",
     "permission_verdict",
-    "prompt_shape",
-    "read_shaping_error_result",
-    "refuse_missing_arguments",
     "render_convention",
     "rendering_refusal_result",
     "resolve_bound",
-    "resource_shape",
     "run_with_deadline",
-    "same_arguments",
-    "services_dispatch_policies",
-    "split_query_params",
-    "split_url_kwargs",
-    "takes_list_payload",
-    "validate_input_against_serializer",
     "validate_output_format",
     "validation_error_data",
     "validation_error_result",

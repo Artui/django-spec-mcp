@@ -1,19 +1,15 @@
 """A kernel tool's audience projection is its presenter's markings, derived once.
 
-The markings live in the presenter's dataclass, as ``Annotated`` extras on its
-fields (``AgentInvoiceOutput``, the kernel twin of ``AgentInvoiceSerializer``),
-and ``KernelToolBinding.audience_projection`` reads them with the kernel's own
-``audience_projection_for_spec``, so the projected payload and the advertised
-``outputSchema`` read the same markings.
+The markings live in the presenter's dataclass, as ``Annotated`` extras on its fields
+(``AgentInvoiceOutput``), and ``KernelToolBinding.audience_projection`` reads them with
+the kernel's own ``audience_projection_for_spec``, so the projected payload and the
+advertised ``outputSchema`` read the same markings.
 
-The drf-services original asked about per-tool ``field_audiences=`` overrides
-on top of a serializer's markings, and is kept beside this file as
-``test_audience_projection_override_drfs.py``. The override has no kernel
-counterpart: ``field_audiences`` is not one of the registration knobs a kernel
-tool keeps, because the markings are a fact of the output rather than of the
-MCP binding. A tool that needs what its neighbour hides presents through a
-dataclass of its own, which is asked below in the override's place, and so is
-the refusal of two labels, which the kernel makes as the projection is derived.
+There is no per-tool ``field_audiences=`` override on registration, because the
+markings are a fact of the output rather than of the MCP binding. A tool that
+needs what its neighbour hides presents through a dataclass of its own, which is
+asked below, and so is the refusal of two labels, which the kernel makes as the
+projection is derived.
 """
 
 from __future__ import annotations

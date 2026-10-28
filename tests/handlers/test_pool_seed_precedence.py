@@ -1,14 +1,11 @@
 """Client-supplied names never outrank the transport's own seeds, on a kernel resource too.
 
-Asks what the original, kept beside this file as
-``test_pool_seed_precedence_drfs.py``, asks. Every method that lets a caller
-route a value into a pool, a prompt argument, a URI-template variable or a
+Every method that lets a caller route a value into a pool, a prompt argument, a URI-template variable or a
 completion sibling, has to keep the dispatcher's own names out of the caller's
 reach, or an argument called ``user`` binds to the parameter the dispatcher owns
 and the callable runs under a principal the caller named.
 
-The prompt and completion cases name no spec, and are asked here as the
-original asks them so they outlive it. The resource cases are asked of a kernel
+The prompt and completion cases name no spec. The resource cases are asked of a kernel
 ``RETRIEVE`` spec. ``register_resource`` refuses a template variable named after
 a reserved seed, and the kernel refuses a spec declaring a read of that name, so
 the runtime lock is reached only by a binding built by hand: there the kernel's
@@ -18,7 +15,7 @@ the selector never runs under the name the URI carried: the read is answered
 refuses is. That is the only outcome on this path: a resource read dispatches
 under the kernel's default ``REJECT``, and ``register_resource`` takes no
 ``unknown_arguments`` knob, so the ``IGNORE`` case the tool path asks (in
-``test_handler_branches.py``) has no resource counterpart.
+``test_handler_branches.py``) is not asked of a resource.
 """
 
 from __future__ import annotations
@@ -211,7 +208,6 @@ def _handbuilt_notes() -> ResourceRegistry:
             uri_template="notes://{user}/{pk}",
             description=None,
             selector=spec.selector,
-            kind=spec.kind,
             spec=spec,
         )
     )
@@ -227,11 +223,10 @@ def test_a_uri_template_variable_named_user_cannot_replace_the_caller(read: Any)
     """The kernel's argument check refuses ``user`` as undeclared, and the read is
     answered ``-32602`` naming it, so the selector never runs under the name the
     URI carried."""
-    # Changed by design: the original ran the selector with the caller's own
-    # ``user`` and the URI's value dropped. The kernel declares no such read, so
-    # the argument check refuses the hand-built binding outright: the outcome
-    # that matters, that the selector never runs under the URI's name, holds
-    # either way, and an error is the louder way to hold it.
+    # The kernel declares no such read, so the argument check refuses the
+    # hand-built binding outright. The outcome that matters, that the selector
+    # never runs under the URI's name, would hold if the value were dropped
+    # instead, and an error is the louder way to hold it.
     ran.clear()
     refused = read({"uri": "notes://victim/1"}, _ctx(_server(), resources=_handbuilt_notes()))
     assert isinstance(refused, JsonRpcError), refused
@@ -334,20 +329,34 @@ def test_a_sibling_named_as_a_kernel_seed_does_not_reach_the_completer(name: str
     assert seen["other"] == "kept"
 
 
-def test_a_sibling_named_as_a_name_drf_services_drops_never_reaches_the_completer() -> None:
-    """``serializer`` is no kernel seed, but drf-services drops a caller's key of
-    that name everywhere else, so a completer is not handed one either."""
+def test_a_sibling_named_serializer_reaches_the_completer_as_on_a_tool() -> None:
+    """``serializer`` is no seed, and a kernel tool receives a caller's key of
+    that name, so a completer is handed it as any other sibling."""
     seen: dict[str, Any] = {}
 
     def completer(*, value: str, **kwargs: Any) -> list[str]:
         seen.update(kwargs)
         return ["a"]
 
-    out = _complete(_server_with_completer(completer), {"serializer": "attacker", "other": "kept"})
+    out = _complete(_server_with_completer(completer), {"serializer": "sent", "other": "kept"})
 
     assert isinstance(out, dict)
-    assert "serializer" not in seen
+    assert seen["serializer"] == "sent"
     assert seen["other"] == "kept"
+
+
+def test_a_sibling_named_request_is_outranked_by_the_seed() -> None:
+    """``request`` is no kernel seed and is not stripped, so it is the seed
+    written over the spread that keeps a caller's value out."""
+    seen: dict[str, Any] = {}
+
+    def completer(*, value: str, request: Any) -> list[str]:
+        seen["request"] = request
+        return ["a"]
+
+    _complete(_server_with_completer(completer), {"request": "spoofed"})
+
+    assert isinstance(seen["request"], HttpRequest)
 
 
 def test_an_ordinary_sibling_still_reaches_the_completer_by_name() -> None:

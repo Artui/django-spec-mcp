@@ -5,9 +5,7 @@ object with that one array property, each row the Validator's fields. The
 shape is the kernel's ``spec_input_schema``, taken rather than rebuilt; the
 spec's own ``reads`` sit beside the list, as the call takes them.
 
-The drf-services original also merged ``UrlKwarg`` and ``QueryParam`` knobs in
-beside the list; a kernel spec has neither, and declares such an argument as a
-read. It is kept beside this file as ``test_service_tool_schema_drfs.py``.
+An argument the service takes beside the list is declared as a read.
 """
 
 from __future__ import annotations
@@ -86,8 +84,7 @@ def test_a_declared_argument_name_is_the_property_advertised() -> None:
 def test_the_shape_is_the_kernels_verbatim() -> None:
     """The list's bounds are declared on the spec, and reach the schema as the kernel writes them.
 
-    The drf-services original read DRF's ``many_init`` bounds; the kernel's are
-    ``many_min_length`` and ``many_max_length``.
+    The bounds are the spec's ``many_min_length`` and ``many_max_length``.
     """
     spec = _bulk(many_min_length=1, many_max_length=50)
 
@@ -99,8 +96,7 @@ def test_the_shape_is_the_kernels_verbatim() -> None:
 
 
 def test_a_read_sits_beside_the_list() -> None:
-    # The kernel counterpart of the original's ``UrlKwarg`` merge: an argument
-    # the service reads beside the rows is one of its ``reads``.
+    # An argument the service reads beside the rows is one of its ``reads``.
     spec = _bulk(
         service=lambda *, project_pk, **_: None,
         reads=Parameters([Parameter("project_pk", "integer", required=True)]),

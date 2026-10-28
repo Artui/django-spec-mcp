@@ -7,9 +7,8 @@ from django.http import StreamingHttpResponse
 from django_service_specs import ProgressReporter, apply_server_arguments
 
 from django_spec_mcp.handlers.kernel_utils import admit_kernel_tool_call
-from django_spec_mcp.handlers.runs_on_kernel import runs_on_kernel
 from django_spec_mcp.handlers.types.context import MCPCallContext
-from django_spec_mcp.handlers.utils import judge_tool_permissions
+from django_spec_mcp.handlers.utils import forbidden, judge_tool_permissions
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.transport.response_stream import build_response_stream
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
@@ -84,37 +83,17 @@ def preflight_permissions(method: str, params: Any, context: MCPCallContext) -> 
     binding = _tool_binding(params, context)
     if binding is None:
         return None
-    # The call as the handler's own check judges it, through the same helper:
-    # a spec permission scoping by ``view.kwargs["project_pk"]`` refused here
-    # with a ``403`` the call it was about to admit
-    # (``test_the_preflight_sees_the_url_kwargs_the_call_delivers``), and one
-    # reading ``request.data`` raised
-    # (``test_a_streamed_call_is_judged_on_its_arguments``). Not refusing a
-    # missing kwarg, which the handler still names after the permission has
-    # answered
-    # (``test_a_denied_caller_missing_a_url_kwarg_is_refused_by_the_preflight``).
-    # This runs before the handler validates ``arguments``, so one that is not
-    # an object delivers nothing here, as an absent one does there, and the
-    # handler is left to name the fault
-    # (``test_a_call_with_no_arguments_object_is_judged_on_the_route_defaults``).
-    # ``url_kwargs`` is read bare because only a service or a selector binding
-    # gets here.
+    # The binding's scope gate, through the helper the handler's own check
+    # uses, then the spec's checks. This runs before the handler validates
+    # ``arguments``, so one that is not an object delivers nothing here, as an
+    # absent one does there, and the handler is left to name the fault
+    # (``test_a_streamed_call_with_no_arguments_object_is_judged_on_none_sent``).
+    allowed, required_scopes = judge_tool_permissions(binding, context)
+    if not allowed:
+        return forbidden(required_scopes)
     arguments: Any = params.get("arguments")
     sent: dict[str, Any] = arguments if isinstance(arguments, dict) else {}
-    allowed, required_scopes = judge_tool_permissions(binding, sent, context)
-    if not allowed:
-        return JsonRpcError(
-            JsonRpcErrorCode.FORBIDDEN,
-            "Insufficient permission",
-            data={"requiredScopes": required_scopes} if required_scopes else None,
-        )
-    # One arc to coverage: without the first condition a drf-services binding
-    # reaches the kernel's prelude and raises on what only a kernel binding
-    # carries (``paginate``, the ``unguarded`` mark)
-    # (``test_the_preflight_sees_the_url_kwargs_the_call_delivers``), and
-    # without the second no kernel check is pre-flighted
-    # (``test_a_spec_check_denying_a_streamed_call_keeps_its_403_and_challenge``).
-    if runs_on_kernel(binding) and _kernel_refuses(binding, sent, context):
+    if _kernel_refuses(binding, sent, context):
         return JsonRpcError(JsonRpcErrorCode.FORBIDDEN, "Insufficient permission")
     return None
 
@@ -159,9 +138,8 @@ def _kernel_refuses(binding: Any, arguments: dict[str, Any], context: MCPCallCon
     here. Any other refusal is left to the handler, which answers it in the
     stream as it would without one
     (``test_a_refusal_that_is_not_a_denial_is_left_to_the_handler``).
-    Arguments a retry's answers would merge in are not seen here, as the
-    drf-services pre-flight does not see them either: the handler judges
-    those again. So when the arguments pass the shape check the checks are
+    Arguments a retry's answers would merge in are not seen here: the handler
+    judges those again. So when the arguments pass the shape check the checks are
     asked twice for a streamed call, here and in the handler, and once for a
     plain one; ``adispatch`` runs under the handler's grant and asks them no
     third time

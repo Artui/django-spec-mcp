@@ -7,25 +7,16 @@ reaches two layers from one place: the call, and the ``inputSchema``'s
 service tool and a paginated ``LIST`` selector tool, whose ``page`` and
 ``limit`` are arguments the transport declares beside the spec's.
 
-The drf-services original asked this of an ``input_serializer`` and the
-drf-services dispatch; it is kept beside this file as
-``test_unknown_arguments_policy_drfs.py``. Changed on the kernel path, by the
-kernel's rules:
+The kernel's rules:
 
 - ``PASSTHROUGH`` is refused at registration, because no argument the spec
   does not declare ever reaches a kernel callable.
 - A seed's name the caller sends is refused under ``REJECT`` like any other
   undeclared key, and dropped under ``IGNORE`` so the seed's value is the one
-  the callable reads. The drf-services path admitted ``user``, ``request``,
-  ``data`` and the names it drops at its edge under ``REJECT`` and dropped
-  them silently; the kernel has no edge seeds to drop.
-- An unknown key's refusal is keyed by its own name, where drf-services wrote
-  a sentence under ``non_field_errors``.
+  the callable reads.
+- An unknown key's refusal is keyed by its own name.
 
-Not asked, because the kernel has no counterpart: a selector tool's
-``input_serializer``, a dataclass one wrapped for it, a bare ``**kwargs``
-selector standing open, ``ordering`` as a transport knob and a nested
-selector's key set. Which keys a kernel spec admits is ``spec.parameters()``,
+Which keys a kernel spec admits is ``spec.parameters()``,
 and ``tests/conformance/test_unknown_arguments_matrix.py`` holds the schema's
 agreement with it.
 """

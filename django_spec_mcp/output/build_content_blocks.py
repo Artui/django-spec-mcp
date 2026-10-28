@@ -59,8 +59,8 @@ def build_content_blocks(
         return (
             f"declares content_kind={content_kind.name} but produced "
             f"{type(payload).__name__}. Media content is the bytes themselves "
-            "(or a str already in base64), not a JSON-shaped value — an "
-            "output_serializer on this binding is probably rendering it away."
+            "(or a str already in base64), not a JSON-shaped value — the "
+            "spec's presenter is probably rendering it away."
         )
     factory = (
         ToolContentBlock.image if content_kind is ToolContentKind.IMAGE else ToolContentBlock.audio

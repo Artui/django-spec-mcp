@@ -1,22 +1,19 @@
 """``tools/list`` leaves out a kernel tool that an operation-scope affordance refuses now.
 
-The original's questions, asked of kernel ``ServiceSpec`` tools registered with
-``register_tool``: a callable ``when`` unmet against the pool's seeds alone
+Asked of kernel ``ServiceSpec`` tools registered with ``register_tool``: a callable ``when`` unmet against the pool's seeds alone
 leaves the tool out, with or without ``FILTER_LISTINGS_BY_PERMISSIONS``; a
 condition on the row is never asked; ``always_listed`` keeps the tool; no pool
-is built when nothing is declared; and ``tools/call`` is unchanged. The permission filter is exercised through ``scopes=``, the
-kernel binding's own gate, because whether the listing reads a kernel spec's
+is built when nothing is declared; and ``tools/call`` is unchanged. The permission filter is exercised through
+``scopes=``, the kernel binding's own gate, because whether the listing reads a kernel spec's
 ``permissions`` is ``is_binding_listable``'s question and not this file's.
 
-One question is asked differently. The original held that a condition sees the
-DRF ``Request`` the call wraps. A kernel condition has no ``request`` seed: it
-reads the call's ``call_context``, whose ``request`` is the transport's own
-``HttpRequest`` carrying the token as ``mcp_token`` and whose ``action`` is the
-tool's name, so that is what the listing must hand it too. For the same reason
-the original's one pool per listing is one pool per conditioned tool here: a
-call resolves the seeds against its own ``call_context``, and a resolver may
-read that context's ``request`` and ``action``. The original is kept beside this
-file as ``test_offered_tools_drfs.py``.
+A kernel condition has no ``request`` seed: it reads the call's
+``call_context``, whose ``request`` is the transport's own ``HttpRequest``
+carrying the token as ``mcp_token`` and whose ``action`` is the tool's name, so
+that is what the listing must hand it too. For the same reason a listing builds
+one pool per conditioned tool: a call resolves the seeds against its own
+``call_context``, and a resolver may read that context's ``request`` and
+``action``.
 """
 
 from __future__ import annotations
@@ -71,8 +68,8 @@ class _User:
 class _UntouchableRowCondition:
     """A condition on the row that records any attempt to answer it.
 
-    ``resolve_expression`` and ``conditional`` are what make drf-services read it
-    as an ORM boolean expression. It is also callable and returns ``False``, so a
+    ``resolve_expression`` and ``conditional`` are what make it read as an ORM
+    boolean expression. It is also callable and returns ``False``, so a
     list-time check that mistook it for an operation condition would both record
     the call and drop the tool.
     """
@@ -278,10 +275,10 @@ def test_a_pool_is_built_per_conditioned_tool(monkeypatch: pytest.MonkeyPatch) -
 
 def test_the_condition_sees_the_context_and_user_a_call_would() -> None:
     """Asked with the call's ``call_context``: the transport's own request, with
-    the token on it, and the tool's name as ``action``. The listing handed a
-    kernel condition the drf-services pool instead, whose ``call_context`` is
-    a fresh one naming nothing, so a condition reading the token or the tool
-    answered differently in the list than at the call."""
+    the token on it, and the tool's name as ``action``. A listing
+    that handed a kernel condition a pool whose ``call_context`` is a fresh one
+    naming nothing would have a condition reading the token or the tool answer
+    differently in the list than at the call."""
     seen: list[tuple[Any, ...]] = []
 
     def condition(user: Any, call_context: Any) -> bool:

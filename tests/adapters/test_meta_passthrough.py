@@ -13,14 +13,9 @@ and register the same way on either route.
 that needs to inject its own key adds an argument at the adapter call site
 rather than touching every binding.
 
-The drf-services original also asked it of the ``service_tool`` /
-``selector_tool`` / ``resource`` decorators and of ``ToolDefinition`` entries,
-all of which build drf-services specs and have no kernel counterpart: a kernel spec is
-declared once and registered, and ``register_tools(overrides=)`` is the bulk
-form. ``test_prompt_decorator_accepts_meta`` is not among them: ``@server.prompt``
-builds no spec, so it is asked of the prompt registration below, which is the same
-call on either route. The original is kept beside this file as
-``test_meta_passthrough_drfs.py``.
+A kernel spec is declared once and registered, and ``register_tools(overrides=)``
+is the bulk form. ``@server.prompt`` builds no spec, so
+``test_prompt_decorator_accepts_meta`` asks it of the prompt registration below.
 """
 
 from __future__ import annotations

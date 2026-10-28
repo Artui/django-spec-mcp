@@ -6,11 +6,6 @@ that selector's ``reads`` are arguments of the call like the Validator's
 fields: ``ServiceSpec.parameters()`` lists them first, and dispatch admits and
 checks them. So the ``inputSchema`` lists them too, or a client validating its
 arguments against it could never send the one call that works.
-
-The drf-services original asked this of a reflected lookup signature, beside
-``UrlKwarg``, ``NotClientInput`` and ``InputRequired``; a kernel lookup declares
-its arguments, and none of those knobs exists. It is kept beside this file as
-``test_service_tool_target_lookup_drfs.py``.
 """
 
 from __future__ import annotations
@@ -163,10 +158,10 @@ def test_a_lookup_declared_optional_adds_nothing_to_required() -> None:
 
 
 def test_a_validator_field_named_like_the_lookup_is_refused_at_registration() -> None:
-    # Changed by design: the drf-services path let an input field override the
-    # reflected lookup of the same name. Two kernel declarations of one name
-    # are refused when the spec's parameters are assembled, which registration
-    # does to compile the schema, so no listing ever shows either.
+    # An input field does not override the lookup of the same name. Two kernel
+    # declarations of one name are refused when the spec's parameters are
+    # assembled, which registration does to compile the schema, so no listing
+    # ever shows either.
     @dataclass
     class _Pk:
         pk: int

@@ -15,12 +15,6 @@ argument of one name meet in three ways:
   kernel's ``check_seeds`` with the server's ``pool_seeds``. A service spec's
   read of either call name is refused earlier, when the spec is built; a
   selector spec's is not, and is refused at registration.
-
-The drf-services original asked this of an ``input_serializer`` field under each
-``ArgumentBinding``, refused at registration because the seed silently won the
-service's pool; on the kernel the Validator's field reaches ``data`` instead, so
-the refusal is no longer the answer for it. It is kept beside this file as
-``test_reserved_input_fields_drfs.py``.
 """
 
 from __future__ import annotations
@@ -91,10 +85,10 @@ def test_a_read_named_after_a_reserved_seed_is_refused_when_the_spec_is_built(ki
 
 
 def test_a_validator_field_named_like_a_registered_seed_is_the_callers_and_reaches_data() -> None:
-    # Changed by design: the drf-services path refused such a field, because
-    # the seed silently outranked it in the service's pool. The kernel keeps
-    # the caller's value in ``data`` and the seed in the parameter, so each
-    # reaches the service under its own name and nothing is lost.
+    # Refusing the field would be wrong: the seed would silently outrank it in
+    # the service's pool. The kernel keeps the caller's value in ``data`` and
+    # the seed in the parameter, so each reaches the service under its own name
+    # and nothing is lost.
     server = _server(pool_seeds=_SEEDED)
     server.register_tool(
         ServiceSpec(

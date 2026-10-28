@@ -3,9 +3,8 @@
 Asked of kernel tools, one per ``TaskPolicy``: the decision at ``tools/call``,
 the handle and polling it, the full round trip, the non-declaring fallback and
 refusal, a legacy client, the ``Mcp-Name`` routing header, and the
-advertisement. The ``REQUIRED`` denial on a server that cannot run tasks, which
-the original asked here, is asked at the decision in ``test_task_wire_shape.py``.
-The original is kept beside this file as ``test_tasks_endtoend_drfs.py``.
+advertisement. The ``REQUIRED`` denial on a server that cannot run tasks is asked at
+the decision in ``test_task_wire_shape.py``.
 """
 
 from __future__ import annotations

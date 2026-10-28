@@ -8,22 +8,14 @@ pipeline's integer rather than as declared, and then never receives what the
 caller sent, so registration refuses it, through ``register_tool`` and through
 ``register_tools`` alike.
 
-Unlike drf-services, the kernel path takes the two names only from a tool that
+The kernel takes the two names only from a tool that
 paginates: an unpaginated ``LIST`` tool's read of either name receives the
 caller's value as any read does, and so does a ``RETRIEVE`` tool's, which cannot
 paginate. Both register, and the first is called here to show it.
 
-The drf-services original asked the same of a reflected selector signature and
-is kept beside this file as ``test_selector_parameter_shadowing_drfs.py``. Four
-of its questions have no kernel counterpart: a ``QueryParam`` shadowing a
-selector parameter, mount-level or from an ``OfflineContract``, since a kernel
-spec declares its query values as ``reads`` and nothing reroutes them; a
-``**kwargs`` catch-all, since a kernel selector's arguments are its declared
-``reads``; an ``input_serializer`` that lays a pagination-named field back,
-since a kernel selector has no Validator; and
-``test_a_url_kwarg_sharing_a_parameter_name_is_allowed``, since ``UrlKwarg`` has
-no kernel counterpart and a route capture that shares a selector parameter's
-name cannot be declared.
+A kernel spec declares its query values as ``reads`` and a kernel selector's
+arguments are its declared ``reads``, so a read is the only way a name can
+collide with the pagination pair.
 """
 
 from __future__ import annotations

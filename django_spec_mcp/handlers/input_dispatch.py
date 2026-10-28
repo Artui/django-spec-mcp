@@ -95,7 +95,7 @@ def ask_for_input(
     prior: ResolvedInput,
     context: MCPCallContext,
     *,
-    admitted: Collection[str] | None = None,
+    admitted: Collection[str],
 ) -> dict[str, Any] | JsonRpcError:
     """Turn a service's *"I need something else"* into whatever this client can use.
 
@@ -118,8 +118,7 @@ def ask_for_input(
 
     ``admitted`` is the argument names a kernel tool takes (``admitted_arguments``):
     a question for any other name is the malformed schema of (1), since its answer
-    would come back as an argument the call refuses or drops. ``None`` for a
-    drf-services tool, which has no such set.
+    would come back as an argument the call refuses or drops.
     """
     if not exc.schema:
         # A message with no schema says *something* is needed without saying

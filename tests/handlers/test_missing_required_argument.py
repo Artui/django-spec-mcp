@@ -5,38 +5,28 @@ every required parameter the call left out, a selector's ``reads``, the
 ``reads`` of the selector a service resolves its target through, and a
 Validator's fields alike, as ``InvalidArguments`` keyed by the name. The
 transport answers that refusal as the validation ``isError`` on every route, so
-the selector's ``TypeError`` the drf-services original guarded against, an HTTP
-500 with ``-32603`` on the wire, has no way to arise. The original read this
-off a selector's reflected signature and a pre-dispatch check of its own; it
-is kept beside this file as ``test_missing_required_argument_drfs.py``.
+a selector's ``TypeError`` for a missing keyword, an HTTP 500 with ``-32603`` on
+the wire, has no way to arise.
 
-Asked here as the original asked it: every route and both protocol eras answer
-a result, the schema's ``required`` is what dispatch refuses, several missing
+Every route and both protocol eras answer a result, the schema's ``required`` is what dispatch refuses, several missing
 names are answered together, a provider or a registered seed filling a read
 satisfies it, and a caller the tool is not for is refused for that before any
 argument is read.
 
-Changed on the kernel path, by the kernel's own rules:
+The kernel's own rules:
 
 - The message is the server's ``AgentConventions.missing_arguments``,
   ``"Missing required argument(s): `pk`."`` by default, for every name the
   kernel reads as left out (``InvalidArguments.missing``), with
-  ``{"pk": ["This field is required."]}`` under ``detail`` as before. A
-  Validator field is one of them: the drf-services path kept ``"Invalid
-  arguments"`` for an input serializer's own missing field, because its
-  refusal could not tell that field from a sent and wrong one.
+  ``{"pk": ["This field is required."]}`` under ``detail``. A Validator field is
+  one of them.
 - A Validator field and a target lookup's read left out together are both
-  named, where the drf-services lookup check answered first and alone.
+  named.
 - A seed's name the client sends anyway is refused as an unknown argument: a
-  ``reflected`` read leaves the argument set once a seed fills it, where the
-  drf-services path admitted the name and let the seed outrank it.
+  ``reflected`` read leaves the argument set once a seed fills it.
 
-Not asked, because the kernel has no counterpart: ``UrlKwarg`` and the
-channel split that refused a missing one, a selector tool's MCP-only
-``input_serializer`` (its own refusal first, its default filling a name),
-``InputRequired``, ``NotClientInput`` and ``ArgumentBinding``. A kernel read is
-declared on the spec, with its default, and a provider's keys are the ones its
-return annotation names.
+A kernel read is declared on the spec, with its default, and a provider's keys
+are the ones its return annotation names.
 """
 
 from __future__ import annotations
@@ -265,12 +255,34 @@ def test_the_missing_argument_is_one_the_schema_requires() -> None:
 
 @pytest.mark.parametrize("route", _ROUTES)
 async def test_several_missing_names_are_answered_together(route: str) -> None:
-    # The lookup's read and the Validator's field, which the drf-services
-    # path answered one check at a time, the lookup's alone first.
+    # The lookup's read and the Validator's field, answered in one result
+    # rather than one check at a time.
     out = await _via(_server(), route, "rename", {})
 
     message = "Missing required argument(s): `number`, `pk`."
     assert _refused(out, message) == {"pk": _REQUIRED, "number": _REQUIRED}
+
+
+@pytest.mark.parametrize("route", _ROUTES)
+async def test_several_missing_names_are_sorted_and_joined(route: str) -> None:
+    # Declared ``tenant`` before ``pk``, so the check finds them in that order;
+    # the sentence sorts them, as the Pydantic-AI toolset does, so one omission
+    # reads the same on every call and on both transports.
+    server = _server()
+    server.register_tool(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=_scoped,
+            reads=Parameters([Parameter("tenant", "string", required=True), _PK]),
+            permissions=OPEN,
+        ),
+        name="scoped",
+    )
+
+    out = await _via(server, route, "scoped", {})
+
+    message = "Missing required argument(s): `pk`, `tenant`."
+    assert _refused(out, message) == {"pk": _REQUIRED, "tenant": _REQUIRED}
 
 
 # ---------- the wire, in both protocol eras ----------
@@ -464,7 +476,7 @@ async def test_a_reflected_read_a_registered_seed_fills_is_not_asked_of_the_call
 
 @pytest.mark.parametrize("route", _ROUTES)
 async def test_a_seeds_name_the_client_sends_anyway_is_refused_as_unknown(route: str) -> None:
-    # Changed by design: the seed fills the read, so the name is not an
+    # The seed fills the read, so the name is not an
     # argument of the call at all, and ``REJECT`` refuses it.
     out = await _via(_seeded_server(), route, "get", {"pk": 1, "tenant": "beta"})
 

@@ -10,20 +10,13 @@ class-level ``has_permission`` before anything is looked up, and
 sends A and answers B is refused, and a class-level refusal reads the same
 whether B exists or not.
 
-The drf-services original asked this of ``UrlKwarg`` route captures: a
-per-binding ``DRFPermissionAdapter`` and a spec's ``permission_classes``
-judged on ``view.kwargs`` before the merge and again on the route it
-produced, ``same_arguments`` deciding whether it moved. None of those exists
-on a kernel tool: there is no route apart from the arguments, and nothing is
-judged before the merge for an answer to slip past. Its invalidation question
-is asked as it was: ``invalidates=`` is rendered from the merged arguments, so
-the notice names the row the service ran on. It is kept beside this file as
-``test_an_answer_is_judged_on_the_route_it_names_drfs.py``.
+A kernel tool has no route apart from its arguments, and nothing is judged
+before the merge for an answer to slip past. ``invalidates=`` is rendered from
+the merged arguments, so the notice names the row the service ran on.
 
-Its charge questions are asked as they were: a caller admitted is charged
-once, and a caller the spec refuses is not charged, since the shell asks a
-kernel spec's checks before the charge (``admit_kernel_call``), as drfs judged
-them in the binding's stack.
+A caller admitted is charged once, and a caller the spec refuses is not
+charged, since the shell asks a kernel spec's checks before the charge
+(``admit_kernel_call``).
 """
 
 from __future__ import annotations
@@ -159,11 +152,13 @@ async def _answer(
     *,
     is_async: bool,
     subscriptions: Any = None,
+    response: dict[str, Any] | None = None,
 ) -> Any:
+    """``answer`` accepted, or ``response`` as the client's whole response."""
     params: dict[str, Any] = {
         "name": "annotate",
         "arguments": sent,
-        "inputResponses": {ELICITATION_KEY: {"action": "accept", "content": answer}},
+        "inputResponses": {ELICITATION_KEY: response or {"action": "accept", "content": answer}},
     }
     if is_async:
         return await handle_tools_call_async(params, _ctx(server, subscriptions))
@@ -349,6 +344,29 @@ async def test_a_caller_admitted_on_the_answered_row_is_charged_once(
 
     assert "isError" not in out, out
     assert limit.consumed == 1
+
+
+@pytest.mark.parametrize("action", ["decline", "cancel"])
+@_ASYNC
+async def test_a_caller_declining_the_question_is_charged_once(
+    rows: tuple[Invoice, Invoice], is_async: bool, action: str
+) -> None:
+    # A declined or cancelled answer is a call the client made: charged as one,
+    # and answered after the charge, with nothing run.
+    acme, _beta = rows
+    limit = _CountingRateLimit()
+    ran: list[int] = []
+
+    await _answer(
+        _server(_NotBeta(), ran, limiter=limit),
+        {"pk": acme.pk, "note": "x"},
+        {},
+        is_async=is_async,
+        response={"action": action},
+    )
+
+    assert limit.consumed == 1
+    assert ran == []
 
 
 @_ASYNC

@@ -11,14 +11,6 @@ logged once, by tool and argument name and never by value, and a retry's
 ``inputResponses`` cannot replace a bound value, on the synchronous and the
 asynchronous handler alike. Whether a value reaches the callable through each
 registrar is asked in ``test_server_arguments_on_every_registrar.py``.
-
-The drf-services original is kept beside this file as
-``test_server_arguments_drfs.py``. Its ``UrlKwarg`` route captures and
-``QueryParam`` query values have no kernel counterpart, since a kernel spec's
-reads are its arguments wherever they come from. Its logging of a caller
-restating a bound value is shared: the kernel route calls the same
-``apply_tool_server_arguments``, so it is asked here of a kernel tool. Its wire
-and in-process questions are asked here in process.
 """
 
 from __future__ import annotations
@@ -47,6 +39,7 @@ from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
+from django_spec_mcp.handlers.utils import apply_tool_server_arguments
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
 from tests.utils import call_context
@@ -120,6 +113,16 @@ def test_a_binding_fills_a_required_read() -> None:
     assert result.structured_content == {"project": 7, "draw": 0}
 
 
+def test_a_tool_binding_nothing_never_reaches_the_kernels_rule() -> None:
+    # The arguments come back as the same object, unread by the kernel's rule.
+    server = _server()
+    server.register_tool(_selector(), name="card", description="d")
+    binding = server.tools.get("card")
+    assert binding is not None
+    arguments: dict[str, Any] = {"project": 1}
+    assert apply_tool_server_arguments(binding, arguments) is arguments
+
+
 def test_the_bound_value_wins_and_the_withheld_one_is_dropped(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
@@ -127,8 +130,8 @@ def test_the_bound_value_wins_and_the_withheld_one_is_dropped(
     server.register_tool(_selector(), name="card", description="d", server_arguments=_SCOPED)
     with caplog.at_level(logging.WARNING, logger="django_spec_mcp"):
         result = server.call_tool("card", {"project": 99, "draw": 3}, user=None)
-    # Both are dropped rather than refused, as the original's bound project
-    # wins and its withheld sibling is dropped.
+    # Both are dropped rather than refused: the bound project wins over the
+    # caller's value and the withheld sibling is dropped.
     assert result.is_error is False
     assert result.structured_content == {"project": 7, "draw": 0}
     # Held by the withheld conjunct of ``apply_tool_server_arguments``: a

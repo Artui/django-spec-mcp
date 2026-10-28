@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any
 
 from django_spec_mcp.handlers.kernel_utils import admit_kernel_tool_call
-from django_spec_mcp.handlers.runs_on_kernel import runs_on_kernel
 from django_spec_mcp.handlers.tasks_utils import (
     declares_tasks_extension,
     missing_capability_error,
@@ -12,6 +11,7 @@ from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import (
     consume_rate_limits,
     effective_rate_limits,
+    forbidden,
     judge_tool_permissions,
 )
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
@@ -89,34 +89,20 @@ def maybe_create_task(
             return missing_capability_error()
         return None
 
-    # The call as the inline check judges it, through the same helper: a spec
-    # permission scoping by ``view.kwargs["project_pk"]`` refused a task to a
-    # caller it admits inline
-    # (``test_a_task_is_created_for_a_route_the_permission_grants``), and one
-    # reading ``request.data`` raised
-    # (``test_a_task_is_judged_on_the_arguments_it_would_run_with``). Not
-    # refusing a missing kwarg, so a caller the permission denies is told
-    # that, and the worker's replay of an admitted call still names a missing
-    # one
-    # (``test_a_denied_caller_missing_a_url_kwarg_is_refused_before_any_task_exists``).
-    allowed, required_scopes = judge_tool_permissions(binding, arguments, context)
+    # The binding's scope gate, through the helper the inline call uses.
+    allowed, required_scopes = judge_tool_permissions(binding, context)
     if not allowed:
-        return JsonRpcError(
-            JsonRpcErrorCode.FORBIDDEN,
-            "Insufficient permission",
-            data={"requiredScopes": required_scopes} if required_scopes else None,
-        )
+        return forbidden(required_scopes)
 
-    # A kernel spec's own checks, which the binding's ``permissions`` above do
-    # not hold, as the inline call asks them before its charge: without this
-    # the plain route queued a call its worker would refuse, where the
-    # streamed route's pre-flight answered ``403``
+    # The spec's own checks, which the binding's ``permissions`` above do not
+    # hold, as the inline call asks them before its charge: without this the
+    # plain route queued a call its worker would refuse, where the streamed
+    # route's pre-flight answered ``403``
     # (``test_a_caller_the_spec_refuses_gets_no_task``). Its grant is not kept,
     # since the worker's replay is a later call, judged again.
-    if runs_on_kernel(binding):
-        admitted = admit_kernel_tool_call(binding, arguments, context)
-        if isinstance(admitted, JsonRpcError):
-            return admitted
+    admitted = admit_kernel_tool_call(binding, arguments, context)
+    if isinstance(admitted, JsonRpcError):
+        return admitted
 
     # After the permission checks and before anything durable exists: a denied
     # caller should not spend a quota, and a caller who has spent one should

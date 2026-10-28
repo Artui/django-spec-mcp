@@ -66,8 +66,7 @@ def _admitting_nothing(schema: dict[str, Any]) -> dict[str, Any]:
     MCP requires an ``outputSchema`` of type ``"object"``, and a ``None`` is
     served as the empty ``structuredContent`` ``{}``, which the kernel's
     ``["object", "null"]`` with every field required does not admit. So the
-    root is ``"object"``, and its ``required`` becomes the drf-services
-    shape (``build_output_schema``'s ``may_be_empty``): either every field or
+    root is ``"object"``, and its ``required`` becomes either every field or
     none at all (``test_a_result_that_presents_nothing_conforms_to_its_schema``).
     A schema with nothing required admits ``{}`` already and keeps no ``anyOf``.
     """

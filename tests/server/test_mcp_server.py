@@ -1,12 +1,8 @@
 """``MCPServer``'s registrars, collaborators, session namespacing and URL mounting.
 
 The registrars are asked here with kernel specs: ``register_tool`` and the
-kernel form of ``register_resource``. The rest of the drf-services original
-built no spec and is carried as it asked it. Its decorator tests
-(``service_tool``, ``selector_tool``, ``resource``) are not moved, because the
-decorators build drf-services specs from serializers and go with them; a kernel
-spec is registered through the registrars, which are the one way in. The
-original is kept beside this file as ``test_mcp_server_drfs.py``.
+kernel form of ``register_resource``. A kernel spec is registered through the
+registrars, which are the one way in.
 """
 
 from __future__ import annotations

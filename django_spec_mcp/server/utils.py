@@ -30,19 +30,15 @@ def check_tool_permissions_declared(
 ) -> None:
     """Warn (or raise) when a registered binding carries no permissions.
 
-    ``permissions`` is the binding's *effective* tuple — author-declared
-    ``spec.permission_classes`` (wrapped in ``DRFPermissionAdapter``) plus any
-    per-binding ``MCPPermission`` — so an empty tuple means nothing gates the
-    call beyond transport authentication. The trap: DRF viewset-level and
-    ``REST_FRAMEWORK`` default permission classes do **not** apply over MCP,
-    so a spec guarded the usual way, with passing HTTP tests, otherwise ships
-    as an unguarded binding with no signal.
+    Asked of a prompt, the one registration whose ``permissions=`` is its whole
+    gate: a kernel tool or resource is guarded by its spec's own
+    ``PermissionCheck``s, which ``check_kernel_spec_guarded`` asks about, and a
+    view reads nothing of the caller's (``register_ui_resource``). An empty tuple
+    means nothing gates the render beyond transport authentication.
 
-    ``kind`` names the registration in the message — ``tool``, ``resource`` or
-    ``prompt``. All three reach data the same way and are governed by the one
-    ``REQUIRE_TOOL_PERMISSIONS`` setting, because the exposure is identical:
-    the same selector registered as a resource rather than a tool used to start
-    clean and answer any authenticated principal.
+    ``kind`` names the registration in the message. It is governed by the
+    ``REQUIRE_TOOL_PERMISSIONS`` setting, the one every unguarded registration
+    has answered to, because a prompt's render reaches data as a tool does.
 
     Emits on every unguarded registration — no warn-once module state, per the
     repo's no-module-level-mutable-state rule.
@@ -50,11 +46,8 @@ def check_tool_permissions_declared(
     if permissions:
         return
     problem = (
-        f"MCP {kind} {name!r} is registered with no permissions: neither "
-        "spec.permission_classes nor a per-binding permissions=[...] is set. "
-        "DRF viewset-level and REST_FRAMEWORK default permission classes do "
-        f"NOT apply over MCP, so this {kind} is callable by any principal the "
-        "transport authenticates. Set spec.permission_classes, or pass "
+        f"MCP {kind} {name!r} is registered with no permissions, so it "
+        "answers any principal the transport authenticates. Pass "
         "permissions=[...] at registration."
     )
     if require:
@@ -226,8 +219,8 @@ def check_permissions_shape(label: str, permissions: Any) -> tuple[Any, ...]:
     ``check_tool_permissions_declared`` sees a guarded tool and stays quiet; at
     dispatch, ``check_permissions`` skips every entry that is not an
     [`MCPPermission`][django_spec_mcp.auth.permissions.types.mcp_permission.MCPPermission],
-    and the call is **allowed**. A bare string is the likely way in, being what the
-    permission classes themselves accept, so it gets its own message.
+    and the call is **allowed**. A bare string is the likely way in, being what
+    ``ScopeRequired`` itself takes, so it gets its own message.
 
     Only ``has_permission`` is required, deliberately: ``required_scopes`` has
     an implied ``[]`` default, so a permission implementing the gate and
@@ -247,8 +240,7 @@ def check_permissions_shape(label: str, permissions: Any) -> tuple[Any, ...]:
         raise ImproperlyConfigured(
             f"{label}: permissions= contains {invalid!r}, which cannot answer "
             "has_permission(request, token). Every entry must be an MCPPermission "
-            "— ScopeRequired / DjangoPermRequired, a DRFPermissionAdapter around a "
-            "DRF class, or your own."
+            "— ScopeRequired / DjangoPermRequired, or your own."
         )
     return resolved
 
