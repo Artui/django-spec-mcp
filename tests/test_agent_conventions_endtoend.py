@@ -181,7 +181,9 @@ async def test_two_servers_in_one_process_keep_their_own_wording() -> None:
 def test_a_task_runs_under_its_servers_conventions() -> None:
     # A task runs off the request path, in a context the server rebuilds for
     # the worker from its own state, so that rebuild has to carry the wording
-    # too or every task-run call answers in the defaults.
+    # too or every task-run call answers in the defaults. Only
+    # ``missing_arguments`` is held here: the page-scope sentence reaches a
+    # kernel tool only in the listing, which a task run never produces.
     Invoice.objects.create(number="INV-1")
     store = InMemoryTaskStore()
     executor = RecordingExecutor(store)
