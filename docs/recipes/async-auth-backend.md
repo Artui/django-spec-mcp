@@ -66,7 +66,7 @@ class IntrospectingAuthBackend:
         )
 
     def protected_resource_metadata(self) -> ProtectedResourceMetadata:
-        # A dataclass, not a dict — the PRM ViewSet calls `.to_dict()` on it.
+        # A dataclass, not a dict — the PRM view calls `.to_dict()` on it.
         return ProtectedResourceMetadata(
             resource="https://example.com/mcp/",
             authorization_servers=["https://idp.example/"],

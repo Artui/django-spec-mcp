@@ -9,71 +9,99 @@
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![License](https://img.shields.io/pypi/l/django-spec-mcp.svg)](LICENSE)
 
-Expose [`djangorestframework-services`](https://github.com/Artui/djangorestframework-services)
+Serve [`django-service-specs`](https://github.com/Artui/django-service-specs)
 services and selectors as a [Model Context Protocol](https://modelcontextprotocol.io)
 (MCP) server, conforming to MCP **2026-07-28** and **2025-11-25** (Streamable HTTP).
 
 ## Idea
 
-Register `ServiceSpec` instances directly — no DRF router or viewset
-involvement. The unit of registration is the `ServiceSpec`, not a view.
+Register kernel specs directly. The unit of registration is a `ServiceSpec`
+or a `SelectorSpec` from `django-service-specs`, not a view: the spec says what
+an operation takes, who may run it and what it returns, and this package serves
+it over MCP. The same spec can be served by any other transport on the kernel.
 
 ```python
+from dataclasses import dataclass
+
 from django.urls import path
-from django_service_specs import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_service_specs import (
+    DataclassPresenter,
+    DataclassValidator,
+    Parameter,
+    Parameters,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+)
 
 from django_spec_mcp import MCPServer
 
-server = MCPServer(name="my-app")
 
-server.register_service_tool(
-    name="invoices.create",
-    spec=ServiceSpec(
-        service=create_invoice,
-        input_serializer=InvoiceInputSerializer,
-        output_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            output_serializer=InvoiceOutputSerializer,
-        ),
+@dataclass
+class InvoiceInput:
+    number: str
+    amount_cents: int
+
+
+@dataclass
+class InvoiceOutput:
+    id: int
+    number: str
+    amount_cents: int
+
+
+server = MCPServer(name="my-app", auth_backend=my_auth_backend)
+
+server.register_tool(
+    ServiceSpec(
+        service=create_invoice,  # def create_invoice(*, number, amount_cents)
+        validator=DataclassValidator(InvoiceInput),
+        presenter=DataclassPresenter(InvoiceOutput),
+        permissions=[Unrestricted()],
     ),
+    name="invoices.create",
+    description="Create an invoice.",
 )
 
 server.register_resource(
+    SelectorSpec(
+        kind=SelectorKind.RETRIEVE,
+        selector=get_invoice,  # def get_invoice(*, pk)
+        reads=Parameters([Parameter("pk", "integer", required=True)]),
+        presenter=DataclassPresenter(InvoiceOutput),
+        permissions=[Unrestricted()],
+    ),
     name="invoice",
     uri_template="invoices://{pk}",
-    selector=SelectorSpec(
-        kind=SelectorKind.RETRIEVE,
-        selector=get_invoice,
-        output_serializer=InvoiceOutputSerializer,
-    ),
 )
 
 urlpatterns = [path("mcp/", server.urls)]
 ```
 
-A decorator form is also supported (`@server.service_tool(...)` / `@server.resource(...)`).
 See the [quickstart](docs/quickstart.md) for the full end-to-end recipe.
 
-- **Services** (mutations) → MCP **tools**.
-- **Selectors** (reads) → MCP **resources**.
+- **Services** (mutations) and **selectors** (reads) → MCP **tools**, through
+  `register_tool`; the spec's class says which kind of tool it is.
+- A `RETRIEVE` selector → an MCP **resource**, through `register_resource`.
 - A single `/mcp` endpoint speaks Streamable HTTP. The
   `/.well-known/oauth-protected-resource` endpoint comes mounted alongside.
 
 ## What ships
 
-- **Tools** — `tools/list`, `tools/call` for `register_service_tool`
-  (mutations) and `register_selector_tool` (reads, with optional
-  `FilterSet` + ordering + pagination).
+- **Tools** — `tools/list`, `tools/call` for `register_tool`, over a kernel
+  `ServiceSpec` (mutations) or `SelectorSpec` (reads, with an optional
+  `FilterSet`, ordering and pagination). `register_tools(registry,
+  overrides=...)` registers every spec in a kernel `SpecRegistry`.
 - **Server-supplied arguments** — `server_arguments=ServerArguments(values=...,
   withheld=...)` at registration answers a declared argument for the caller:
   the name leaves the tool's schema, a caller's value for it is dropped and
   logged by name, and the binding is checked when it is registered. Route and
   query values a tool asks for are read from the spec's own `reads`.
 - **Resources** — `resources/list`, `resources/templates/list`,
-  `resources/read` against `SelectorSpec`-backed callables; RFC 6570
-  templated URIs.
+  `resources/read` against a kernel `RETRIEVE` `SelectorSpec`, presented by
+  its own presenter; RFC 6570 templated URIs whose variables are the spec's
+  reads.
 - **Prompts** — `prompts/list`, `prompts/get` against render callables
   returning strings, `PromptMessage`s, or async coroutines.
 - **In-process transport surface** — call tools without an HTTP round-trip:
@@ -96,9 +124,10 @@ See the [quickstart](docs/quickstart.md) for the full end-to-end recipe.
   own `tools/call`s inherit your auth, permissions and rate limits. An
   extension over base MCP, so no protocol bump. We declare; the host sandboxes
   and renders.
-- **Pluggable auth** — `DjangoOAuthToolkitBackend` (default) and
-  `AllowAnyBackend` (dev only). Per-binding `MCPPermission` classes
-  (`ScopeRequired`, `DjangoPermRequired`) plus your own.
+- **Pluggable auth** — an `MCPAuthBackend` verifies the bearer token;
+  `DjangoOAuthToolkitBackend` (default) and `AllowAnyBackend` (dev only) ship.
+  A tool or resource is guarded by its spec's own kernel `permissions`, and
+  `scopes=` at registration adds an OAuth scope gate.
 - **RFC 8707 audience binding** when `RESOURCE_URL` is configured;
   **RFC 9728 PRM** served from the configured backend.
 - **Per-binding rate limits** — `MCPRateLimit` Protocol with

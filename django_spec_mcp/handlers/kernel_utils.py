@@ -50,13 +50,12 @@ from django_spec_mcp.handlers.utils import (
     validation_error_data,
 )
 from django_spec_mcp.observability import get_logger
-from django_spec_mcp.output.encode_json import encode_json
+from django_spec_mcp.output.encode_resource_contents import encode_resource_contents
 from django_spec_mcp.output.enforce_result_bytes import enforce_result_bytes
 from django_spec_mcp.output.error_tool_result import build_error_tool_result
 from django_spec_mcp.output.resolve_structured_output import resolve_structured_output
 from django_spec_mcp.output.tool_result import build_tool_result
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
-from django_spec_mcp.protocol.types.resource_contents import ResourceContents
 from django_spec_mcp.protocol.types.tool_result import ToolResult
 from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
@@ -68,6 +67,11 @@ logger = get_logger(__name__)
 # The two arguments a paginated ``LIST`` tool takes for its page, which the
 # kernel's argument check would refuse as undeclared if they reached dispatch.
 _PAGE_ARGUMENTS: frozenset[str] = frozenset({"page", "limit"})
+
+# What a kernel resource's wrong-typed body is blamed on: ``present`` hands the
+# presenter's answer through unchanged, or the selector's value when the spec
+# declares no presenter, so one of the two returned it.
+_PRESENTED_BY: str = "the spec's presenter (or its selector, when it declares none)"
 
 
 # The two refusals the kernel's prelude answers before the call is anyone's to
@@ -857,9 +861,16 @@ def resource_read_result(
 
     A ``not_found`` is the resource-not-found error the protocol version names,
     with the URI in ``data``, as an unknown URI is answered. Otherwise the
-    presented ``payload`` is the one JSON ``contents`` block, with the
-    binding's ``_meta``, the cache hints and the server's result ceiling, as
-    the drf-services read builds them.
+    presented ``payload`` is the one ``contents`` block, encoded per the
+    binding's ``encoding`` by ``encode_resource_contents``, the step the
+    drf-services read shares: pretty-printed JSON by default, the presented
+    ``str`` verbatim for ``TEXT``, presented bytes base64-encoded into ``blob``
+    for ``BLOB``. The kernel's ``present`` hands a presenter's ``str`` or bytes
+    through as returned, and a spec with no presenter its selector's value. A
+    presented value of the wrong type for the encoding is the
+    ``INTERNAL_ERROR`` that function answers, naming the presenter. Every
+    encoding carries the binding's ``_meta``, the cache hints and the server's
+    result ceiling, as the drf-services read builds them.
     """
     if result.kind == "not_found":
         return JsonRpcError(
@@ -867,12 +878,9 @@ def resource_read_result(
             f"Resource not found: {uri!r}",
             data={"uri": uri},
         )
-    contents = ResourceContents(
-        uri=uri,
-        mime_type=binding.mime_type,
-        text=encode_json(payload),
-        meta=dict(binding.meta) or None,
-    )
+    contents = encode_resource_contents(payload, binding=binding, uri=uri, producer=_PRESENTED_BY)
+    if isinstance(contents, JsonRpcError):
+        return contents
     answer: dict[str, Any] = {
         "contents": [contents.to_dict()],
         **resource_cache_hints(

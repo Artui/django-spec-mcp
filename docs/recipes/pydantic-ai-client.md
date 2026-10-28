@@ -27,14 +27,13 @@ through a socket back into the same interpreter, and paying an auth round trip
 buys nothing when there is no network between the two.
 
 Use
-[`djangorestframework-pydantic-ai`](https://artui.github.io/djangorestframework-pydantic-ai/)'s
-`SpecToolset` instead. It takes the same `ServiceSpec` / `SelectorSpec` objects
-you register here, reflects the same schemas through
-`djangorestframework-services`' `spec_to_json_schema`, and dispatches
-in-process:
+[`django-spec-agents`](https://artui.github.io/django-spec-agents/)'
+`SpecToolset` instead, from its `[specs]` extra. It takes the same kernel
+`ServiceSpec` / `SelectorSpec` objects you register here, reads the same
+schemas off them, and dispatches in-process:
 
 ```python
-from rest_framework_pydantic_ai import SpecToolset
+from django_spec_agents.spec_tools import SpecToolset
 
 agent = Agent("openai:gpt-5", toolsets=[SpecToolset(registry)])
 ```
@@ -49,7 +48,7 @@ Reach for `MCPToolset` when the network is real:
 
 The two are not exclusive. Declare the specs once in a `SpecRegistry` (see
 [Register tools from a shared spec registry](register-from-spec-registry.md)),
-feed it to `MCPServer.register_specs` for the wire and to `SpecToolset` for
+feed it to `MCPServer.register_tools` for the wire and to `SpecToolset` for
 the in-process agent, and the two surfaces cannot drift apart.
 
 ## What the client stack resolves to
