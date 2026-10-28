@@ -194,6 +194,45 @@ def test_a_selector_no_read_can_run_is_refused_at_registration(
     assert len(server.resources) == 0
 
 
+@pytest.mark.django_db
+def test_an_optional_read_the_template_names_registers_and_is_read() -> None:
+    # The matcher fills every template variable on every read, so ``pk`` is
+    # never left out whatever the read declares, as a bound server argument is
+    # not; a read the template names is checked as required.
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend())
+    server.register_resource(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=_invoice,
+            reads=Parameters([Parameter("pk", "integer")]),
+            presenter=DataclassPresenter(Invoice),
+            permissions=OPEN,
+        ),
+        name="invoice",
+        uri_template="invoices://{pk}",
+    )
+    out = handle_resources_read({"uri": "invoices://7"}, _ctx(server))
+    assert _body(out) == {"number": "INV-7", "amount_cents": 100}
+
+
+def test_an_optional_read_the_template_does_not_name_is_still_refused() -> None:
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend())
+    with pytest.raises(
+        ImproperlyConfigured, match=r"Resource 'bad': .*\['owner'\], declared as optional"
+    ):
+        server.register_resource(
+            SelectorSpec(
+                kind=SelectorKind.RETRIEVE,
+                selector=_requires_an_owner,
+                reads=Parameters([*_PK, Parameter("owner", "string")]),
+                permissions=OPEN,
+            ),
+            name="bad",
+            uri_template="bad://{pk}",
+        )
+    assert len(server.resources) == 0
+
+
 def test_the_refusal_names_the_resource_and_each_variable_no_read_declares() -> None:
     """``pk`` is declared and so is left out. The other six are listed sorted. The template
     names them in reverse sorted order, so a list built in template order fails, and six

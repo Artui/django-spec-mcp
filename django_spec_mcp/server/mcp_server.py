@@ -1501,7 +1501,9 @@ class MCPServer:
         ``output_serializer``, ``permissions``, ``mime_type`` and
         ``encoding``), are refused beside a positional spec, as ``scopes`` is
         beside ``selector=``. A spec no read can run as written is refused
-        naming the resource, as ``register_tool`` refuses one.
+        naming the resource, as ``register_tool`` refuses one. A read the URI
+        template names is filled on every read, as a value ``server_arguments``
+        binds is on every call, so it is never refused as optional.
         """
         if spec is not None:
             return self._register_kernel_resource(
@@ -1673,8 +1675,14 @@ class MCPServer:
         # ``register_tool`` refuses one, by the kernel's reader with this
         # server's seeds
         # (``test_a_selector_no_read_can_run_is_refused_at_registration``).
+        # The matcher fills every template variable on every read, so a read
+        # the template names is checked as demanded, as a bound server argument
+        # is (``test_an_optional_read_the_template_names_registers_and_is_read``,
+        # ``test_an_optional_read_the_template_does_not_name_is_still_refused``).
         try:
-            check_seeds(spec, pool_seeds=self._pool_seeds)
+            check_seeds(
+                _demanding(spec, frozenset(template_variables)), pool_seeds=self._pool_seeds
+            )
         except ImproperlyConfigured as exc:
             raise ImproperlyConfigured(f"Resource {name!r}: {exc}") from exc
         # The spec's own permissions are the guard, as for ``register_tool``.
@@ -2577,7 +2585,14 @@ def _as_called(
 def _demanding(
     spec: KernelServiceSpec | KernelSelectorSpec, bound: frozenset[str]
 ) -> KernelServiceSpec | KernelSelectorSpec:
-    """``spec`` with each of its own reads named in ``bound`` required, and declaring no default."""
+    """``spec`` with each of its own reads named in ``bound`` required, and declaring no default.
+
+    ``bound`` is what is sent on every call: a binding's ``server_arguments``
+    values, or a resource's URI-template variables. The default is dropped as
+    well, because ``check_seeds`` demands a read only when it is required and
+    declares none
+    (``test_a_bound_read_declaring_a_default_registers_and_takes_the_bound_value``).
+    """
     if not bound & spec.reads.names():
         return spec
     return spec.derive(

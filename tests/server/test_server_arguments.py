@@ -164,6 +164,27 @@ def test_an_optional_read_the_server_binds_registers_and_is_filled() -> None:
     assert result.structured_content == {"project": 7, "draw": 0}
 
 
+def test_a_bound_read_declaring_a_default_registers_and_takes_the_bound_value() -> None:
+    # A read declaring a default is not demanded either, so the derived copy
+    # drops the default as well as requiring the read; requiring it alone
+    # leaves it refused as optional.
+    server = _server()
+    server.register_tool(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=_card,
+            reads=Parameters([Parameter("project", "integer", default=3)]),
+            presenter=DataclassPresenter(_Card),
+            permissions=[Unrestricted()],
+        ),
+        name="card",
+        description="d",
+        server_arguments=ServerArguments(values={"project": 7}),
+    )
+    result = server.call_tool("card", {}, user=None)
+    assert result.structured_content == {"project": 7, "draw": 0}
+
+
 def _card_for(*, project: int, owner: int) -> _Card:
     return _Card(project=project, draw=owner)
 

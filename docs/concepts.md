@@ -978,9 +978,10 @@ What changes against the drf-services tools:
   like a registered seed or the call's own `request` or `view`, a
   positional-only parameter with no default, a keyword the callable requires
   that nothing fills, and an optional read over a keyword the callable
-  requires. A read the tool's [`server_arguments=`](#server-arguments) binds is
-  filled on every call, so it is checked as required and registers; an optional
-  read the server does not bind is still refused.
+  requires. A read always sent is checked as required and registers: one the
+  tool's [`server_arguments=`](#server-arguments) binds a value to, and one a
+  resource's URI template names, which the matcher fills on every read. An
+  optional read neither covers is still refused.
 - **`scopes=` is the transport's gate.** A token must carry every scope named;
   one that is missing any is answered `-32006` with every declared scope in
   `requiredScopes`, not only the missing ones. A bare string is one scope, as
