@@ -16,12 +16,11 @@ dispatch, and it is refused at registration here too: ``register_tool`` asks the
 kernel's ``check_seeds`` with the server's ``pool_seeds``, since the registered
 pool is not known when a spec is built (``lambda *, tenant: tenant`` is valid on
 a server whose pool registers ``tenant``). A Validator field the callable has
-no way to receive is advertised, accepted and silently dropped; the strict
-xfail below holds that. The kernel answers it with ``unreceived_fields`` and
-does not refuse it, because such a spec runs and may mean to (a Validator
-checking that two fields agree passes one of them on), so whether this
-package refuses, warns or advertises it anyway is a decision still to be
-made. The drf-services twin that refused it is
+no way to receive registers, is advertised, and is validated on the call,
+which runs without it. The kernel answers such a field with
+``unreceived_fields`` and does not refuse it, because such a spec runs and may
+mean to (a Validator checking that two fields agree passes one of them on), and
+this package does not refuse it either. The drf-services twin that refused it is
 ``test_input_serializer_validation_drfs.py``.
 
 The drf-services original asked this of trust mode, ``ArgumentBinding``,
@@ -46,6 +45,7 @@ from django_service_specs import (
     SelectorSpec,
     ServiceSpec,
     Unrestricted,
+    unreceived_fields,
 )
 
 from django_spec_mcp import MCPServer
@@ -178,21 +178,19 @@ def test_a_required_parameter_nothing_fills_is_refused_at_registration(
         _server(build())
 
 
-@pytest.mark.xfail(
-    strict=True,
-    # "DID NOT RAISE" only, so no other error can keep the test quietly xfailed.
-    raises=pytest.fail.Exception,
-    reason=(
-        "register_tool accepts a Validator field the callable cannot receive, which is "
-        "advertised in inputSchema, accepted, and dropped without an error. The kernel "
-        "answers it with unreceived_fields and does not refuse it; whether registration "
-        "refuses it, warns or advertises it anyway waits on the owner's decision."
-    ),
-)
-def test_a_validator_field_the_callable_cannot_receive_is_refused_at_registration() -> None:
+def test_a_validator_field_the_callable_cannot_receive_registers_and_is_validated() -> None:
     # ``note`` reaches a callable naming it, taking ``data`` or taking ``**kwargs``;
-    # this one takes ``title`` alone, so ``note`` would be lost.
-    with pytest.raises(ImproperlyConfigured, match="note"):
-        _server(
-            _service(lambda *, title: title, validator=DataclassValidator(_Titled)),
-        )
+    # this one takes ``title`` alone, so ``note`` is validated and not passed on.
+    spec = _service(lambda *, title: title, validator=DataclassValidator(_Titled))
+    server = _server(spec)
+    listed: Any = server.list_tools(user=None)
+
+    out = server.call_tool("t", {"title": "a", "note": "kept"}, user=None).to_dict()
+    refused = server.call_tool("t", {"title": "a", "note": 5}, user=None).to_dict()
+
+    assert unreceived_fields(spec) == frozenset({"note"})
+    assert "note" in listed["tools"][0]["inputSchema"]["properties"]
+    assert out.get("isError") is not True, out
+    assert out["structuredContent"] == "a"
+    assert refused.get("isError") is True, refused
+    assert '"note"' in refused["content"][0]["text"]
