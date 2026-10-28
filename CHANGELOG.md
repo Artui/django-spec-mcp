@@ -189,10 +189,10 @@ carries; releases up to 0.54.0 are in
   the `Accept`, where one naming only `text/event-stream` was a `406`. The `406`
   for an `Accept` admitting nothing the endpoint answers with is kept, as are the
   CSRF and login-required opt-outs, and it now follows Django's reading of the
-  header: on Django 5.2 an `Accept` of `application/json;q=0, text/event-stream`
-  is a `406` from the sync endpoint, which was served a `200`, because a `q` of
-  `0` declares JSON unacceptable and JSON is all that endpoint answers with
-  (Django 4.2 ignores the `q` and still serves it). The `406` body and the
+  header. So an `Accept` of `application/json;q=0, text/event-stream`, which
+  was served a `200`, is a `406` from the sync endpoint wherever Django reads a
+  `q` of `0` as declaring JSON unacceptable, as Django 5.2 does, since JSON is
+  all that endpoint answers with; Django 4.2 ignores the `q` and still serves it. The `406` body and the
   metadata document are serialized with `json.dumps` defaults, so they carry
   `", "` and `": "` separators and escape non-ASCII characters, where DRF wrote
   them compact and in UTF-8. `request.user` and `request.auser()` are the

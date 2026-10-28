@@ -27,7 +27,7 @@ import pytest
 from asgiref.sync import sync_to_async
 from django import VERSION as DJANGO_VERSION
 from django.contrib.auth import get_user_model
-from django.test import AsyncClient, Client, override_settings
+from django.test import AsyncClient, Client, RequestFactory, override_settings
 
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
@@ -365,3 +365,22 @@ async def test_a_session_user_is_not_the_caller_the_auth_backend_sees(mount: boo
             response = await sync_to_async(_logged_in_initialize)(user)
     assert response.status_code == 200, response.content
     assert store.owner(response["Mcp-Session-Id"]) == "anonymous"
+
+
+def test_the_sync_endpoint_reads_a_q_of_zero_as_django_does() -> None:
+    """``application/json;q=0`` is refused exactly where Django reads it as refusing JSON.
+
+    Django 5.2 reads a ``q`` of ``0`` as declaring a type unacceptable and 4.2
+    ignores it, so the answer is pinned to ``request.accepts`` rather than to a
+    version: a ``406`` where JSON is not accepted, served where it is. The
+    lowest-versions job runs this on 4.2, the rest of the suite on 5.2.
+    """
+    accept = "application/json;q=0, text/event-stream"
+    accepted = (
+        RequestFactory().post(_ENDPOINT, headers={"Accept": accept}).accepts("application/json")
+    )
+    with override_settings(ROOT_URLCONF=urlconf_for(build_server())):
+        response = Client().post(
+            _ENDPOINT, _INITIALIZE, content_type="application/json", headers={"Accept": accept}
+        )
+    assert response.status_code == (200 if accepted else 406), response.content[:200]
