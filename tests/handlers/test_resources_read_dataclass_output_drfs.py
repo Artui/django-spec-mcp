@@ -2,14 +2,14 @@
 
 Tools render through drf-services' ``render_spec_output``, which resolves a
 dataclass to a serializer class before instantiating it. A resource renders in
-this package instead (``build_resource_contents``), because its binding holds a
+this package instead (``render_drfs_resource_output``), because its binding holds a
 bare selector callable rather than a spec to hand upstream -- so it has to make
 the same resolution itself, or a dataclass output that a tool renders fine
 crashes every read of the resource.
 
 Both handlers are driven, through a real ``register_resource``: the sync and
 async read paths are parallel implementations, and a fix reaching one of them
-is the drift ``build_resource_contents`` exists to prevent.
+is the drift ``render_drfs_resource_output`` exists to prevent.
 """
 
 from __future__ import annotations

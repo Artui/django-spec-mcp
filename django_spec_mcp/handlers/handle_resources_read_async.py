@@ -116,9 +116,10 @@ async def handle_resources_read_async(
         contents: ResourceContents | JsonRpcError
         if plain:
             # See the sync sibling: the kernel's pool and the transport's
-            # request. The selector goes through ``arun_selector_sync_safe``,
-            # so a template it renders is read off the loop; encoding a
-            # document touches no ORM, so it runs here.
+            # request. The selector goes through ``arun_selector_sync_safe``
+            # and the encoding through ``acall``, so neither a template it
+            # renders nor a lazy value ``JSON`` encoding iterates is read on
+            # the loop.
             request = carry_token(context.http_request, context.token)
             pool: dict[str, Any] = {
                 **vars_,
@@ -127,7 +128,7 @@ async def handle_resources_read_async(
             raw: Any = await arun_selector_sync_safe(
                 binding.selector, resolve_callable_kwargs(binding.selector, pool)
             )
-            contents = build_resource_contents(binding=binding, uri=uri, raw=raw)
+            contents = await acall(build_resource_contents, binding=binding, uri=uri, raw=raw)
         else:
             contents = await read_drfs_resource_async(
                 binding, uri, vars_, cast(DispatchShape, shape), context

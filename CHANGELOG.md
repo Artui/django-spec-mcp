@@ -175,8 +175,11 @@ carries; releases up to 0.54.0 are in
   endpoint's own query string. **Declare `user` for the caller**:
   `request.user` is whatever the endpoint's middleware set, which a bearer
   token does not, so over the wire it is not the token's principal. A pool seed
-  declaring `request` is handed the same `HttpRequest` when a view registered
-  with `register_ui_resource` is read; a view's answer is otherwise unchanged.
+  declaring `request` is handed the same `HttpRequest` on `resources/read` of a
+  resource that needs nothing from drf-services: no output serializer, no
+  `kwargs` provider, no `DRFPermissionAdapter` and a selector taking nothing,
+  which every view registered with `register_ui_resource` is. Such a read's
+  answer is otherwise unchanged.
 
 ### Removed
 
