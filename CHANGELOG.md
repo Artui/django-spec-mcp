@@ -30,8 +30,7 @@ carries; releases up to 0.54.0 are in
   that is not a kernel spec, a knob of the other kind of tool, `scopes=()`,
   `UnknownArguments.PASSTHROUGH`, a resource's `uri_template` variable that no
   read or shape of the spec declares or that the server fills (a reflected read, or
-  a key a typed `kwargs=` provider declares, unless its type admits `UnsetType`), each named in the error, and, for now,
-  any `task_policy` but the default.
+  a key a typed `kwargs=` provider declares, unless its type admits `UnsetType`), each named in the error.
   A spec declaring `permissions=None` is refused under
   `REQUIRE_TOOL_PERMISSIONS`; with the setting off it registers with an
   `UnguardedToolWarning` and is called without a permission check, under a
@@ -153,6 +152,18 @@ carries; releases up to 0.54.0 are in
   or by `non_field_errors` when the URI carries several; with no shape in the
   URI it is raised.
 
+- **A kernel tool can run as a task.** `register_tool` and `register_tools`'
+  `overrides` take `task_policy=` for a kernel `ServiceSpec` or `SelectorSpec`,
+  meaning what it means on the drf-services registrars: `OPTIONAL` answers a
+  client that declared the tasks extension with a task handle and runs inline for
+  one that did not, and `REQUIRED` refuses the latter `-32021`, or `-32603` on a
+  server with no task store and executor. The `scopes=` gate and the spec's own
+  `permissions` are asked before the task is created, so a refused caller queues
+  nothing, and the tool's rate limits are charged once, there. The worker runs
+  the call, under either policy, through the kernel's `dispatch`, under the server's `pool_seeds` and
+  `conventions`, asking the spec's permissions again and handing a service that
+  declares `progress` the task's reporter, so its reports reach `tasks/get`.
+
 ### Changed
 
 - **`django-service-specs` 0.18.0 is the floor.** Its root holds every kernel name
@@ -216,5 +227,13 @@ carries; releases up to 0.54.0 are in
   spec's `FilterSet` still runs. A project using either has the package
   installed already; one that does not runs `pip install drf-spectacular` or
   `pip install django-filter`.
+
+### Fixed
+
+- **A `REQUIRED` tool's task runs.** The worker's run of a task went back
+  through the task decision, met a context declaring no extension, and was
+  refused `-32021`, so every task of a `REQUIRED` tool ended `failed` without
+  running. The worker's run now enters below that decision. A client that did
+  not declare the extension is still refused `-32021` by a `REQUIRED` tool.
 
 [Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.0.0...HEAD

@@ -1,29 +1,11 @@
 """The tasks extension over the actual HTTP transport, for kernel tools.
 
-A kernel spec takes no ``task_policy`` but the default yet (``register_tool``
-refuses ``OPTIONAL`` and ``REQUIRED`` with ``ImproperlyConfigured``: *"not yet
-supported for a kernel spec; such a tool runs inline"*). So what a kernel tool
-can be asked here is every question that names no task policy:
-
-- on a server that runs tasks, a tool that never opted in answers inline, to a
-  client declaring the extension as to one that does not, and hands the
-  executor nothing;
-- ``server/discover`` advertises the extension when the server can run tasks,
-  and a server with no executor, or a store with no executor, advertises
-  nothing;
-- an executor alone earns a store, and ``task_store=None`` is not a request for
-  the default.
-
-These name no spec at all, and are asked with a kernel tool where one is
-needed to build a server.
-
-Owed until a kernel spec takes a ``task_policy`` (each needs a tool that opted
-in, so a task to follow): the task handle, polling it, the full round trip, the
-non-declaring fallback, the ``REQUIRED`` denial on a server that cannot run
-tasks, a legacy client, and ``test_mcp_name_must_carry_the_task_id`` and
-``test_a_task_id_that_disagrees_with_the_header_is_a_mismatch``, which need a
-task id to put in ``Mcp-Name``. The original is kept beside this file as
-``test_tasks_endtoend_drfs.py``.
+Asked of kernel tools, one per ``TaskPolicy``: the decision at ``tools/call``,
+the handle and polling it, the full round trip, the non-declaring fallback and
+refusal, a legacy client, the ``Mcp-Name`` routing header, and the
+advertisement. The ``REQUIRED`` denial on a server that cannot run tasks, which
+the original asked here, is asked at the decision in ``test_task_wire_shape.py``.
+The original is kept beside this file as ``test_tasks_endtoend_drfs.py``.
 """
 
 from __future__ import annotations
@@ -36,7 +18,7 @@ from django.test import Client
 from django.urls import path
 from django_service_specs import ServiceSpec, Unrestricted
 
-from django_spec_mcp import MCPServer
+from django_spec_mcp import MCPServer, TaskPolicy
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.handlers.handle_initialize import build_capabilities
 from django_spec_mcp.tasks.django_cache_task_store import DjangoCacheTaskStore
@@ -46,6 +28,7 @@ from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
 from tests.tasks.conftest import RecordingExecutor, context
 
 MODERN = "2026-07-28"
+LEGACY = "2025-11-25"
 
 STORE = InMemoryTaskStore()
 EXECUTOR = RecordingExecutor(STORE)
@@ -63,11 +46,17 @@ def _build() -> MCPServer:
         task_store=STORE,
         task_executor=EXECUTOR,
     )
-    server.register_tool(
-        ServiceSpec(service=_done, permissions=[Unrestricted()], atomic=False),
-        name="t.inline",
-        description="x",
-    )
+    for name, policy in (
+        ("t.optional", TaskPolicy.OPTIONAL),
+        ("t.required", TaskPolicy.REQUIRED),
+        ("t.inline", TaskPolicy.FORBIDDEN),
+    ):
+        server.register_tool(
+            ServiceSpec(service=_done, permissions=[Unrestricted()], atomic=False),
+            name=name,
+            description="x",
+            task_policy=policy,
+        )
     return server
 
 
@@ -78,31 +67,142 @@ urlpatterns: list[Any] = [path("mcp/", SERVER.urls)]
 pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.urls(__name__)]
 
 
-def _call(client: Client, *, declares: bool) -> Any:
+def _post(
+    client: Client,
+    method: str,
+    params: dict[str, Any],
+    *,
+    declares: bool = True,
+    headers: dict[str, str] | None = None,
+) -> Any:
     meta: dict[str, Any] = {
         "io.modelcontextprotocol/protocolVersion": MODERN,
         "io.modelcontextprotocol/clientCapabilities": {
             "extensions": {TASKS_EXTENSION_ID: {}} if declares else {}
         },
     }
+    sent: dict[str, str] = {"Mcp-Method": method, "Mcp-Protocol-Version": MODERN}
+    name = params.get("name") or params.get("taskId")
+    if name is not None:
+        sent["Mcp-Name"] = name
+    sent.update(headers or {})
+    return client.post(
+        "/mcp/",
+        data=json.dumps(
+            {"jsonrpc": "2.0", "id": 1, "method": method, "params": {**params, "_meta": meta}}
+        ),
+        content_type="application/json",
+        headers=sent,
+    )
+
+
+def _result(response: Any) -> Any:
+    return json.loads(response.content)["result"]
+
+
+def _error(response: Any) -> Any:
+    return json.loads(response.content)["error"]
+
+
+def _call(client: Client, *, declares: bool, name: str = "t.inline") -> Any:
+    return _result(_post(client, "tools/call", {"name": name, "arguments": {}}, declares=declares))
+
+
+# ----- the decision at tools/call -----
+
+
+def test_a_declaring_client_gets_a_task_handle(client: Client) -> None:
+    result = _call(client, declares=True, name="t.optional")
+    assert result["resultType"] == "task"
+    assert result["status"] == "working"
+    assert result["taskId"] in EXECUTOR.enqueued
+
+
+def test_the_handle_resolves_immediately_by_polling(client: Client) -> None:
+    """The durability requirement, seen from outside: the id the client was
+    handed works on the very next request."""
+    task_id = _call(client, declares=True, name="t.optional")["taskId"]
+    assert _result(_post(client, "tasks/get", {"taskId": task_id}))["status"] == "working"
+
+
+def test_the_full_round_trip(client: Client) -> None:
+    task_id = _call(client, declares=True, name="t.optional")["taskId"]
+    SERVER.run_task(task_id)
+    polled = _result(_post(client, "tasks/get", {"taskId": task_id}))
+    assert polled["status"] == "completed"
+    assert polled["result"]["structuredContent"] == {"done": "yes"}
+
+
+def test_a_non_declaring_client_gets_the_result_inline_when_the_policy_allows(
+    client: Client,
+) -> None:
+    """``OPTIONAL`` means a task *if it can*, and an ordinary call otherwise —
+    so an older client keeps working against the same tool."""
+    result = _call(client, declares=False, name="t.optional")
+    assert result["structuredContent"] == {"done": "yes"}
+    assert "taskId" not in result
+
+
+def test_a_non_declaring_client_calling_a_task_only_tool_is_refused(client: Client) -> None:
+    """The case the spec names: unable to service the request without returning
+    a task handle the client cannot accept."""
+    response = _post(client, "tools/call", {"name": "t.required", "arguments": {}}, declares=False)
+    assert response.status_code == 400
+    assert _error(response)["code"] == -32021
+
+
+def test_a_legacy_client_never_gets_a_task(client: Client) -> None:
+    """Not an era branch — it falls out of the shape. Legacy capabilities
+    arrived once at ``initialize``, so nothing is declared *on the request*."""
     response = client.post(
         "/mcp/",
         data=json.dumps(
             {
                 "jsonrpc": "2.0",
                 "id": 1,
-                "method": "tools/call",
-                "params": {"name": "t.inline", "arguments": {}, "_meta": meta},
+                "method": "initialize",
+                "params": {"protocolVersion": LEGACY, "capabilities": {}},
             }
         ),
         content_type="application/json",
-        headers={
-            "Mcp-Method": "tools/call",
-            "Mcp-Protocol-Version": MODERN,
-            "Mcp-Name": "t.inline",
-        },
     )
-    return json.loads(response.content)["result"]
+    session = response.headers["Mcp-Session-Id"]
+    before = list(EXECUTOR.enqueued)
+    called = client.post(
+        "/mcp/",
+        data=json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/call",
+                "params": {"name": "t.optional", "arguments": {}},
+            }
+        ),
+        content_type="application/json",
+        headers={"Mcp-Session-Id": session, "Mcp-Protocol-Version": LEGACY},
+    )
+    assert _result(called)["structuredContent"] == {"done": "yes"}
+    assert EXECUTOR.enqueued == before
+
+
+# ----- routing headers -----
+
+
+def test_mcp_name_must_carry_the_task_id(client: Client) -> None:
+    """The extension requires it so a gateway can route a follow-up to the
+    instance holding that task's state. Without the mirroring registered, every
+    conformant ``tasks/*`` request would fail header validation."""
+    task_id = _call(client, declares=True, name="t.optional")["taskId"]
+    assert _post(client, "tasks/get", {"taskId": task_id}).status_code == 200
+
+
+def test_a_task_id_that_disagrees_with_the_header_is_a_mismatch(client: Client) -> None:
+    task_id = _call(client, declares=True, name="t.optional")["taskId"]
+    response = _post(
+        client, "tasks/get", {"taskId": task_id}, headers={"Mcp-Name": "something-else"}
+    )
+    assert response.status_code == 400
+    assert _error(response)["code"] == -32020
 
 
 @pytest.mark.parametrize("declares", [True, False], ids=["declaring", "not-declaring"])
