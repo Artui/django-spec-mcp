@@ -892,8 +892,12 @@ from the user, the copy is the handed request for everything a call reads from
 it: the session, the body, the stream and the parsed `GET`, `POST` and `FILES`
 are the caller's, so a body a spec reads is read for the caller, a stream it
 drains is drained for the caller, and a body no spec reads stays unread for the
-view. An attribute a spec sets on the copy stays on the copy, and one the
-caller sets once the call has its copy is not seen by it. The copy is an
+view. Every other attribute starts as the very object the handed request holds:
+one a spec rebinds or deletes on the copy changes the copy alone, and one the
+caller sets once the call has its copy is not seen by it, but an object a spec
+mutates through one (`META`, the session, the message storage) is the caller's.
+Upload handlers Django creates during the call are bound to the handed request,
+so a handler reading `request.user` reads the caller's. The copy is an
 instance of the handed request's class, so `isinstance` holds where
 `type(request) is WSGIRequest` does not, and it does not pickle. With no
 request handed, a minimal `POST` `HttpRequest`
