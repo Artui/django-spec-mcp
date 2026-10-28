@@ -92,7 +92,9 @@ def carry_principal(request: HttpRequest, token: TokenInfo) -> None:
     the user ``AuthenticationMiddleware`` read off a session cookie
     (``test_a_permission_sees_the_tokens_principal_not_the_sessions``), and an
     ``AnonymousUser`` when the token names no one
-    (``test_a_token_naming_no_one_leaves_an_anonymous_user_not_the_sessions``).
+    (``test_a_token_naming_no_one_leaves_an_anonymous_user_not_the_sessions``),
+    on a request no handler reads as on one a handler does
+    (``test_a_request_no_handler_reads_still_carries_the_tokens_principal``).
     It is the handlers' ``carry_token``, called earlier, so a handler writing
     the same values again changes nothing.
     """

@@ -1274,7 +1274,9 @@ class MCPServer:
         permission classes reading ``request.user`` behave as they would on
         HTTP. A handed request is the caller's own, and the call's user is
         never written to it: the call works on a copy (``copy_request``),
-        which the handlers then seat the token's principal on. The protocol version is
+        which the handlers then seat the token's principal on, and which
+        shares the handed request's body and parse state, so what a spec
+        reads of the body it reads for the caller. The protocol version is
         the server's first (most preferred) supported version, not a
         hardcoded literal.
         """

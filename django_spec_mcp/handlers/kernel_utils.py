@@ -7,15 +7,12 @@ the two paths share only the helpers they call by name.
 from __future__ import annotations
 
 import json
-import os
 from collections.abc import Mapping
-from contextlib import suppress
 from dataclasses import dataclass, replace
-from io import BytesIO
+from functools import cache
 from itertools import islice
 from typing import Any
 
-from django.conf import settings
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import (
@@ -225,8 +222,90 @@ def seat(request: Any, principal: Any) -> Any:
     return request
 
 
+# What a handed request's body and parse state are stored under, which a copy
+# reads and writes on the handed request rather than holding its own: the
+# names ``HttpRequest`` reads and writes on ``self`` from Django 4.2 to 6.1, in
+# ``body``, ``read``, ``_load_post_and_files`` and the ``encoding``,
+# ``upload_handlers`` and ``multipart_parser_class`` setters, which a method
+# override on the copy could not reach. The configuration names go with the
+# parse they configure: the ``encoding`` setter discards the parsed ``POST``,
+# and the other two refuse once ``FILES`` is parsed, so a copy configuring
+# itself alone would discard or refuse on the caller's parse. ``ASGIRequest``'s
+# ``_post_parse_error`` is set in ``__init__`` and read by nothing, so it is
+# not here. The test holding each name is on ``copy_request``.
+_REQUEST_SHARES: frozenset[str] = frozenset(
+    {
+        "_body",
+        "_stream",
+        "_read_started",
+        "_post",
+        "_files",
+        "_encoding",
+        "_upload_handlers",
+        "_multipart_parser_class",
+    }
+)
+
+# DRF's ``Request`` parse cache, the same way: what ``data``, ``POST``,
+# ``FILES`` and ``stream`` cache under these names, so a spec parsing through a
+# copy leaves the parse on the caller's wrapper rather than a consumed stream
+# for it to parse again. ``_content_type`` is set in ``__init__`` and read by
+# nothing, so it is not here.
+_WRAPPER_SHARES: frozenset[str] = frozenset({"_data", "_files", "_full_data", "_stream"})
+
+
+class _SharesBodyState:
+    """The base of a copy ``copy_request`` makes, sharing its shared names with the handed request.
+
+    Every read, write and delete of a name in ``_shared_names`` lands on the
+    handed request, held as ``_shares_with``; every other name is the copy's
+    own. A value written to a shared name that is itself a copy is written as
+    the request it copies, so the handed request never holds a copy, and with
+    it the call's user: DRF opens its stream over the request it wraps, which
+    for a copy is the wrapped request's copy.
+    """
+
+    _shared_names: frozenset[str]
+
+    def __getattribute__(self, name: str) -> Any:
+        return _holder(self, name).__getattribute__(name)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name in type(self)._shared_names and isinstance(value, _SharesBodyState):
+            value = object.__getattribute__(value, "_shares_with")
+        _holder(self, name).__setattr__(name, value)
+
+    def __delattr__(self, name: str) -> None:
+        _holder(self, name).__delattr__(name)
+
+
+def _holder(clone: _SharesBodyState, name: str) -> Any:
+    """What ``name`` is read on for ``clone``: the handed request, or the copy itself."""
+    if name in type(clone)._shared_names:
+        return object.__getattribute__(clone, "_shares_with")
+    return super(_SharesBodyState, clone)
+
+
+# One class per handed request's class, made once: the copy's class is what an
+# ``isinstance`` and a ``type(...)`` read, and a class made per call would be
+# as many classes as calls. A cache of pure results, as ``build_app_document``'s.
+@cache
+def _sharing_class(cls: type, shared: frozenset[str]) -> type:
+    """A subclass of ``cls`` whose instances share ``shared`` with the request they copy.
+
+    It takes ``cls``'s name, qualified name and module, so a copy's ``repr``
+    and any message naming its type read as the handed request's.
+    """
+    namespace = {
+        "__module__": cls.__module__,
+        "__qualname__": cls.__qualname__,
+        "_shared_names": shared,
+    }
+    return type(cls.__name__, (_SharesBodyState, cls), namespace)
+
+
 def copy_request(request: Any) -> Any:
-    """A copy of ``request`` for one in-process call to write to.
+    """A copy of ``request`` for one in-process call to write its user to.
 
     A request an in-process caller hands ``call_tool`` / ``acall_tool`` is the
     caller's own, often the very request a view is serving, so the call's user
@@ -234,107 +313,64 @@ def copy_request(request: Any) -> Any:
     someone else after the call
     (``test_an_in_process_call_leaves_the_handed_request_as_it_was``), and two
     concurrent calls sharing it would each see the other's
-    (``test_concurrent_in_process_calls_on_one_request_keep_their_own_users``).
+    (``test_concurrent_in_process_calls_on_one_request_keep_their_own_users``,
+    ``test_concurrent_calls_on_one_asgi_request_keep_their_own_users``).
 
-    The ``__dict__`` is transplanted onto an instance made with
-    ``object.__new__``, drf-services' recipe for the same copy, which skips
-    ``__init__`` and the ``__reduce_ex__`` route ``copy.copy`` takes. The copy
-    shares ``META``, ``GET``, the cookies, the session and any ``POST`` or
-    ``FILES`` already parsed, and gets its own of what a call can consume or
-    write through:
+    The user is all the copy owns. Its body and parse state are the handed
+    request's, read and written there, so a spec reading or parsing it does
+    so for the caller exactly as if the request itself had been handed over:
+    a body a spec reads is cached for the caller, a stream it drains is
+    drained for the caller, and a body it does not read is left unread. The
+    names shared are ``_REQUEST_SHARES`` above, each held by a test:
 
-    - **A body within the upload limit.** An unread body whose size is known
-      before anything is read and is within ``DATA_UPLOAD_MAX_MEMORY_SIZE`` is
-      read once on the original, as any first read caches it, and the copy
-      reads a stream of its own over it, since reading through a shared
-      ``_stream`` drained a WSGI original and closed an ASGI one
-      (``test_a_spec_reading_the_body_leaves_the_handed_requests_body_intact``,
-      ``test_a_spec_draining_the_stream_leaves_the_originals_stream_whole``).
-      Any other body is left unread and **shared**, so a spec reading it
-      consumes it for the caller (``test_a_body_of_unknown_size_is_shared``):
-      one over the limit
-      (``test_an_oversized_body_is_left_unread_for_the_caller``), and one whose
-      size is unknown, a malformed or negative ``CONTENT_LENGTH`` or none over a
-      stream that cannot seek. Reading those is what Django refuses, or leaves
-      truncated or at the end of its stream. A pre-read that fails, a client
-      gone mid-body, is not raised here, where a call that never reads the
-      body would fail for it: the stream is gone either way, and the caller's
-      ``body`` then raises ``RawPostDataException``
-      (``test_an_unreadable_body_does_not_fail_the_call``).
-    - **A wrapped request.** A DRF ``Request`` keeps its ``HttpRequest`` as
-      ``_request`` and its ``user`` setter writes through to it, so the
-      wrapped request is copied too, and a stream DRF opened over it is
-      re-pointed at the copy (``test_a_handed_drf_request_keeps_its_user``,
-      ``test_a_drf_request_whose_stream_is_open_reads_through_its_copy``); a
-      stream DRF found empty stays ``None``
-      (``test_a_drf_request_with_an_empty_body_still_parses_as_empty``).
+    - ``_body``, ``_stream``:
+      ``test_a_spec_reading_the_body_reads_it_for_the_caller``;
+    - ``_read_started``:
+      ``test_a_spec_draining_the_stream_drains_it_for_the_caller``;
+    - ``_post``, ``_files``:
+      ``test_a_form_a_spec_parsed_is_parsed_for_the_caller``;
+    - ``_encoding``: ``test_an_encoding_a_spec_sets_is_the_callers``;
+    - ``_upload_handlers``:
+      ``test_upload_handlers_a_spec_sets_are_the_callers``;
+    - ``_multipart_parser_class``, Django 6.1's:
+      ``test_a_multipart_parser_a_spec_sets_is_the_callers``.
+
+    They are shared by name, through the copy's class, rather than by
+    overriding ``body`` or ``POST``, because Django's own methods read and
+    write them on ``self``. Everything else is a shallow copy of the
+    ``__dict__``, taken onto an instance made with ``object.__new__``, which
+    skips ``__init__`` and the ``__reduce_ex__`` route ``copy.copy`` takes:
+    ``META``, ``GET``, the cookies and the session are the same objects, and
+    an attribute the copy sets or deletes is its own
+    (``test_deleting_an_attribute_on_the_copy_leaves_the_caller_its_own``).
+    The copy is an instance of a subclass of the handed request's class,
+    named as it is (``test_a_copy_reads_as_the_request_it_copies``).
+
+    A wrapped request, DRF's ``Request``, keeps its ``HttpRequest`` as
+    ``_request`` and its ``user`` setter writes through to it, so the wrapped
+    request is copied too (``test_a_wrapped_request_keeps_its_user``), and the
+    wrapper shares its parse cache, ``_WRAPPER_SHARES``, with the handed
+    wrapper (``test_a_wrapped_requests_parse_is_the_callers``). A copy handed
+    on is copied from the request it copies, so a spec passing its request to
+    a further call shares the one body
+    (``test_a_spec_handing_its_request_on_shares_the_callers_body``).
     """
-    own = request.__dict__
-    clone: Any = object.__new__(type(request))
-    if "_request" in own:
-        clone.__dict__.update(own)
-        clone._request = copy_request(request._request)
-        if own.get("_stream") is request._request:
-            clone._stream = clone._request
-        return clone
-    # ``_read_started`` is set by a request that has a stream at all, and is
-    # true once anything has read it, the body included; a bare
-    # ``HttpRequest()`` has none and no body to read.
-    if own.get("_read_started") is False and _body_within_limit(request):
-        with suppress(OSError):
-            request.body  # noqa: B018 - reading caches ``_body`` on the original
-    clone.__dict__.update(own)
-    if "_body" in own:
-        clone._stream = BytesIO(request._body)
+    if isinstance(request, _SharesBodyState):
+        cls: type = type(request)
+        shared = type(request)._shared_names
+        source = object.__getattribute__(request, "_shares_with")
+    else:
+        shared = _WRAPPER_SHARES if "_request" in request.__dict__ else _REQUEST_SHARES
+        cls = _sharing_class(type(request), shared)
+        source = request
+    clone: Any = object.__new__(cls)
+    vars(clone).update(
+        (name, value) for name, value in request.__dict__.items() if name not in shared
+    )
+    object.__setattr__(clone, "_shares_with", source)
+    if "_request" in vars(clone):
+        clone._request = copy_request(clone._request)
     return clone
-
-
-def _body_within_limit(request: Any) -> bool:
-    """Whether ``request``'s unread body is known, before reading it, to fit the limit.
-
-    Its size is the declared ``CONTENT_LENGTH`` and, over a stream that can
-    seek, what is left of the stream, measured and then returned to where it
-    was. Both are checked, as Django's own ``body`` checks both: an ASGI
-    request's stream is the spooled body itself, whose length may be
-    understated (``test_an_understated_length_over_the_limit_is_left_unread``).
-    A length that is not a non-negative integer, or no length over a stream
-    that cannot seek, is a size not known, and so not known to fit.
-    """
-    sizes: list[int] = []
-    length = request.META.get("CONTENT_LENGTH")
-    if length:
-        try:
-            declared = int(length)
-        except ValueError:
-            return False
-        if declared < 0:
-            return False
-        sizes.append(declared)
-    stream = request._stream
-    if _can_seek(stream):
-        position = stream.tell()
-        sizes.append(stream.seek(0, os.SEEK_END) - position)
-        stream.seek(position)
-    if not sizes:
-        return False
-    limit = settings.DATA_UPLOAD_MAX_MEMORY_SIZE
-    return limit is None or max(sizes) <= limit
-
-
-def _can_seek(stream: Any) -> bool:
-    """Whether ``stream`` can be measured and returned to where it was.
-
-    A stream saying so through ``seekable()`` is taken at its word. One with no
-    ``seekable()`` can seek if it has ``seek`` and ``tell``: before Python 3.11
-    ``SpooledTemporaryFile``, which an ASGI request's stream is, has those and
-    no ``seekable()``
-    (``test_a_stream_that_seeks_without_saying_so_is_measured``), and a stream
-    missing either cannot (``test_a_body_of_unknown_size_is_shared``).
-    """
-    seekable = getattr(stream, "seekable", None)
-    if seekable is not None:
-        return bool(seekable())
-    return hasattr(stream, "seek") and hasattr(stream, "tell")
 
 
 def admits_without_arguments(
