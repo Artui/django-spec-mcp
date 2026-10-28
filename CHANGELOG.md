@@ -170,16 +170,16 @@ carries; releases up to 0.54.0 are in
   `call_context`, with the caller's token on it as `request.mcp_token`; they
   received a DRF `Request` before. A callable reading `request.data` reads the
   prompt's arguments by name instead, and a completer reads what was typed from
-  `value` and the client's resolved siblings from `arguments`; one reading
-  `request.query_params` has nothing to read, since `request.GET` is the MCP
-  endpoint's own query string. **Declare `user` for the caller**:
-  `request.user` is whatever the endpoint's middleware set, which a bearer
-  token does not, so over the wire it is not the token's principal. A pool seed
-  declaring `request` is handed the same `HttpRequest` on `resources/read` of a
-  resource that needs nothing from drf-services: no output serializer, no
-  `kwargs` provider, no `DRFPermissionAdapter` and a selector taking nothing,
-  which every view registered with `register_ui_resource` is. Such a read's
-  answer is otherwise unchanged.
+  `value` and the client's resolved siblings from `arguments`. `request.GET` is
+  the MCP endpoint's own query string, and there is no `request.query_params`.
+  `request.user` is the token's principal, as before, and never a session
+  cookie's user: `AnonymousUser` when the token names no one. Declare `user` or
+  read `request.user`, either works. A pool seed declaring `request` is handed
+  the same `HttpRequest` on `resources/read` of a resource that needs nothing
+  from drf-services: no output serializer, no `kwargs` provider, no
+  `DRFPermissionAdapter` and a selector taking nothing, which every view
+  registered with `register_ui_resource` is. Such a read's answer is otherwise
+  unchanged.
 
 ### Removed
 
