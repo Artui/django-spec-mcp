@@ -21,8 +21,9 @@ asked its scope check of ``None`` as every call asks it, so a check refusing
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, replace
-from typing import Any
+from typing import Any, NamedTuple
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -139,11 +140,6 @@ class _HasPerm(PermissionCheck):
         return bool(principal.has_perm("auth.view_user"))
 
 
-class _DenyPrompt(PermissionCheck):
-    def has_permission(self, principal: Any, spec: Any) -> bool:  # noqa: ARG002
-        return False
-
-
 def _write() -> dict[str, bool]:
     return {"ran": True}
 
@@ -236,22 +232,6 @@ def _names(out: Any, key: str) -> list[str]:
 # ---------- tools/list ----------
 
 
-def test_tools_list_setting_off_returns_all_tools_even_when_refused() -> None:
-    server = _server(filtered=False)
-    _tool(server, "a")
-    _tool(server, "b", _Refuse())
-
-    assert set(_names(handle_tools_list(None, _ctx(server)), "tools")) == {"a", "b"}
-
-
-def test_tools_list_setting_on_hides_refused_tools() -> None:
-    server = _server()
-    _tool(server, "a")
-    _tool(server, "b", _Refuse())
-
-    assert set(_names(handle_tools_list(None, _ctx(server)), "tools")) == {"a"}
-
-
 def test_tools_list_always_listed_overrides_a_refusal() -> None:
     server = _server()
     _tool(server, "a")
@@ -306,68 +286,73 @@ def test_the_async_mount_lists_by_a_check_that_reads_the_database(client: Client
     assert listed == {"viewer": {"a", "users"}, "ann": {"a"}}
 
 
-# ---------- resources/list ----------
+# ---------- the setting on and off, on every list handler ----------
 
 
-def test_resources_list_setting_on_hides_refused() -> None:
-    server = _server()
-    _resource(server, "a", "r://a")
-    _resource(server, "b", "r://b", _Refuse())
-
-    assert _names(handle_resources_list(None, _ctx(server)), "resources") == ["a"]
-
-
-def test_resources_list_setting_off_returns_all() -> None:
-    server = _server(filtered=False)
-    _resource(server, "a", "r://a", _Refuse())
-
-    assert _names(handle_resources_list(None, _ctx(server)), "resources") == ["a"]
-
-
-# ---------- resources/templates/list ----------
-
-
-def test_resources_templates_list_setting_on_hides_refused() -> None:
-    server = _server()
-    _resource(server, "a", "r://a/{pk}")
-    _resource(server, "b", "r://b/{pk}", _Refuse())
-
-    out = handle_resources_templates_list(None, _ctx(server))
-
-    assert _names(out, "resourceTemplates") == ["a"]
-
-
-def test_resources_templates_list_setting_off_returns_all() -> None:
-    server = _server(filtered=False)
-    _resource(server, "a", "r://a/{pk}", _Refuse())
-
-    out = handle_resources_templates_list(None, _ctx(server))
-
-    assert _names(out, "resourceTemplates") == ["a"]
-
-
-# ---------- prompts/list ----------
-
-
-def _prompt(server: MCPServer, name: str, *, permissions: tuple[Any, ...] = ()) -> None:
+def _prompt(server: MCPServer, name: str, *checks: PermissionCheck) -> None:
     server.prompts.register(
-        PromptBinding(name=name, description=None, render=_render, permissions=permissions)
+        PromptBinding(name=name, description=None, render=_render, permissions=checks)
     )
 
 
-def test_prompts_list_setting_on_hides_denied() -> None:
+def _plain_resource(server: MCPServer, name: str, *checks: PermissionCheck) -> None:
+    _resource(server, name, f"r://{name}", *checks)
+
+
+def _template(server: MCPServer, name: str, *checks: PermissionCheck) -> None:
+    _resource(server, name, f"r://{name}/{{pk}}", *checks)
+
+
+class _Listing(NamedTuple):
+    handler: Callable[[Any, MCPCallContext], Any]
+    key: str
+    method: str
+    register: Callable[..., None]
+
+
+_TOOLS = _Listing(handle_tools_list, "tools", "tools/list", _tool)
+_RESOURCES = _Listing(handle_resources_list, "resources", "resources/list", _plain_resource)
+_TEMPLATES = _Listing(
+    handle_resources_templates_list,
+    "resourceTemplates",
+    "resources/templates/list",
+    _template,
+)
+_PROMPTS = _Listing(handle_prompts_list, "prompts", "prompts/list", _prompt)
+
+# Prompts are not specs, so no check there reads a call's arguments.
+_SPEC_LISTINGS = pytest.mark.parametrize(
+    "listing", [_TOOLS, _RESOURCES, _TEMPLATES], ids=["tools", "resources", "templates"]
+)
+_ALL_LISTINGS = pytest.mark.parametrize(
+    "listing",
+    [_TOOLS, _RESOURCES, _TEMPLATES, _PROMPTS],
+    ids=["tools", "resources", "templates", "prompts"],
+)
+
+
+def _listed(listing: _Listing, server: MCPServer) -> list[str]:
+    return _names(listing.handler(None, _ctx(server)), listing.key)
+
+
+@_ALL_LISTINGS
+def test_a_listing_with_the_setting_on_hides_what_the_caller_is_refused(
+    listing: _Listing,
+) -> None:
     server = _server()
-    _prompt(server, "a")
-    _prompt(server, "b", permissions=(_DenyPrompt(),))
+    listing.register(server, "a")
+    listing.register(server, "b", _Refuse())
 
-    assert _names(handle_prompts_list(None, _ctx(server)), "prompts") == ["a"]
+    assert _listed(listing, server) == ["a"]
 
 
-def test_prompts_list_setting_off_returns_all() -> None:
+@_ALL_LISTINGS
+def test_a_listing_with_the_setting_off_returns_all(listing: _Listing) -> None:
     server = _server(filtered=False)
-    _prompt(server, "a", permissions=(_DenyPrompt(),))
+    listing.register(server, "a")
+    listing.register(server, "b", _Refuse())
 
-    assert _names(handle_prompts_list(None, _ctx(server)), "prompts") == ["a"]
+    assert _listed(listing, server) == ["a", "b"]
 
 
 # ---------- a check that reads the call's arguments ----------
@@ -376,46 +361,19 @@ both_mounts = pytest.mark.parametrize("is_async", [False, True], ids=["sync", "a
 
 
 @both_mounts
+@_SPEC_LISTINGS
 def test_a_check_reading_arguments_hides_its_tool_and_no_other(
-    client: Client, is_async: bool
+    client: Client, is_async: bool, listing: _Listing
 ) -> None:
     # A listing hands a check no arguments, so one reading them raises. That
-    # hides its own tool, as the docs promise of a check that cannot decide at
+    # hides its own binding, as the docs promise of a check that cannot decide at
     # list time, rather than failing the whole listing (HTTP 500) and taking an
-    # unrestricted tool with it.
+    # unrestricted one with it.
     server = _server()
-    _tool(server, "open")
-    _takes_x(server, "needs-x", _NeedsArgument())
+    listing.register(server, "open")
+    listing.register(server, "needs-x", _NeedsArgument())
 
-    names = _listed_over_http(client, server, "tools/list", "tools", is_async=is_async)
-
-    assert names == ["open"]
-
-
-@both_mounts
-def test_a_resource_check_reading_arguments_hides_its_resource_and_no_other(
-    client: Client, is_async: bool
-) -> None:
-    server = _server()
-    _resource(server, "open", "r://open")
-    _resource(server, "needs-x", "r://needs-x", _NeedsArgument())
-
-    names = _listed_over_http(client, server, "resources/list", "resources", is_async=is_async)
-
-    assert names == ["open"]
-
-
-@both_mounts
-def test_a_template_check_reading_arguments_hides_its_template_and_no_other(
-    client: Client, is_async: bool
-) -> None:
-    server = _server()
-    _resource(server, "open", "r://open/{pk}")
-    _resource(server, "needs-x", "r://needs-x/{pk}", _NeedsArgument())
-
-    names = _listed_over_http(
-        client, server, "resources/templates/list", "resourceTemplates", is_async=is_async
-    )
+    names = _listed_over_http(client, server, listing.method, listing.key, is_async=is_async)
 
     assert names == ["open"]
 
