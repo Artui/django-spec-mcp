@@ -36,7 +36,7 @@ def handle_tools_call(
     The kernel owns the run: the spec's argument check, its permissions, the
     service or selector and the presenter (``run_kernel_tool``). This layer
     keeps the transport shell: the binding's scope gate and rate limits, a
-    retry's answers, the output format, the result ceiling and
+    retry's answers, the result ceiling and
     ``structuredContent``.
     """
     if not isinstance(params, dict):

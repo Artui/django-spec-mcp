@@ -13,8 +13,9 @@ def build_worker_token(record: TaskRecord) -> TokenInfo:
     """Rebuild the authorization context a task was created under.
 
     The worker has no request and no bearer token — only what the record kept.
-    This turns that back into the ``TokenInfo`` the permission classes expect,
-    so the binding's guards run in the worker exactly as they ran inline.
+    This turns that back into the ``TokenInfo`` the binding's scope gate and the
+    spec's checks are handed, so they run in the worker exactly as they ran
+    inline.
 
     **The user is re-read from the database, not reconstructed.** A task may sit
     in a queue long enough for the answers permissions ask of it to change, and
@@ -26,9 +27,9 @@ def build_worker_token(record: TaskRecord) -> TokenInfo:
     Deletion is the obvious case, and it degrades rather than raising because a
     deleted account should fail the task's permission checks as a denial the
     client can read, not as a worker crash. Deactivation has to be spelled out
-    the same way: ``is_active`` is not something the permission classes
-    downstream consult — ``IsAuthenticated`` is true of an inactive user — so
-    re-reading the row would otherwise honour deactivation in appearance only.
+    the same way: a check reading only ``is_authenticated`` admits an inactive
+    user, since Django's ``User.is_authenticated`` is true of one, so re-reading
+    the row would otherwise honour deactivation in appearance only.
     This is the check Django's own ``ModelBackend`` makes before it will
     authenticate anyone, applied at the moment the work runs.
 

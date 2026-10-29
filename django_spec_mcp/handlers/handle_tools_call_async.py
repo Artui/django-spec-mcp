@@ -42,8 +42,8 @@ async def handle_tools_call_async(
 
     The tool runs through the kernel's ``adispatch`` (``run_kernel_tool_async``),
     which awaits async-native callables and bridges sync ones off the event
-    loop. The transport shell — the binding's permissions and rate limits, the
-    output format, ``structuredContent`` — stays here, its blocking parts
+    loop. The transport shell — the binding's scope gate and rate limits,
+    ``structuredContent`` — stays here, its blocking parts
     through ``acall``.
     """
     if not isinstance(params, dict):

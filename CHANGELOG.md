@@ -256,7 +256,8 @@ carries; releases up to 0.54.0 are in
   refused when it is built, as one named `user` is.
 - **The package is `django-spec-mcp`, imported as `django_spec_mcp`.** Every
   import of `rest_framework_mcp` becomes `django_spec_mcp`, with the same module
-  paths below it, `constants` apart. The settings key is `SPEC_MCP`; a `REST_FRAMEWORK_MCP` setting
+  paths below it apart from `constants` and the modules renamed or removed in the
+  entries below. The settings key is `SPEC_MCP`; a `REST_FRAMEWORK_MCP` setting
   is no longer read, and nothing warns about it, so rename the key. The
   `serverInfo.name` default is `django-spec-mcp`, and the logger and tracer names
   follow the import package.
