@@ -381,8 +381,8 @@ def read_message(http_request: HttpRequest, config: MCPConfig) -> JsonRpcMessage
         # expected, without the body echoed back. The others' text is
         # either an interpreter internal or advice to raise a server-side
         # limit, so they get a fixed message instead. The kept detail is
-        # held by ``test_a_decode_error_keeps_the_decoders_detail`` and
-        # ``test_async_decode_error_keeps_the_decoders_detail``.
+        # held by ``test_a_decode_error_keeps_the_decoders_detail``, on both
+        # views.
         detail: str = (
             exc.msg if isinstance(exc, json.JSONDecodeError) else "body could not be decoded"
         )

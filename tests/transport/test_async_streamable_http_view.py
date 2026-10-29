@@ -16,13 +16,11 @@ from typing import Any
 import pytest
 from asgiref.sync import iscoroutinefunction
 from django import VERSION as DJANGO_VERSION
-from django.http import HttpRequest
 from django.test import AsyncClient, RequestFactory, override_settings
 from django_service_specs import PermissionCheck, ServiceSpec, Unrestricted
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.registry.resource_registry import ResourceRegistry
 from django_spec_mcp.registry.tool_registry import ToolRegistry
@@ -61,12 +59,6 @@ async def _initialize(client: AsyncClient) -> str:
     )
     assert response.status_code == 200
     return response["Mcp-Session-Id"]
-
-
-async def test_async_initialize_returns_session(async_urlconf) -> None:
-    client = AsyncClient()
-    sid = await _initialize(client)
-    assert sid
 
 
 async def test_async_tools_list(async_urlconf) -> None:
@@ -148,17 +140,6 @@ async def test_async_resources_read(async_urlconf) -> None:
     assert json.loads(text)["number"] == "ASYNC-2"
 
 
-async def test_async_unknown_session_returns_404(async_urlconf) -> None:
-    client = AsyncClient()
-    response = await client.post(
-        "/mcp/",
-        data=json.dumps({"jsonrpc": "2.0", "id": 6, "method": "tools/list"}),
-        content_type="application/json",
-        headers={"Mcp-Protocol-Version": "2025-11-25", "Mcp-Session-Id": "not-real"},
-    )
-    assert response.status_code == 404
-
-
 async def test_async_get_without_broker_returns_405() -> None:
     """When no broker is wired, GET is 405 (spec-compliant fallback)."""
     factory = RequestFactory()
@@ -210,29 +191,6 @@ async def test_async_delete_terminates_session(async_urlconf) -> None:
         headers={"Mcp-Protocol-Version": "2025-11-25", "Mcp-Session-Id": sid},
     )
     assert follow_up.status_code == 404
-
-
-async def test_async_invalid_json(async_urlconf) -> None:
-    client = AsyncClient()
-    response = await client.post(
-        "/mcp/",
-        data="not json",
-        content_type="application/json",
-        headers={"Mcp-Protocol-Version": "2025-11-25"},
-    )
-    assert response.json()["error"]["code"] == -32700
-
-
-async def test_async_decode_error_keeps_the_decoders_detail(async_urlconf) -> None:
-    """A ``JSONDecodeError`` names what it expected, and the refusal carries it."""
-    client = AsyncClient()
-    response = await client.post(
-        "/mcp/",
-        data="not json",
-        content_type="application/json",
-        headers={"Mcp-Protocol-Version": "2025-11-25"},
-    )
-    assert response.json()["error"]["message"] == "Invalid JSON: Expecting value"
 
 
 @pytest.mark.parametrize(
@@ -301,44 +259,6 @@ def test_async_body_json_cannot_decode_is_a_parse_error(
     }
 
 
-async def test_async_invalid_request_shape(async_urlconf) -> None:
-    client = AsyncClient()
-    response = await client.post(
-        "/mcp/",
-        data=json.dumps({"foo": "bar"}),
-        content_type="application/json",
-        headers={"Mcp-Protocol-Version": "2025-11-25"},
-    )
-    assert response.json()["error"]["code"] == -32600
-
-
-async def test_async_missing_protocol_version(async_urlconf) -> None:
-    client = AsyncClient()
-    response = await client.post(
-        "/mcp/",
-        data=json.dumps({"jsonrpc": "2.0", "id": 8, "method": "tools/list"}),
-        content_type="application/json",
-    )
-    assert response.status_code == 400
-
-
-async def test_async_post_missing_protocol_version_allowed_when_disabled() -> None:
-    server = build_kernel_server(
-        config=build_mcp_config(allowed_origins=["*"], require_protocol_version_header=False)
-    )
-    with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=True)):
-        client = AsyncClient()
-        sid = await _initialize(client)
-        response = await client.post(
-            "/mcp/",
-            data=json.dumps({"jsonrpc": "2.0", "id": 81, "method": "tools/list"}),
-            content_type="application/json",
-            headers={"Mcp-Session-Id": sid},
-        )
-    assert response.status_code == 200
-    assert "result" in response.json()
-
-
 async def test_async_get_missing_protocol_version_allowed_when_disabled() -> None:
     """The GET (SSE) path mirrors POST when the relaxation is enabled.
 
@@ -352,205 +272,6 @@ async def test_async_get_missing_protocol_version_allowed_when_disabled() -> Non
     with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=True)):
         response = await AsyncClient().get("/mcp/")
     assert response.status_code == 404
-
-
-async def test_async_body_too_large() -> None:
-    server = build_kernel_server(
-        config=build_mcp_config(allowed_origins=["*"], max_request_bytes=10)
-    )
-    with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=True)):
-        response = await AsyncClient().post(
-            "/mcp/", data=b"X" * 256, content_type="application/json"
-        )
-    assert response.status_code == 413
-
-
-async def test_async_blocked_origin_post() -> None:
-    server = build_kernel_server(
-        config=build_mcp_config(allowed_origins=["https://allowed.example"])
-    )
-    with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=True)):
-        response = await AsyncClient().post(
-            "/mcp/",
-            data=json.dumps({"jsonrpc": "2.0", "id": 9, "method": "ping"}),
-            content_type="application/json",
-            headers={
-                "Origin": "https://blocked.example",
-                "Mcp-Protocol-Version": "2025-11-25",
-            },
-        )
-    assert response.status_code == 403
-
-
-async def test_async_blocked_origin_get() -> None:
-    server = build_kernel_server(
-        config=build_mcp_config(allowed_origins=["https://allowed.example"])
-    )
-    with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=True)):
-        response = await AsyncClient().get("/mcp/", headers={"Origin": "https://blocked.example"})
-    assert response.status_code == 403
-
-
-async def test_async_blocked_origin_delete() -> None:
-    server = build_kernel_server(
-        config=build_mcp_config(allowed_origins=["https://allowed.example"])
-    )
-    with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=True)):
-        response = await AsyncClient().delete(
-            "/mcp/", headers={"Origin": "https://blocked.example"}
-        )
-    assert response.status_code == 403
-
-
-async def test_async_unauthenticated_returns_401() -> None:
-    """Auth backend that returns ``None`` produces a 401 with WWW-Authenticate."""
-
-    class _Deny:
-        def authenticate(self, request: HttpRequest) -> TokenInfo | None:
-            return None
-
-        def protected_resource_metadata(self) -> dict:
-            return {}
-
-        def www_authenticate_challenge(self, *, scopes=None, error=None) -> str:
-            del scopes, error
-            return 'Bearer realm="x", error="invalid_token"'
-
-    factory = RequestFactory()
-    request = factory.post(
-        "/mcp/",
-        data=json.dumps(
-            {
-                "jsonrpc": "2.0",
-                "id": 10,
-                "method": "initialize",
-                "params": {
-                    "protocolVersion": "2025-11-25",
-                    "capabilities": {},
-                    "clientInfo": {"name": "x", "version": "1"},
-                },
-            }
-        ),
-        content_type="application/json",
-    )
-    view = AsyncStreamableHttpView.as_view(
-        tools=ToolRegistry(),
-        resources=ResourceRegistry(),
-        auth_backend=_Deny(),
-        session_store=InMemorySessionStore(),
-        config=build_mcp_config(),
-    )
-    response = await view(request)
-    assert response.status_code == 401
-    assert response["WWW-Authenticate"].startswith("Bearer")
-
-
-async def test_async_notification_returns_202(async_urlconf) -> None:
-    client = AsyncClient()
-    sid = await _initialize(client)
-    response = await client.post(
-        "/mcp/",
-        data=json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}),
-        content_type="application/json",
-        headers={"Mcp-Protocol-Version": "2025-11-25", "Mcp-Session-Id": sid},
-    )
-    assert response.status_code == 202
-
-
-async def test_async_response_shaped_input_rejected(async_urlconf) -> None:
-    client = AsyncClient()
-    sid = await _initialize(client)
-    response = await client.post(
-        "/mcp/",
-        data=json.dumps({"jsonrpc": "2.0", "id": 11, "result": {"ok": True}}),
-        content_type="application/json",
-        headers={"Mcp-Protocol-Version": "2025-11-25", "Mcp-Session-Id": sid},
-    )
-    assert response.json()["error"]["code"] == -32600
-
-
-async def test_async_list_params_treated_as_no_params(async_urlconf) -> None:
-    client = AsyncClient()
-    sid = await _initialize(client)
-    response = await client.post(
-        "/mcp/",
-        data=json.dumps({"jsonrpc": "2.0", "id": 12, "method": "tools/list", "params": [1, 2]}),
-        content_type="application/json",
-        headers={"Mcp-Protocol-Version": "2025-11-25", "Mcp-Session-Id": sid},
-    )
-    body = response.json()
-    assert "result" in body
-
-
-async def test_async_initialize_with_unsupported_version_is_rejected(
-    async_urlconf, settings
-) -> None:
-    """Parity with the sync transport: a header naming a version this server
-    does not speak is a mismatch on every method, ``initialize`` included."""
-    settings.SPEC_MCP = {
-        "ALLOWED_ORIGINS": ["*"],
-        "PROTOCOL_VERSIONS": ["2025-11-25"],
-        "SERVER_INFO": {},
-    }
-    client = AsyncClient()
-    response = await client.post(
-        "/mcp/",
-        data=json.dumps(
-            {
-                "jsonrpc": "2.0",
-                "id": 13,
-                "method": "initialize",
-                "params": {
-                    "protocolVersion": "2025-11-25",
-                    "capabilities": {},
-                    "clientInfo": {"name": "x", "version": "1"},
-                },
-            }
-        ),
-        content_type="application/json",
-        headers={"Mcp-Protocol-Version": "9999-99-99"},
-    )
-    assert response.status_code == 400
-
-
-async def test_async_dispatch_error_envelope(async_urlconf) -> None:
-    """A handler returning a ``JsonRpcError`` is wrapped in an ``error`` envelope."""
-    client = AsyncClient()
-    sid = await _initialize(client)
-    response = await client.post(
-        "/mcp/",
-        data=json.dumps(
-            {
-                "jsonrpc": "2.0",
-                "id": 14,
-                "method": "tools/call",
-                "params": {"name": "does.not.exist", "arguments": {}},
-            }
-        ),
-        content_type="application/json",
-        headers={"Mcp-Protocol-Version": "2025-11-25", "Mcp-Session-Id": sid},
-    )
-    body = response.json()
-    assert body["error"]["code"] == -32602
-
-
-async def test_async_delete_without_session_id_is_204(async_urlconf) -> None:
-    client = AsyncClient()
-    response = await client.delete("/mcp/")
-    assert response.status_code == 204
-
-
-async def test_async_request_with_no_params_field(async_urlconf) -> None:
-    """Omitting ``params`` entirely is valid — handler receives ``None``."""
-    client = AsyncClient()
-    sid = await _initialize(client)
-    response = await client.post(
-        "/mcp/",
-        data=json.dumps({"jsonrpc": "2.0", "id": 15, "method": "ping"}),
-        content_type="application/json",
-        headers={"Mcp-Protocol-Version": "2025-11-25", "Mcp-Session-Id": sid},
-    )
-    assert response.json()["result"] == {"resultType": "complete"}
 
 
 async def test_acall_invokes_async_function_directly() -> None:
