@@ -13,6 +13,10 @@ Serve [`django-service-specs`](https://github.com/Artui/django-service-specs)
 services and selectors as a [Model Context Protocol](https://modelcontextprotocol.io)
 (MCP) server, conforming to MCP **2026-07-28** and **2025-11-25** (Streamable HTTP).
 
+Coming from `djangorestframework-mcp-server` (drf-mcp)? Read
+[Moving from drf-mcp](docs/moving-from-drf-mcp.md) before the first deploy:
+the settings key, the stored names and the registration calls all change.
+
 ## Idea
 
 Register kernel specs directly. The unit of registration is a `ServiceSpec`
@@ -182,6 +186,8 @@ walks the OAuth auth flow against your configured Authorization Server.
 ## Documentation
 
 - [Quickstart](docs/quickstart.md) — copy-pasteable end-to-end.
+- [Moving from drf-mcp](docs/moving-from-drf-mcp.md) — what a project on
+  drf-mcp changes to move across.
 - [Concepts](docs/concepts.md) — tools vs resources, sessions, tool results.
 - [Authentication](docs/auth.md) — backends, permissions, audience binding,
   bring-your-own AS recipe.

@@ -25,7 +25,6 @@ each item in `items`, never to the envelope — and its description in the
 `inputSchema` says so. See
 [Query params on a paged tool](../concepts.md#query-param-per-item).
 
-[](){#django_spec_mcp.registry.types.tool_binding.ToolBinding.always_listed}
 ::: django_spec_mcp.registry.types.kernel_tool_binding.KernelToolBinding
 ::: django_spec_mcp.registry.types.kernel_resource_binding.KernelResourceBinding
 ::: django_spec_mcp.registry.tool_registry.ToolRegistry

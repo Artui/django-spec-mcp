@@ -12,6 +12,11 @@ Serve [`django-service-specs`](https://github.com/Artui/django-service-specs)
 services and selectors as a [Model Context Protocol](https://modelcontextprotocol.io)
 (MCP) server, conforming to MCP **2026-07-28** and **2025-11-25** (Streamable HTTP).
 
+!!! tip "Coming from drf-mcp?"
+    This package is `djangorestframework-mcp-server` moved onto the kernel.
+    [Moving from drf-mcp](moving-from-drf-mcp.md) lists what a project has to
+    change, starting with the live state its first deploy drops.
+
 ## What this is
 
 `django-service-specs` is the kernel: a Django project declares each operation
@@ -35,7 +40,8 @@ Reach for this package when:
   about to) and you want to expose them to an MCP-aware client (Claude Desktop,
   Inspector, Cursor, etc.).
 - You want a single, spec-compliant `/mcp` endpoint with pluggable auth
-  (django-oauth-toolkit out of the box) and a small surface that you can audit.
+  (an `MCPAuthBackend` for the authorization server you run) and a small
+  surface that you can audit.
 - You don't want to rewrite your service layer in a parallel framework.
 
 Skip it when you don't need the MCP wire format — call your services directly.
@@ -111,6 +117,8 @@ Optional extras degrade gracefully:
 ## Where to next
 
 - [Quickstart](quickstart.md) — copy-pasteable end-to-end recipe.
+- [Moving from drf-mcp](moving-from-drf-mcp.md) — what a project on
+  `djangorestframework-mcp-server` changes to move across.
 - [Concepts](concepts.md) — tools vs resources, sessions, tool results, origin
   allowlist.
 - [Authentication](auth.md) — backends, permissions, RFC 9728 PRM, RFC 8707

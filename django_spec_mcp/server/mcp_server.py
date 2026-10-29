@@ -609,6 +609,16 @@ class MCPServer:
         wire; every other refusal comes back as the ``isError`` result the wire
         serves.
 
+        ``request`` is the caller's own Django request when there is one, and
+        the call never writes its user to it: the spec is handed a copy whose
+        ``user`` is ``user``, so a view handing the request it is serving keeps
+        serving as its own user after the call. The copy shares the handed
+        request's body, stream and parsed ``POST`` and ``FILES``, so a body a
+        spec reads is read for the caller, and an object a spec mutates through
+        it, such as ``META`` or the session, is the caller's; an attribute a
+        spec sets or deletes changes the copy alone. With no ``request``, a
+        minimal ``POST`` ``HttpRequest`` bearing ``user`` is synthesised.
+
         Raises ``KeyError`` when no tool is registered under ``name``.
         """
         binding = self._tools.get(name)
@@ -758,16 +768,18 @@ class MCPServer:
         """Invoke a tool off the HTTP path with full transport semantics (async).
 
         The in-process twin of a ``tools/call`` request: routes through the same async
-        handler the wire uses, so the transport-level MCP permissions and rate limits,
-        the pagination of a ``LIST`` tool and the output format all
-        apply — everything ``call_tool`` omits. Returns the wire's result payload (a
+        handler the wire uses, so the ``scopes=`` gate and the rate limits apply —
+        what ``call_tool`` omits — beside the spec's own permissions and the
+        pagination of a ``LIST`` tool. Returns the wire's result payload (a
         ``dict`` carrying ``content`` / ``structuredContent`` / ``isError``), or a
         [`JsonRpcError`][django_spec_mcp.protocol.types.json_rpc_error.JsonRpcError]
         for a protocol fault (unknown tool, malformed ``arguments`` shape, denied
         permission).
 
-        ``request`` is the originating Django request when there is one; a
-        minimal one is synthesised otherwise, mirroring ``call_tool``.
+        ``request`` is the originating Django request when there is one, handled
+        as ``call_tool`` handles it: the call works on a copy bearing ``user``
+        and never writes its user to the handed request. A minimal one is
+        synthesised otherwise.
         ``scopes`` populate the synthetic token so a tool registered with
         ``scopes=`` is invokable in-process just as it is on the wire.
         """

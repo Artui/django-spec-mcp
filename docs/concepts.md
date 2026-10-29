@@ -555,20 +555,24 @@ other than what was declared:
 | --- | --- |
 | A `LIST` spec | A resource reads one row by URI. Register a `LIST` as a selector tool, which paginates. |
 | `encoding=TEXT` or `BLOB` beside a spec declaring `affordances` or `allow_none` | The kernel adds affordances to a presented object, and under `allow_none` a missing row presents as `None` without the presenter running; neither is a document or bytes. Serve either as JSON. |
-| `permissions=` beside a spec | The spec's own `permissions` are the resource's guard. |
+| `permissions=` | `register_resource` takes no such keyword, so passing one is a `TypeError`: the spec's own `permissions` are the resource's guard. |
 | A URI variable no read or shape declares, or one the server fills | See above: every read would be refused, or would serve the server's value for any URI. |
 
 #### The body a read serves { #the-body-a-read-serves }
 
-`encoding=` decides how the presented value becomes the `contents` entry, and
-`mime_type=` is advertised as given, on the read and in both listings, never
-inferred or checked:
+The read dispatches the spec, and **its presenter renders the body**: what the
+presenter's `present` returns is what `encoding=` turns into the `contents`
+entry. A spec with no presenter serves its selector's value the same way.
+`mime_type=` is advertised as given, on the read and in both listings, and is
+never inferred from the encoding or checked against the body:
 
 | `encoding=` | The presenter returns | Served as |
 | --- | --- | --- |
 | `ResourceEncoding.JSON`, the default | anything JSON-encodable | `text`, the value as JSON |
 | `ResourceEncoding.TEXT` | a `str`: Markdown, CSV, HTML, plain text | `text`, the string as written |
-| `ResourceEncoding.BLOB` | `bytes`, `bytearray` or a `memoryview` | `blob`, base64, and no `text` |
+| `ResourceEncoding.BLOB` | `bytes`, `bytearray` or `memoryview`, a strided `memoryview` included | `blob`, base64, and no `text` |
+
+A `TEXT` resource whose presenter renders the row as Markdown:
 
 ```python
 from django_service_specs import (
@@ -606,14 +610,52 @@ server.register_resource(
 )
 ```
 
-A spec with no presenter serves its selector's value the same way. A `TEXT`
-resource under the default `application/json` is still served verbatim, since
-the mime type is never checked against the body. A presenter returning the
-wrong type for its encoding, a dict under `TEXT` or a `str` under `BLOB`, is
-answered `-32603` naming the resource and the code that produced the value, a well-formed error rather than a 500,
-because only a read can find it out. The result ceiling and the cache hints
-apply to every encoding alike. An HTML view the host renders is
-[`register_ui_resource`](#interactive-views-mcp-apps), which sets both.
+A `BLOB` resource whose presenter renders the same row as a PDF:
+
+```python
+class InvoicePdf(Presenter):
+    def output(self) -> Output:
+        return Output()  # bytes, not an object of fields
+
+    def present(self, value):
+        return render_invoice_pdf(value)  # -> bytes
+
+
+server.register_resource(
+    SelectorSpec(
+        kind=SelectorKind.RETRIEVE,
+        selector=get_invoice,
+        reads=Parameters([Parameter("pk", "integer", required=True)]),
+        presenter=InvoicePdf(),
+        permissions=[IsBillingStaff()],
+    ),
+    name="invoice-pdf",
+    uri_template="invoices://{pk}/pdf",
+    mime_type="application/pdf",
+    encoding=ResourceEncoding.BLOB,
+)
+# resources/read of invoices://7/pdf answers a contents entry of
+# {"uri": "invoices://7/pdf", "mimeType": "application/pdf", "blob": "JVBERi0..."}
+```
+
+A `TEXT` resource left at the default `application/json` is still served
+verbatim, since the mime type is never checked against the body.
+
+**A presenter returning the wrong type for its encoding is `-32603`.** A dict
+under `TEXT`, or a `str` under `BLOB`, can only be found out by a read, so the
+read answers a JSON-RPC error with code `-32603` rather than failing with a
+`500`. The message names the resource, its encoding and the type it got, and
+sends the reader to the code that produced it:
+
+```text
+Resource 'invoice-pdf' declares encoding=BLOB but produced str, not bytes. A BLOB
+resource's body is the binary itself, base64-encoded here, so the spec's
+presenter (or its selector, when it declares none) must return the bytes.
+```
+
+The result ceiling and the cache hints apply to every encoding alike. An HTML
+view the host renders is [`register_ui_resource`](#interactive-views-mcp-apps),
+which sets both.
 
 ### Registering a whole `SpecRegistry`
 
@@ -1551,23 +1593,40 @@ server.register_tool(
 )
 ```
 
-| `task_policy` | A client that declared the extension | A client that did not |
-|---|---|---|
-| `FORBIDDEN` (default) | runs inline | runs inline |
-| `OPTIONAL` | gets a task handle | runs inline |
-| `REQUIRED` | gets a task handle | `-32021`, missing capability |
+| `task_policy` | A client that declared the extension | A client that did not | A server with no task store and executor |
+|---|---|---|---|
+| `FORBIDDEN` (default) | runs inline | runs inline | runs inline |
+| `OPTIONAL` | gets a task handle | runs inline | runs inline |
+| `REQUIRED` | gets a task handle | `-32021`, missing capability | `-32603`, naming the tool |
 
 `FORBIDDEN` is the default, so **a tool that names no policy always runs
 inline**. Reach for `OPTIONAL` when a tool is slow but can
 still finish inside a request, and `REQUIRED` when it genuinely cannot — where
-running it inline would only hit the dispatch deadline.
+running it inline would only hit the dispatch deadline. A `REQUIRED` tool on a
+server that cannot run tasks is the server's misconfiguration rather than the
+client's, so it is `-32603` whatever the client declared.
 
-A service tool and a selector tool take `task_policy=` alike. A caller the
-spec's own `permissions` or the tool's `scopes=` refuse is answered `-32006`
-and no task is created, and the tool's rate limits are charged once, when the
-task is created. The worker runs the call, under either policy, through the
-same `dispatch` a direct call takes, under the server's `pool_seeds` and
-`conventions`, with the spec's permissions asked again.
+A service tool and a selector tool take `task_policy=` alike. The decision is
+taken in this order, and the first step that answers ends it:
+
+1. The server can run tasks, or the call runs inline (`OPTIONAL`) or is
+   `-32603` (`REQUIRED`).
+2. The client declared the extension on this request, or the call runs inline
+   (`OPTIONAL`) or is `-32021` (`REQUIRED`). This comes before any permission
+   check, so a client that did not declare it is told `-32021` even when the
+   tool's checks would refuse it.
+3. The tool's `scopes=` gate, then the spec's own `permissions`, each asked as
+   an inline call asks them: a caller either refuses is answered `-32006`, and
+   no task is created.
+4. The tool's rate limits are charged, once. A caller over its limit is
+   answered `-32005` and no task is created.
+5. The task is created and handed to the executor.
+
+The worker's run of a task is never itself made a task, under either policy:
+it runs the call through the same `dispatch` a direct call takes, under the
+server's `pool_seeds` and `conventions`, asking the spec's permissions again
+and charging no rate limit. A service declaring `progress` is handed the
+task's reporter.
 
 ### What a client sees
 
