@@ -52,8 +52,12 @@ def _invoice(*, pk: int) -> Invoice:
     return Invoice(number=f"INV-{pk}", amount_cents=100)
 
 
+def _bare_server() -> MCPServer:
+    return MCPServer(name="t", auth_backend=AllowAnyBackend())
+
+
 def _server() -> MCPServer:
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend())
+    server = _bare_server()
     server.register_resource(
         SelectorSpec(
             kind=SelectorKind.RETRIEVE,
@@ -86,7 +90,7 @@ async def test_async_read_renders_a_dataclass_retrieve() -> None:
 
 
 def test_a_list_of_dataclasses_is_a_tool_not_a_resource() -> None:
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend())
+    server = _bare_server()
     with pytest.raises(ImproperlyConfigured, match="RETRIEVE, not a LIST"):
         server.register_resource(
             SelectorSpec(
@@ -111,7 +115,7 @@ def test_a_presenter_no_read_could_render_through_is_refused_when_the_spec_is_bu
 
 
 def test_a_template_variable_no_read_declares_is_refused_at_registration() -> None:
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend())
+    server = _bare_server()
     with pytest.raises(ImproperlyConfigured, match="pk"):
         server.register_resource(
             SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda: {}, permissions=OPEN),
@@ -167,7 +171,7 @@ def test_an_optional_read_the_template_names_registers_and_is_read() -> None:
     # The matcher fills every template variable on every read, so ``pk`` is
     # never left out whatever the read declares, as a bound server argument is
     # not; a read the template names is checked as required.
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend())
+    server = _bare_server()
     server.register_resource(
         SelectorSpec(
             kind=SelectorKind.RETRIEVE,
@@ -184,7 +188,7 @@ def test_an_optional_read_the_template_names_registers_and_is_read() -> None:
 
 
 def test_an_optional_read_the_template_does_not_name_is_still_refused() -> None:
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend())
+    server = _bare_server()
     with pytest.raises(
         ImproperlyConfigured, match=r"Resource 'bad': .*\['owner'\], declared as optional"
     ):
@@ -206,7 +210,7 @@ def test_the_refusal_names_the_resource_and_each_variable_no_read_declares() -> 
     names them in reverse sorted order, so a list built in template order fails, and six
     names make a set that happens to iterate sorted a one-in-720 chance per hash seed
     (checked over ``PYTHONHASHSEED`` 0 to 7), so a list built from a set fails too."""
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend())
+    server = _bare_server()
     with pytest.raises(ImproperlyConfigured) as raised:
         server.register_resource(
             SelectorSpec(
@@ -245,7 +249,7 @@ def _provides_many() -> _ManyScope:
 def test_the_variables_a_provider_fills_are_listed_sorted() -> None:
     """Five provider-filled names, in reverse sorted order in the template: the same two
     ways to get the order wrong as the undeclared list, held for this one too."""
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend())
+    server = _bare_server()
     names = ["zone", "yard", "mid", "lane", "bay"]
     with pytest.raises(ImproperlyConfigured) as raised:
         server.register_resource(
@@ -282,7 +286,7 @@ def test_a_variable_named_view_is_refused_as_the_call_s_own(reads: Parameters) -
     set was read, a spec with no read of it was told the variable was undeclared and one
     with a reflected read that the server fills it, so the whole message is asserted: it
     names which check answers."""
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend())
+    server = _bare_server()
     with pytest.raises(ImproperlyConfigured) as raised:
         server.register_resource(
             SelectorSpec(
@@ -301,7 +305,7 @@ def test_a_variable_named_view_is_refused_as_the_call_s_own(reads: Parameters) -
 def test_a_variable_a_provider_always_fills_is_refused() -> None:
     """A typed ``kwargs=`` provider that always returns ``pk`` replaces whatever the URI
     carries, so the read would serve the provider's row for every URI."""
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend())
+    server = _bare_server()
     with pytest.raises(ImproperlyConfigured) as raised:
         server.register_resource(
             SelectorSpec(
@@ -322,7 +326,7 @@ def test_a_variable_a_provider_always_fills_is_refused() -> None:
 
 def test_a_template_naming_both_kinds_of_bad_variable_says_both() -> None:
     """The two clauses are independent: one undeclared variable and one the server fills."""
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend())
+    server = _bare_server()
     with pytest.raises(ImproperlyConfigured) as raised:
         server.register_resource(
             SelectorSpec(
@@ -347,7 +351,7 @@ def test_a_template_variable_naming_a_shape_registers_and_is_read() -> None:
     """A shape is a parameter of the spec too (``parameters()`` is its reads then its
     shapes), which dispatch takes as an argument, so a variable naming one is not
     refused: the check reads ``parameters()`` and not ``reads`` alone."""
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend())
+    server = _bare_server()
     server.register_resource(
         SelectorSpec(
             kind=SelectorKind.RETRIEVE,
