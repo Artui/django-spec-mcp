@@ -84,14 +84,17 @@ def _rendered(out: Any) -> str:
     return out["messages"][0]["content"]["text"]
 
 
-def test_prompt_argument_named_user_cannot_replace_the_caller() -> None:
+@pytest.mark.parametrize(
+    "get",
+    [handle_prompts_get, async_to_sync(handle_prompts_get_async)],
+    ids=["sync", "async"],
+)
+def test_prompt_argument_named_user_cannot_replace_the_caller(get: Any) -> None:
     """The documented ``def render(user, topic)`` shape: ``user`` is the
     authenticated principal, never an argument the client chose."""
     server = _server_with_scoped_prompt()
 
-    out = handle_prompts_get(
-        {"name": "scoped", "arguments": {"topic": "x", "user": "victim"}}, _ctx(server)
-    )
+    out = get({"name": "scoped", "arguments": {"topic": "x", "user": "victim"}}, _ctx(server))
 
     assert _rendered(out) == f"{_CALLER}:x"
 
@@ -123,16 +126,6 @@ def test_prompt_argument_named_request_cannot_replace_the_request() -> None:
     assert seen["request"] is context.http_request
     assert seen["request"].user == _CALLER
     assert seen["user"] == _CALLER
-
-
-async def test_async_prompt_argument_named_user_cannot_replace_the_caller() -> None:
-    server = _server_with_scoped_prompt()
-
-    out = await handle_prompts_get_async(
-        {"name": "scoped", "arguments": {"topic": "x", "user": "victim"}}, _ctx(server)
-    )
-
-    assert _rendered(out) == f"{_CALLER}:x"
 
 
 def test_ordinary_prompt_arguments_still_reach_render() -> None:
@@ -276,21 +269,6 @@ def _complete(server: MCPServer, siblings: dict[str, Any]) -> Any:
     )
 
 
-def test_a_sibling_named_instance_does_not_reach_the_completer() -> None:
-    """``instance`` is one of the three reserved seeds this handler never
-    supplies, so re-seeding a hand-picked few left it reachable."""
-    seen: dict[str, Any] = {}
-
-    def completer(*, value: str, **kwargs: Any) -> list[str]:
-        seen.update(kwargs)
-        return ["a"]
-
-    out = _complete(_server_with_completer(completer), {"instance": {"attacker": True}})
-
-    assert isinstance(out, dict)
-    assert "instance" not in seen
-
-
 def test_a_sibling_named_data_does_not_reach_the_completer() -> None:
     seen: dict[str, Any] = {}
 
@@ -303,10 +281,10 @@ def test_a_sibling_named_data_does_not_reach_the_completer() -> None:
     assert seen["data"] == "seed-untouched"
 
 
-@pytest.mark.parametrize("name", ["result", "queryset"])
+@pytest.mark.parametrize("name", ["instance", "result", "queryset"])
 def test_a_sibling_named_as_a_kernel_seed_does_not_reach_the_completer(name: str) -> None:
-    """``result`` and ``queryset`` are reserved seeds too, so stripping tracks
-    the whole set rather than the names it held when the strip was written."""
+    """``instance``, ``result`` and ``queryset`` are reserved seeds this handler
+    never supplies, so stripping tracks the whole set rather than a hand-picked few."""
     seen: dict[str, Any] = {}
 
     def completer(*, value: str, **kwargs: Any) -> list[str]:
