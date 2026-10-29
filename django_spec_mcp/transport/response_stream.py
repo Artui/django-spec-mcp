@@ -9,7 +9,7 @@ from typing import Any
 from django.http import StreamingHttpResponse
 from django_service_specs import ProgressReporter
 
-from django_spec_mcp.observability import get_logger
+from django_spec_mcp.observability.get_logger import get_logger
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.protocol.types.json_rpc_response import JsonRpcResponse
 from django_spec_mcp.transport.sse_response import format_event, keepalive_interval_seconds
@@ -124,10 +124,9 @@ async def _run(coro: Awaitable[Any], queue: asyncio.Queue[Any], *, request_id: A
     which the client can at least read.
 
     **The frame says ``Internal error`` and nothing else**, as the JSON-mode
-    backstop in both views does: the exception's text used to ride in the
-    message, and it is written for an operator, not a client (a DRF
-    ``ValidationError`` arrived as ``ValidationError: [ErrorDetail(...)]``).
-    The traceback goes to the log instead, under the request id the frame
+    backstop in both views does: the exception's text is written for an
+    operator, not a client, and can carry whatever the raising code put in
+    it. The traceback goes to the log instead, under the request id the frame
     carries.
     """
     try:

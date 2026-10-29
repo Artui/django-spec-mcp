@@ -4,18 +4,15 @@ The MCP endpoint (on both mounts) and the protected-resource metadata view are
 answered for ``HEAD`` and ``OPTIONS``, opt out of CSRF and of
 ``LoginRequiredMiddleware``, refuse an ``Accept`` header admitting nothing they
 can answer with, and put an ``Allow`` header on every ``405``. None of that is
-written in this package's handlers: each was a property of the endpoints being
-DRF viewsets, so these tests were written against the viewsets first and hold
-the plain Django views to the same answers.
+written in this package's handlers: each is a property of the views
+themselves, so it is held here at the HTTP level.
 
-Two things are deliberately left out, because they were DRF's and are not this
-package's to keep: the body of an ``OPTIONS`` answer (DRF served its metadata,
-the class docstring included) and the ``Allow`` header on answers that are not a
-``405``.
+Two things are deliberately not pinned, because the package promises neither:
+the body of an ``OPTIONS`` answer and the ``Allow`` header on answers that are
+not a ``405``.
 
-The async client sends request headers through ``headers=`` only: an
-``HTTP_ACCEPT`` keyword lands in the ASGI scope, not in the request's headers,
-so a test written that way would pass without sending what it names.
+Requests go through the ``endpoint`` fixture, whose ``send`` says why headers
+travel as ``headers=``.
 """
 
 from __future__ import annotations
@@ -33,6 +30,7 @@ from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.testapp.mcp import build_server
 from tests.testapp.urlconf_for import urlconf_for
+from tests.transport.conftest import Endpoint
 
 _ENDPOINT = "/mcp/"
 _PRM = "/mcp/.well-known/oauth-protected-resource"
@@ -62,21 +60,6 @@ _SESSION_MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
 ]
-
-
-@pytest.fixture(params=[False, True], ids=["sync", "async"])
-def mount(request: pytest.FixtureRequest) -> Any:
-    """Mount the test server on the sync or the async URL conf."""
-    is_async: bool = request.param
-    with override_settings(ROOT_URLCONF=urlconf_for(build_server(), is_async=is_async)):
-        yield is_async
-
-
-async def _send(is_async: bool, method: str, path: str, **kwargs: Any) -> Any:
-    """Send one request on the mount's own client, the sync one off the event loop."""
-    if is_async:
-        return await getattr(AsyncClient(), method)(path, **kwargs)
-    return await sync_to_async(getattr(Client(), method))(path, **kwargs)
 
 
 def _post_initialize(client: Client, **headers: str) -> Any:
@@ -111,8 +94,8 @@ async def test_head_on_the_async_endpoint_is_its_get_refused_without_a_session()
     assert response.content == b""
 
 
-async def test_head_on_the_protected_resource_metadata_is_an_empty_200(mount: bool) -> None:
-    response = await _send(mount, "head", _PRM)
+async def test_head_on_the_protected_resource_metadata_is_an_empty_200(endpoint: Endpoint) -> None:
+    response = await endpoint.send("head", _PRM)
     assert response.status_code == 200
     assert response["Content-Type"] == "application/json"
     assert response.content == b""
@@ -121,14 +104,16 @@ async def test_head_on_the_protected_resource_metadata_is_an_empty_200(mount: bo
 # ----- OPTIONS -----
 
 
-async def test_options_on_the_endpoint_names_its_methods(mount: bool) -> None:
-    response = await _send(mount, "options", _ENDPOINT)
+async def test_options_on_the_endpoint_names_its_methods(endpoint: Endpoint) -> None:
+    response = await endpoint.send("options", _ENDPOINT)
     assert response.status_code == 200
     assert response["Allow"] == _ENDPOINT_ALLOW
 
 
-async def test_options_on_the_protected_resource_metadata_names_its_methods(mount: bool) -> None:
-    response = await _send(mount, "options", _PRM)
+async def test_options_on_the_protected_resource_metadata_names_its_methods(
+    endpoint: Endpoint,
+) -> None:
+    response = await endpoint.send("options", _PRM)
     assert response.status_code == 200
     assert response["Allow"] == _PRM_ALLOW
 
@@ -136,8 +121,8 @@ async def test_options_on_the_protected_resource_metadata_names_its_methods(moun
 # ----- the protected-resource metadata -----
 
 
-async def test_the_protected_resource_metadata_is_json_and_never_cached(mount: bool) -> None:
-    response = await _send(mount, "get", _PRM)
+async def test_the_protected_resource_metadata_is_json_and_never_cached(endpoint: Endpoint) -> None:
+    response = await endpoint.send("get", _PRM)
     assert response.status_code == 200
     assert response["Content-Type"] == "application/json"
     # Compared parsed: the bytes' separators are the encoder's, not the RFC's.
@@ -150,9 +135,9 @@ async def test_the_protected_resource_metadata_is_json_and_never_cached(mount: b
 
 
 async def test_a_post_to_the_protected_resource_metadata_is_a_405_naming_its_methods(
-    mount: bool,
+    endpoint: Endpoint,
 ) -> None:
-    response = await _send(mount, "post", _PRM)
+    response = await endpoint.send("post", _PRM)
     assert response.status_code == 405
     assert response["Allow"] == _PRM_ALLOW
 
@@ -160,8 +145,8 @@ async def test_a_post_to_the_protected_resource_metadata_is_a_405_naming_its_met
 # ----- Allow on every 405 -----
 
 
-async def test_an_unrouted_method_is_a_405_naming_the_methods(mount: bool) -> None:
-    response = await _send(mount, "put", _ENDPOINT)
+async def test_an_unrouted_method_is_a_405_naming_the_methods(endpoint: Endpoint) -> None:
+    response = await endpoint.send("put", _ENDPOINT)
     assert response.status_code == 405
     assert response["Allow"] == _ENDPOINT_ALLOW
 
@@ -172,33 +157,34 @@ def test_the_sync_get_405_names_the_methods() -> None:
     assert response["Allow"] == _ENDPOINT_ALLOW
 
 
-async def test_a_delete_with_sessions_off_is_a_405_naming_the_methods(mount: bool) -> None:
+async def test_a_delete_with_sessions_off_is_a_405_naming_the_methods(endpoint: Endpoint) -> None:
     server = build_server(config=build_mcp_config(sessions_enabled=False))
-    with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=mount)):
-        response = await _send(mount, "delete", _ENDPOINT)
+    with endpoint.mount(server):
+        response = await endpoint.send("delete", _ENDPOINT)
     assert response.status_code == 405
     assert response["Allow"] == _ENDPOINT_ALLOW
 
 
-async def test_a_modern_era_delete_is_a_405_naming_the_methods(mount: bool) -> None:
-    response = await _send(
-        mount, "delete", _ENDPOINT, headers={"Mcp-Protocol-Version": "2026-07-28"}
+async def test_a_modern_era_delete_is_a_405_naming_the_methods(endpoint: Endpoint) -> None:
+    """Session termination does not exist in the revision the caller named."""
+    response = await endpoint.send(
+        "delete", _ENDPOINT, headers={"Mcp-Protocol-Version": "2026-07-28"}
     )
     assert response.status_code == 405
     assert response["Allow"] == _ENDPOINT_ALLOW
 
 
-async def test_a_get_with_sessions_off_is_a_405_naming_the_methods(mount: bool) -> None:
+async def test_a_get_with_sessions_off_is_a_405_naming_the_methods(endpoint: Endpoint) -> None:
     """With no session there is no channel to open a stream on, on either mount."""
     server = build_server(config=build_mcp_config(sessions_enabled=False))
-    with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=mount)):
-        response = await _send(mount, "get", _ENDPOINT)
+    with endpoint.mount(server):
+        response = await endpoint.send("get", _ENDPOINT)
     assert response.status_code == 405
     assert response["Allow"] == _ENDPOINT_ALLOW
 
 
-async def test_a_modern_era_get_is_a_405_naming_the_methods(mount: bool) -> None:
-    response = await _send(mount, "get", _ENDPOINT, headers={"Mcp-Protocol-Version": "2026-07-28"})
+async def test_a_modern_era_get_is_a_405_naming_the_methods(endpoint: Endpoint) -> None:
+    response = await endpoint.send("get", _ENDPOINT, headers={"Mcp-Protocol-Version": "2026-07-28"})
     assert response.status_code == 405
     assert response["Allow"] == _ENDPOINT_ALLOW
 
@@ -210,9 +196,9 @@ async def test_a_modern_era_get_is_a_405_naming_the_methods(mount: bool) -> None
     "accept",
     [None, "*/*", "application/*", "application/json", "application/json, text/event-stream"],
 )
-async def test_an_accept_admitting_json_is_served(mount: bool, accept: str | None) -> None:
+async def test_an_accept_admitting_json_is_served(endpoint: Endpoint, accept: str | None) -> None:
     headers: dict[str, str] = {} if accept is None else {"Accept": accept}
-    if mount:
+    if endpoint.is_async:
         response = await _apost_initialize(AsyncClient(), **headers)
     else:
         response = await sync_to_async(_post_initialize)(Client(), **headers)
@@ -223,10 +209,9 @@ async def test_an_accept_admitting_json_is_served(mount: bool, accept: str | Non
 @pytest.mark.parametrize("accept", ["text/html", ""])
 @pytest.mark.parametrize("method", ["post", "delete", "options"])
 async def test_an_accept_admitting_nothing_the_endpoint_serves_is_a_406(
-    mount: bool, accept: str, method: str
+    endpoint: Endpoint, accept: str, method: str
 ) -> None:
-    response = await _send(
-        mount,
+    response = await endpoint.send(
         method,
         _ENDPOINT,
         data=_INITIALIZE,
@@ -239,9 +224,9 @@ async def test_an_accept_admitting_nothing_the_endpoint_serves_is_a_406(
 
 
 async def test_the_protected_resource_metadata_refuses_an_accept_it_cannot_serve(
-    mount: bool,
+    endpoint: Endpoint,
 ) -> None:
-    response = await _send(mount, "get", _PRM, headers={"Accept": "text/html"})
+    response = await endpoint.send("get", _PRM, headers={"Accept": "text/html"})
     assert response.status_code == 406
     assert json.loads(response.content) == _NOT_ACCEPTABLE
 
@@ -271,7 +256,7 @@ def _initialize_then_delete(user: Any) -> tuple[Any, Any]:
 
 
 @pytest.mark.django_db(transaction=True)
-async def test_a_session_cookie_does_not_bring_csrf_to_the_endpoint(mount: bool) -> None:
+async def test_a_session_cookie_does_not_bring_csrf_to_the_endpoint(endpoint: Endpoint) -> None:
     """A bearer-token transport has no CSRF token to send, cookie or not.
 
     The cookie is what makes ``CsrfViewMiddleware`` enforce at all on a
@@ -279,7 +264,7 @@ async def test_a_session_cookie_does_not_bring_csrf_to_the_endpoint(mount: bool)
     """
     user = await get_user_model().objects.acreate(username="cookie-holder")
     with override_settings(MIDDLEWARE=_SESSION_MIDDLEWARE, **_SESSION_SETTINGS):
-        if mount:
+        if endpoint.is_async:
             client: Any = AsyncClient(enforce_csrf_checks=True)
             await sync_to_async(client.force_login)(user)
             initialized = await _apost_initialize(client)
@@ -296,14 +281,14 @@ async def test_a_session_cookie_does_not_bring_csrf_to_the_endpoint(mount: bool)
     assert deleted.status_code == 204
 
 
-async def test_csrf_never_answers_for_the_protected_resource_metadata(mount: bool) -> None:
+async def test_csrf_never_answers_for_the_protected_resource_metadata(endpoint: Endpoint) -> None:
     """A POST there is the view's own ``405``, not ``CsrfViewMiddleware``'s ``403``.
 
     The metadata only answers ``GET``, so the opt-out shows only as which
     refusal a POST gets: without it the middleware refuses first.
     """
     with override_settings(MIDDLEWARE=_SESSION_MIDDLEWARE, **_SESSION_SETTINGS):
-        if mount:
+        if endpoint.is_async:
             response = await AsyncClient(enforce_csrf_checks=True).post(_PRM)
         else:
             response = await sync_to_async(Client(enforce_csrf_checks=True).post)(_PRM)
@@ -314,7 +299,7 @@ async def test_csrf_never_answers_for_the_protected_resource_metadata(mount: boo
 @pytest.mark.skipif(DJANGO_VERSION < (5, 1), reason="LoginRequiredMiddleware lands in Django 5.1")
 @pytest.mark.parametrize("path", [_ENDPOINT, _PRM])
 async def test_login_required_middleware_never_redirects_an_endpoint(
-    mount: bool, path: str
+    endpoint: Endpoint, path: str
 ) -> None:
     """The metadata is public discovery, and the endpoint authenticates itself."""
     middleware = [*_SESSION_MIDDLEWARE, "django.contrib.auth.middleware.LoginRequiredMiddleware"]
@@ -322,11 +307,11 @@ async def test_login_required_middleware_never_redirects_an_endpoint(
         if path == _ENDPOINT:
             response = (
                 await _apost_initialize(AsyncClient())
-                if mount
+                if endpoint.is_async
                 else await sync_to_async(_post_initialize)(Client())
             )
         else:
-            response = await _send(mount, "get", path)
+            response = await endpoint.send("get", path)
     assert response.status_code == 200, response.content
 
 
@@ -340,7 +325,7 @@ def _logged_in_initialize(user: Any) -> Any:
 
 
 @pytest.mark.django_db(transaction=True)
-async def test_a_session_user_is_not_the_caller_the_auth_backend_sees(mount: bool) -> None:
+async def test_a_session_user_is_not_the_caller_the_auth_backend_sees(endpoint: Endpoint) -> None:
     """``AllowAnyBackend`` reads ``request.user``; a session cookie must not set it.
 
     The endpoint is CSRF-exempt, so a backend that took the session's user for
@@ -353,11 +338,11 @@ async def test_a_session_user_is_not_the_caller_the_auth_backend_sees(mount: boo
     server._session_store = store  # noqa: SLF001 — the mount reads it at ``urls``
     user = await get_user_model().objects.acreate(username="cookie-holder")
     with override_settings(
-        ROOT_URLCONF=urlconf_for(server, is_async=mount),
+        ROOT_URLCONF=urlconf_for(server, is_async=endpoint.is_async),
         MIDDLEWARE=_SESSION_MIDDLEWARE,
         **_SESSION_SETTINGS,
     ):
-        if mount:
+        if endpoint.is_async:
             client: Any = AsyncClient()
             await sync_to_async(client.force_login)(user)
             response = await _apost_initialize(client)

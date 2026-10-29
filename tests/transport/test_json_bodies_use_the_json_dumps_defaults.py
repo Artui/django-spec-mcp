@@ -1,8 +1,8 @@
 """The ``406`` body and the metadata document are ``json.dumps`` with its defaults.
 
 ``JsonResponse`` writes them, so they carry ``", "`` and ``": "`` separators and
-escape non-ASCII characters, where DRF's renderer wrote them compact and in
-UTF-8. A client parsing JSON sees no difference; one comparing bytes does.
+escape non-ASCII characters. A client parsing JSON sees no difference; one
+comparing bytes does, so the bytes are pinned here.
 """
 
 from __future__ import annotations

@@ -1,14 +1,12 @@
-"""Regressions for the five defects the PR review found.
+"""Supported configurations whose defects a coverage number cannot see.
 
-Each was reachable on a supported configuration and each passed CI at 100%
-coverage — they were unexercised *combinations*, not uncovered lines, which is
-exactly the gap a coverage number cannot see. Grouped in one file so the
-provenance stays obvious.
+A modern-only server, a progress token on a path with no reporter, the
+reporter's counters under concurrency and a tuple of resource links each break
+at 100% coverage: they are unexercised *combinations*, not uncovered lines.
 
-The two that registered a tool or a resource now ask it of kernel specs
-registered with ``register_tool`` and ``register_resource``. A kernel resource
-has two gates: its ``scopes=`` and its spec's own checks, so the denied read is
-asked of each.
+The tools and resources here are kernel specs registered with ``register_tool``
+and ``register_resource``. A kernel resource has two gates, its ``scopes=`` and
+its spec's own checks, so the denied read is asked of each.
 """
 
 from __future__ import annotations
@@ -33,7 +31,7 @@ MODERN = "2026-07-28"
 LEGACY = "2025-11-25"
 
 
-# ----- 1. a modern-only PROTOCOL_VERSIONS was a 500 -----
+# ----- a modern-only PROTOCOL_VERSIONS -----
 
 
 def _modern_only() -> Any:
@@ -47,7 +45,7 @@ def test_a_modern_only_server_has_no_legacy_fallback() -> None:
 
 
 def test_discovery_still_works_on_a_modern_only_server() -> None:
-    """This used to raise ``IndexError`` → HTTP 500.
+    """Not an ``IndexError`` and an HTTP 500.
 
     ``server/discover`` is the request a modern client leads with, sent without
     a version header precisely because it is asking which versions exist.
@@ -93,7 +91,7 @@ def test_a_server_supporting_no_revision_at_all_is_refused_at_construction() -> 
         build_mcp_config(protocol_versions=[])
 
 
-# ----- 2 & 3. streaming only where a reporter exists -----
+# ----- streaming only where a reporter exists -----
 
 
 def _selector() -> list[dict[str, str]]:
@@ -232,7 +230,7 @@ def test_a_tools_call_with_a_non_string_name_is_not_streamed(stream_urls: Any) -
     assert response.headers["Content-Type"].startswith("application/json")
 
 
-# ----- 5. the reporter's counters -----
+# ----- the reporter's counters -----
 
 
 def test_the_reporter_guards_its_counters_with_a_lock() -> None:
@@ -255,7 +253,7 @@ def test_the_reporter_guards_its_counters_with_a_lock() -> None:
     assert reporter._lock is not None
 
 
-# ----- smaller note: a tuple of resource links -----
+# ----- a tuple of resource links -----
 
 
 def test_a_tuple_of_resource_links_is_accepted() -> None:

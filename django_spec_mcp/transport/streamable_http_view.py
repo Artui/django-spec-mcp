@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from collections.abc import Callable
 from typing import Any
 
@@ -21,13 +20,12 @@ from django_spec_mcp.auth.types.auth_backend import MCPAuthBackend
 from django_spec_mcp.config.types.mcp_config import MCPConfig
 from django_spec_mcp.handlers.dispatch import dispatch
 from django_spec_mcp.handlers.types.context import MCPCallContext
-from django_spec_mcp.observability import get_logger, session_fingerprint
-from django_spec_mcp.protocol.parse_message import parse_message
+from django_spec_mcp.observability.get_logger import get_logger
 from django_spec_mcp.protocol.types.implementation import Implementation
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.protocol.types.json_rpc_message import JsonRpcMessage
 from django_spec_mcp.protocol.types.json_rpc_notification import JsonRpcNotification
 from django_spec_mcp.protocol.types.json_rpc_request import JsonRpcRequest
-from django_spec_mcp.protocol.types.json_rpc_response import JsonRpcResponse
 from django_spec_mcp.registry.prompt_registry import PromptRegistry
 from django_spec_mcp.registry.resource_registry import ResourceRegistry
 from django_spec_mcp.registry.tool_registry import ToolRegistry
@@ -36,31 +34,37 @@ from django_spec_mcp.subscriptions.types.subscription_broker import Subscription
 from django_spec_mcp.tasks.types.task_executor import TaskExecutor
 from django_spec_mcp.tasks.types.task_store import TaskStore
 from django_spec_mcp.transport.negotiate_protocol_version import negotiate_protocol_version
-from django_spec_mcp.transport.origin_validation import is_origin_allowed
 from django_spec_mcp.transport.types.request_metadata import RequestMetadata
 from django_spec_mcp.transport.types.session_store import SessionStore
 from django_spec_mcp.transport.utils import (
     allowed_methods,
     carry_principal,
+    error_response,
     exempt_endpoint,
-    insufficient_scope_challenge,
-    is_permission_denial,
+    internal_error_response,
     is_raised_denial,
-    modern_error_status,
+    legacy_result_response,
+    modern_era_requested,
+    modern_header_refusal,
+    modern_result_response,
     not_acceptable,
+    origin_refusal,
+    params_dict,
     raised_denial_error,
+    read_message,
     seat_anonymous,
-    session_gate_failure,
+    session_rejection,
+    unauthenticated_response,
+    unknown_session_response,
+    unsupported_version_response,
 )
-from django_spec_mcp.transport.validate_modern_request import validate_modern_request
-from django_spec_mcp.types.internal_error_message import INTERNAL_ERROR_MESSAGE
+from django_spec_mcp.transport.validate_modern_request import (
+    VERSION_HEADER,
+)
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
-from django_spec_mcp.types.mcp_error_header import MCP_ERROR_HEADER
-from django_spec_mcp.types.modern_protocol_versions import MODERN_PROTOCOL_VERSIONS
 from django_spec_mcp.types.sessionless_methods import SESSIONLESS_METHODS
 
 _SESSION_HEADER: str = "Mcp-Session-Id"
-_VERSION_HEADER: str = "Mcp-Protocol-Version"
 # WSGI never streams, so JSON is all this view answers a POST, DELETE or
 # OPTIONS with, and a client accepting only ``text/event-stream`` there cannot
 # be served (``test_the_sync_endpoint_refuses_an_accept_naming_only_a_stream``).
@@ -73,63 +77,6 @@ _ANSWERS_WITH: tuple[str, ...] = ("application/json",)
 _UNNEGOTIATED: frozenset[str] = frozenset({"GET", "HEAD"})
 
 logger = get_logger(__name__)
-
-
-def _error_response(
-    *,
-    code: int,
-    message: str,
-    data: Any = None,
-    status: int = 400,
-    request_id: Any = None,
-    error_hint: str | None = None,
-) -> JsonResponse:
-    body: dict[str, Any] = JsonRpcResponse(
-        id=request_id, error=JsonRpcError(code=code, message=message, data=data)
-    ).to_dict()
-    response = JsonResponse(body, status=status)
-    if error_hint is not None:
-        # Summarises the body for clients that surface only the status line.
-        response[MCP_ERROR_HEADER] = error_hint
-    return response
-
-
-def _internal_error_response(message: JsonRpcRequest) -> JsonResponse:
-    """Answer a dispatch that raised with a JSON-RPC ``-32603``, and log why.
-
-    **The backstop, not a classifier.** Every failure a caller can act on is
-    already *returned* by the handlers, as an ``isError`` tool result or a
-    JSON-RPC error, and the permission denial, unknown method and rate limit
-    responses are all built from those return values. What reaches this is
-    what nothing mapped, which makes it a server fault whatever its type.
-
-    Without it the exception would leave the view as Django's ``500`` page,
-    which is not a JSON-RPC reply at all: a spec-following client could not
-    even match it to the request it sent.
-
-    **Nothing is meant to escape.** The ``406`` for an ``Accept`` header the
-    view cannot answer is decided in ``dispatch``, before this action is
-    called, so the backstop cannot reach it.
-    tests/transport/test_dispatch_backstop.py pins the denial, rate-limit and
-    unknown-method answers the handlers return rather than raise.
-
-    **The status stays a ``500``** so proxies, load balancers and error-rate
-    monitoring still count a server fault, which a ``200`` carrying the error
-    would hide from all three. **The message is generic** and the exception
-    goes to the log with its traceback: see ``INTERNAL_ERROR_MESSAGE``.
-
-    Must be called from inside the ``except`` block: ``logger.exception``
-    reads the exception being handled.
-    """
-    logger.exception(
-        "Unhandled exception dispatching %s (request id %r)", message.method, message.id
-    )
-    return _error_response(
-        code=JsonRpcErrorCode.INTERNAL_ERROR,
-        message=INTERNAL_ERROR_MESSAGE,
-        status=500,
-        request_id=message.id,
-    )
 
 
 def _reject_awaitable_token(result: Any, *, backend: Any) -> Any:
@@ -257,46 +204,14 @@ class StreamableHttpView(View):
 
     def post(self, http_request: HttpRequest) -> HttpResponse:
         """POST action: parse a single JSON-RPC message and dispatch."""
-        guard: HttpResponse | None = self._check_origin(http_request)
-        if guard is not None:
-            return guard
+        config: MCPConfig = self._require_config()
+        refused: JsonResponse | None = origin_refusal(http_request, config)
+        if refused is not None:
+            return refused
 
-        max_bytes: int = self._require_config().max_request_bytes
-        if len(http_request.body) > max_bytes:
-            return _error_response(
-                code=JsonRpcErrorCode.INVALID_REQUEST,
-                message="Request body too large",
-                status=413,
-            )
-
-        # ``JSONDecodeError`` is not all ``json.loads`` raises on a body it
-        # cannot decode: nesting past the decoder's recursion is a
-        # ``RecursionError``, an integer over the 4300-digit conversion cap a
-        # plain ``ValueError``, and bytes that are not UTF-8 a
-        # ``UnicodeDecodeError``. Each escaped as a 500, and this parse runs
-        # before authentication, so anyone could produce one. Held by
-        # ``test_a_body_json_cannot_decode_is_a_parse_error``: its nested case
-        # fails without ``RecursionError``, the other two without widening
-        # ``JSONDecodeError`` to ``ValueError``.
-        try:
-            payload: Any = json.loads(http_request.body or b"null")
-        except (ValueError, RecursionError) as exc:
-            # Only ``JSONDecodeError`` carries ``msg`` - what the decoder
-            # expected, without the body echoed back. The others' text is
-            # either an interpreter internal or advice to raise a server-side
-            # limit, so they get a fixed message instead. The kept detail is
-            # held by ``test_a_decode_error_keeps_the_decoders_detail``.
-            detail: str = (
-                exc.msg if isinstance(exc, json.JSONDecodeError) else "body could not be decoded"
-            )
-            return _error_response(
-                code=JsonRpcErrorCode.PARSE_ERROR, message=f"Invalid JSON: {detail}"
-            )
-
-        try:
-            message = parse_message(payload)
-        except ValueError as exc:
-            return _error_response(code=JsonRpcErrorCode.INVALID_REQUEST, message=str(exc))
+        message: JsonRpcMessage | JsonResponse = read_message(http_request, config)
+        if isinstance(message, JsonResponse):
+            return message
 
         is_initialize: bool = isinstance(message, JsonRpcRequest) and message.method == "initialize"
         # ``server/discover`` joins ``initialize`` in being answerable without a
@@ -311,22 +226,16 @@ class StreamableHttpView(View):
         # (``initialize`` handshake, sessions). One branch, here at the edge —
         # everything below the transport is era-agnostic by construction.
         metadata: RequestMetadata | None = RequestMetadata.from_params(
-            _params_dict(getattr(message, "params", None))
+            params_dict(getattr(message, "params", None))
         )
         if metadata is not None:
             return self._handle_modern(http_request, message, metadata)
 
-        version_header: str | None = http_request.headers.get(_VERSION_HEADER)
         negotiated: str | None = negotiate_protocol_version(
-            version_header, is_sessionless=is_sessionless, config=self._require_config()
+            http_request.headers.get(VERSION_HEADER), is_sessionless=is_sessionless, config=config
         )
         if negotiated is None:
-            return _error_response(
-                code=JsonRpcErrorCode.INVALID_REQUEST,
-                message="Missing or unsupported MCP-Protocol-Version",
-                request_id=getattr(message, "id", None),
-            )
-        protocol_version: str = negotiated
+            return unsupported_version_response(getattr(message, "id", None))
 
         # Authentication runs *before* the session lookup: an unauthenticated
         # caller always sees 401 regardless of session validity, so session ids
@@ -335,7 +244,7 @@ class StreamableHttpView(View):
         token = self._authenticate(http_request)
         if token is None:
             logger.warning("Authentication failed for %s", http_request.path)
-            return self._unauthenticated_response()
+            return unauthenticated_response(self._require_auth_backend())
 
         # A session is bound to the principal it was minted for at
         # ``initialize``; a wrong-principal presentation renders the same
@@ -349,78 +258,39 @@ class StreamableHttpView(View):
                 and _reject_awaitable_session(store.owner(session_id), store=store, method="owner")
                 == principal
             )
-            failure = session_gate_failure(session_id, owner_matches=owner_matches)
-            if failure is not None:
-                message_text, status, hint = failure
-                # The log names the *exact* condition while the response merges
-                # unknown-id with wrong-principal: the gate must not be an
-                # ownership oracle, but a log line is not the wire.
-                logger.warning(
-                    "Session rejected: %s (session=%s, principal=%s, method=%s) -> HTTP %s",
-                    hint,
-                    session_fingerprint(session_id),
-                    principal,
-                    getattr(message, "method", "?"),
-                    status,
-                )
-                return _error_response(
-                    code=JsonRpcErrorCode.INVALID_REQUEST,
-                    message=message_text,
-                    status=status,
-                    request_id=getattr(message, "id", None),
-                    error_hint=hint,
-                )
+            rejected: JsonResponse | None = session_rejection(
+                session_id,
+                owner_matches=owner_matches,
+                principal=principal,
+                message=message,
+                logger=logger,
+            )
+            if rejected is not None:
+                return rejected
 
-        context = MCPCallContext(
-            http_request=http_request,
-            token=token,
-            tools=self._require_tools(),
-            resources=self._require_resources(),
-            prompts=self._require_prompts(),
-            protocol_version=protocol_version,
-            session_id=session_id,
-            server_info=self.server_info,
-            instructions=self.instructions,
-            tasks=self.task_store,
-            task_executor=self.task_executor,
-            subscriptions=self.subscription_broker,
-            config=self._require_config(),
-            pool_seeds=self.pool_seeds,
-            conventions=self.conventions,
+        context: MCPCallContext = self._context(
+            http_request, token, protocol_version=negotiated, session_id=session_id
         )
 
         if isinstance(message, JsonRpcNotification):
             return HttpResponse(status=202)
 
         if not isinstance(message, JsonRpcRequest):
-            return _error_response(
+            return error_response(
                 code=JsonRpcErrorCode.INVALID_REQUEST, message="Expected a JSON-RPC request"
             )
 
         try:
-            result: Any = dispatch(message.method, _params_dict(message.params), context)
-        except Exception as exc:  # noqa: BLE001 — the backstop; see ``_internal_error_response``
+            result: Any = dispatch(message.method, params_dict(message.params), context)
+        except Exception as exc:  # noqa: BLE001 — the backstop; see ``internal_error_response``
             if not is_raised_denial(exc):
-                return _internal_error_response(message)
+                return internal_error_response(message, logger)
             # A denial raised rather than returned; see ``raised_denial_error``.
             result = raised_denial_error()
 
-        if isinstance(result, JsonRpcError):
-            response_body = JsonRpcResponse(id=message.id, error=result).to_dict()
-        else:
-            response_body = JsonRpcResponse(id=message.id, result=result).to_dict()
-        # A permission denial is a 403 with a challenge naming the missing
-        # scopes, not a 200 with the error tucked inside: the MCP authorization
-        # spec's error table makes the status normative, and the challenge is
-        # how a client learns what to ask for. Every other dispatch outcome,
-        # including a tool that failed on its own terms, stays a 200.
-        denied: bool = is_permission_denial(result)
-        http_response = JsonResponse(response_body, status=403 if denied else 200)
-        if denied:
-            http_response["WWW-Authenticate"] = insufficient_scope_challenge(
-                result, self._require_auth_backend()
-            )
-
+        http_response: JsonResponse = legacy_result_response(
+            message.id, result, self._require_auth_backend()
+        )
         if is_initialize and self._sessions_enabled() and not isinstance(result, JsonRpcError):
             # The spec makes assignment the server's choice ("MAY assign a
             # session ID") and the client's duty to echo one conditional on it
@@ -447,50 +317,22 @@ class StreamableHttpView(View):
         a legacy one, so gating it on credentials would break era detection for
         anonymous probes.
         """
-        config: MCPConfig = self._require_config()
-        request_id: Any = getattr(message, "id", None)
-        if isinstance(message, JsonRpcRequest):
-            invalid: JsonRpcError | None = validate_modern_request(
-                method=message.method,
-                params=_params_dict(message.params),
-                metadata=metadata,
-                headers=http_request.headers,
-                supported_versions=config.modern_protocol_versions,
-            )
-            if invalid is not None:
-                return _error_response(
-                    code=invalid.code,
-                    message=invalid.message,
-                    data=invalid.data,
-                    status=modern_error_status(invalid),
-                    request_id=request_id,
-                )
+        refused: JsonResponse | None = modern_header_refusal(
+            http_request, message, metadata, self._require_config()
+        )
+        if refused is not None:
+            return refused
 
         token = self._authenticate(http_request)
         if token is None:
-            return self._unauthenticated_response()
+            return unauthenticated_response(self._require_auth_backend())
 
-        context = MCPCallContext(
-            http_request=http_request,
-            token=token,
-            tools=self._require_tools(),
-            resources=self._require_resources(),
-            prompts=self._require_prompts(),
+        context: MCPCallContext = self._context(
+            http_request,
+            token,
             protocol_version=metadata.protocol_version,
             session_id=None,
-            # Modern path only. The legacy context leaves this empty by design:
-            # a legacy client declared its capabilities once, at
-            # ``initialize``, and the spec forbids relying on a declaration
-            # that did not arrive *with the request*.
             client_capabilities=metadata.client_capabilities,
-            server_info=self.server_info,
-            instructions=self.instructions,
-            tasks=self.task_store,
-            task_executor=self.task_executor,
-            subscriptions=self.subscription_broker,
-            config=config,
-            pool_seeds=self.pool_seeds,
-            conventions=self.conventions,
         )
 
         if isinstance(message, JsonRpcNotification):
@@ -500,42 +342,31 @@ class StreamableHttpView(View):
         # JSON-RPC *response* does not carry, so a response body is always
         # routed to the legacy path — and rejected there.
         try:
-            result: Any = dispatch(message.method, _params_dict(message.params), context)
-        except Exception as exc:  # noqa: BLE001 — the backstop; see ``_internal_error_response``
+            result: Any = dispatch(message.method, params_dict(message.params), context)
+        except Exception as exc:  # noqa: BLE001 — the backstop; see ``internal_error_response``
             if not is_raised_denial(exc):
-                return _internal_error_response(message)
+                return internal_error_response(message, logger)
             # A denial raised rather than returned; see ``raised_denial_error``.
             result = raised_denial_error()
-        if isinstance(result, JsonRpcError):
-            body = JsonRpcResponse(id=message.id, error=result).to_dict()
-            status: int = modern_error_status(result)
-            response = JsonResponse(body, status=status)
-            if status == 403:
-                response["WWW-Authenticate"] = insufficient_scope_challenge(
-                    result, self._require_auth_backend()
-                )
-            return response
-        return JsonResponse(JsonRpcResponse(id=message.id, result=result).to_dict())
+        return modern_result_response(message.id, result, self._require_auth_backend())
 
     def get(self, http_request: HttpRequest) -> HttpResponse:
         """GET action: SSE-from-server isn't implemented in v1; 405 per spec.
 
-        Unconditional, and so decided without authenticating. This once
-        challenged unauthenticated callers first, to keep the endpoint from
-        revealing even its 405 — but that confidentiality never existed:
-        ``delete`` answers 405 to an anonymous DELETE whenever
-        sessions are off, and POST answers 401 with a challenge naming the
-        publicly fetchable protected-resource metadata. What the challenge did
-        buy was an OAuth flow, browser window and all, ending at the 405 the
-        caller would have got for free.
+        Unconditional, and so decided without authenticating. Challenging
+        first would not keep even the 405 confidential: ``delete`` answers 405
+        to an anonymous DELETE whenever sessions are off, and POST answers 401
+        with a challenge naming the publicly fetchable protected-resource
+        metadata. All a challenge buys here is an OAuth flow, browser window
+        and all, ending at the 405 the caller gets for free.
 
-        The async sibling still authenticates on this path, because there it
-        guards a stream a credential can actually open. WSGI serves no stream
-        on any configuration, so it inherited the gate without the reason.
+        The async sibling authenticates on this path, because there it guards
+        a stream a credential can actually open. WSGI serves no stream on any
+        configuration.
         """
-        guard: HttpResponse | None = self._check_origin(http_request)
-        if guard is not None:
-            return guard
+        refused: JsonResponse | None = origin_refusal(http_request, self._require_config())
+        if refused is not None:
+            return refused
         return self._method_not_allowed()
 
     def delete(self, http_request: HttpRequest) -> HttpResponse:
@@ -545,40 +376,59 @@ class StreamableHttpView(View):
         minted for can destroy it — a wrong-principal (or unknown) id
         renders 404 without touching the session.
         """
-        guard: HttpResponse | None = self._check_origin(http_request)
-        if guard is not None:
-            return guard
-        if self._modern_era_requested(http_request) or not self._sessions_enabled():
+        refused: JsonResponse | None = origin_refusal(http_request, self._require_config())
+        if refused is not None:
+            return refused
+        if modern_era_requested(http_request) or not self._sessions_enabled():
             # The spec's blessed answer for a server that does not let clients
             # terminate sessions, which is exactly true when there are none.
             return self._method_not_allowed()
         token = self._authenticate(http_request)
         if token is None:
-            return self._unauthenticated_response()
+            return unauthenticated_response(self._require_auth_backend())
         session_id: str | None = http_request.headers.get(_SESSION_HEADER)
         if session_id:
             store = self._require_session_store()
             owner = _reject_awaitable_session(store.owner(session_id), store=store, method="owner")
             if owner != principal_for_token(token):
-                return _error_response(
-                    code=JsonRpcErrorCode.INVALID_REQUEST,
-                    message="Unknown or missing MCP-Session-Id",
-                    status=404,
-                )
+                return unknown_session_response()
             _reject_awaitable_session(store.destroy(session_id), store=store, method="destroy")
         return HttpResponse(status=204)
 
-    def _modern_era_requested(self, http_request: Any) -> bool:
-        """Whether the caller named a modern revision in its version header.
+    def _context(
+        self,
+        http_request: HttpRequest,
+        token: Any,
+        *,
+        protocol_version: str,
+        session_id: str | None,
+        client_capabilities: dict[str, Any] | None = None,
+    ) -> MCPCallContext:
+        """The context a dispatch reads, from this view's collaborators.
 
-        GET and DELETE carry no body, so the per-request ``_meta`` that decides
-        the era everywhere else is unavailable and the header is the only
-        signal. A modern client should never send either verb; ``405`` is what
-        the spec asks of a server receiving wrong-era traffic, and it beats
-        silently serving a mechanism the caller's revision removed.
+        ``client_capabilities`` is the modern path's alone. A legacy client
+        declared its capabilities once, at ``initialize``, and the spec forbids
+        relying on a declaration that did not arrive *with the request*, so the
+        legacy context leaves it empty.
         """
-        version: str | None = http_request.headers.get(_VERSION_HEADER)
-        return version in MODERN_PROTOCOL_VERSIONS
+        return MCPCallContext(
+            http_request=http_request,
+            token=token,
+            tools=self._require_tools(),
+            resources=self._require_resources(),
+            prompts=self._require_prompts(),
+            protocol_version=protocol_version,
+            session_id=session_id,
+            client_capabilities=client_capabilities if client_capabilities is not None else {},
+            server_info=self.server_info,
+            instructions=self.instructions,
+            tasks=self.task_store,
+            task_executor=self.task_executor,
+            subscriptions=self.subscription_broker,
+            config=self._require_config(),
+            pool_seeds=self.pool_seeds,
+            conventions=self.conventions,
+        )
 
     # ----- collaborator accessors -----
 
@@ -600,27 +450,6 @@ class StreamableHttpView(View):
         if token is not None:
             carry_principal(http_request, token)
         return token
-
-    def _unauthenticated_response(self) -> JsonResponse:
-        challenge: str = self._require_auth_backend().www_authenticate_challenge(
-            error="invalid_token"
-        )
-        response = JsonResponse(
-            {"error": "unauthorized", "error_description": "Authentication required."},
-            status=401,
-        )
-        response["WWW-Authenticate"] = challenge
-        return response
-
-    def _check_origin(self, request: Any) -> HttpResponse | None:
-        origin: str | None = request.headers.get("Origin")
-        if not is_origin_allowed(origin, self._require_config().allowed_origins):
-            return _error_response(
-                code=JsonRpcErrorCode.INVALID_REQUEST,
-                message=f"Origin not allowed: {origin!r}",
-                status=403,
-            )
-        return None
 
     def _require_tools(self) -> ToolRegistry:
         if self.tools is None:  # pragma: no cover - guarded by MCPServer
@@ -655,14 +484,6 @@ class StreamableHttpView(View):
         if self.session_store is None:  # pragma: no cover - guarded by MCPServer
             raise RuntimeError("StreamableHttpView is missing a SessionStore")
         return self.session_store
-
-
-def _params_dict(params: Any) -> dict[str, Any] | None:
-    if params is None:
-        return None
-    if isinstance(params, dict):
-        return params
-    return None  # JSON-RPC list params are not used by MCP today.
 
 
 __all__ = ["StreamableHttpView"]

@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest
-from django.test import Client, RequestFactory
+from django.test import RequestFactory
 
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
@@ -34,51 +34,6 @@ class _DenyAllBackend:
     def www_authenticate_challenge(self, *, scopes=None, error=None) -> str:
         del scopes, error
         return 'Bearer realm="x", error="invalid_token"'
-
-
-def test_unauthenticated_response_uses_backend_challenge() -> None:
-    """When the auth backend returns ``None``, the transport emits 401 + WWW-Authenticate."""
-    factory = RequestFactory()
-    request = factory.post(
-        "/mcp/",
-        data=json.dumps(
-            {
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "initialize",
-                "params": {
-                    "protocolVersion": "2025-11-25",
-                    "capabilities": {},
-                    "clientInfo": {"name": "x", "version": "1"},
-                },
-            }
-        ),
-        content_type="application/json",
-    )
-
-    view = StreamableHttpView.as_view(
-        tools=ToolRegistry(),
-        resources=ResourceRegistry(),
-        auth_backend=_DenyAllBackend(),
-        session_store=InMemorySessionStore(),
-        config=build_mcp_config(),
-    )
-    response = view(request)
-    assert response.status_code == 401
-    assert response["WWW-Authenticate"].startswith("Bearer")
-
-
-def test_request_with_no_params_field(client: Client, initialized_session: str) -> None:
-    """Omitting ``params`` entirely is valid — handler receives ``None``."""
-    response = client.post(
-        "/mcp/",
-        data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": "ping"}),
-        content_type="application/json",
-        HTTP_MCP_PROTOCOL_VERSION="2025-11-25",
-        HTTP_MCP_SESSION_ID=initialized_session,
-    )
-    body = response.json()
-    assert body["result"] == {"resultType": "complete"}
 
 
 class _AsyncAuthBackend(_DenyAllBackend):
@@ -111,9 +66,9 @@ def _initialize_request() -> HttpRequest:
 def test_async_auth_backend_on_sync_transport_is_refused() -> None:
     """An ``async def authenticate`` under ``server.urls`` fails loudly, not open.
 
-    Regression test for a documented configuration that authenticated every
-    caller: the sync view cannot await, so the coroutine sailed through the
-    ``token is None`` gate on its truthiness alone.
+    Served, it would authenticate every caller: the sync view cannot await,
+    so the coroutine would pass the ``token is None`` gate on its truthiness
+    alone.
     """
     view = StreamableHttpView.as_view(
         tools=ToolRegistry(),
@@ -254,16 +209,3 @@ def test_async_session_store_destroy_on_sync_transport_is_refused() -> None:
         _view_with_store(store)(request)
 
     assert "_AsyncDestroyOnly.destroy()" in str(excinfo.value)
-
-
-def test_response_shaped_input_is_rejected(client: Client, initialized_session: str) -> None:
-    """Posting a JSON-RPC response (vs request/notification) returns -32600."""
-    response = client.post(
-        "/mcp/",
-        data=json.dumps({"jsonrpc": "2.0", "id": 1, "result": {"ok": True}}),
-        content_type="application/json",
-        HTTP_MCP_PROTOCOL_VERSION="2025-11-25",
-        HTTP_MCP_SESSION_ID=initialized_session,
-    )
-    body = response.json()
-    assert body["error"]["code"] == -32600

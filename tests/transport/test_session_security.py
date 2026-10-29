@@ -1,6 +1,7 @@
 """Wire-conformance tests for transport auth ordering + session binding.
 
-Covers the 0.7.0 security hardening:
+Each rule runs on both views through ``make_view``, except GET, which only
+the async view can serve a stream on:
 
 - POST authenticates *before* the session lookup (no 404-vs-401 oracle).
 - GET (SSE) and DELETE require authentication wherever a credential can
@@ -14,10 +15,13 @@ Covers the 0.7.0 security hardening:
 
 from __future__ import annotations
 
+import inspect
 import json
+from collections.abc import Callable
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
 from django.http import HttpRequest
 from django.test import RequestFactory
 
@@ -78,7 +82,19 @@ def _async_view(store: InMemorySessionStore, *, broker: InMemorySSEBroker | None
     )
 
 
-def _post(
+@pytest.fixture(params=[_sync_view, _async_view], ids=["sync", "async"])
+def make_view(request: pytest.FixtureRequest) -> Callable[[InMemorySessionStore], Any]:
+    """Build the sync and then the async view, both judging by ``X-Principal``."""
+    return request.param
+
+
+async def _answer(view: Any, request: HttpRequest) -> Any:
+    """Call ``view``, awaiting the async view's coroutine."""
+    response: Any = view(request)
+    return await response if inspect.isawaitable(response) else response
+
+
+async def _post(
     view: Any,
     *,
     method: str = "ping",
@@ -101,66 +117,47 @@ def _post(
     request = factory.post(
         "/mcp/", data=json.dumps(payload), content_type="application/json", headers=headers
     )
-    return view(request)
+    return await _answer(view, request)
 
 
 # ---------- POST: auth before session lookup ----------
 
 
-def test_unauthenticated_post_with_bogus_session_is_401_not_404() -> None:
+async def test_unauthenticated_post_with_bogus_session_is_401_not_404(make_view: Any) -> None:
     """Session validity must not be probeable without a credential."""
-    view = _sync_view(InMemorySessionStore())
-    response = _post(view, session_id="made-up-id")
+    response = await _post(make_view(InMemorySessionStore()), session_id="made-up-id")
     assert response.status_code == 401
     assert response["WWW-Authenticate"].startswith("Bearer")
 
 
-def test_authenticated_post_with_bogus_session_is_404() -> None:
-    view = _sync_view(InMemorySessionStore())
-    response = _post(view, session_id="made-up-id", principal="alice")
+async def test_authenticated_post_with_bogus_session_is_404(make_view: Any) -> None:
+    view = make_view(InMemorySessionStore())
+    response = await _post(view, session_id="made-up-id", principal="alice")
     assert response.status_code == 404
 
 
 # ---------- POST: session bound to principal ----------
 
 
-def test_session_is_bound_to_initializing_principal() -> None:
+async def test_session_is_bound_to_initializing_principal(make_view: Any) -> None:
     store = InMemorySessionStore()
-    view = _sync_view(store)
-    init = _post(view, method="initialize", principal="alice")
+    view = make_view(store)
+    init = await _post(view, method="initialize", principal="alice")
     assert init.status_code == 200
     sid = init["Mcp-Session-Id"]
     assert store.owner(sid) == "user:alice"
 
-    same = _post(view, session_id=sid, principal="alice", request_id=2)
+    same = await _post(view, session_id=sid, principal="alice", request_id=2)
     assert same.status_code == 200
 
-    other = _post(view, session_id=sid, principal="mallory", request_id=3)
+    other = await _post(view, session_id=sid, principal="mallory", request_id=3)
     assert other.status_code == 404
 
 
-# ---------- GET: authentication required where it decides anything ----------
-
-
-def test_sync_get_does_not_authenticate_at_all() -> None:
-    """WSGI serves no GET stream on any configuration, so 405 is the whole
-    answer and a 401 could only send the caller after a useless token."""
-    view = _sync_view(InMemorySessionStore())
-    response = view(factory.get("/mcp/"))
-    assert response.status_code == 405
-    assert "WWW-Authenticate" not in response
-
-
-def test_sync_get_authenticated_is_405() -> None:
-    view = _sync_view(InMemorySessionStore())
-    response = view(factory.get("/mcp/", headers={"X-Principal": "alice"}))
-    assert response.status_code == 405
-
-
-async def test_async_get_requires_authentication() -> None:
-    view = _async_view(InMemorySessionStore(), broker=InMemorySSEBroker())
-    response = await view(factory.get("/mcp/"))
-    assert response.status_code == 401
+# ---------- GET: the stream is bound to its principal too ----------
+#
+# Whether GET authenticates at all, on each view and configuration, is held by
+# ``test_unauthenticated_method_support.py``.
 
 
 async def test_async_get_wrong_principal_is_404() -> None:
@@ -183,63 +180,28 @@ async def test_async_get_wrong_principal_is_404() -> None:
 # ---------- DELETE: authentication + principal binding ----------
 
 
-def test_sync_delete_requires_authentication() -> None:
-    view = _sync_view(InMemorySessionStore())
-    response = view(factory.delete("/mcp/"))
+async def test_delete_requires_authentication(make_view: Any) -> None:
+    response = await _answer(make_view(InMemorySessionStore()), factory.delete("/mcp/"))
     assert response.status_code == 401
 
 
-def test_sync_delete_wrong_principal_is_404_and_session_survives() -> None:
+async def test_delete_wrong_principal_is_404_and_session_survives(make_view: Any) -> None:
     store = InMemorySessionStore()
     sid = store.create(principal_id="user:alice")
-    view = _sync_view(store)
-    response = view(
-        factory.delete("/mcp/", headers={"X-Principal": "mallory", "Mcp-Session-Id": sid})
+    response = await _answer(
+        make_view(store),
+        factory.delete("/mcp/", headers={"X-Principal": "mallory", "Mcp-Session-Id": sid}),
     )
     assert response.status_code == 404
     assert store.exists(sid)
 
 
-def test_sync_delete_owner_destroys_session() -> None:
+async def test_delete_owner_destroys_session(make_view: Any) -> None:
     store = InMemorySessionStore()
     sid = store.create(principal_id="user:alice")
-    view = _sync_view(store)
-    response = view(
-        factory.delete("/mcp/", headers={"X-Principal": "alice", "Mcp-Session-Id": sid})
-    )
-    assert response.status_code == 204
-    assert not store.exists(sid)
-
-
-def test_sync_delete_without_session_id_is_a_noop_204() -> None:
-    view = _sync_view(InMemorySessionStore())
-    response = view(factory.delete("/mcp/", headers={"X-Principal": "alice"}))
-    assert response.status_code == 204
-
-
-async def test_async_delete_requires_authentication() -> None:
-    view = _async_view(InMemorySessionStore())
-    response = await view(factory.delete("/mcp/"))
-    assert response.status_code == 401
-
-
-async def test_async_delete_wrong_principal_is_404_and_session_survives() -> None:
-    store = InMemorySessionStore()
-    sid = store.create(principal_id="user:alice")
-    view = _async_view(store)
-    response = await view(
-        factory.delete("/mcp/", headers={"X-Principal": "mallory", "Mcp-Session-Id": sid})
-    )
-    assert response.status_code == 404
-    assert store.exists(sid)
-
-
-async def test_async_delete_owner_destroys_session() -> None:
-    store = InMemorySessionStore()
-    sid = store.create(principal_id="user:alice")
-    view = _async_view(store)
-    response = await view(
-        factory.delete("/mcp/", headers={"X-Principal": "alice", "Mcp-Session-Id": sid})
+    response = await _answer(
+        make_view(store),
+        factory.delete("/mcp/", headers={"X-Principal": "alice", "Mcp-Session-Id": sid}),
     )
     assert response.status_code == 204
     assert not store.exists(sid)
@@ -248,7 +210,7 @@ async def test_async_delete_owner_destroys_session() -> None:
 # ---------- modern era: the same rules, minus the session ----------
 
 
-def _modern_post(view: Any, *, principal: str | None = None, method: str = "ping") -> Any:
+async def _modern_post(view: Any, *, principal: str | None = None, method: str = "ping") -> Any:
     """A modern POST: per-request ``_meta``, mirrored headers, no session."""
     meta = {
         "io.modelcontextprotocol/protocolVersion": "2026-07-28",
@@ -266,28 +228,23 @@ def _modern_post(view: Any, *, principal: str | None = None, method: str = "ping
         content_type="application/json",
         headers=headers,
     )
-    return view(request)
+    return await _answer(view, request)
 
 
-def test_an_unauthenticated_modern_post_is_401() -> None:
+async def test_an_unauthenticated_modern_post_is_401(make_view: Any) -> None:
     """Statelessness removes the session, not the credential."""
-    response = _modern_post(_sync_view(InMemorySessionStore()))
+    response = await _modern_post(make_view(InMemorySessionStore()))
     assert response.status_code == 401
     assert response["WWW-Authenticate"].startswith("Bearer")
 
 
-async def test_an_unauthenticated_modern_post_is_401_async() -> None:
-    response = await _modern_post(_async_view(InMemorySessionStore()))
-    assert response.status_code == 401
-
-
-async def test_an_authenticated_modern_post_needs_no_session_async() -> None:
-    response = await _modern_post(_async_view(InMemorySessionStore()), principal="alice")
+async def test_an_authenticated_modern_post_needs_no_session(make_view: Any) -> None:
+    response = await _modern_post(make_view(InMemorySessionStore()), principal="alice")
     assert response.status_code == 200
     assert "Mcp-Session-Id" not in response.headers
 
 
-async def test_a_modern_notification_is_202_async() -> None:
+async def test_a_modern_notification_is_202(make_view: Any) -> None:
     meta = {"io.modelcontextprotocol/protocolVersion": "2026-07-28"}
     request = factory.post(
         "/mcp/",
@@ -297,19 +254,15 @@ async def test_a_modern_notification_is_202_async() -> None:
         content_type="application/json",
         headers={"Mcp-Protocol-Version": "2026-07-28", "X-Principal": "alice"},
     )
-    response = await _async_view(InMemorySessionStore())(request)
+    response = await _answer(make_view(InMemorySessionStore()), request)
     assert response.status_code == 202
 
 
-async def test_an_unknown_modern_method_is_404_async() -> None:
+async def test_an_unknown_modern_method_is_404(make_view: Any) -> None:
+    """The 404 is what lets a client tell this endpoint from a legacy HTTP+SSE
+    server; the JSON-RPC body is what stops it falling back anyway."""
     response = await _modern_post(
-        _async_view(InMemorySessionStore()), principal="alice", method="nonsense/method"
+        make_view(InMemorySessionStore()), principal="alice", method="nonsense/method"
     )
     assert response.status_code == 404
     assert json.loads(response.content)["error"]["code"] == -32601
-
-
-async def test_modern_delete_is_405_async() -> None:
-    request = factory.delete("/mcp/", headers={"Mcp-Protocol-Version": "2026-07-28"})
-    response = await _async_view(InMemorySessionStore())(request)
-    assert response.status_code == 405
