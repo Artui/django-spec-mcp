@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 from django.http import HttpRequest
-from django_service_specs import PoolSeeds
+from django_service_specs import PermissionCheck, PoolSeeds
 
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
@@ -126,8 +126,8 @@ class TestListing:
             "FILTER_LISTINGS_BY_PERMISSIONS": True,
         }
 
-        class _Deny:
-            def has_permission(self, request: Any, token: Any) -> bool:
+        class _Deny(PermissionCheck):
+            def has_permission(self, principal: Any, spec: Any) -> bool:
                 return False
 
         server = _server(permissions=[_Deny()])
@@ -250,15 +250,8 @@ async def test_every_view_source_serves_its_document_whole(reader: str, source: 
 
 
 @pytest.mark.parametrize("reader", ["sync", "async"])
-async def test_a_view_its_permission_refuses_is_refused_with_the_scopes(reader: str) -> None:
-    class _NeedsScope:
-        def has_permission(self, request: Any, token: Any) -> bool:
-            return False
-
-        def required_scopes(self) -> list[str]:
-            return ["views:read"]
-
-    out = await _read(reader, _ctx(_server(permissions=[_NeedsScope()])))
+async def test_a_view_its_scope_gate_refuses_is_refused_with_the_scopes(reader: str) -> None:
+    out = await _read(reader, _ctx(_server(scopes="views:read")))
 
     assert isinstance(out, JsonRpcError)
     assert out.code == JsonRpcErrorCode.FORBIDDEN

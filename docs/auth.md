@@ -15,8 +15,8 @@ to discover your authorization server, and `AllowAnyBackend` for development.
 | --- | --- | --- |
 | `MCPAuthBackend` | Authenticate request → `TokenInfo`, build `WWW-Authenticate`, supply PRM payload | **none**: `auth_backend=` is required to mount, and `urls` / `async_urls` refuse without one |
 | The spec's `permissions` | Kernel `PermissionCheck`s guarding a tool or resource | required: a spec with none is refused at registration |
-| `scopes=` | OAuth scopes a tool's or resource's caller must carry | `None` (no scope gate) |
-| `MCPPermission` | Per-prompt / per-view gate (AND-combined) | `[]`; a prompt with none is refused |
+| `scopes=` | OAuth scopes a binding's caller must carry | `None` (no scope gate) |
+| `permissions=` on a prompt or view | Kernel `PermissionCheck`s, each handed the binding as the spec | `[]`; a prompt with neither these nor `scopes=` is refused |
 | `/.well-known/oauth-protected-resource` | RFC 9728 metadata | served from backend's `protected_resource_metadata()` |
 
 The transport flow on every request:
@@ -245,8 +245,8 @@ un-awaited coroutine is truthy and would allow every call.
 
 ### The scope gate
 
-`scopes=` on `register_tool` and `register_resource` names the OAuth scopes the
-caller's token must carry, every one of them. A bare string is one scope:
+`scopes=` on `register_tool`, `register_resource`, `register_prompt` and
+`register_ui_resource` names the OAuth scopes the caller's token must carry, every one of them. A bare string is one scope:
 `scopes="invoices:write"`. A token missing one is answered `-32006` with HTTP
 403, every declared scope in `data.requiredScopes`, and a challenge carrying
 `error="insufficient_scope"` and the scopes, so the client knows what to ask
@@ -254,36 +254,55 @@ for. `scopes=()` is refused, since it would read as a gate and admit every
 caller.
 
 The scope gate is a transport check, beside the spec's permissions rather than
-in place of them: it never satisfies `REQUIRE_TOOL_PERMISSIONS`, which reads
-the spec's own `permissions`.
+in place of them: on a tool or resource it never satisfies
+`REQUIRE_TOOL_PERMISSIONS`, which reads the spec's own `permissions`. A prompt
+has no spec, so there either guard counts.
 
 ### Prompts and interactive views
 
-A prompt and an interactive view are not specs, so they are gated by
-`permissions=[...]` on `register_prompt` and `register_ui_resource`: objects
-with a `has_permission(request, token)` method, AND-combined. Two ship:
+A prompt and an interactive view are not specs, so they are gated where they
+are registered: `register_prompt` and `register_ui_resource` take
+`permissions=[...]`, a list of the same kernel `PermissionCheck`s a spec
+declares, and `scopes=`, the scope gate above. The scope gate is asked first,
+then a deactivated caller is refused, then each check in order, the first
+refusal ending it. A check is asked `has_permission(principal, binding)`:
+`principal` is the token's user, an `AnonymousUser` when it has none, and
+`binding` is the prompt's or view's binding standing where a spec would, so a
+check can read its `name`.
 
-- `ScopeRequired(["a", "b"])` — the token must carry every listed OAuth scope.
-  A single scope may be passed bare: `ScopeRequired("invoices:write")`.
-- `DjangoPermRequired("app.codename")` — `user.has_perm(...)` must be true.
-  Anonymous users are always rejected by this class.
+```python
+from django_service_specs import PermissionCheck
 
-Both refuse an **empty** requirement. `all(...)` over nothing is `True`, so
-`ScopeRequired([])` would permit every request while reading as a guard at the
-registration site. Your own implements the
-[`MCPPermission`](reference/auth.md) Protocol; see
-[Add a custom permission](recipes/custom-permission.md#gating-a-prompt-or-a-view).
 
-!!! warning "`permissions=` must contain permission objects"
+class IsStaff(PermissionCheck):
+    message = "Staff only."
 
-    Every entry needs a `has_permission(request, token)` method, and this is
-    checked at registration. The reason is not tidiness: an entry that cannot
-    answer it is skipped at dispatch, so a binding "guarded" by one is
-    **ungated** — and because the list is non-empty, the unguarded check
-    stays quiet. `permissions="ScopeRequired"` is the likely way in: a bare
-    string spreads into one entry per character.
+    def has_permission(self, principal, spec) -> bool:
+        return bool(principal.is_staff)
 
-A prompt with no permissions at all is refused like a tool. Interactive
+
+server.register_prompt(
+    name="summarise-ledger",
+    render=render_summary,
+    permissions=[IsStaff()],
+    scopes="ledger:read",
+)
+```
+
+The same judgement answers `prompts/list`, `prompts/get`, `resources/list`,
+`resources/read`, `completion/complete` and a subscription, so a caller is
+never shown a prompt or view it would then be refused.
+
+Registration refuses a list that cannot be judged: a bare string (it would
+spread into one entry per character), a check class rather than an instance,
+an object that is not a `PermissionCheck`, and a check whose `has_permission`
+is `async def`, whose answer would be a truthy coroutine nothing awaits. A
+check that answers one anyway at call time is refused there too. Only the
+principal and the binding are passed: the keywords a spec's check may opt into,
+such as `arguments` or `call_context`, are the kernel's to offer at dispatch,
+so a check that requires one cannot gate a prompt.
+
+A prompt with neither `permissions=` nor `scopes=` is refused like a tool. Interactive
 **views** (`register_ui_resource`) are the one exemption, and a deliberate
 one — a view is a template rendered with no context, a literal document, or a
 zero-argument callable, none of which can read the caller's data.
@@ -326,8 +345,9 @@ call's arguments — see
 `SPEC_MCP["FILTER_LISTINGS_BY_PERMISSIONS"] = True` to drop
 bindings whose permissions deny the caller before paginating.
 
-This is **binding-level** gating. A binding's `scopes=` gate, and a prompt's or
-view's permission objects, are evaluated against the caller's token. A tool or
+This is **binding-level** gating. A binding's `scopes=` gate is evaluated
+against the caller's token, and a prompt's or view's checks against its
+principal, as a `prompts/get` or `resources/read` asks them. A tool or
 resource is judged by its spec's own checks as well, asked through the
 kernel's `authorize` with no arguments, because a listing has none; a create,
 a service spec with no instance or collection selector, is also asked each
@@ -338,16 +358,12 @@ checks refuse is not shown the binding, and neither is a deactivated caller. A
 spec declaring `permissions=None` is listed only where its call is granted, as
 `register_tool` grants it with `REQUIRE_TOOL_PERMISSIONS` off.
 
-A check whose decision depends on the call arguments cannot answer at list time
+A spec's check whose decision depends on the call arguments cannot answer at list time
 and will conservatively deny: when asking it raises, that binding alone is
 hidden and the rest of the listing is unaffected. Mark such a binding with
 `always_listed=True` to keep it visible as a discovery aid; the check still
 gates the actual invocation. An `ImproperlyConfigured` raised by a check is not
 a refusal: it is raised and fails the listing, because the call raises it too.
-A prompt's or view's permission object can declare an `is_listable(token)`
-method to override the list-time check independently of
-`has_permission(request, token)`; a kernel check has no such method, and
-`always_listed` is its way back.
 
 ## Audience binding (RFC 8707)
 
@@ -439,5 +455,5 @@ Inspector reads the protected-resource metadata, hits your authorization server'
 | 401 with `WWW-Authenticate` but no `resource_metadata` | The backend passed `resource_metadata_url=None` to `bearer_challenge`. |
 | Token verifies but every call is still 401 | The backend's audience comparison fails: the token's audience is not the server's own resource URL (or the token carries none). |
 | 403 with `error="insufficient_scope"` and `scope=` in the challenge | Token authenticated, missing one of the per-binding scopes. The body also carries JSON-RPC `-32006` with `data.requiredScopes`. |
-| 403 with no `scope=` | A spec's permission check refused the caller, or a non-scope permission on a prompt (e.g. `DjangoPermRequired`). RFC 6750 defines no error code for that case, so the challenge advertises nothing rather than a scope the client cannot obtain. |
+| 403 with no `scope=` | A spec's permission check refused the caller, or a prompt's or view's own check. RFC 6750 defines no error code for that case, so the challenge advertises nothing rather than a scope the client cannot obtain. |
 | 403 with `INVALID_REQUEST` (`-32600`) in the body | Not a permission failure — `Origin` rejection. |

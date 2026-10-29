@@ -8,12 +8,12 @@ from django_spec_mcp._compat.acall import acall
 from django_spec_mcp._compat.tracing import span
 from django_spec_mcp._compat.utils import arun_selector_sync_safe
 from django_spec_mcp.handlers.handle_tools_call import _span_attrs
+from django_spec_mcp.handlers.judge_binding import judge_binding
 from django_spec_mcp.handlers.kernel_utils import KernelAdmission, admit_kernel_read, carry_token
 from django_spec_mcp.handlers.read_kernel_resource_async import read_kernel_resource_async
 from django_spec_mcp.handlers.runs_on_kernel import runs_on_kernel
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import (
-    check_permissions,
     consume_rate_limits,
     forbidden,
     resolve_bound,
@@ -63,9 +63,7 @@ async def handle_resources_read_async(
         "mcp.resources.read",
         attributes={**_span_attrs(binding.name, context), "mcp.resource.uri": uri},
     ):
-        allowed, required_scopes = await acall(
-            check_permissions, binding.permissions, context.http_request, context.token
-        )
+        allowed, required_scopes = await acall(judge_binding, binding, context.token)
         if not allowed:
             return forbidden(required_scopes)
 

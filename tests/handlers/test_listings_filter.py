@@ -139,12 +139,9 @@ class _HasPerm(PermissionCheck):
         return bool(principal.has_perm("auth.view_user"))
 
 
-class _DenyPrompt:
-    def has_permission(self, request: HttpRequest, token: TokenInfo) -> bool:  # noqa: ARG002
+class _DenyPrompt(PermissionCheck):
+    def has_permission(self, principal: Any, spec: Any) -> bool:  # noqa: ARG002
         return False
-
-    def required_scopes(self) -> list[str]:
-        return []
 
 
 def _write() -> dict[str, bool]:

@@ -8,7 +8,7 @@ from django_service_specs import SelectorKind, SelectorSpec, UnsetType
 
 from django_spec_mcp.protocol.types.icon import Icon
 from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
-from django_spec_mcp.registry.types.utils import kernel_scope_gate
+from django_spec_mcp.registry.types.utils import scope_names
 from django_spec_mcp.types.resource_encoding import ResourceEncoding
 
 
@@ -58,7 +58,7 @@ def kernel_selector_to_resource(
         spec=spec,
         # Read as the field holds them; the binding builds its gate from them, and
         # refuses ``()``, whoever constructs it.
-        scopes=kernel_scope_gate(f"Resource {name!r}", scopes)[0],
+        scopes=scope_names(f"Resource {name!r}", scopes),
         rate_limits=rate_limits,
         annotations=dict(annotations or {}),
         meta=dict(meta or {}),

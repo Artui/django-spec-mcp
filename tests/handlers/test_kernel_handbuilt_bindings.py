@@ -163,8 +163,6 @@ def test_a_handbuilt_kernel_resource_gates_on_its_scopes(client: Client, is_asyn
 def test_a_handbuilt_kernel_resource_reads_a_bare_string_scope_as_one() -> None:
     binding = _resource([Unrestricted()], scopes="billing")
     assert binding.scopes == ("billing",)
-    (gate,) = binding.permissions
-    assert gate.required_scopes() == ["billing"]
 
 
 def test_a_handbuilt_kernel_resource_without_scopes_has_no_gate() -> None:

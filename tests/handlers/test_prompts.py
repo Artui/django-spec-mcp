@@ -1,9 +1,8 @@
 """``prompts/list`` and ``prompts/get``.
 
 A prompt is not a spec: ``register_prompt`` takes a ``render`` callable and
-``permissions`` that judge the transport's request and token. A prompt's
-permission is an ``MCPPermission`` (or the scope gate), which is handed the
-request and the token and never the arguments; the last test here holds that.
+``permissions`` of kernel ``PermissionCheck``s, each handed the principal and
+the prompt's binding, never the arguments; the last test here holds that.
 """
 
 from __future__ import annotations
@@ -14,6 +13,7 @@ import pytest
 from asgiref.sync import sync_to_async
 from django.contrib.auth.models import AnonymousUser
 from django.http import HttpRequest, QueryDict
+from django_service_specs import PermissionCheck
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
@@ -195,12 +195,9 @@ def test_prompts_get_handles_unsupported_render_value() -> None:
     assert isinstance(out, JsonRpcError) and out.code == -32603
 
 
-class _DenyAll:
-    def has_permission(self, request: HttpRequest, token: TokenInfo) -> bool:
+class _DenyAll(PermissionCheck):
+    def has_permission(self, principal: Any, spec: Any) -> bool:
         return False
-
-    def required_scopes(self) -> list[str]:
-        return ["s"]
 
 
 def test_prompts_get_permission_denied() -> None:
@@ -344,28 +341,28 @@ def test_prompt_message_text_helper() -> None:
     assert msg.content == {"type": "text", "text": "hi"}
 
 
-class _Recording:
-    """An ``MCPPermission`` refusing every call, recording what each check was handed."""
+class _Recording(PermissionCheck):
+    """A kernel check refusing every call, recording what each ask was handed."""
 
     def __init__(self) -> None:
         self.seen: list[tuple[Any, Any]] = []
 
-    def has_permission(self, request: HttpRequest, token: TokenInfo) -> bool:
-        self.seen.append((request, token))
+    def has_permission(self, principal: Any, spec: Any) -> bool:
+        self.seen.append((principal, spec))
         return False
 
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
-async def test_a_prompt_permission_is_judged_on_the_request_and_token_alone(
+async def test_a_prompt_permission_is_judged_on_the_principal_and_the_binding_alone(
     is_async: bool,
 ) -> None:
-    # The whole of what a prompt permission sees: the transport's own
-    # request and the resolved token, once per get, and nothing of the
-    # arguments, which reach ``render`` and no check.
+    # The whole of what a prompt's check sees: the token's principal, an
+    # ``AnonymousUser`` for none, and the prompt's binding as the spec, once
+    # per get, and nothing of the arguments, which reach ``render`` and no check.
     permission = _Recording()
     server = _server()
-    server.register_prompt(name="p", render=lambda **_: "hello", permissions=[permission])
+    binding = server.register_prompt(name="p", render=lambda **_: "hello", permissions=[permission])
     context = _ctx(server)
     params: dict[str, Any] = {"name": "p", "arguments": {"deny": "1"}}
 
@@ -376,7 +373,9 @@ async def test_a_prompt_permission_is_judged_on_the_request_and_token_alone(
 
     assert isinstance(out, JsonRpcError) and out.code == JsonRpcErrorCode.FORBIDDEN
     assert out.data is None
-    assert permission.seen == [(context.http_request, context.token)]
+    [(principal, spec)] = permission.seen
+    assert isinstance(principal, AnonymousUser)
+    assert spec is binding
 
 
 @pytest.mark.parametrize("is_async", [False, True])

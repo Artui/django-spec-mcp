@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 from django.template import TemplateDoesNotExist
+from django_service_specs import Unrestricted
 
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.registry.types.ui_csp import UICsp
@@ -36,13 +37,6 @@ def _register(server: MCPServer, **overrides: Any) -> Any:
     return server.register_ui_resource(**{**defaults, **overrides})
 
 
-class _AlwaysAllow:
-    """A minimal real permission — the sentinel it replaces gated nothing."""
-
-    def has_permission(self, request: Any, token: Any) -> bool:
-        return True
-
-
 class TestDefaults:
     def test_advertises_the_apps_mime_type(self) -> None:
         assert _register(_make()).mime_type == UI_RESOURCE_MIME_TYPE
@@ -57,8 +51,10 @@ class TestDefaults:
         assert _register(_make()).permissions == ()
 
     def test_can_still_be_guarded(self) -> None:
-        sentinel = _AlwaysAllow()
-        assert _register(_make(), permissions=[sentinel]).permissions == (sentinel,)
+        check = Unrestricted()
+        binding = _register(_make(), permissions=[check], scopes="apps")
+        assert binding.permissions == (check,)
+        assert binding.scopes == ("apps",)
 
     def test_lands_in_the_shared_resource_registry(self) -> None:
         server = _make()

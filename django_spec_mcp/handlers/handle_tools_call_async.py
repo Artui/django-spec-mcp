@@ -83,8 +83,8 @@ async def handle_tools_call_async(
     # creating a task is a store write and a queue hand-off, not the work, and
     # timing it out would abandon a task already durably created. Taken through
     # the thread-sensitive executor because it reads the cache and runs the
-    # binding's permissions, both of which reach code Django marks async-unsafe
-    # (a database-backed cache raises; ``DjangoPermRequired`` runs a query).
+    # spec's permission checks, both of which reach code Django marks
+    # async-unsafe (a database-backed cache raises; a check may run a query).
     as_task: dict[str, Any] | JsonRpcError | None = await sync_to_async(
         maybe_create_task, thread_sensitive=True
     )(binding, arguments_raw, context)

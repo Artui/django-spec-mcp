@@ -2,11 +2,12 @@
 
 The project's ``AuthenticationMiddleware`` resolves ``request.user`` from the
 session cookie, and the cookie may name someone other than the bearer token's
-principal. An ``MCPPermission`` is handed the transport's request before any
-handler runs (a prompt's gate, a streamed tool's pre-flight), so whatever the
-transport leaves on it is who that permission judges. Each case here logs one
-user in through a real session and authenticates as another with a bearer
-token, and asks what the permission saw.
+principal. A prompt's check is handed the token's principal, and a spec's
+check asking for the call context is handed the transport's request (a
+streamed tool's pre-flight runs it before the handler), so whatever the
+transport leaves on it is who that check judges. Each case here logs one user
+in through a real session and authenticates as another with a bearer token,
+and asks what the check saw.
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from django.http import HttpRequest
 from django.test import AsyncClient, Client, override_settings
-from django_service_specs import ServiceSpec, Unrestricted
+from django_service_specs import PermissionCheck, ServiceSpec
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
@@ -51,18 +52,21 @@ class _BearerBackend(AllowAnyBackend):
         return TokenInfo(user=user, scopes=(), audience=None, raw=header)
 
 
-class _Recording:
-    """An ``MCPPermission`` that admits every call and keeps the request it judged."""
+class _Recording(PermissionCheck):
+    """A kernel check admitting every call, keeping the principal and request it judged.
+
+    The request is the call context's, which the kernel hands a spec's check
+    that asks for it; a prompt's check is asked without one, so it is ``None``.
+    """
 
     def __init__(self) -> None:
-        self.seen: list[tuple[HttpRequest, TokenInfo]] = []
+        self.seen: list[tuple[Any, HttpRequest | None]] = []
 
-    def has_permission(self, request: HttpRequest, token: TokenInfo) -> bool:
-        self.seen.append((request, token))
+    def has_permission(
+        self, principal: Any, spec: Any, *, call_context: dict[str, Any] | None = None
+    ) -> bool:
+        self.seen.append((principal, (call_context or {}).get("request")))
         return True
-
-    def required_scopes(self) -> list[str]:
-        return []
 
 
 def _server(recording: _Recording) -> MCPServer:
@@ -72,13 +76,10 @@ def _server(recording: _Recording) -> MCPServer:
         session_store=InMemorySessionStore(),
     )
     server.register_prompt(name="greet", render=lambda: "hello", permissions=[recording])
-    binding = server.register_tool(
-        ServiceSpec(service=lambda: {"ok": True}, permissions=[Unrestricted()]),
+    server.register_tool(
+        ServiceSpec(service=lambda: {"ok": True}, permissions=[recording]),
         name="ping",
     )
-    # A kernel binding's ``permissions`` are only its ``scopes=`` gate, so the
-    # recorder stands in for that gate to be what the streamed pre-flight asks.
-    object.__setattr__(binding, "permissions", (recording,))
     return server
 
 
@@ -148,13 +149,19 @@ async def test_a_permission_sees_the_tokens_principal_not_the_sessions(route: st
 
     assert response.status_code == 200, getattr(response, "content", response)
     if route == "streamed tool pre-flight":
-        # Streamed, so the first ask was the pre-flight's, ahead of the handler.
+        # Streamed, so the spec's check was asked on the request the
+        # transport authenticated, not on one a handler rebuilt.
         assert response["Content-Type"].startswith("text/event-stream")
-    assert recording.seen, "the permission was never asked"
-    request, token = recording.seen[0]
-    assert request.user == token_user
-    assert await request.auser() == token_user
-    assert request.mcp_token is token
+    assert recording.seen, "the check was never asked"
+    principal, request = recording.seen[0]
+    assert principal == token_user
+    if route == "streamed tool pre-flight":
+        assert request is not None
+        assert request.user == token_user
+        assert await request.auser() == token_user
+        assert request.mcp_token.user == token_user
+    else:
+        assert request is None
 
 
 @pytest.mark.django_db(transaction=True)
@@ -168,9 +175,12 @@ async def test_a_token_naming_no_one_leaves_an_anonymous_user_not_the_sessions(
     response = await _call(route, recording, session_user, None)
 
     assert response.status_code == 200, getattr(response, "content", response)
-    request, _ = recording.seen[0]
-    assert isinstance(request.user, AnonymousUser)
-    assert isinstance(await request.auser(), AnonymousUser)
+    principal, request = recording.seen[0]
+    assert isinstance(principal, AnonymousUser)
+    if route == "streamed tool pre-flight":
+        assert request is not None
+        assert isinstance(request.user, AnonymousUser)
+        assert isinstance(await request.auser(), AnonymousUser)
 
 
 class _Keeping(_BearerBackend):

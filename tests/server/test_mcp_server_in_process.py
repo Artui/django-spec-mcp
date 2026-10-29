@@ -9,10 +9,8 @@ the call context correctly off-HTTP.
 
 A kernel spec has no ``filter_set`` ordering, so the read extras asked here are
 pagination alone; the transport-level gate is ``scopes=``, and a denial by the
-spec is its own ``PermissionCheck``. The DB-backed listing permission
-(``DjangoPermRequired``) is not asked of a kernel binding, because a kernel
-binding's only listing gate is its scopes, which read the token and never the
-database.
+spec is its own ``PermissionCheck``. A kernel binding's only transport gate
+at listing is its scopes, which read the token and never the database.
 """
 
 from __future__ import annotations

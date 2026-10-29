@@ -116,78 +116,33 @@ def validate_output_format(params: dict[str, Any]) -> JsonRpcError | None:
     return None
 
 
-def permission_verdict(perm: Any, result: Any, *, method: str, effect: str) -> Any:
-    """A permission hook's answer, refusing one that must be awaited.
+def scope_verdict(scopes: tuple[str, ...] | None, token: TokenInfo) -> tuple[bool, list[str]]:
+    """A binding's scope gate judged against ``token``: ``(allowed, required_scopes)``.
 
-    Shared by ``check_permissions`` and
-    ``django_spec_mcp.handlers.is_binding_listable.is_binding_listable``
-    so the two places a consumer-supplied permission is consulted cannot drift on
-    whether ``async def`` is allowed. It is not.
-
-    **Without the guard this fails open on both transports.** Nothing awaits
-    these hooks: the async path reaches them through ``acall``, which bridges
-    this sync function, leaving an ``async def has_permission`` as un-awaited as
-    on WSGI — and a coroutine is truthy, so the caller is granted. A permission
-    that must await wraps the work in ``asgiref.sync.async_to_sync``.
+    ``scopes`` is a binding's normalised ``scopes`` (``registry.types.utils.scope_names``),
+    ``None`` for no gate. Refused when the token lacks any of them, and then
+    ``required_scopes`` is every declared scope, not only the missing ones, so
+    the ``WWW-Authenticate`` challenge names the whole set a fresh token needs.
     """
-    return reject_awaitable(
-        result,
-        call=f"{type(perm).__name__}.{method}()",
-        remedy=(
-            f"MCP permissions are synchronous by contract on both transports: {method} "
-            "must be a plain 'def'. Wrap any awaiting it needs in "
-            "asgiref.sync.async_to_sync inside the method body."
-        ),
-        hazard=f"an un-awaited coroutine is truthy, so {effect}",
-    )
-
-
-def check_permissions(
-    permissions: tuple[Any, ...],
-    http_request: HttpRequest,
-    token: TokenInfo,
-) -> tuple[bool, list[str]]:
-    """Return ``(allowed, required_scopes)`` after evaluating every permission.
-
-    Permissions are AND-combined. The aggregated ``required_scopes`` from any
-    permission that would deny is returned so the transport can surface them in
-    the ``WWW-Authenticate`` header. An ``MCPPermission`` judges the request
-    and token and is handed no arguments, so one check answers a binding
-    whatever the call carries.
-    """
-    required: list[str] = []
-    allowed: bool = True
-    for perm in permissions:
-        # Do not gate this loop on ``isinstance(perm, MCPPermission)``: the
-        # Protocol is ``runtime_checkable``, so that demands *every* member
-        # including ``required_scopes``, and a gate-only permission would be
-        # honoured by the duck-typing ``is_binding_listable`` but skipped here —
-        # vanishing from listings while the call goes through.
-        verdict = permission_verdict(
-            perm,
-            perm.has_permission(http_request, token),
-            method="has_permission",
-            effect="every caller would be granted access.",
-        )
-        if not verdict:
-            allowed = False
-            scopes = getattr(perm, "required_scopes", None)
-            if callable(scopes):
-                required.extend(scopes())
-    return allowed, required
+    # No gate is the empty set, which every token carries; registration
+    # refuses ``scopes=()``, so the two never need telling apart here.
+    declared = scopes or ()
+    if token.has_all_scopes(declared):
+        return True, []
+    return False, list(declared)
 
 
 def judge_tool_permissions(
     binding: KernelToolBinding, context: MCPCallContext
 ) -> tuple[bool, list[str]]:
-    """A tool binding's ``permissions``, its scope gate, judged for this call.
+    """A tool binding's scope gate, judged for this call.
 
-    Every check a ``tools/call`` makes of ``binding.permissions`` goes through
+    Every check a ``tools/call`` makes of ``binding.scopes`` goes through
     this: the sync and async handlers, the streamed call's pre-flight and the
-    check made before a task is created. The spec's own checks are the
-    kernel's, asked after it (``admit_kernel_tool_call``).
+    check made before a task is created (``maybe_create_task``). The spec's own
+    checks are the kernel's, asked after it (``admit_kernel_tool_call``).
     """
-    return check_permissions(binding.permissions, context.http_request, context.token)
+    return scope_verdict(binding.scopes, context.token)
 
 
 def forbidden(required_scopes: list[str]) -> JsonRpcError:
@@ -511,17 +466,16 @@ async def run_with_deadline(coro: Awaitable[Any], seconds: float | None) -> Any:
 
 __all__ = [
     "apply_tool_server_arguments",
-    "check_permissions",
     "consume_rate_limits",
     "effective_rate_limits",
     "enforce_result_ceiling",
     "judge_tool_permissions",
     "missing_arguments_message",
-    "permission_verdict",
     "render_convention",
     "rendering_refusal_result",
     "resolve_bound",
     "run_with_deadline",
+    "scope_verdict",
     "validate_output_format",
     "validation_error_data",
     "validation_error_result",

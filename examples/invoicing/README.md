@@ -18,12 +18,13 @@ MCP. Every operation is a `django_service_specs` spec (`ServiceSpec` or
 | `MCPServer(pool_seeds=)`       | `invoices.outstanding` — reads the mount's `currency` seed, which its `inputSchema` does not advertise; a client `currency` argument is refused, not read in its place.|
 | `MCPServer(conventions=)`      | `invoices.set_amount` without `number` — the refusal's message is the server's own `missing_arguments` wording, which points the model at `invoices.list`; every sentence it does not override keeps the package's words.|
 | `register_resource`            | `invoice` — single invoice by PK via `invoices://{pk}` URI, the template's `pk` being the spec's read.|
-| `register_prompt`              | `compose_invoice_email` — render an email body for an invoice.|
+| `register_prompt(permissions=)` | `compose_invoice_email` — render an email body for an invoice, gated by a kernel `PermissionCheck` as a spec is.|
 
 Every spec declares `permissions=[Unrestricted()]`, which says "deliberately
 open" out loud; a spec declaring none is refused at registration. The prompt
-is a render callable rather than a spec, so it is gated by an `MCPPermission`
-instead, `OpenPrompt` in `invoices/permissions.py`.
+is a render callable rather than a spec, and takes the same kernel checks: it
+declares `permissions=[Unrestricted()]` too, each check asked
+`has_permission(principal, binding)` with the prompt's binding as the spec.
 
 The whole MCP wiring lives in `invoices/mcp.py`. Models, forms, the
 dataclasses results are presented through, the presenter, filters, services

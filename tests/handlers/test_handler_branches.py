@@ -13,9 +13,8 @@ Two of the questions are asked in a particular way:
 - A kernel spec always spreads its declared reads into the service's keywords,
   so whether a caller can name a reserved pool seed is asked of ``user`` under
   both ``unknown_arguments`` policies.
-- ``check_permissions`` is asked directly: it judges a binding's transport
-  permissions on every path, the kernel scope gate's included, and names no
-  spec.
+- ``judge_binding`` is asked directly: it judges a prompt's or a view's
+  scope gate and kernel checks on every path, and names no spec.
 """
 
 from __future__ import annotations
@@ -52,9 +51,10 @@ from django_spec_mcp.handlers.handle_resources_read_async import handle_resource
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
+from django_spec_mcp.handlers.judge_binding import judge_binding
 from django_spec_mcp.handlers.types.context import MCPCallContext
-from django_spec_mcp.handlers.utils import check_permissions
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.registry.types.prompt_binding import PromptBinding
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from tests.utils import tool_error
 
@@ -220,32 +220,35 @@ def test_a_resource_read_denied_by_its_scope_gate(read: Handle) -> None:
     assert (out.code, out.data) == (-32006, {"requiredScopes": ["scope:x"]})
 
 
-class _Judge:
-    """A transport permission answering ``allowed``, naming ``scopes`` when it denies."""
+class _Judge(PermissionCheck):
+    """A kernel check answering ``allowed`` whoever asks."""
 
-    def __init__(self, allowed: bool, scopes: list[str]) -> None:
+    def __init__(self, allowed: bool) -> None:
         self.allowed = allowed
-        self.scopes = scopes
 
-    def has_permission(self, request: HttpRequest, token: TokenInfo) -> bool:
+    def has_permission(self, principal: Any, spec: Any) -> bool:
         return self.allowed
-
-    def required_scopes(self) -> list[str]:
-        return self.scopes
 
 
 @pytest.mark.parametrize(
-    ("permissions", "answer"),
+    ("permissions", "scopes", "answer"),
     [
-        # A denial naming no scope serves an empty list, not ``None``.
-        ((_Judge(False, []),), (False, [])),
-        ((_Judge(True, ["unused"]),), (True, [])),
-        ((), (True, [])),
+        # A refusing check names no scope: an empty list, not ``None``.
+        ((_Judge(False),), None, (False, [])),
+        ((_Judge(True), _Judge(True)), None, (True, [])),
+        ((), None, (True, [])),
+        # The scope gate refuses before a check is asked, naming every scope.
+        ((_Judge(True),), ("a", "b"), (False, ["a", "b"])),
     ],
-    ids=["denied-naming-no-scope", "all-allow", "none"],
+    ids=["denied-naming-no-scope", "all-allow", "none", "scope-gate"],
 )
-def test_check_permissions(permissions: tuple[Any, ...], answer: tuple[bool, list[str]]) -> None:
-    assert check_permissions(permissions, HttpRequest(), TokenInfo(user=None)) == answer
+def test_judge_binding(
+    permissions: tuple[Any, ...], scopes: tuple[str, ...] | None, answer: tuple[bool, list[str]]
+) -> None:
+    binding = PromptBinding(
+        name="p", description=None, render=lambda: "", permissions=permissions, scopes=scopes
+    )
+    assert judge_binding(binding, TokenInfo(user=None, scopes=("a",))) == answer
 
 
 # ---------- structuredContent and outputSchema ----------

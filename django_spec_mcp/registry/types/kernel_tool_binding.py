@@ -18,7 +18,7 @@ from django_service_specs import (
 )
 
 from django_spec_mcp.protocol.types.icon import Icon
-from django_spec_mcp.registry.types.utils import kernel_scope_gate, validate_content_kind
+from django_spec_mcp.registry.types.utils import scope_names, validate_content_kind
 from django_spec_mcp.types.output_format import OutputFormat
 from django_spec_mcp.types.task_policy import TaskPolicy
 from django_spec_mcp.types.tool_content_kind import ToolContentKind
@@ -37,7 +37,7 @@ class KernelToolBinding:
     ``arguments`` rather than nested under a ``data`` key.
 
     Every other field is a fact of the MCP binding rather than of the operation:
-    the scope gate (``permissions``), ``rate_limits``, ``server_arguments``,
+    the scope gate (``scopes``), ``rate_limits``, ``server_arguments``,
     ``task_policy``, ``invalidates``, ``dispatch_timeout`` and
     ``max_result_bytes`` are read by the ``tools/call`` shell around the
     dispatch, never by the spec.
@@ -104,10 +104,10 @@ class KernelToolBinding:
     scopes: tuple[str, ...] | None = None
     """The OAuth scopes a caller's token must carry, every one of them.
 
-    ``None`` is no scope gate. Enforced as the ``ScopeRequired`` check on
-    ``permissions``, so a token missing one is answered ``-32006`` with every
-    declared scope in ``requiredScopes``, not only the missing ones, as a
-    ``ScopeRequired`` permission is answered on every other binding. An empty
+    ``None`` is no scope gate. Judged by ``handlers.utils.scope_verdict``, so a
+    token missing one is answered ``-32006`` with every declared scope in
+    ``requiredScopes``, not only the missing ones, as the scope gate is answered
+    on every other binding. An empty
     tuple is refused when the binding is built, by hand or by the registrar: it
     would read as a gate and admit every caller."""
     unknown_arguments: UnknownArguments = UnknownArguments.REJECT
@@ -122,11 +122,6 @@ class KernelToolBinding:
     """See ``ToolBinding.task_policy``. Read by ``maybe_create_task``, which asks
     a kernel spec's own checks before it creates the task; the worker runs the
     call, under either policy, through the same ``dispatch`` an inline call takes."""
-    permissions: tuple[Any, ...] = field(init=False)
-    """The transport checks the shared shell judges, derived from ``scopes``.
-
-    Never the spec's own ``permissions``: those are the kernel's, and
-    ``dispatch`` asks them itself."""
     unguarded: bool = field(default=False, init=False)
     """Whether a call runs the spec without a permission check.
 
@@ -156,9 +151,7 @@ class KernelToolBinding:
         # Here rather than in the registrar, so a binding built by hand reads a
         # bare string as one scope and refuses ``scopes=()`` as well
         # (``test_a_binding_built_by_hand_reads_a_bare_string_scope_as_one``).
-        scopes, checks = kernel_scope_gate(f"Tool {self.name!r}", self.scopes)
-        object.__setattr__(self, "scopes", scopes)
-        object.__setattr__(self, "permissions", checks)
+        object.__setattr__(self, "scopes", scope_names(f"Tool {self.name!r}", self.scopes))
 
     @property
     def is_selector(self) -> bool:

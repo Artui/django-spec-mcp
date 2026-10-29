@@ -18,7 +18,7 @@ class TaskRecord:
     nothing with that request except this record.
 
     **The scopes are stored, and that is the point.** Without them the worker
-    rebuilds a token that proves nothing, and every ``ScopeRequired`` binding
+    rebuilds a token that proves nothing, and every binding with ``scopes=``
     denies the call it had already been authorized for — silently, long after
     the client was told the work had started.
 

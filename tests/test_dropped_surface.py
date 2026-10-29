@@ -2,7 +2,9 @@
 
 Each name below was public there and is gone here on purpose: the bundled
 authorization-server pieces (a project runs its own authorization server and
-verifies its own tokens through ``MCPAuthBackend``), the guard against settings
+verifies its own tokens through ``MCPAuthBackend``), the transport's own
+permission types (the kernel's ``PermissionCheck`` gates a prompt and a view),
+the guard against settings
 keys a fresh package never had, chain tools (a service spec that calls the
 others replaces one), and the extras that only re-exposed another package's.
 
@@ -69,6 +71,19 @@ def test_the_server_takes_no_resource_url() -> None:
 
 def test_the_server_registers_no_chain_tool() -> None:
     assert not hasattr(MCPServer, "register_chain_tool")
+
+
+def test_the_transport_permission_types_are_gone() -> None:
+    """A prompt and a view take the kernel's ``PermissionCheck`` and ``scopes=``.
+
+    So the package's own permission protocol and its two implementations are
+    not carried: a check on the principal alone is the instance a spec takes.
+    """
+    assert importlib.util.find_spec("django_spec_mcp.auth.permissions") is None
+    for name in ("MCPPermission", "ScopeRequired", "DjangoPermRequired"):
+        assert name not in django_spec_mcp.__all__
+        assert not hasattr(django_spec_mcp, name)
+        assert not hasattr(django_spec_mcp.auth, name)
 
 
 @pytest.mark.parametrize(

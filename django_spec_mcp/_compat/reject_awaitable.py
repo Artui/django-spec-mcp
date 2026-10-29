@@ -15,8 +15,8 @@ def reject_awaitable(result: Any, *, call: str, remedy: str, hazard: str) -> Any
     is truthy and is never ``None``**, so every downstream test of the return
     value reads it as a yes.
 
-    **This is a security gate, not a type check.** ``backend.authenticate()``,
-    ``perm.has_permission()`` and ``perm.is_listable()`` all fail *open* that
+    **This is a security gate, not a type check.** ``backend.authenticate()``
+    and a prompt's or a view's ``check.has_permission()`` both fail *open* that
     way: the misconfiguration is invisible in the response and the endpoint
     serves everyone. (``limiter.consume()`` and the session store fail closed
     or nonsensically instead.) Refusing converts a silent, total bypass into a

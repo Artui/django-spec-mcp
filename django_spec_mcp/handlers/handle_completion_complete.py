@@ -9,6 +9,7 @@ from django_service_specs import RESERVED_POOL_SEEDS, NotPermitted, resolve_call
 
 from django_spec_mcp._compat.tracing import span
 from django_spec_mcp.handlers.handle_tools_call import _span_attrs
+from django_spec_mcp.handlers.judge_binding import judge_binding
 from django_spec_mcp.handlers.kernel_utils import (
     admits_without_arguments,
     call_context,
@@ -18,10 +19,12 @@ from django_spec_mcp.handlers.kernel_utils import (
 )
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.types.kernel_refusal_scene import KernelRefusalScene
-from django_spec_mcp.handlers.utils import check_permissions, consume_rate_limits
+from django_spec_mcp.handlers.utils import consume_rate_limits
 from django_spec_mcp.protocol.types.completion import Completion
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
+from django_spec_mcp.registry.types.prompt_binding import PromptBinding
+from django_spec_mcp.registry.types.resource_binding import ResourceBinding
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from django_spec_mcp.types.max_completion_values import MAX_COMPLETION_VALUES
 
@@ -94,9 +97,7 @@ def handle_completion_complete(
         "mcp.completion.argument": argument_name,
     }
     with span("mcp.completion.complete", attributes=attributes):
-        allowed, required_scopes = check_permissions(
-            target.permissions, context.http_request, context.token
-        )
+        allowed, required_scopes = judge_binding(target.binding, context.token)
         if not allowed:
             return JsonRpcError(
                 JsonRpcErrorCode.FORBIDDEN,
@@ -164,7 +165,8 @@ class _CompletionTarget:
     """``prompt`` or ``resource`` — used to label errors and the span."""
 
     name: str
-    permissions: tuple[Any, ...]
+    binding: PromptBinding | ResourceBinding
+    """The prompt or resource itself, which its checks are handed as the spec."""
     rate_limits: tuple[Any, ...]
     completions: dict[str, Callable[..., Any]]
     kernel: KernelResourceBinding | None = None
@@ -195,7 +197,7 @@ def _resolve_ref(ref: Any, context: MCPCallContext) -> _CompletionTarget | JsonR
         return _CompletionTarget(
             kind="prompt",
             name=name,
-            permissions=prompt.permissions,
+            binding=prompt,
             rate_limits=prompt.rate_limits,
             completions=prompt.completions,
         )
@@ -216,7 +218,7 @@ def _resolve_ref(ref: Any, context: MCPCallContext) -> _CompletionTarget | JsonR
         return _CompletionTarget(
             kind="resource",
             name=resource.name,
-            permissions=resource.permissions,
+            binding=resource,
             rate_limits=resource.rate_limits,
             completions=resource.completions,
             kernel=resource if isinstance(resource, KernelResourceBinding) else None,

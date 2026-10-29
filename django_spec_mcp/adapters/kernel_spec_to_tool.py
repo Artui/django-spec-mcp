@@ -19,7 +19,7 @@ from django_service_specs import (
 from django_spec_mcp.adapters.utils import merge_tool_annotations
 from django_spec_mcp.protocol.types.icon import Icon
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
-from django_spec_mcp.registry.types.utils import kernel_scope_gate
+from django_spec_mcp.registry.types.utils import scope_names
 from django_spec_mcp.types.output_format import OutputFormat
 from django_spec_mcp.types.task_policy import TaskPolicy
 from django_spec_mcp.types.tool_content_kind import ToolContentKind
@@ -62,7 +62,7 @@ def kernel_spec_to_tool(
     - a knob of the other kind of tool: ``paginate`` / ``max_page_size`` on a
       service tool or a ``RETRIEVE``, ``invalidates`` on a selector tool.
     - ``scopes=()``, which reads as a gate and admits everyone. A bare string
-      is one scope, as ``ScopeRequired`` reads it.
+      is one scope.
     - ``UnknownArguments.PASSTHROUGH``, which the kernel never honours: an
       argument a spec does not declare reaches no callable.
 
@@ -121,7 +121,7 @@ def kernel_spec_to_tool(
         rate_limits=rate_limits,
         # Read as the field holds them; the binding builds its gate from them, and
         # refuses ``()``, whoever constructs it.
-        scopes=kernel_scope_gate(f"Tool {name!r}", scopes)[0],
+        scopes=scope_names(f"Tool {name!r}", scopes),
         unknown_arguments=unknown_arguments,
         server_arguments=server_arguments or ServerArguments(),
     )

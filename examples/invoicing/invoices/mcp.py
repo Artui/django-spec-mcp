@@ -36,7 +36,6 @@ from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from invoices.filters import InvoiceFilterSet
 from invoices.forms import InvoiceForm
 from invoices.models import Invoice
-from invoices.permissions import OpenPrompt
 from invoices.presenters import FIELDS, SelectableInvoicePresenter
 from invoices.selectors import (
     find_invoice,
@@ -284,8 +283,10 @@ def build_server() -> MCPServer:
             PromptArgument(name="pk", description="Invoice primary key", required=True),
         ],
         # A prompt reads the database here, so it is gated like everything
-        # else on this server. Swap OpenPrompt for the real gate.
-        permissions=[OpenPrompt()],
+        # else on this server, by the same kernel checks a spec takes: each is
+        # asked has_permission(principal, binding). Deliberately open, as the
+        # specs are; swap Unrestricted() for the real check in anything real.
+        permissions=[Unrestricted()],
     )
 
     return server
