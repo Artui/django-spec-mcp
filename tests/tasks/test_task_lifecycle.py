@@ -404,6 +404,14 @@ def test_a_task_worker_hands_the_seeds_to_the_tool_it_runs(
 # ----- build_worker_token -----
 
 
+def _worker_record(**fields: Any) -> TaskRecord:
+    """A record as the worker reads it; only the authorization fields vary."""
+    task = Task(
+        task_id="t", status=TaskStatus.WORKING, created_at="x", last_updated_at="x", ttl_ms=None
+    )
+    return TaskRecord(task=task, tool_name="t", arguments={}, **fields)
+
+
 @pytest.mark.django_db
 def test_the_worker_rereads_the_user_rather_than_reconstructing_it(
     django_user_model: Any,
@@ -411,16 +419,7 @@ def test_the_worker_rereads_the_user_rather_than_reconstructing_it(
     """A task can sit in a queue long enough for the answers permissions ask to
     change. The point in time that matters is when the work runs."""
     user = django_user_model.objects.create_user(username="u1")
-    record = TaskRecord(
-        task=Task(
-            task_id="t",
-            status=TaskStatus.WORKING,
-            created_at="x",
-            last_updated_at="x",
-            ttl_ms=None,
-        ),
-        tool_name="t",
-        arguments={},
+    record = _worker_record(
         principal_id=f"user:{user.pk}",
         user_pk=user.pk,
         scopes=("s",),
@@ -432,24 +431,19 @@ def test_the_worker_rereads_the_user_rather_than_reconstructing_it(
 
 
 @pytest.mark.django_db
-def test_a_deleted_user_degrades_to_anonymous_rather_than_crashing(
-    django_user_model: Any,
+@pytest.mark.parametrize(
+    ("principal_id", "user_pk"),
+    [
+        # A deleted account should fail the task's permission checks, which is
+        # what anonymous does, and fail as a denial rather than a worker crash.
+        pytest.param("user:9999", 9999, id="a-deleted-user"),
+        pytest.param("anonymous", None, id="an-anonymous-caller"),
+    ],
+)
+def test_a_user_the_worker_cannot_find_runs_as_anonymous(
+    principal_id: str, user_pk: int | None
 ) -> None:
-    """A deleted account should fail the task's permission checks — which is
-    what anonymous does — and fail as a denial, not a worker crash."""
-    record = TaskRecord(
-        task=Task(
-            task_id="t",
-            status=TaskStatus.WORKING,
-            created_at="x",
-            last_updated_at="x",
-            ttl_ms=None,
-        ),
-        tool_name="t",
-        arguments={},
-        principal_id="user:9999",
-        user_pk=9999,
-    )
+    record = _worker_record(principal_id=principal_id, user_pk=user_pk)
     assert isinstance(build_worker_token(record).user, AnonymousUser)
 
 
@@ -464,16 +458,7 @@ def test_a_deactivated_user_degrades_to_anonymous_too(django_user_model: Any) ->
     before it will authenticate anyone, applied at the moment the work runs.
     """
     user = django_user_model.objects.create_user(username="gone-away")
-    record = TaskRecord(
-        task=Task(
-            task_id="t",
-            status=TaskStatus.WORKING,
-            created_at="x",
-            last_updated_at="x",
-            ttl_ms=None,
-        ),
-        tool_name="t",
-        arguments={},
+    record = _worker_record(
         principal_id=f"user:{user.pk}",
         user_pk=user.pk,
         scopes=("s",),
@@ -497,16 +482,7 @@ def test_the_scopes_a_worker_replays_are_the_ones_frozen_at_creation(
     was created with. ``TASK_TTL_MS`` is what bounds that window.
     """
     user = django_user_model.objects.create_user(username="still-here")
-    record = TaskRecord(
-        task=Task(
-            task_id="t",
-            status=TaskStatus.WORKING,
-            created_at="x",
-            last_updated_at="x",
-            ttl_ms=None,
-        ),
-        tool_name="t",
-        arguments={},
+    record = _worker_record(
         principal_id=f"user:{user.pk}",
         user_pk=user.pk,
         scopes=("invoices:write",),
@@ -518,33 +494,8 @@ def test_the_scopes_a_worker_replays_are_the_ones_frozen_at_creation(
     assert token.raw is None
 
 
-def test_a_task_created_by_an_anonymous_caller_stays_anonymous() -> None:
-    record = TaskRecord(
-        task=Task(
-            task_id="t",
-            status=TaskStatus.WORKING,
-            created_at="x",
-            last_updated_at="x",
-            ttl_ms=None,
-        ),
-        tool_name="t",
-        arguments={},
-        principal_id="anonymous",
-    )
-    assert isinstance(build_worker_token(record).user, AnonymousUser)
-
-
 def test_with_task_leaves_the_original_untouched() -> None:
-    record = TaskRecord(
-        task=Task(
-            task_id="t",
-            status=TaskStatus.WORKING,
-            created_at="x",
-            last_updated_at="x",
-            ttl_ms=None,
-        ),
-        tool_name="t",
-        arguments={},
+    record = _worker_record(
         principal_id="anonymous",
     )
     changed = record.with_task(status=TaskStatus.COMPLETED)
