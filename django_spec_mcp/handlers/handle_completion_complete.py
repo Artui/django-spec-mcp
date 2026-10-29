@@ -18,7 +18,12 @@ from django_spec_mcp.handlers.kernel_utils import (
 )
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.types.kernel_refusal_scene import KernelRefusalScene
-from django_spec_mcp.handlers.utils import consume_rate_limits, rate_limited, span_attrs
+from django_spec_mcp.handlers.utils import (
+    consume_rate_limits,
+    forbidden,
+    rate_limited,
+    span_attrs,
+)
 from django_spec_mcp.protocol.types.completion import Completion
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
@@ -98,11 +103,7 @@ def handle_completion_complete(
     with span("mcp.completion.complete", attributes=attributes):
         allowed, required_scopes = judge_binding(target.binding, context.token)
         if not allowed:
-            return JsonRpcError(
-                JsonRpcErrorCode.FORBIDDEN,
-                "Insufficient permission",
-                data={"requiredScopes": required_scopes} if required_scopes else None,
-            )
+            return forbidden(required_scopes)
 
         # Before the charge, where the read asks the spec's checks too
         # (``test_a_kernel_resources_spec_is_asked_before_its_rate_limit``).
@@ -127,11 +128,11 @@ def handle_completion_complete(
         request = carry_token(context.http_request, context.token)
         # Every dispatcher-owned name is dropped from the client's siblings
         # before the spread, then the transport's own seeds are applied on top.
-        # Re-seeding by hand covered only the names this handler happens to
-        # supply, so a sibling called ``instance`` or ``collection`` — reserved
-        # everywhere else, seeded nowhere here — still reached a completer under
-        # a name the rest of the package treats as dispatcher-owned. Stripping
-        # tracks ``RESERVED_POOL_SEEDS`` instead of a hand-picked subset of it.
+        # Re-seeding alone would cover only the names this handler supplies, so
+        # a sibling called ``instance`` or ``collection`` (reserved everywhere
+        # else, seeded nowhere here) would reach a completer under a name the
+        # rest of the package treats as dispatcher-owned; stripping tracks
+        # ``RESERVED_POOL_SEEDS`` rather than a hand-picked subset of it.
         # ``request`` is no kernel seed, and needs no strip: the seed below is
         # written over a sibling of that name.
         # ``arguments`` stays the client's mapping verbatim: it is documented as
