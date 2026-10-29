@@ -81,18 +81,15 @@ def test_the_refusal_is_not_the_code_the_extension_document_prints(server: MCPSe
 
 
 @pytest.mark.parametrize("handler", HANDLERS)
-@pytest.mark.parametrize("params", [None, {}, {"taskId": 7}, {"taskId": ""}])
-def test_a_missing_or_malformed_task_id_is_invalid_params(
+@pytest.mark.parametrize(
+    "params",
+    [None, {}, {"taskId": 7}, {"taskId": ""}, {"taskId": "nope", "inputResponses": {}}],
+    ids=["no-params", "no-task-id", "non-string", "empty", "unknown"],
+)
+def test_a_missing_malformed_or_unknown_task_id_is_invalid_params(
     handler: Any, params: Any, server: MCPServer
 ) -> None:
     result = handler(params, context(server))
-    assert isinstance(result, JsonRpcError)
-    assert result.code == JsonRpcErrorCode.INVALID_PARAMS
-
-
-@pytest.mark.parametrize("handler", HANDLERS)
-def test_an_unknown_task_is_invalid_params(handler: Any, server: MCPServer) -> None:
-    result = handler({"taskId": "nope", "inputResponses": {}}, context(server))
     assert isinstance(result, JsonRpcError)
     assert result.code == JsonRpcErrorCode.INVALID_PARAMS
 
@@ -149,20 +146,21 @@ def test_get_is_a_complete_result_not_a_task_result(
     assert "resultType" not in handle_tasks_get({"taskId": task.task_id}, context(server))
 
 
-def test_a_completed_task_carries_its_result(
-    server: MCPServer, store: InMemoryTaskStore, executor: RecordingExecutor
+@pytest.mark.parametrize(
+    ("status", "field", "value"),
+    [(TaskStatus.COMPLETED, "result", {"v": 1}), (TaskStatus.FAILED, "error", {"code": -32603})],
+)
+def test_a_finished_task_carries_its_outcome(
+    status: TaskStatus,
+    field: str,
+    value: dict[str, Any],
+    server: MCPServer,
+    store: InMemoryTaskStore,
+    executor: RecordingExecutor,
 ) -> None:
     task: Task = _task(server, store, executor)
-    transition_task(store, task.task_id, status=TaskStatus.COMPLETED, result={"v": 1})
-    assert handle_tasks_get({"taskId": task.task_id}, context(server))["result"] == {"v": 1}
-
-
-def test_a_failed_task_carries_its_error(
-    server: MCPServer, store: InMemoryTaskStore, executor: RecordingExecutor
-) -> None:
-    task: Task = _task(server, store, executor)
-    transition_task(store, task.task_id, status=TaskStatus.FAILED, error={"code": -32603})
-    assert handle_tasks_get({"taskId": task.task_id}, context(server))["error"] == {"code": -32603}
+    transition_task(store, task.task_id, status=status, **{field: value})
+    assert handle_tasks_get({"taskId": task.task_id}, context(server))[field] == value
 
 
 # ----- tasks/cancel -----

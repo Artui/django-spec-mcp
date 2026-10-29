@@ -84,14 +84,28 @@ async def test_a_published_notification_reaches_the_stream() -> None:
     await gen.aclose()
 
 
-async def test_every_notification_carries_the_subscription_id() -> None:
+@pytest.mark.parametrize(
+    ("params", "expected"),
+    [
+        pytest.param({"params": {"uri": "a"}}, 42, id="stamped-beside-the-params"),
+        pytest.param({}, 42, id="a-notification-with-no-params-still-gets-its-meta"),
+        pytest.param(
+            {"params": {"_meta": {SUBSCRIPTION_ID_META_KEY: 9}}},
+            9,
+            id="a-payload-already-naming-a-subscription-is-left-alone",
+        ),
+    ],
+)
+async def test_every_notification_carries_the_subscription_id(
+    params: dict[str, Any], expected: int
+) -> None:
     """Stamped by the stream, not the publisher — the same event goes to every
     subscription watching that URI and each needs its own id."""
     broker = InMemorySubscriptionBroker()
     gen = _open(broker, {"resource:a"}, SubscriptionFilter(resource_uris=("a",)), request_id=42)
     await anext(gen)
-    await broker.publish("resource:a", {"jsonrpc": "2.0", "method": "m", "params": {"uri": "a"}})
-    assert _frame(await anext(gen))["params"]["_meta"][SUBSCRIPTION_ID_META_KEY] == 42
+    await broker.publish("resource:a", {"jsonrpc": "2.0", "method": "m", **params})
+    assert _frame(await anext(gen))["params"]["_meta"][SUBSCRIPTION_ID_META_KEY] == expected
     await gen.aclose()
 
 
@@ -108,32 +122,12 @@ async def test_two_subscriptions_stamp_their_own_ids_on_the_same_event() -> None
     await two.aclose()
 
 
-async def test_a_payload_that_already_names_a_subscription_is_left_alone() -> None:
-    broker = InMemorySubscriptionBroker()
-    gen = _open(broker, {"t"}, SubscriptionFilter(), request_id=1)
-    await anext(gen)
-    await broker.publish(
-        "t", {"jsonrpc": "2.0", "method": "m", "params": {"_meta": {SUBSCRIPTION_ID_META_KEY: 9}}}
-    )
-    assert _frame(await anext(gen))["params"]["_meta"][SUBSCRIPTION_ID_META_KEY] == 9
-    await gen.aclose()
-
-
 async def test_a_non_dict_payload_passes_through_untouched() -> None:
     broker = InMemorySubscriptionBroker()
     gen = _open(broker, {"t"}, SubscriptionFilter())
     await anext(gen)
     await broker.publish("t", "raw")
     assert _frame(await anext(gen)) == "raw"
-    await gen.aclose()
-
-
-async def test_a_notification_with_no_params_still_gets_its_meta() -> None:
-    broker = InMemorySubscriptionBroker()
-    gen = _open(broker, {"t"}, SubscriptionFilter(), request_id=3)
-    await anext(gen)
-    await broker.publish("t", {"jsonrpc": "2.0", "method": "notifications/tools/list_changed"})
-    assert _frame(await anext(gen))["params"]["_meta"][SUBSCRIPTION_ID_META_KEY] == 3
     await gen.aclose()
 
 

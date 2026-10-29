@@ -8,10 +8,9 @@ from django_spec_mcp.types.reserved_post_fetch_keys import RESERVED_POST_FETCH_K
 
 
 def test_reserved_post_fetch_keys_shape() -> None:
-    # ``ordering`` left when ``ordering_fields`` did: the pipeline stopped
-    # consuming it, and every name in here is a name a selector cannot use for a
-    # parameter of its own -- so an entry the pipeline no longer reads is pure
-    # cost, and was silently dropping a value reflection had advertised.
+    # Every name in here is a name a selector cannot use for a parameter of its
+    # own, so an entry the pipeline does not read is pure cost: it would drop a
+    # value reflection had advertised.
     assert frozenset({"page", "limit"}) == RESERVED_POST_FETCH_KEYS
 
 
