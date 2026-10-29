@@ -1593,7 +1593,7 @@ server.register_tool(
 )
 ```
 
-| `task_policy` | A client that declared the extension | A client that did not | A server with no task store and executor |
+| `task_policy` | A client that declared the extension | A client that did not | A server missing its task store or executor |
 |---|---|---|---|
 | `FORBIDDEN` (default) | runs inline | runs inline | runs inline |
 | `OPTIONAL` | gets a task handle | runs inline | runs inline |
@@ -1609,7 +1609,7 @@ client's, so it is `-32603` whatever the client declared.
 A service tool and a selector tool take `task_policy=` alike. The decision is
 taken in this order, and the first step that answers ends it:
 
-1. The server can run tasks, or the call runs inline (`OPTIONAL`) or is
+1. The server has both a task store and an executor, or the call runs inline (`OPTIONAL`) or is
    `-32603` (`REQUIRED`).
 2. The client declared the extension on this request, or the call runs inline
    (`OPTIONAL`) or is `-32021` (`REQUIRED`). This comes before any permission

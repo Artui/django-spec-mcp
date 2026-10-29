@@ -280,9 +280,11 @@ server.register_prompt(
 )
 ```
 
-The same judgement answers `prompts/list`, `prompts/get`, `resources/list`,
-`resources/read`, `completion/complete` and a subscription, so a caller is
-never shown a prompt or view it would then be refused.
+The same judgement answers `prompts/get`, `resources/read`,
+`completion/complete` and a subscription. With `FILTER_LISTINGS_BY_PERMISSIONS`
+on, it answers `prompts/list` and `resources/list` too, so a caller is never
+shown a prompt or view it would then be refused; with the setting off, the
+default, the listings show every prompt and view.
 
 Registration holds the list to the kernel's rule for a spec's `permissions`,
 through the kernel's own `check_permissions`: a bare string or anything else

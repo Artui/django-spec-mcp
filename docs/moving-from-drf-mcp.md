@@ -36,9 +36,11 @@ holds no session to lose.
 | drf-mcp | django-spec-mcp |
 | --- | --- |
 | `pip install djangorestframework-mcp-server` | `pip install django-spec-mcp` |
-| `import rest_framework_mcp` | `import django_spec_mcp`, with the same module paths below it |
+| `import rest_framework_mcp` | `import django_spec_mcp`, with the same module paths below it apart from the exceptions in this table and the modules removed below |
+| `transport.streamable_http_viewset`, `transport.async_streamable_http_viewset`, `auth.protected_resource_metadata` | `transport.streamable_http_view`, `transport.async_streamable_http_view`, `auth.protected_resource_metadata_view`; see [What an HTTP client sees](#what-an-http-client-sees) |
 | `rest_framework_mcp.constants` | `django_spec_mcp.types`, one module per name (`JsonRpcErrorCode` is in `django_spec_mcp.types.json_rpc_error_code`) |
 | `UnknownArguments`, `RESERVED_POOL_SEEDS` from the package | import both from `django_service_specs`, which defines them |
+| `service_spec_to_tool`, `selector_to_resource` from `django_spec_mcp.adapters`; `build_input_schema`, `build_output_schema` from `django_spec_mcp.schema` | gone: a kernel tool's schemas are the kernel's. `django_spec_mcp.schema.kernel_tool_input_schema` and `django_spec_mcp.schema.kernel_tool_output_schema` build what a tool advertises |
 | the `jwt`, `spectacular`, `filter`, `oauth` and `toon` extras | gone. `filter_set=` on a selector spec needs `django-filter`, which the kernel's `filter` extra installs: `pip install "django-service-specs[filter]"` |
 
 The root still exports what it exported from `constants`, apart from four names
@@ -46,7 +48,8 @@ that are gone: `UnknownArguments` (import it from the kernel), and
 `ArgumentBinding`, `OutputFormat` and `ToolKind`, which the sections below
 cover.
 `django-service-specs` **0.20.0** is the lowest kernel release the package
-runs on.
+runs on. It reserves `shapes` as a pool name, so a `PoolSeeds` entry named
+`shapes` is refused with a `ValueError` when it is built, as one named `user` is.
 
 djangorestframework, djangorestframework-services and
 djangorestframework-dataclasses are no longer dependencies, and nothing in the
@@ -205,9 +208,10 @@ server.register_resource(
 
 **A client sends a service tool's arguments at the top level.** The advertised
 `inputSchema` is the kernel's, so the tool above takes `{"number": "A-1"}`,
-with no `data` key around it. A client or an agent prompt that wrapped the
-arguments in `data` sends one undeclared argument, which is refused under the
-default `UnknownArguments.REJECT`.
+with no `data` key around it. A client or an agent prompt that still wraps the
+arguments in `data` gets a `validation_error` result naming what is missing,
+``Missing required argument(s): `number`.``, with `data` refused as an unknown
+argument in its detail.
 
 What a binding used to declare is declared on the spec: its `reads` are the
 arguments a call takes, a URL lookup among them; its `shapes` are the
