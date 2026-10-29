@@ -201,13 +201,12 @@ def test_prompts_get_missing_echo(settings, prompts_get) -> None:
 def test_a_falsy_non_object_prompt_arguments_field_is_named_as_the_fault(
     settings, prompts_get, malformed: Any
 ) -> None:
-    """``[]`` is not "no arguments" here either.
+    """``[]`` is not "no arguments".
 
-    The tools/call handler was corrected for this; ``prompts/get`` carried the
-    identical ``or {}`` and so folded every falsy value into the default,
+    An ``or {}`` on the field would fold every falsy value into the default,
     reaching the required-argument check as if the client had sent an empty
-    object. A prompt whose arguments are all optional then rendered a call the
-    client never made in that shape.
+    object, and a prompt whose arguments are all optional would render a call
+    the client never made in that shape.
     """
     settings.SPEC_MCP = {}
     out = prompts_get(

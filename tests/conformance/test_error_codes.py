@@ -80,10 +80,10 @@ def test_an_unknown_name_or_method_has_the_code_the_spec_names(
 def test_a_kernel_permission_denial_does_not_squat_on_32002(caller: KernelClient) -> None:
     """A denial must not look like a missing resource.
 
-    ``-32002`` used to be this package's ``FORBIDDEN`` code, which meant a
-    spec-following client read every permission denial as "resource not
-    found". The denial carries an implementation-defined code, and the HTTP
-    status is what a client acts on.
+    ``-32002`` is the spec's resource-not-found, so a denial sent under it would
+    be read by a spec-following client as "resource not found". The denial
+    carries an implementation-defined code, and the HTTP status is what a
+    client acts on.
     """
     response = caller.post("tools/call", {"name": "gated", "arguments": {}})
     assert response.status_code == 403, response.content

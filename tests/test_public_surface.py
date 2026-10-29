@@ -7,8 +7,8 @@ which is exactly the spelling the docs teach. It also breaks ``import *``
 outright, with an ``AttributeError`` naming a symbol that plainly exists one
 file away.
 
-That happened here: an OAuth helper sat in its subpackage's ``__all__`` with
-no import beside it.
+An OAuth helper listed in its subpackage's ``__all__`` with no import beside
+it is the shape of defect this catches.
 
 **Checked statically, against the source, rather than with ``hasattr`` on the
 imported module** — and the difference is the whole test. Importing
@@ -16,8 +16,7 @@ imported module** — and the difference is the whole test. Importing
 imported the submodule (a sibling, a test, the walk itself), ``hasattr(pkg,
 "thing")`` is ``True`` while ``from pkg import thing`` hands back a *module*
 that raises ``TypeError: 'module' object is not callable``. A runtime check
-reports that as fine. The first draft of this test did exactly that and passed
-with the defect reintroduced.
+reports that as fine, and would pass with the defect present.
 """
 
 from __future__ import annotations

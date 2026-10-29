@@ -96,8 +96,7 @@ class TestTheHandshakeAlwaysCompletes:
         a cold host, and returning early on the once-only guard threw away the
         host context that arrived a moment later -- leaving the view on the UA's
         default theme, underneath a banner saying the host never replied, which
-        by then was false. Self-concealing in the same way the hidden frame is.
-        Reported by the consumer this work came from, against the first draft."""
+        by then was false. Self-concealing in the same way the hidden frame is."""
         result = scenarios["late_reply"]
 
         assert result["banner_after_timeout"] != []

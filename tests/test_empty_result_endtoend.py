@@ -10,7 +10,7 @@ nothing admits ``{}`` beside a full row. Every other tool keeps a strict
 ``required``, because loosening it turns every row field optional for a client
 generating types from the schema.
 
-Each entry point is driven, because each once had its own answer: the sync wire
+Each entry point is driven, because each answers on its own path: the sync wire
 handler, the async one, and the in-process ``call_tool``. The HTTP views are
 driven as well, sync and async in both eras, because what a client validates is
 the schema and the result read off the wire. ``tests/schema/`` asks the schema of

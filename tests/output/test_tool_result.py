@@ -12,7 +12,7 @@ from django_spec_mcp.output.tool_result import build_tool_result
     ("payload", "text"),
     [
         ({"a": 1}, '{\n  "a": 1\n}'),
-        # A uniform list of objects, the payload a second format was once chosen for.
+        # A uniform list of objects, the payload a denser format would be tempting for.
         ([{"a": 1}, {"a": 2}], '[\n  {\n    "a": 1\n  },\n  {\n    "a": 2\n  }\n]'),
     ],
     ids=["object", "uniform-list"],
