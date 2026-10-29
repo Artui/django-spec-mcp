@@ -72,6 +72,9 @@ def maybe_create_task(
     if policy is TaskPolicy.FORBIDDEN:
         return None
 
+    # Asked of every client, declaring or not, since the extension cannot
+    # help a server with nothing to run a task on
+    # (test_a_required_tool_without_a_server_to_run_it_blames_the_server_whatever_was_declared).
     store = context.tasks
     executor = context.task_executor
     if store is None or executor is None:
@@ -84,6 +87,9 @@ def maybe_create_task(
             )
         return None
 
+    # Before the scope gate and the spec's checks, so a client that did not
+    # declare is told -32021 even by a tool that would refuse it
+    # (test_the_capability_is_asked_before_the_scope_gate_and_the_spec_s_checks).
     if not declares_tasks_extension(context):
         if policy is TaskPolicy.REQUIRED:
             return missing_capability_error()

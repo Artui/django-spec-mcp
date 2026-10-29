@@ -17,6 +17,7 @@ from typing import Any
 
 import pytest
 from django.test import override_settings
+from django_service_specs import PermissionCheck, ServiceSpec
 
 from django_spec_mcp import MCPServer, TaskPolicy
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
@@ -165,6 +166,60 @@ def test_a_required_tool_on_a_server_that_cannot_run_tasks_blames_the_server() -
     assert isinstance(result, JsonRpcError)
     assert result.code == JsonRpcErrorCode.INTERNAL_ERROR
     assert "task_store=" in result.message
+
+
+def test_a_required_tool_without_a_server_to_run_it_blames_the_server_whatever_was_declared() -> (
+    None
+):
+    """The store is asked of every client, not only a declaring one: a client
+    that did not declare is told ``-32603`` too, because ``-32021`` would send
+    it to declare an extension that could not help."""
+    server = _server()
+    result = handle_tools_call(
+        {"name": "p.required", "arguments": {}}, context(server, declares=False)
+    )
+    assert isinstance(result, JsonRpcError)
+    assert result.code != JsonRpcErrorCode.MISSING_REQUIRED_CLIENT_CAPABILITY
+    assert result.code == JsonRpcErrorCode.INTERNAL_ERROR
+    assert result.message == (
+        "Tool 'p.required' is registered to run only as a task, but this server has no task "
+        "store and executor configured. Pass task_store= and task_executor= to "
+        "MCPServer(...), or relax the tool's task_policy."
+    )
+
+
+class _Refuse(PermissionCheck):
+    def has_permission(self, principal: Any, spec: Any) -> bool:  # noqa: ARG002
+        return False
+
+
+def test_the_capability_is_asked_before_the_scope_gate_and_the_spec_s_checks() -> None:
+    """A client that did not declare is told ``-32021`` even by a tool whose
+    scope gate and spec would both refuse it, so it learns what it can fix
+    first, and the tool's guards are not asked for a call that cannot run."""
+    store = InMemoryTaskStore()
+    executor = RecordingExecutor(store)
+    server = MCPServer(
+        name="gated", auth_backend=AllowAnyBackend(), task_store=store, task_executor=executor
+    )
+    server.register_tool(
+        ServiceSpec(service=done, permissions=[_Refuse()], atomic=False),
+        name="p.gated",
+        description="x",
+        task_policy=TaskPolicy.REQUIRED,
+        scopes=("things:write",),
+    )
+    binding = server._tools.get("p.gated")
+
+    result = maybe_create_task(binding, {}, context(server, declares=False))
+    assert isinstance(result, JsonRpcError)
+    assert result.code != JsonRpcErrorCode.FORBIDDEN
+    assert result.code == JsonRpcErrorCode.MISSING_REQUIRED_CLIENT_CAPABILITY
+    assert executor.enqueued == []
+    # The control: declared, the same caller is refused by the guards.
+    declared = maybe_create_task(binding, {}, context(server, scopes=("things:write",)))
+    assert isinstance(declared, JsonRpcError)
+    assert declared.code == JsonRpcErrorCode.FORBIDDEN
 
 
 def test_a_scope_denial_stops_the_task_before_it_is_created() -> None:
