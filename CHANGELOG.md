@@ -438,7 +438,11 @@ carries; releases up to 0.54.0 are in
   `check_oauth_url_shadowing`, `build_authorize_passthrough_view`,
   `AuthUserAdapter` and `SimpleJWTCookieAdapter` are gone, and so are the settings
   only they read: `DCR_ENABLED`, `DCR_INITIAL_ACCESS_TOKEN` and
-  `SIMPLEJWT_ACCESS_COOKIE`. OAuth is the project's: run the authorization server
+  `SIMPLEJWT_ACCESS_COOKIE`. So is what fed the metadata view:
+  `authorization_server_metadata()` on `MCPAuthBackend` and `AllowAnyBackend`,
+  and the `AuthorizationServerMetadata` dataclass it returned, since an
+  authorization server's metadata is that server's to serve. OAuth is the
+  project's: run the authorization server
   you choose (django-oauth-toolkit serves its own registration and discovery
   endpoints from 3.4.0, and so does any outside identity provider), sign users in
   at its own authorize endpoint, and verify its tokens through an

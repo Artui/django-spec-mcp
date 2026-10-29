@@ -49,4 +49,3 @@ server's URLs as `protected-resource-metadata`.
 
 ::: django_spec_mcp.auth.protected_resource_metadata_view.ProtectedResourceMetadataView
 ::: django_spec_mcp.auth.types.protected_resource_metadata.ProtectedResourceMetadata
-::: django_spec_mcp.auth.types.authorization_server_metadata.AuthorizationServerMetadata
