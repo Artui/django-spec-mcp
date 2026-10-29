@@ -24,7 +24,9 @@ The transport flow on every request:
 1. Validate `Origin`, `MCP-Protocol-Version`, `MCP-Session-Id` (where required).
 2. `backend.authenticate(request)` → `TokenInfo | None`. `None`, the answer
    for a caller the backend cannot authenticate, → 401 with the challenge from
-   `backend.www_authenticate_challenge(...)`. A backend that raises instead is
+   `backend.www_authenticate_challenge(error=...)`: `error="invalid_token"`
+   when the request sent an `Authorization` header, `error=None` when it sent
+   none (RFC 6750 3.1: a request with no credentials gets no error code). A backend that raises instead is
    not answered as MCP: a `PermissionDenied` or `Http404` renders as Django's
    own HTML 403 or 404, and anything else is a 500. From here on
    `request.user` and `request.auser()` are the token's principal.
@@ -61,7 +63,7 @@ A backend implements `MCPAuthBackend`:
 | --- | --- |
 | `authenticate(request)` | A `TokenInfo` for a request carrying a valid token, `None` for one that does not (the transport answers 401) |
 | `protected_resource_metadata()` | The RFC 9728 document served at `.well-known/oauth-protected-resource`: the resource's URL and the authorization servers that issue tokens for it |
-| `www_authenticate_challenge(scopes=, error=)` | The `WWW-Authenticate` value of a 401 or an insufficient-scope 403 |
+| `www_authenticate_challenge(scopes=, error=)` | The `WWW-Authenticate` value of a 401 or an insufficient-scope 403. A 401 passes `error="invalid_token"` when the request sent an `Authorization` header and `error=None` when it did not; a 403 passes `error="insufficient_scope"` with the scopes |
 
 This one verifies tokens with a function the project supplies (a JWKS check, an
 introspection call, a database lookup) and binds each token to this server's

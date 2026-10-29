@@ -414,6 +414,10 @@ def unauthenticated_response(backend: MCPAuthBackend, request: HttpRequest) -> H
     authentication information SHOULD NOT get an error code, and a client
     reading ``invalid_token`` there would take it as a verdict on a token it
     never presented rather than as the cue to start the authorization flow.
+    The test is the header, not its scheme: a header in a scheme the backend
+    does not accept, ``Basic`` say, still gets ``invalid_token``, because a
+    backend may accept a scheme other than ``Bearer`` and the transport cannot
+    tell which.
     """
     error: str | None = "invalid_token" if "Authorization" in request.headers else None
     return build_unauthenticated_response(backend.www_authenticate_challenge(error=error))

@@ -17,9 +17,23 @@ from django.http import HttpRequest
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.bearer_challenge import bearer_challenge
 from django_spec_mcp.auth.types.token_info import TokenInfo
-from tests.transport.conftest import Endpoint
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp.transport.in_memory_sse_broker import InMemorySSEBroker
+from tests.transport.conftest import LEGACY_VERSION, Endpoint
 
+_MODERN_VERSION: str = "2026-07-28"
 _LIST: dict[str, Any] = {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}
+_MODERN_LIST: dict[str, Any] = {
+    **_LIST,
+    "params": {
+        "_meta": {
+            "io.modelcontextprotocol/protocolVersion": _MODERN_VERSION,
+            "io.modelcontextprotocol/clientInfo": {"name": "pytest", "version": "0.0"},
+            "io.modelcontextprotocol/clientCapabilities": {},
+        }
+    },
+}
+_SESSION: dict[str, str] = {"Mcp-Session-Id": "s", "Mcp-Protocol-Version": LEGACY_VERSION}
 
 
 class _OneTokenBackend:
@@ -39,7 +53,32 @@ class _OneTokenBackend:
         return bearer_challenge(resource_metadata_url=None, scopes=scopes, error=error)
 
 
-@pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
+async def _refuse(endpoint: Endpoint, route: str, headers: dict[str, str]) -> Any:
+    """Send ``route``'s request, each of which reaches its view's 401 call site."""
+    if route == "legacy-post":
+        return await endpoint.post(_LIST, **headers)
+    if route == "modern-post":
+        return await endpoint.post(
+            _MODERN_LIST,
+            **{"Mcp-Protocol-Version": _MODERN_VERSION, "Mcp-Method": "tools/list", **headers},
+        )
+    return await endpoint.send(route, headers={**_SESSION, **headers})
+
+
+@pytest.mark.parametrize(
+    ("is_async", "route"),
+    [
+        (False, "legacy-post"),
+        (True, "legacy-post"),
+        (False, "modern-post"),
+        (True, "modern-post"),
+        (False, "delete"),
+        (True, "delete"),
+        # The sync view's GET is a 405 before it authenticates; only the
+        # async view, with a broker and sessions, reaches a challenge there.
+        (True, "get"),
+    ],
+)
 @pytest.mark.parametrize(
     ("headers", "challenge"),
     [
@@ -48,19 +87,17 @@ class _OneTokenBackend:
     ],
     ids=["no-credential", "rejected-credential"],
 )
-@pytest.mark.parametrize("method", ["post", "delete"])
 async def test_a_challenge_names_an_error_only_for_a_credential_sent(
-    is_async: bool, headers: dict[str, str], challenge: str, method: str
+    is_async: bool, route: str, headers: dict[str, str], challenge: str
 ) -> None:
     endpoint = Endpoint(is_async=is_async)
-    server = MCPServer(name="t", auth_backend=_OneTokenBackend(), session_store=None)
+    server = MCPServer(
+        name="t",
+        auth_backend=_OneTokenBackend(),
+        session_store=InMemorySessionStore(),
+        sse_broker=InMemorySSEBroker(),
+    )
     with endpoint.mount(server):
-        if method == "post":
-            response = await endpoint.post(_LIST, **headers)
-        else:
-            response = await endpoint.send(
-                "delete",
-                headers={"Mcp-Session-Id": "s", "Mcp-Protocol-Version": "2025-11-25", **headers},
-            )
+        response = await _refuse(endpoint, route, headers)
     assert response.status_code == 401
     assert response["WWW-Authenticate"] == challenge

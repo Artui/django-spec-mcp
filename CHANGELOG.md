@@ -495,13 +495,15 @@ carries; releases up to 0.54.0 are in
 
 ### Fixed
 
-- **A request with no credentials gets a challenge with no error code.**
-  The `401` challenge named `error="invalid_token"` whether or not the request
-  sent a token; RFC 6750 3.1 says a request lacking any authentication
-  information SHOULD NOT carry one. It now names `invalid_token` only when the
-  request sent an `Authorization` header, so a client's first, credential-free
-  request reads as the cue to start the authorization flow rather than as a
-  verdict on a token it never presented.
+- **A request with no `Authorization` header gets a challenge with no error
+  code.** The `401` challenge named `error="invalid_token"` whether or not the
+  request sent a token; RFC 6750 3.1 says a request lacking any authentication
+  information SHOULD NOT carry one. A backend's `www_authenticate_challenge` is
+  now called with `error=None` for a request with no `Authorization` header,
+  and with `error="invalid_token"` for one whose header it did not accept, so a
+  client's first, credential-free request reads as the cue to start the
+  authorization flow. The test is the header, not its scheme: a header in a
+  scheme the backend does not accept still gets `invalid_token`.
 - **A `REQUIRED` tool's task runs.** The worker's run of a task went back
   through the task decision, met a context declaring no extension, and was
   refused `-32021`, so every task of a `REQUIRED` tool ended `failed` without
