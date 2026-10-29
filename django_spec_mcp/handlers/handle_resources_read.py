@@ -14,7 +14,7 @@ from django_spec_mcp.handlers.utils import (
     consume_rate_limits,
     forbidden,
     rate_limited,
-    resource_not_found_code,
+    resolve_resource_read,
     resource_read_answer,
     span_attrs,
 )
@@ -22,7 +22,6 @@ from django_spec_mcp.output.build_resource_contents import build_resource_conten
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.protocol.types.resource_contents import ResourceContents
 from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
-from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 
 
 def handle_resources_read(
@@ -39,27 +38,10 @@ def handle_resources_read(
     callable) by running its selector over the kernel's pool. The answer is
     one ``ResourceContents`` block, encoded by ``build_resource_contents``.
     """
-    if not isinstance(params, dict):
-        return JsonRpcError(
-            JsonRpcErrorCode.INVALID_PARAMS, "resources/read params must be an object"
-        )
-    uri: Any = params.get("uri")
-    if not isinstance(uri, str):
-        return JsonRpcError(
-            JsonRpcErrorCode.INVALID_PARAMS, "'uri' is required and must be a string"
-        )
-
-    resolved = context.resources.resolve(uri)
-    if resolved is None:
-        # ``-32002`` with the URI echoed in ``data`` is the spec's own worked
-        # example, so a client special-casing resource not-found finds both
-        # halves where it expects them.
-        return JsonRpcError(
-            resource_not_found_code(context.protocol_version),
-            f"Unknown resource: {uri!r}",
-            data={"uri": uri},
-        )
-    binding, vars_ = resolved
+    target = resolve_resource_read(params, context)
+    if isinstance(target, JsonRpcError):
+        return target
+    binding, vars_, uri = target
 
     with span(
         "mcp.resources.read",

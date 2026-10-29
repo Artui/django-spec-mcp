@@ -26,6 +26,7 @@ from django_spec_mcp.handlers.utils import (
     judge_tool_permissions,
     rate_limited,
     resolve_bound,
+    resolve_tool_call,
     run_with_deadline,
     span_attrs,
 )
@@ -49,29 +50,10 @@ async def handle_tools_call_async(
     """
     if not isinstance(params, dict):
         return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, "tools/call params must be an object")
-
-    tool_name: Any = params.get("name")
-    if not isinstance(tool_name, str):
-        return JsonRpcError(
-            JsonRpcErrorCode.INVALID_PARAMS, "'name' is required and must be a string"
-        )
-
-    binding = context.tools.get(tool_name)
-    if binding is None:
-        # See the sync sibling: the tools spec answers an unknown tool with
-        # ``-32602``.
-        return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, f"Unknown tool: {tool_name!r}")
-
-    # See the sync sibling: only a missing key or an explicit ``null`` means
-    # "no arguments"; every other non-object is named as the fault.
-    arguments_raw: Any = params.get("arguments")
-    if arguments_raw is None:
-        arguments_raw = {}
-    if not isinstance(arguments_raw, dict):
-        return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, "'arguments' must be an object")
-
-    # See the sync sibling: before the task and the permission check read them.
-    arguments_raw = apply_tool_server_arguments(binding, arguments_raw)
+    target = resolve_tool_call(params, context)
+    if isinstance(target, JsonRpcError):
+        return target
+    binding, arguments_raw = target
 
     # Placed as in the sync sibling, and deliberately *outside* the deadline:
     # creating a task is a store write and a queue hand-off, not the work, and

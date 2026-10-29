@@ -7,18 +7,16 @@ from django_service_specs import resolve_callable_kwargs
 from django_spec_mcp._compat.tracing import span
 from django_spec_mcp.handlers.judge_binding import judge_binding
 from django_spec_mcp.handlers.kernel_utils import carry_token
-from django_spec_mcp.handlers.render_prompt_messages import normalize_render_result
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import (
     consume_rate_limits,
     forbidden,
+    prompt_get_answer,
     rate_limited,
+    resolve_prompt_get,
     span_attrs,
 )
-from django_spec_mcp.output.enforce_result_bytes import enforce_result_bytes
-from django_spec_mcp.protocol.types.get_prompt_result import GetPromptResult
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
-from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 
 
 def handle_prompts_get(
@@ -38,42 +36,10 @@ def handle_prompts_get(
     identity, and the finished result is held to ``MAX_RESULT_BYTES`` like every
     other result surface.
     """
-    if not isinstance(params, dict):
-        return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, "prompts/get params must be an object")
-    name: Any = params.get("name")
-    if not isinstance(name, str):
-        return JsonRpcError(
-            JsonRpcErrorCode.INVALID_PARAMS, "'name' is required and must be a string"
-        )
-
-    binding = context.prompts.get(name)
-    if binding is None:
-        # The prompts spec is explicit: "Invalid prompt name: -32602". An
-        # unknown name is a fault in the *params*, and ``-32002`` is reserved
-        # for ``resources/read``.
-        return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, f"Unknown prompt: {name!r}")
-
-    arguments_raw: Any = params.get("arguments")
-    if arguments_raw is None:
-        arguments_raw = {}
-    # Not ``or {}``: that folds every falsy value into the default, so a ``[]``,
-    # ``""``, ``0`` or ``False`` would be accepted as "no arguments" by the very
-    # line below that exists to reject a non-object.
-    if not isinstance(arguments_raw, dict):
-        return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, "'arguments' must be an object")
-
-    missing: list[str] = [
-        arg.name for arg in binding.arguments if arg.required and arg.name not in arguments_raw
-    ]
-    if missing:
-        data: dict[str, Any] = {"missing": missing}
-        if context.config.include_validation_value:
-            data["value"] = arguments_raw
-        return JsonRpcError(
-            JsonRpcErrorCode.INVALID_PARAMS,
-            "Missing required prompt arguments",
-            data=data,
-        )
+    target = resolve_prompt_get(params, context)
+    if isinstance(target, JsonRpcError):
+        return target
+    binding, arguments_raw = target
 
     with span("mcp.prompts.get", attributes=span_attrs(binding.name, context)):
         # The prompt's scope gate and its kernel checks, asked of the principal
@@ -112,26 +78,7 @@ def handle_prompts_get(
         kwargs: dict[str, Any] = resolve_callable_kwargs(binding.render, pool)
         raw: Any = binding.render(**kwargs)
 
-        try:
-            messages = normalize_render_result(raw)
-        except TypeError as exc:
-            return JsonRpcError(JsonRpcErrorCode.INTERNAL_ERROR, str(exc))
-
-        result: dict[str, Any] = GetPromptResult(
-            messages=messages, description=binding.description
-        ).to_dict()
-        # The same outbound ceiling ``tools/call`` and ``resources/read``
-        # apply. A rendered prompt is a result surface like any other — its
-        # body is whatever a consumer's ``render`` interpolated — so an
-        # operator who set the ceiling gets it here too. No ``isError``
-        # envelope exists on this method, so an over-ceiling render is a
-        # protocol error carrying the same remedy-naming message.
-        oversize: str | None = enforce_result_bytes(
-            result, context.config.max_result_bytes, label=f"Prompt {binding.name!r}"
-        )
-        if oversize is not None:
-            return JsonRpcError(JsonRpcErrorCode.SERVER_ERROR, oversize)
-        return result
+        return prompt_get_answer(binding, raw, context)
 
 
 __all__ = ["handle_prompts_get"]

@@ -22,6 +22,7 @@ from django_spec_mcp.handlers.utils import (
     judge_tool_permissions,
     rate_limited,
     resolve_bound,
+    resolve_tool_call,
     span_attrs,
 )
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
@@ -43,36 +44,10 @@ def handle_tools_call(
     """
     if not isinstance(params, dict):
         return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, "tools/call params must be an object")
-
-    tool_name: Any = params.get("name")
-    if not isinstance(tool_name, str):
-        return JsonRpcError(
-            JsonRpcErrorCode.INVALID_PARAMS, "'name' is required and must be a string"
-        )
-
-    binding = context.tools.get(tool_name)
-    if binding is None:
-        # The tools spec's own worked example of a protocol error: an unknown
-        # tool is a bad param, so ``-32602`` rather than an ``isError`` result.
-        return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, f"Unknown tool: {tool_name!r}")
-
-    # Read once: only a missing key (or an explicit ``null``) means "no
-    # arguments". Collapsing every falsy value into ``{}`` — as ``or {}`` did —
-    # let ``[]``, ``0``, ``""`` and ``false`` past the guard on the next line,
-    # so a malformed ``arguments`` ran the tool with no arguments instead of
-    # being named as the fault.
-    arguments_raw: Any = params.get("arguments")
-    if arguments_raw is None:
-        arguments_raw = {}
-    if not isinstance(arguments_raw, dict):
-        return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, "'arguments' must be an object")
-
-    # The binding's ``server_arguments`` in place before anything reads the
-    # arguments: a task records what the tool will run with, and the permission
-    # check at its creation, the stand-in below and the strict split and
-    # missing-argument checks all see the server's value, so a binding can fill
-    # a required read (``apply_tool_server_arguments``).
-    arguments_raw = apply_tool_server_arguments(binding, arguments_raw)
+    target = resolve_tool_call(params, context)
+    if isinstance(target, JsonRpcError):
+        return target
+    binding, arguments_raw = target
 
     # Ordering: after argument-shape validation so a malformed call is rejected
     # outright rather than queued, and before dispatch because a task exists
