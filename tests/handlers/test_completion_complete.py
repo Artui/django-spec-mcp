@@ -81,6 +81,19 @@ def _invoice(*checks: PermissionCheck) -> SelectorSpec:
     )
 
 
+def _invoice_server(*checks: PermissionCheck, **registration: Any) -> MCPServer:
+    """A server whose ``invoices://{pk}`` template completes ``pk`` to ``["1"]``."""
+    server = _server()
+    server.register_resource(
+        _invoice(*checks),
+        name="invoice",
+        uri_template="invoices://{pk}",
+        completions={"pk": lambda: ["1"]},
+        **registration,
+    )
+    return server
+
+
 def _prompt_server(**kwargs: Any) -> MCPServer:
     server = _server()
     server.register_prompt(
@@ -123,62 +136,77 @@ def test_an_empty_value_is_valid_and_matches_everything() -> None:
     assert result["completion"]["values"] == LANGUAGES
 
 
-def test_context_arguments_reach_the_completer_by_name() -> None:
+def _seed_named_siblings(*, value: str, result: Any = None, queryset: Any = None) -> list[str]:
+    return [f"{result}-{queryset}"]
+
+
+# (completer, the prompt's arguments, the argument asked, the sibling arguments, the values)
+@pytest.mark.parametrize(
+    ("completer", "declared", "argument", "siblings", "values"),
+    [
+        # A sibling argument reaches the completer under its own name.
+        (
+            lambda language: [f"{language}-web"],
+            ["language", "framework"],
+            {"name": "framework", "value": "fla"},
+            {"language": "python"},
+            ["python-web"],
+        ),
+        # A completer may declare the whole mapping of siblings.
+        (
+            lambda arguments, value: [f"{sorted(arguments)}:{value}"],
+            ["a"],
+            {"name": "a", "value": "v"},
+            {"z": 1},
+            ["['z']:v"],
+        ),
+        # A client-supplied ``value`` sibling must not shadow the real one.
+        (
+            lambda value: [value],
+            ["a"],
+            {"name": "a", "value": "real"},
+            {"value": "spoofed"},
+            ["real"],
+        ),
+        # The strip tracks the kernel's reserved seeds, which gained ``result``
+        # and ``queryset``; ``arguments`` still carries them verbatim, as caller input.
+        (
+            _seed_named_siblings,
+            ["a"],
+            {"name": "a", "value": "v"},
+            {"result": "r", "queryset": "q"},
+            ["None-None"],
+        ),
+        # A lone string is one suggestion, not its characters.
+        (lambda: "python", ["a"], {"name": "a"}, None, ["python"]),
+    ],
+    ids=[
+        "sibling-by-name",
+        "whole-arguments-mapping",
+        "transport-seeds-win-over-a-sibling",
+        "sibling-named-after-a-newer-kernel-seed",
+        "lone-string",
+    ],
+)
+def test_a_completer_is_handed_what_it_declares(
+    completer: Any,
+    declared: list[str],
+    argument: dict[str, str],
+    siblings: dict[str, Any] | None,
+    values: list[str],
+) -> None:
     server = _server()
     server.register_prompt(
         name="p",
         render=lambda: "x",
-        arguments=[PromptArgument(name="language"), PromptArgument(name="framework")],
-        completions={"framework": lambda language: [f"{language}-web"]},
+        arguments=[PromptArgument(name=name) for name in declared],
+        completions={argument["name"]: completer},
     )
-    result = _complete(
-        server,
-        {
-            "ref": {"type": "ref/prompt", "name": "p"},
-            "argument": {"name": "framework", "value": "fla"},
-            "context": {"arguments": {"language": "python"}},
-        },
-    )
-    assert result["completion"]["values"] == ["python-web"]
+    params: dict[str, Any] = {"ref": {"type": "ref/prompt", "name": "p"}, "argument": argument}
+    if siblings is not None:
+        params["context"] = {"arguments": siblings}
 
-
-def test_a_completer_may_declare_the_whole_arguments_mapping() -> None:
-    server = _server()
-    server.register_prompt(
-        name="p",
-        render=lambda: "x",
-        arguments=[PromptArgument(name="a")],
-        completions={"a": lambda arguments, value: [f"{sorted(arguments)}:{value}"]},
-    )
-    result = _complete(
-        server,
-        {
-            "ref": {"type": "ref/prompt", "name": "p"},
-            "argument": {"name": "a", "value": "v"},
-            "context": {"arguments": {"z": 1}},
-        },
-    )
-    assert result["completion"]["values"] == ["['z']:v"]
-
-
-def test_transport_seeds_win_over_a_same_named_sibling_argument() -> None:
-    """A client-supplied ``value`` sibling must not shadow the real one."""
-    server = _server()
-    server.register_prompt(
-        name="p",
-        render=lambda: "x",
-        arguments=[PromptArgument(name="a")],
-        completions={"a": lambda value: [value]},
-    )
-    result = _complete(
-        server,
-        {
-            "ref": {"type": "ref/prompt", "name": "p"},
-            "argument": {"name": "a", "value": "real"},
-            "context": {"arguments": {"value": "spoofed"}},
-        },
-    )
-    assert result["completion"]["values"] == ["real"]
+    assert _complete(server, params)["completion"]["values"] == values
 
 
 # ----- ref/resource -----
@@ -204,13 +232,7 @@ def test_resource_template_variable_completion() -> None:
 
 def test_a_concrete_uri_is_not_mistaken_for_its_own_template() -> None:
     """``resolve`` would match ``invoices://7`` — the ref lookup must not."""
-    server = _server()
-    server.register_resource(
-        _invoice(),
-        name="invoice",
-        uri_template="invoices://{pk}",
-        completions={"pk": lambda: ["1"]},
-    )
+    server = _invoice_server()
     result = _complete(
         server,
         {
@@ -260,20 +282,6 @@ def test_the_generator_is_sliced_not_drained() -> None:
     )
     _complete(server, {"ref": {"type": "ref/prompt", "name": "p"}, "argument": {"name": "a"}})
     assert len(produced) == 101
-
-
-def test_a_lone_string_is_one_suggestion_not_its_characters() -> None:
-    server = _server()
-    server.register_prompt(
-        name="p",
-        render=lambda: "x",
-        arguments=[PromptArgument(name="a")],
-        completions={"a": lambda: "python"},
-    )
-    result = _complete(
-        server, {"ref": {"type": "ref/prompt", "name": "p"}, "argument": {"name": "a"}}
-    )
-    assert result["completion"]["values"] == ["python"]
 
 
 # ----- guards -----
@@ -329,13 +337,7 @@ def test_a_kernel_resources_completion_asks_its_spec_permissions() -> None:
     # The scope gate alone answered a kernel resource's completion, so a spec
     # refusing the caller still listed which ``pk`` values exist.
     check = _Refuses()
-    server = _server()
-    server.register_resource(
-        _invoice(check),
-        name="invoice",
-        uri_template="invoices://{pk}",
-        completions={"pk": lambda: ["1", "2"]},
-    )
+    server = _invoice_server(check)
 
     result = _complete(server, _INVOICE_PK)
 
@@ -349,13 +351,7 @@ def test_a_kernel_resources_completion_is_judged_on_no_arguments() -> None:
     # scoping by a variable is handed ``None`` and refuses, whatever siblings
     # the request carries, as it would admit a read of ``invoices://7``.
     check = _GrantsProjectSeven()
-    server = _server()
-    server.register_resource(
-        _invoice(check),
-        name="invoice",
-        uri_template="invoices://{pk}",
-        completions={"pk": lambda: ["7", "8"]},
-    )
+    server = _invoice_server(check)
 
     result = _complete(server, {**_INVOICE_PK, "context": {"arguments": {"pk": "7"}}})
 
@@ -368,14 +364,7 @@ def test_a_kernel_resources_scope_gate_answers_before_its_spec() -> None:
     # The scope gate is the shell's and answers first, with the scopes the
     # token lacks; the spec's check is never asked for a caller it refuses.
     check = _Refuses()
-    server = _server()
-    server.register_resource(
-        _invoice(check),
-        name="invoice",
-        uri_template="invoices://{pk}",
-        scopes=("invoices:read",),
-        completions={"pk": lambda: ["1"]},
-    )
+    server = _invoice_server(check, scopes=("invoices:read",))
 
     result = _complete(server, _INVOICE_PK)
 
@@ -399,13 +388,7 @@ def test_a_check_raising_a_service_error_refuses_the_completion_as_the_listing()
     # whose variable has no checked form is ``-32006``, and so is the
     # completion. A read with a checked form dispatches, and raises the
     # check's ``ServiceError`` on to the transport's internal error.
-    server = _server()
-    server.register_resource(
-        _invoice(_RaisesNotFound()),
-        name="invoice",
-        uri_template="invoices://{pk}",
-        completions={"pk": lambda: ["1"]},
-    )
+    server = _invoice_server(_RaisesNotFound())
     context = _ctx(server)
     binding = server.resources.by_uri_template("invoices://{pk}")
 
@@ -471,13 +454,7 @@ class _AnswersWithACoroutine(PermissionCheck):
 def test_a_misconfigured_check_fails_the_completion_as_the_read() -> None:
     # A configuration error is raised, as the read raises it, rather than read
     # as a refusal that would hide the mistake behind a -32006.
-    server = _server()
-    server.register_resource(
-        _invoice(_AnswersWithACoroutine()),
-        name="invoice",
-        uri_template="invoices://{pk}",
-        completions={"pk": lambda: ["1"]},
-    )
+    server = _invoice_server(_AnswersWithACoroutine())
 
     with pytest.raises(ImproperlyConfigured, match="awaitable"):
         _complete(server, _INVOICE_PK)
@@ -486,14 +463,7 @@ def test_a_misconfigured_check_fails_the_completion_as_the_read() -> None:
 
 
 def test_a_kernel_resource_admitting_the_caller_completes() -> None:
-    server = _server()
-    server.register_resource(
-        _invoice(),
-        name="invoice",
-        uri_template="invoices://{pk}",
-        scopes=("invoices:read",),
-        completions={"pk": lambda: ["1"]},
-    )
+    server = _invoice_server(scopes=("invoices:read",))
 
     result = _complete(server, _INVOICE_PK, scopes=("invoices:read",))
 
@@ -524,14 +494,7 @@ def test_a_kernel_resources_spec_is_asked_before_its_rate_limit() -> None:
     # refuses is told that and is charged nothing on either.
     check = _Refuses()
     limit = RefusingRateLimit()
-    server = _server()
-    server.register_resource(
-        _invoice(check),
-        name="invoice",
-        uri_template="invoices://{pk}",
-        rate_limits=[limit],
-        completions={"pk": lambda: ["1"]},
-    )
+    server = _invoice_server(check, rate_limits=[limit])
 
     result = _complete(server, _INVOICE_PK)
 
@@ -543,35 +506,12 @@ def test_a_kernel_resources_spec_is_asked_before_its_rate_limit() -> None:
 
 def test_a_kernel_resource_its_spec_admits_is_still_charged() -> None:
     # The other half: a caller the spec admits meets the rate limit after it.
-    server = _server()
-    server.register_resource(
-        _invoice(),
-        name="invoice",
-        uri_template="invoices://{pk}",
-        rate_limits=[_AlwaysLimited()],
-        completions={"pk": lambda: ["1"]},
-    )
+    server = _invoice_server(rate_limits=[_AlwaysLimited()])
 
     result = _complete(server, _INVOICE_PK)
 
     assert isinstance(result, JsonRpcError)
     assert result.code == -32005
-
-
-def test_unknown_prompt_is_invalid_params() -> None:
-    result = _complete(
-        _prompt_server(),
-        {"ref": {"type": "ref/prompt", "name": "nope"}, "argument": {"name": "a"}},
-    )
-    assert isinstance(result, JsonRpcError) and result.code == -32602
-
-
-def test_unknown_resource_is_invalid_params() -> None:
-    result = _complete(
-        _server(),
-        {"ref": {"type": "ref/resource", "uri": "nope://{x}"}, "argument": {"name": "x"}},
-    )
-    assert isinstance(result, JsonRpcError) and result.code == -32602
 
 
 def test_an_argument_with_no_completer_lists_what_is_completable() -> None:
@@ -602,9 +542,11 @@ def test_an_argument_with_no_completer_lists_what_is_completable() -> None:
         {"ref": {"type": "ref/prompt"}, "argument": {"name": "a"}},
         {"ref": {"type": "ref/resource"}, "argument": {"name": "a"}},
         {"ref": {"type": "ref/nonsense"}, "argument": {"name": "a"}},
+        {"ref": {"type": "ref/prompt", "name": "nope"}, "argument": {"name": "a"}},
+        {"ref": {"type": "ref/resource", "uri": "nope://{x}"}, "argument": {"name": "x"}},
     ],
 )
-def test_malformed_requests_are_invalid_params(params: Any) -> None:
+def test_a_malformed_or_unknown_request_is_invalid_params(params: Any) -> None:
     result = _complete(_prompt_server(), params)
     assert isinstance(result, JsonRpcError) and result.code == -32602
 
@@ -694,31 +636,6 @@ def test_capabilities_describe_what_the_server_can_answer() -> None:
         uri_template="invoices://{pk}",
     )
     assert handle_initialize({}, _ctx(server)).capabilities.to_dict() == {"resources": {}}
-
-
-def _seed_named_siblings(*, value: str, result: Any = None, queryset: Any = None) -> list[str]:
-    return [f"{result}-{queryset}"]
-
-
-def test_a_sibling_named_after_a_newer_kernel_seed_does_not_reach_the_completer() -> None:
-    """The strip tracks the kernel's reserved seeds, which gained ``result`` and
-    ``queryset``; ``arguments`` still carries them verbatim, as caller input."""
-    server = _server()
-    server.register_prompt(
-        name="p",
-        render=lambda: "x",
-        arguments=[PromptArgument(name="a")],
-        completions={"a": _seed_named_siblings},
-    )
-    result = _complete(
-        server,
-        {
-            "ref": {"type": "ref/prompt", "name": "p"},
-            "argument": {"name": "a", "value": "v"},
-            "context": {"arguments": {"result": "r", "queryset": "q"}},
-        },
-    )
-    assert result["completion"]["values"] == ["None-None"]
 
 
 # ----- what a completer is handed as ``request`` -----
