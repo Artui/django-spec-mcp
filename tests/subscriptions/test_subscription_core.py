@@ -70,14 +70,22 @@ def test_a_malformed_filter_is_empty_rather_than_an_error() -> None:
     assert SubscriptionFilter.from_params("nope") == SubscriptionFilter()
 
 
-def test_non_string_and_empty_uris_are_dropped() -> None:
-    parsed = SubscriptionFilter.from_params({"resourceSubscriptions": ["a://1", 7, "", None]})
-    assert parsed.resource_uris == ("a://1",)
-
-
-def test_duplicate_uris_collapse_but_order_is_kept() -> None:
-    parsed = SubscriptionFilter.from_params({"resourceSubscriptions": ["b://1", "a://1", "b://1"]})
-    assert parsed.resource_uris == ("b://1", "a://1")
+@pytest.mark.parametrize(
+    ("uris", "expected"),
+    [
+        pytest.param(
+            ["a://1", 7, "", None], ("a://1",), id="non-string-and-empty-uris-are-dropped"
+        ),
+        pytest.param(
+            ["b://1", "a://1", "b://1"], ("b://1", "a://1"), id="duplicates-collapse-in-order"
+        ),
+    ],
+)
+def test_resource_uris_are_cleaned_as_they_are_parsed(
+    uris: list[Any], expected: tuple[str, ...]
+) -> None:
+    parsed = SubscriptionFilter.from_params({"resourceSubscriptions": uris})
+    assert parsed.resource_uris == expected
 
 
 def test_task_ids_come_from_the_extensions_field() -> None:
@@ -263,13 +271,39 @@ async def _listen(uris: list[str]) -> Any:
     )
 
 
-def test_a_readable_resource_is_granted() -> None:
-    server = _server()
+@pytest.mark.parametrize(
+    ("requested", "expected"),
+    [
+        pytest.param(("open://1",), ("open://1",), id="a-readable-resource-is-granted"),
+        # Indistinguishable from a forbidden one on purpose: erroring on one and
+        # not the other would make the endpoint an oracle for which resources
+        # exist.
+        pytest.param(("nope://thing",), (), id="an-unregistered-uri-is-refused"),
+        pytest.param(
+            ("gated://1", "open://1"),
+            ("open://1",),
+            id="a-refused-entry-does-not-take-the-rest-with-it",
+        ),
+        # The binding's own gate, judged before the spec's: a token without
+        # ``things:read`` is refused the read, so it is refused the watch.
+        pytest.param(("scoped://1",), (), id="a-resource-outside-the-callers-scopes"),
+        # ``abc`` is no integer ``pk``, so the read would refuse it; the watch
+        # drops that one entry rather than failing the stream on it.
+        pytest.param(
+            ("open://abc", "open://1"),
+            ("open://1",),
+            id="a-uri-whose-variable-the-spec-cannot-read-is-dropped",
+        ),
+    ],
+)
+def test_a_resource_is_watchable_exactly_when_it_is_readable(
+    requested: tuple[str, ...], expected: tuple[str, ...]
+) -> None:
     granted, topics = grant_subscription(
-        SubscriptionFilter(resource_uris=("open://1",)), call_context(server)
+        SubscriptionFilter(resource_uris=requested), call_context(_server())
     )
-    assert granted.resource_uris == ("open://1",)
-    assert topics == frozenset({topic_for_resource("open://1")})
+    assert granted.resource_uris == expected
+    assert topics == frozenset(topic_for_resource(uri) for uri in expected)
 
 
 def test_a_resource_the_caller_cannot_read_is_not_watchable() -> None:
@@ -282,33 +316,6 @@ def test_a_resource_the_caller_cannot_read_is_not_watchable() -> None:
     )
     assert granted.resource_uris == ()
     assert topics == frozenset()
-
-
-def test_an_unregistered_uri_is_refused_the_same_way_as_a_forbidden_one() -> None:
-    """Indistinguishable on purpose — erroring on one and not the other would
-    make the endpoint an oracle for which resources exist."""
-    server = _server()
-    granted, _ = grant_subscription(
-        SubscriptionFilter(resource_uris=("nope://thing",)), call_context(server)
-    )
-    assert granted.resource_uris == ()
-
-
-def test_a_refused_entry_does_not_take_the_rest_of_the_subscription_with_it() -> None:
-    server = _server()
-    granted, _ = grant_subscription(
-        SubscriptionFilter(resource_uris=("gated://1", "open://1")), call_context(server)
-    )
-    assert granted.resource_uris == ("open://1",)
-
-
-def test_a_resource_outside_the_callers_scopes_is_not_watchable() -> None:
-    """The binding's own gate, judged before the spec's: a token without
-    ``things:read`` is refused the read, so it is refused the watch."""
-    granted, _ = grant_subscription(
-        SubscriptionFilter(resource_uris=("scoped://1",)), call_context(_server())
-    )
-    assert granted.resource_uris == ()
 
 
 def test_a_resource_inside_the_callers_scopes_is_watchable() -> None:
@@ -376,15 +383,6 @@ def test_a_registered_unguarded_kernel_resource_is_watchable_with_the_setting_of
         SubscriptionFilter(resource_uris=("bare://1",)), call_context(server, config=config)
     )
     assert granted.resource_uris == ("bare://1",)
-
-
-def test_a_uri_whose_variable_the_spec_cannot_read_is_dropped() -> None:
-    """``abc`` is no integer ``pk``, so the read would refuse it; the watch drops
-    that one entry rather than failing the stream on it."""
-    granted, _ = grant_subscription(
-        SubscriptionFilter(resource_uris=("open://abc", "open://1")), call_context(_server())
-    )
-    assert granted.resource_uris == ("open://1",)
 
 
 class _OnlyTenant(PermissionCheck):

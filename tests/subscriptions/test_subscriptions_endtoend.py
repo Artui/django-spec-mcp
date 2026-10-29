@@ -98,17 +98,18 @@ async def test_a_notification_published_elsewhere_arrives_on_the_stream() -> Non
     await stream.aclose()
 
 
-async def test_a_subscription_asking_for_nothing_is_acknowledged_and_silent() -> None:
-    """Strange, but exactly what was asked for: every type is opt-in."""
-    response = await _listen(AsyncClient(), {"notifications": {}})
-    assert (await _first_frame(response))["params"]["notifications"] == {}
-    await response.streaming_content.aclose()
-
-
-async def test_malformed_params_do_not_fail_the_subscription() -> None:
-    """The acknowledgement is the channel for "you will not get this", so a
-    junk filter opens an honest, empty subscription rather than erroring."""
-    response = await _listen(AsyncClient(), {"notifications": "nonsense"})
+@pytest.mark.parametrize(
+    "notifications",
+    [
+        # Strange, but exactly what was asked for: every type is opt-in.
+        pytest.param({}, id="asking-for-nothing"),
+        # The acknowledgement is the channel for "you will not get this", so a
+        # junk filter opens an honest, empty subscription rather than erroring.
+        pytest.param("nonsense", id="a-malformed-filter"),
+    ],
+)
+async def test_an_empty_or_malformed_filter_is_acknowledged_and_silent(notifications: Any) -> None:
+    response = await _listen(AsyncClient(), {"notifications": notifications})
     assert (await _first_frame(response))["params"]["notifications"] == {}
     await response.streaming_content.aclose()
 
