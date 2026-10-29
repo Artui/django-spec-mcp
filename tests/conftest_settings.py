@@ -8,7 +8,6 @@ USE_TZ = True
 INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.auth",
-    "oauth2_provider",
     "tests.testapp",
 ]
 

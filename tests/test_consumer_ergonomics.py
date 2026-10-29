@@ -8,7 +8,7 @@ The registration cases ask ``register_tool`` with kernel specs: the
 structured-output pair is refused at registration, and an unguarded spec is
 refused by default. The guard is the spec's own ``permissions``, a
 ``PermissionCheck`` list; the scope gate, the kernel tool's ``scopes=``, does
-not count as one. The authorization-server and observability cases build no
+not count as one. The observability cases build no
 spec.
 """
 
@@ -22,10 +22,6 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import PermissionCheck, ServiceSpec, Unrestricted
 
-from django_spec_mcp.auth.backends.django_oauth_toolkit_backend import (
-    DjangoOAuthToolkitBackend,
-    MountedAuthorizationServerWarning,
-)
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.observability import get_logger, session_fingerprint
 from django_spec_mcp.server.mcp_server import MCPServer
@@ -45,59 +41,6 @@ class _Staff(PermissionCheck):
 
     def has_permission(self, principal: Any, spec: Any) -> bool:
         return bool(getattr(principal, "is_staff", False))
-
-
-class TestAuthorizationServerRoot:
-    """The issuer is a site root, and copying DOT's own breaks it."""
-
-    def test_a_mounted_value_warns(self) -> None:
-        with pytest.warns(MountedAuthorizationServerWarning, match="site root"):
-            DjangoOAuthToolkitBackend(authorization_servers=["https://example.test/oauth"])
-
-    def test_a_trailing_slash_does_not_hide_it(self) -> None:
-        with pytest.warns(MountedAuthorizationServerWarning):
-            DjangoOAuthToolkitBackend(authorization_servers=["https://example.test/oauth/"])
-
-    def test_a_site_root_is_silent(self) -> None:
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", MountedAuthorizationServerWarning)
-            DjangoOAuthToolkitBackend(authorization_servers=["https://example.test"])
-
-    def test_a_pathless_authorize_path_disables_the_check(self) -> None:
-        """Nothing is appended, so there is no doubled segment to warn about."""
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", MountedAuthorizationServerWarning)
-            DjangoOAuthToolkitBackend(
-                authorization_servers=["https://example.test/oauth"], authorize_path="/"
-            )
-
-    def test_no_authorization_server_configured_is_silent(self) -> None:
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", MountedAuthorizationServerWarning)
-            DjangoOAuthToolkitBackend(authorization_servers=[])
-
-    def test_the_published_metadata_is_what_the_warning_predicts(self) -> None:
-        """Pin the actual damage, not just the warning about it."""
-        with pytest.warns(MountedAuthorizationServerWarning):
-            backend = DjangoOAuthToolkitBackend(
-                authorization_servers=["https://example.test/oauth"]
-            )
-        metadata = backend.authorization_server_metadata()
-        assert metadata.authorization_endpoint == "https://example.test/oauth/oauth/authorize/"
-
-    def test_custom_paths_suppress_the_warning_and_are_used(self) -> None:
-        """A project that really did mount DOT under a prefix is not nagged."""
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", MountedAuthorizationServerWarning)
-            backend = DjangoOAuthToolkitBackend(
-                authorization_servers=["https://example.test/oauth"],
-                authorize_path="/authorize/",
-                token_path="/token/",
-                registration_path="/register/",
-            )
-        metadata = backend.authorization_server_metadata()
-        assert metadata.authorization_endpoint == "https://example.test/oauth/authorize/"
-        assert metadata.token_endpoint == "https://example.test/oauth/token/"
 
 
 class TestStructuredOutputCouplingAtRegistration:

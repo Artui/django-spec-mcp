@@ -176,8 +176,7 @@ curl http://localhost:8000/mcp/ \
 ```
 
 The server above passes `AllowAnyBackend`, which accepts every caller and is
-for local development only. A server built with no `auth_backend=` gets
-`DjangoOAuthToolkitBackend`, which needs the `[oauth]` extra and refuses
-unauthenticated requests. Before going to production, use that backend or
-plug in your own, and set an `ALLOWED_ORIGINS` allowlist — see
+for local development only. A server built with no `auth_backend=` cannot be
+mounted: `urls` raises `ImproperlyConfigured`. Before going to production,
+write a backend that verifies your tokens, and set an `ALLOWED_ORIGINS` allowlist — see
 [Authentication](auth.md) for the recipe.

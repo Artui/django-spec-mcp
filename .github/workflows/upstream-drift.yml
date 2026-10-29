@@ -130,8 +130,8 @@ jobs:
           from django_service_specs import ServiceSpec, Unrestricted
           from django_spec_mcp import MCPServer
 
-          # Constructing a bare server builds its own auth backend and session
-          # store defaults, and registering a tool runs the full spec
+          # Constructing a bare server builds its own session store default,
+          # and registering a tool runs the full spec
           # reflection. Both are where an upstream release that turned a lazy
           # import into a hard requirement would surface first.
           server = MCPServer(name="drift")
@@ -145,11 +145,11 @@ jobs:
           # Guard the guard: if this environment ever gained an extra, the
           # assertions above would pass for the wrong reason.
           try:
-              import oauth2_provider  # noqa: F401
+              import redis  # noqa: F401
           except ImportError:
               pass
           else:
-              raise SystemExit("base environment unexpectedly has oauth2_provider installed")
+              raise SystemExit("base environment unexpectedly has redis installed")
 
           print("BASE INSTALL OK")
           PY

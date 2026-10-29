@@ -171,4 +171,4 @@ curl -s -X POST http://localhost:8000/mcp/ "${H[@]}" \
 - Service tool basics — [`docs/recipes/expose-a-service.md`](../../docs/recipes/expose-a-service.md)
 - Selector tool with FilterSet — [`docs/recipes/selector-tool-with-filterset.md`](../../docs/recipes/selector-tool-with-filterset.md)
 - Concepts (`ServiceSpec` / `SelectorSpec`, dispatch flow) — [`docs/concepts.md`](../../docs/concepts.md)
-- Auth (this example uses `AllowAnyBackend`; production swaps in DOT) — [`docs/auth.md`](../../docs/auth.md)
+- Auth (this example uses `AllowAnyBackend`; production passes a backend of its own) — [`docs/auth.md`](../../docs/auth.md)

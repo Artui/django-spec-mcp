@@ -80,8 +80,8 @@ def build_server() -> MCPServer:
         name="invoicing-example",
         version="0.0.1",
         description="Demo invoicing MCP surface",
-        # Dev-only: accepts any caller. Swap for the default
-        # DjangoOAuthToolkitBackend (or your own) in production.
+        # Dev-only: accepts any caller. A mounted server has no default
+        # backend, so production passes one of its own (docs/auth.md).
         auth_backend=AllowAnyBackend(),
         # Fine for single-process dev. The default DjangoCacheSessionStore
         # works across workers.

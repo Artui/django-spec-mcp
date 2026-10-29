@@ -34,9 +34,6 @@ from django_spec_mcp.adapters.kernel_selector_to_resource import kernel_selector
 from django_spec_mcp.adapters.kernel_spec_to_tool import kernel_spec_to_tool
 from django_spec_mcp.adapters.ui_to_resource import ui_view_to_resource
 from django_spec_mcp.adapters.utils import merge_meta
-from django_spec_mcp.auth.backends.django_oauth_toolkit_backend import (
-    DjangoOAuthToolkitBackend,
-)
 from django_spec_mcp.auth.protected_resource_metadata_view import ProtectedResourceMetadataView
 from django_spec_mcp.auth.types.auth_backend import MCPAuthBackend
 from django_spec_mcp.auth.types.self_checking import SelfChecking
@@ -180,7 +177,6 @@ class MCPServer:
         icons: tuple[Icon, ...] = (),
         website_url: str | None = None,
         description: str | None = None,
-        resource_url: str | None = None,
         config: MCPConfig | None = None,
         auth_backend: MCPAuthBackend | None = None,
         session_store: SessionStore | None = None,
@@ -220,20 +216,11 @@ class MCPServer:
         # handed request from, one per request class, kept here because the
         # package keeps no module-level state.
         self._request_classes: dict[tuple[type, frozenset[str]], type] = {}
-        # ``resource_url`` configures the *default* backend; a custom backend
-        # owns its own audience policy, so there is nowhere to forward it to.
-        # Refusing beats leaving audience enforcement quietly unconfigured.
-        if resource_url is not None and auth_backend is not None:
-            raise ImproperlyConfigured(
-                "Pass resource_url= or auth_backend=, not both — a custom auth "
-                "backend owns its own audience binding. Configure it there, e.g. "
-                f"auth_backend=DjangoOAuthToolkitBackend(resource_url={resource_url!r})."
-            )
-        self._auth_backend: MCPAuthBackend = (
-            auth_backend
-            if auth_backend is not None
-            else DjangoOAuthToolkitBackend(resource_url=resource_url)
-        )
+        # No default: this package ships no backend that verifies tokens, and
+        # falling back to one that answers every caller would serve a mount
+        # nobody secured. The in-process route never authenticates, so a server
+        # is built without one; ``urls`` and ``async_urls`` refuse instead.
+        self._auth_backend: MCPAuthBackend | None = auth_backend
         # Namespaced by default: the cache-backed store shares one Django cache
         # across every server in the process, so without this a session minted
         # at ``/public/mcp`` satisfies ``/internal/mcp``'s ownership check and a
@@ -1379,7 +1366,8 @@ class MCPServer:
         return self._conventions
 
     @property
-    def auth_backend(self) -> MCPAuthBackend:
+    def auth_backend(self) -> MCPAuthBackend | None:
+        """The ``auth_backend=`` given at construction, or ``None`` when there is none."""
         return self._auth_backend
 
     @property
@@ -1492,8 +1480,22 @@ class MCPServer:
     def _urls_with_view(self, view: Any) -> tuple[list[URLPattern], str, str]:
         # Mounting is where the auth backend stops being optional: from here on
         # every request reaches ``authenticate``. Both ``urls`` and
-        # ``async_urls`` land here, so one call covers them. A backend that does
-        # not implement the opt-in protocol needs no setup and is left alone.
+        # ``async_urls`` land here, so one check covers them (the two
+        # ``..._without_a_backend_refuses_by_name`` tests). There is no default
+        # to fall back to: this package ships no backend that verifies tokens,
+        # and one that answers every caller would serve a mount nobody secured.
+        if self._auth_backend is None:
+            raise ImproperlyConfigured(
+                f"MCPServer {self.name!r} is mounted with no auth_backend=. Every request "
+                "to a mounted endpoint is authenticated by the backend, and this package "
+                "ships none that verifies tokens, so there is nothing safe to fall back "
+                "to. Pass auth_backend= a backend of your own (the authorization page "
+                "shows one), or AllowAnyBackend() for local development."
+            )
+        # A backend that does not implement the opt-in ``SelfChecking`` protocol
+        # needs no setup and is left alone; one that does is asked once, here, so
+        # ``manage.py check`` reaches it
+        # (``test_a_self_checking_backend_that_fails_stops_the_mount``).
         if isinstance(self._auth_backend, SelfChecking):
             self._auth_backend.check_configuration()
         patterns = [

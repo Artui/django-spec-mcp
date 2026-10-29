@@ -125,11 +125,11 @@ See the [quickstart](docs/quickstart.md) for the full end-to-end recipe.
   extension over base MCP, so no protocol bump. We declare; the host sandboxes
   and renders.
 - **Pluggable auth** — an `MCPAuthBackend` verifies the bearer token;
-  `DjangoOAuthToolkitBackend` (default) and `AllowAnyBackend` (dev only) ship.
-  A tool or resource is guarded by its spec's own kernel `permissions`, and
+  `AllowAnyBackend` (dev only) ships, and `bearer_challenge` builds the 401
+  challenge a backend of your own answers with. A tool or resource is guarded by its spec's own kernel `permissions`, and
   `scopes=` at registration adds an OAuth scope gate.
-- **RFC 8707 audience binding** when `RESOURCE_URL` is configured;
-  **RFC 9728 PRM** served from the configured backend.
+- **RFC 8707 audience binding** through `audience_matches`, which a backend
+  calls; **RFC 9728 PRM** served from the configured backend.
 - **Per-binding rate limits** — `MCPRateLimit` Protocol with
   `FixedWindowRateLimit`, `SlidingWindowRateLimit`, and
   `TokenBucketRateLimit` implementations shipped.
@@ -156,10 +156,9 @@ See the [quickstart](docs/quickstart.md) for the full end-to-end recipe.
 ```bash
 pip install django-spec-mcp                              # JSON only
 pip install "django-spec-mcp[toon]"                      # +TOON encoder
-pip install "django-spec-mcp[oauth]"                     # +django-oauth-toolkit backend
 pip install "django-spec-mcp[redis]"                     # +Redis SSE broker for multi-worker ASGI
 pip install "django-spec-mcp[otel]"                      # +OpenTelemetry instrumentation
-pip install "django-spec-mcp[toon,oauth,redis,otel]"     # everything
+pip install "django-spec-mcp[toon,redis,otel]"           # everything
 ```
 
 …or with `uv`:
@@ -167,16 +166,13 @@ pip install "django-spec-mcp[toon,oauth,redis,otel]"     # everything
 ```bash
 uv add django-spec-mcp                                   # JSON only
 uv add "django-spec-mcp[toon]"                           # +TOON encoder
-uv add "django-spec-mcp[oauth]"                          # +django-oauth-toolkit backend
 uv add "django-spec-mcp[redis]"                          # +Redis SSE broker for multi-worker ASGI
 uv add "django-spec-mcp[otel]"                           # +OpenTelemetry instrumentation
-uv add "django-spec-mcp[toon,oauth,redis,otel]"          # everything
+uv add "django-spec-mcp[toon,redis,otel]"                # everything
 ```
 
 Optional extras degrade gracefully: TOON falls back to JSON with a runtime
-warning if `python-toon` is not installed, and the OAuth backend module imports
-cleanly without `oauth2_provider`, so a server used in process needs no DOT.
-Mounting one over HTTP refuses without it, while the URLConf is imported.
+warning if `python-toon` is not installed.
 
 ## Try it
 

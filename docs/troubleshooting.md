@@ -178,23 +178,6 @@ A kernel spec declares its own presenter and permissions, so `permissions=`,
 `mime_type=` and `encoding=` beside a spec passed positionally are refused with a `TypeError`. Declare the checks on the spec,
 and add a `scopes=` gate at registration if the resource needs one.
 
-## OAuth discovery returns 404s
-
-### The authorization server must be a site root
-
-Endpoint paths are appended to it, so passing the value django-oauth-toolkit
-advertises as *its* issuer (`https://host/oauth`) publishes
-`https://host/oauth/oauth/authorize/` and two siblings like it. Pass the site
-root. This warns at construction; if you genuinely mount elsewhere, set the
-paths instead:
-
-```python
-DjangoOAuthToolkitBackend(
-    authorization_servers=["https://host"],
-    authorize_path="/custom/authorize/",
-)
-```
-
 ## A tool result is too large for the client
 
 `MAX_RESULT_BYTES` (default 5 MiB) bounds the wire payload, but a client's

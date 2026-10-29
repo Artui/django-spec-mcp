@@ -22,7 +22,7 @@ Each example ships its own `manage.py`. From the example's directory:
 
 ```bash
 # Set up the deps in a fresh venv (uses the workspace install, no extras unless noted)
-uv pip install -e "../.." "../..[oauth]" "django-service-specs[filter]"
+uv pip install -e "../.." "django-service-specs[filter]"
 
 # Migrate, run, smoke-test
 python manage.py migrate
@@ -50,8 +50,8 @@ npx @modelcontextprotocol/inspector
 ## Notes
 
 - Examples use `AllowAnyBackend` for simplicity. Production deployments
-  should use `DjangoOAuthToolkitBackend` (or your own
-  `MCPAuthBackend`); see `docs/auth.md`.
+  should use an `MCPAuthBackend` of their own that verifies their tokens;
+  `docs/auth.md` walks through one.
 - SQLite is used for portability. Swap `DATABASES` in the example's
   `settings.py` for Postgres/MySQL when adapting to your stack.
 - Each example registers its specs imperatively in `mcp.py` to keep the

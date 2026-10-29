@@ -19,12 +19,15 @@ objects below gate a prompt or an interactive view.
 ## Backends
 
 ::: django_spec_mcp.auth.backends.allow_any_backend.AllowAnyBackend
-::: django_spec_mcp.auth.backends.django_oauth_toolkit_backend.DjangoOAuthToolkitBackend
 
-A backend of your own compares the token's audience with
-`audience_matches`, the exact comparison RFC 8707 asks for.
+This package ships no backend that verifies tokens; a project writes its own
+([Writing your own backend](../auth.md#writing-your-own-backend)). A backend of
+its own compares the token's audience with `audience_matches`, the exact
+comparison RFC 8707 asks for, and builds its 401 challenge with
+`bearer_challenge`.
 
 ::: django_spec_mcp.auth.audience.audience_matches
+::: django_spec_mcp.auth.bearer_challenge.bearer_challenge
 
 ## Permissions
 

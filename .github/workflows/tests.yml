@@ -241,7 +241,7 @@ jobs:
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           enable-cache: true
-      - name: Install base only (no [toon], no [oauth], no dev group)
+      - name: Install base only (no [toon], no dev group)
         run: |
           uv venv --python 3.13 .venv-smoke
           # ``uv venv`` doesn't include pip by default; use ``uv pip install``
@@ -265,8 +265,7 @@ jobs:
               DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}},
               # Only scalars. The auth backend and session store are
               # constructor arguments, so building a bare server exercises the
-              # real defaults — including that constructing
-              # DjangoOAuthToolkitBackend needs no DOT.
+              # real defaults.
               SPEC_MCP={
                   "ALLOWED_ORIGINS": ["*"],
                   "SERVER_INFO": {},
@@ -274,10 +273,9 @@ jobs:
           )
           django.setup()
 
+          from django.core.exceptions import ImproperlyConfigured
+
           from django_spec_mcp import MCPServer
-          from django_spec_mcp.auth.backends.django_oauth_toolkit_backend import (
-              DjangoOAuthToolkitBackend,
-          )
           from django_spec_mcp.output.encode_toon import encode_toon
           from django_spec_mcp.transport.django_cache_session_store import (
               DjangoCacheSessionStore,
@@ -294,10 +292,16 @@ jobs:
           )
           assert server.tools.get("noop") is not None
 
-          # A bare server constructs its own defaults — neither may reach for an
-          # optional extra at construction.
-          assert isinstance(server.auth_backend, DjangoOAuthToolkitBackend)
+          # A bare server constructs its session store default without reaching
+          # for an optional extra, and has no auth backend: it builds, and
+          # refuses to be mounted until one is given.
+          assert server.auth_backend is None
           assert isinstance(server.session_store, DjangoCacheSessionStore)
+          try:
+              server.urls
+              raise SystemExit("mounting a server with no auth backend should be refused")
+          except ImproperlyConfigured:
+              pass
 
           with warnings.catch_warnings(record=True) as caught:
               warnings.simplefilter("always")
@@ -309,8 +313,8 @@ jobs:
           # Guard the guard: if the smoke env ever gained the extra, everything
           # below would pass for the wrong reason.
           try:
-              import oauth2_provider  # noqa: F401
-              raise SystemExit("smoke environment unexpectedly has oauth2_provider installed")
+              import redis  # noqa: F401
+              raise SystemExit("smoke environment unexpectedly has redis installed")
           except ImportError:
               pass
 

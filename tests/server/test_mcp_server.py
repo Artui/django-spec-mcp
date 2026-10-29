@@ -11,7 +11,6 @@ from dataclasses import dataclass
 from typing import Any
 
 import pytest
-from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import (
     DataclassPresenter,
     Parameter,
@@ -23,9 +22,6 @@ from django_service_specs import (
 )
 
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.auth.backends.django_oauth_toolkit_backend import (
-    DjangoOAuthToolkitBackend,
-)
 from django_spec_mcp.server.mcp_server import MCPServer
 from django_spec_mcp.transport.django_cache_session_store import DjangoCacheSessionStore
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
@@ -98,7 +94,7 @@ def test_accessors() -> None:
 def test_omitted_collaborators_get_constructed_defaults() -> None:
     """No dotted-path resolution: the package defaults are built directly."""
     server = MCPServer(name="s")
-    assert isinstance(server.auth_backend, DjangoOAuthToolkitBackend)
+    assert server.auth_backend is None
     assert isinstance(server.session_store, DjangoCacheSessionStore)
 
 
@@ -160,24 +156,6 @@ def test_a_hand_built_session_store_keeps_its_own_namespace() -> None:
     session_id = server.session_store.create(principal_id="user:2")
 
     assert DjangoCacheSessionStore().owner(session_id) == "user:2"
-
-
-def test_resource_url_configures_the_default_backend() -> None:
-    server = MCPServer(name="internal", resource_url="https://example.com/internal/mcp/")
-    md = server.auth_backend.protected_resource_metadata()
-    assert md.resource == "https://example.com/internal/mcp/"
-
-
-def test_resource_url_with_a_custom_backend_raises() -> None:
-    """A custom backend owns its own audience binding, so resource_url= has
-    nowhere to go — silently dropping it would leave enforcement unconfigured
-    in a project that believes it configured it."""
-    with pytest.raises(ImproperlyConfigured, match="not both"):
-        MCPServer(
-            name="s",
-            resource_url="https://example.com/mcp/",
-            auth_backend=AllowAnyBackend(),
-        )
 
 
 def test_urls_is_the_namespaced_triple() -> None:

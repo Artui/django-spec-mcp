@@ -19,7 +19,7 @@ Rules are non-negotiable unless flagged as a heuristic.
    are allowed in `utils.py` if they are internal infrastructure.
 4. **Top-level imports only.** No function-local / lazy imports unless a circular import
    is genuine and documented inline at the import site, or the dependency is optional
-   (e.g. `python-toon`, `oauth2_provider`) — those imports go inside the function body
+   (e.g. `python-toon`) — those imports go inside the function body
    with a clear `ImportError` message.
 5. **Full type annotations on every function and method signature.** `Any` is allowed
    only at Django ORM and wire boundaries (e.g. `request.user`, `queryset` items,
@@ -267,9 +267,6 @@ Change a rule here and change the config with it, or they drift apart again.
 
 ## Boundaries
 
-- The package **does not** depend on `oauth2_provider` at import time. The
-  `DjangoOAuthToolkitBackend` imports it lazily inside its method bodies, gated behind a
-  clear `ImportError` message.
 - The TOON encoder imports `python-toon` lazily and falls back to JSON with a warning
   if the extra is missing — a tool call must never fail because the optional extra is
   absent.

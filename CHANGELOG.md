@@ -13,6 +13,15 @@ carries; releases up to 0.54.0 are in
 
 ### Added
 
+- **`bearer_challenge`.** `django_spec_mcp.auth.bearer_challenge(*,
+  resource_metadata_url, scopes=None, error=None)` builds the `WWW-Authenticate`
+  value of a 401 or an insufficient-scope 403: the realm, then `resource_metadata`,
+  `error` and `scope`, in the order a client reads them. A backend of a project's
+  own returns it from `www_authenticate_challenge`, and `AllowAnyBackend` does.
+  `resource_metadata_url` has no default, because it is the pointer a client
+  follows to find the authorization server and a challenge without it fails
+  with no error on either side; `None` says a backend has no metadata to point at.
+
 - **Kernel specs register as tools and resources.** `MCPServer.register_tool(spec, *, name, ...)`
   takes a `django_service_specs` `ServiceSpec` or `SelectorSpec`, and the spec's
   class decides whether it is a service tool or a selector tool;
@@ -188,6 +197,14 @@ carries; releases up to 0.54.0 are in
   through one step, so the two cannot drift.
 
 ### Changed
+
+- **A mounted server needs an `auth_backend=`.** A server built without one used to
+  get `DjangoOAuthToolkitBackend`; no backend ships that verifies tokens now, and
+  falling back to `AllowAnyBackend` would answer every caller. `MCPServer(...)`
+  still builds without one, and so does the in-process route, which never
+  authenticates, but `urls` and `async_urls` raise `ImproperlyConfigured` naming
+  the server, so `manage.py check` reaches it. `MCPServer.auth_backend` is `None`
+  for a server built without one.
 
 - **The MCP endpoint and the protected-resource metadata view are plain Django
   views**, no longer DRF viewsets, so **no `REST_FRAMEWORK` setting reaches them**:
@@ -393,6 +410,19 @@ carries; releases up to 0.54.0 are in
   `MCPAuthBackend`. This package keeps the resource-server side: the backend
   protocol, the protected-resource metadata view and the challenge responses.
 
+- **The django-oauth-toolkit backend.** `DjangoOAuthToolkitBackend`,
+  `UnenforcedAudienceWarning` and `MountedAuthorizationServerWarning` are gone,
+  with `MCPServer(resource_url=)`, the settings `RESOURCE_URL` and
+  `ENFORCE_AUDIENCE` that only the backend read, and the `oauth` extra. The
+  backend verified tokens by reading one authorization server's models, which is
+  an OAuth implementation of the kind removed above. A project writes the backend
+  for the authorization server it runs: the authentication page walks through one
+  that checks a token's audience with `audience_matches` and answers its 401 with
+  `bearer_challenge`. The `SERVER_INFO` keys the backend read for its metadata
+  (`resource`, `authorization_servers`, `scopes_supported`,
+  `resource_metadata_url` and `documentation`) are read by nothing now: a
+  backend of a project's own publishes its metadata itself.
+
 - **The refusal of settings keys drf-mcp removed in its 0.12.0.**
   `SPEC_MCP["AUTH_BACKEND"]`, `["SESSION_STORE"]` and `["AUTH_USER_ADAPTER"]` no
   longer raise `ImproperlyConfigured` at `MCPServer(...)`: no project ever set
@@ -408,13 +438,14 @@ carries; releases up to 0.54.0 are in
   `register_tool`: it is judged, validated and presented like any other
   service tool, and its `atomic` flag owns the transaction.
 
-- **The `jwt`, `spectacular` and `filter` extras.** `jwt` only installed
+- **The `jwt`, `spectacular`, `filter` and `oauth` extras.** `jwt` only installed
   djangorestframework-simplejwt for the cookie adapter removed above.
   `spectacular` installed drf-spectacular, which nothing here reads: a tool's
   `inputSchema` is the kernel's schema of its spec, and `@extend_schema_*`
   annotations do not reach it. `filter` installed django-filter, which the
   kernel reads: a `SelectorSpec`'s `filter_set=` runs a `FilterSet`, installed
   with `pip install "django-service-specs[filter]"`.
+  `oauth` installed django-oauth-toolkit for the backend removed above.
 
 ### Fixed
 

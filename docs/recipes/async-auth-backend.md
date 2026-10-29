@@ -20,6 +20,7 @@ from django.contrib.auth import get_user_model
 from django.http import HttpRequest
 
 from django_spec_mcp import MCPAuthBackend, TokenInfo
+from django_spec_mcp.auth import bearer_challenge
 from django_spec_mcp.auth.types.protected_resource_metadata import (
     ProtectedResourceMetadata,
 )
@@ -79,12 +80,12 @@ class IntrospectingAuthBackend:
         raise NotImplementedError("Authorization is hosted by the IDP, not by this resource.")
 
     def www_authenticate_challenge(self, *, scopes=None, error=None) -> str:
-        parts = ['Bearer realm="mcp"']
-        if error:
-            parts.append(f'error="{error}"')
-        if scopes:
-            parts.append(f'scope="{" ".join(scopes)}"')
-        return ", ".join(parts)
+        # `resource_metadata` is what lets a client find the authorization server.
+        return bearer_challenge(
+            resource_metadata_url="https://example.com/mcp/.well-known/oauth-protected-resource",
+            scopes=scopes,
+            error=error,
+        )
 ```
 
 Wire it into the server:

@@ -1,7 +1,7 @@
 """Minimal Django settings for the invoicing MCP example.
 
 SQLite + locmem cache + no authentication. Drop in production-grade
-collaborators (Postgres, Redis, ``DjangoOAuthToolkitBackend``) when
+collaborators (Postgres, Redis, an ``MCPAuthBackend`` of your own) when
 adapting to your stack.
 """
 
