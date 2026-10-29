@@ -18,13 +18,21 @@ MCP. Every operation is a `django_service_specs` spec (`ServiceSpec` or
 | `MCPServer(pool_seeds=)`       | `invoices.outstanding` — reads the mount's `currency` seed, which its `inputSchema` does not advertise; a client `currency` argument is refused, not read in its place.|
 | `MCPServer(conventions=)`      | `invoices.set_amount` without `number` — the refusal's message is the server's own `missing_arguments` wording, which points the model at `invoices.list`; every sentence it does not override keeps the package's words.|
 | `register_resource`            | `invoice` — single invoice by PK via `invoices://{pk}` URI, the template's `pk` being the spec's read.|
-| `register_prompt(permissions=)` | `compose_invoice_email` — render an email body for an invoice, gated by a kernel `PermissionCheck` as a spec is.|
+| `register_prompt(permissions=, scopes=)` | `compose_invoice_email` — render an email body for an invoice, gated by a kernel `PermissionCheck` as a spec is, and by the `invoices:email` scope: a token without it is a `403` whose challenge names the scope.|
+| A backend of your own + `bearer_challenge` | `invoices/auth.py` — `DemoTokenBackend` knows two hard-coded tokens; a request without one is a `401` whose `WWW-Authenticate` points at the `.well-known/oauth-protected-resource` document the mount serves.|
 
 Every spec declares `permissions=[Unrestricted()]`, which says "deliberately
 open" out loud; a spec declaring none is refused at registration. The prompt
 is a render callable rather than a spec, and takes the same kernel checks: it
 declares `permissions=[Unrestricted()]` too, each check asked
 `has_permission(principal, binding)` with the prompt's binding as the spec.
+
+**Every request carries a bearer token.** The mount's `auth_backend=` is
+`DemoTokenBackend`, which knows exactly two tokens and is a demo of the seam,
+not something to deploy: `demo-clerk` carries `invoices:email` and
+`demo-intern` carries no scope. Both reach every tool and the resource; only
+the clerk may render the prompt. A real backend verifies the tokens its
+authorization server issues, as `docs/auth.md` walks through.
 
 The whole MCP wiring lives in `invoices/mcp.py`. Models, forms, the
 dataclasses results are presented through, the presenter, filters, services
@@ -53,7 +61,7 @@ invoicing/
     ├── forms.py             ← the form invoices.create validates with
     ├── shapes.py            ← the dataclasses results are presented through
     ├── presenters.py        ← field selection for invoices.list
-    ├── permissions.py       ← the prompt's gate
+    ├── auth.py              ← the demo bearer backend
     ├── filters.py
     ├── services.py
     ├── selectors.py
@@ -84,6 +92,7 @@ python manage.py runserver
 
 ```bash
 curl -i -X POST http://localhost:8000/mcp/ \
+  -H 'Authorization: Bearer demo-clerk' \
   -H 'Content-Type: application/json' \
   -H 'Mcp-Protocol-Version: 2025-11-25' \
   -H 'Origin: http://localhost' \
@@ -98,7 +107,8 @@ Export the session id and walk through the surfaces:
 ```bash
 SID=<paste from above>
 # An array, so each header stays one argument once the shell expands it
-H=(-H 'Content-Type: application/json'
+H=(-H 'Authorization: Bearer demo-clerk'
+   -H 'Content-Type: application/json'
    -H 'Mcp-Protocol-Version: 2025-11-25'
    -H 'Origin: http://localhost'
    -H "Mcp-Session-Id: $SID")
@@ -165,6 +175,21 @@ curl -s -X POST http://localhost:8000/mcp/ "${H[@]}" \
 curl -s -X POST http://localhost:8000/mcp/ "${H[@]}" \
   -d '{"jsonrpc":"2.0","id":9,"method":"prompts/get",
        "params":{"name":"compose_invoice_email","arguments":{"pk":"1"}}}'
+
+# The intern's token lacks `invoices:email`: a 403 whose challenge ends
+# error="insufficient_scope", scope="invoices:email". `H` carries the clerk's
+# token, so this call spells its headers out.
+curl -i -X POST http://localhost:8000/mcp/ \
+  -H 'Authorization: Bearer demo-intern' \
+  -H 'Content-Type: application/json' \
+  -H 'Mcp-Protocol-Version: 2025-11-25' \
+  -H 'Origin: http://localhost' \
+  -H "Mcp-Session-Id: $SID" \
+  -d '{"jsonrpc":"2.0","id":10,"method":"prompts/get",
+       "params":{"name":"compose_invoice_email","arguments":{"pk":"1"}}}'
+
+# No token at all is a 401 pointing at the metadata document, served here
+curl -s http://localhost:8000/mcp/.well-known/oauth-protected-resource
 ```
 
 ## Where the patterns are documented
@@ -172,4 +197,4 @@ curl -s -X POST http://localhost:8000/mcp/ "${H[@]}" \
 - Service tool basics — [`docs/recipes/expose-a-service.md`](../../docs/recipes/expose-a-service.md)
 - Selector tool with FilterSet — [`docs/recipes/selector-tool-with-filterset.md`](../../docs/recipes/selector-tool-with-filterset.md)
 - Concepts (`ServiceSpec` / `SelectorSpec`, dispatch flow) — [`docs/concepts.md`](../../docs/concepts.md)
-- Auth (this example uses `AllowAnyBackend`; production passes a backend of its own) — [`docs/auth.md`](../../docs/auth.md)
+- Auth (this example's `DemoTokenBackend` is the seam with two hard-coded tokens; production verifies its own authorization server's) — [`docs/auth.md`](../../docs/auth.md)

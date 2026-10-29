@@ -101,7 +101,7 @@ _INVOICING_FIELD_SELECTION = textwrap.dedent(
     for number, amount in (("INV-A", 300), ("INV-B", 100), ("INV-C", 200)):
         Invoice.objects.create(number=number, amount_cents=amount)
 
-    client = Client(HTTP_ORIGIN="http://localhost")
+    client = Client(HTTP_ORIGIN="http://localhost", HTTP_AUTHORIZATION="Bearer demo-clerk")
     initialized = client.post(
         "/mcp/",
         data=json.dumps({
@@ -206,7 +206,7 @@ _INVOICING_CLIENT = textwrap.dedent(
     call_command("migrate", verbosity=0)
     Invoice.objects.create(number="INV-A", amount_cents=100)
     Invoice.objects.create(number="INV-B", amount_cents=50, sent=True)
-    client = Client(HTTP_ORIGIN="http://localhost")
+    client = Client(HTTP_ORIGIN="http://localhost", HTTP_AUTHORIZATION="Bearer demo-clerk")
 
     def rpc(method, params):
         response = client.post(
@@ -472,6 +472,134 @@ def test_invoicing_serves_its_resource_prompt_and_send_tool() -> None:
         "type": "service_error",
         "message": f"Invoice {pk} is already sent",
     }
+
+
+# Runs inside the invoicing project with a client carrying no token of its
+# own, so each request names the token it sends: none, one the backend does
+# not know, one without the prompt's scope, and the clerk's. The status, the
+# challenge and the body are printed for the test to read.
+_INVOICING_AUTH = textwrap.dedent(
+    """
+    import json
+    from urllib.parse import urlsplit
+
+    import django
+    from django.conf import settings
+
+    settings.DATABASES["default"]["NAME"] = ":memory:"
+    django.setup()
+
+    from django.core.management import call_command
+    from django.test import Client
+    from invoices.models import Invoice
+
+    call_command("migrate", verbosity=0)
+    pk = Invoice.objects.create(number="INV-A", amount_cents=100).pk
+    client = Client(HTTP_ORIGIN="http://localhost")
+    META = {
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientInfo": {"name": "smoke", "version": "0"},
+        "io.modelcontextprotocol/clientCapabilities": {},
+    }
+
+    def prompt(**token):
+        params = {"name": "compose_invoice_email", "arguments": {"pk": str(pk)}, "_meta": META}
+        response = client.post(
+            "/mcp/",
+            data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": "prompts/get", "params": params}),
+            content_type="application/json",
+            HTTP_MCP_PROTOCOL_VERSION="2026-07-28",
+            HTTP_MCP_METHOD="prompts/get",
+            HTTP_MCP_NAME="compose_invoice_email",
+            **token,
+        )
+        return {
+            "status": response.status_code,
+            "challenge": response.get("WWW-Authenticate"),
+            "body": json.loads(response.content) if response.content else None,
+        }
+
+    # The metadata is fetched where the challenge points, not where the test
+    # expects it, so a pointer naming the wrong path fails here.
+    anonymous = prompt()
+    challenge = anonymous["challenge"] or 'resource_metadata="/no-challenge/"'
+    pointer = challenge.split('resource_metadata="')[1].split('"')[0]
+    metadata = client.get(urlsplit(pointer).path)
+    print(json.dumps({
+        "anonymous": anonymous,
+        "unknown": prompt(HTTP_AUTHORIZATION="Bearer not-a-demo-token"),
+        "intern": prompt(HTTP_AUTHORIZATION="Bearer demo-intern"),
+        "clerk": prompt(HTTP_AUTHORIZATION="Bearer demo-clerk"),
+        "metadata": {
+            "status": metadata.status_code,
+            "body": json.loads(metadata.content) if metadata.status_code == 200 else None,
+        },
+    }))
+    """
+)
+
+
+def test_invoicing_authenticates_bearer_tokens_and_gates_its_prompt_on_a_scope() -> None:
+    """The example's demo backend and the prompt's ``scopes=`` gate, as a client meets them.
+
+    A request with no token, or a token the backend does not know, is a ``401``
+    whose challenge points at the metadata document, which is served where it
+    points; a token without ``invoices:email`` is the ``403`` naming that scope;
+    the clerk's token renders the prompt.
+    """
+    result = subprocess.run(
+        [sys.executable, "-c", _INVOICING_AUTH],
+        cwd=_EXAMPLES_DIR / "invoicing",
+        env={**os.environ, "DJANGO_SETTINGS_MODULE": "invoicing.settings"},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    replies = json.loads(result.stdout)
+    pointer = "http://localhost:8000/mcp/.well-known/oauth-protected-resource"
+
+    # The transport answers both alike, ``invalid_token`` included.
+    for refused in ("anonymous", "unknown"):
+        assert replies[refused] == {
+            "status": 401,
+            "challenge": f'Bearer realm="mcp", resource_metadata="{pointer}", error="invalid_token"',
+            "body": {"error": "unauthorized", "error_description": "Authentication required."},
+        }
+
+    assert replies["metadata"] == {
+        "status": 200,
+        "body": {
+            "resource": "http://localhost:8000/mcp/",
+            "authorization_servers": [],
+            "bearer_methods_supported": ["header"],
+            "scopes_supported": ["invoices:email"],
+        },
+    }
+
+    intern = replies["intern"]
+    assert intern["status"] == 403
+    assert intern["challenge"] == (
+        f'Bearer realm="mcp", resource_metadata="{pointer}", '
+        'error="insufficient_scope", scope="invoices:email"'
+    )
+    assert intern["body"] == {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "error": {
+            "code": -32006,
+            "message": "Insufficient permission",
+            "data": {"requiredScopes": ["invoices:email"]},
+        },
+    }
+
+    clerk = replies["clerk"]
+    assert clerk["status"] == 200
+    assert clerk["challenge"] is None
+    [message] = clerk["body"]["result"]["messages"]
+    assert message["content"]["text"] == (
+        "Hello,\n\nInvoice INV-A for $1.00 is now ready. Please remit at your "
+        "convenience.\n\n\u2014 Accounting"
+    )
 
 
 # Runs inside the job_status project on a database file, not ``:memory:``: the
