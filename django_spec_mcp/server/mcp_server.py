@@ -1245,12 +1245,10 @@ class MCPServer:
         # Requiring permissions on it would be noise on every MCP Apps install.
         #
         # That third source is only caller-blind because ``ui_view_to_resource``
-        # refuses a ``render`` that declares any fillable parameter. It did not
-        # always: ``handle_resources_read`` resolves every binding's callable
-        # against a pool carrying ``request`` and ``user``, so
-        # ``render=lambda user: ...`` was handed the caller while this comment
-        # said it could not be — and skipped the declaration check on the
-        # strength of the claim. The exemption is sound *because* of that
+        # refuses a ``render`` that declares any fillable parameter:
+        # ``handle_resources_read`` resolves every binding's callable against a
+        # pool carrying ``request`` and ``user``, so ``render=lambda user: ...``
+        # would be handed the caller. The exemption is sound *because* of that
         # refusal, not on its own, and the two have to move together.
         self._resources.register(binding)
         return binding
