@@ -53,14 +53,12 @@ def report_task_progress(store: TaskStore, task_id: str) -> ProgressReporter:
             if record is None or record.status.is_terminal:
                 return
             updated: TaskRecord = replace(
-                record,
-                progress=progress,
-                total=total,
-                task=replace(
-                    record.task,
+                record.with_task(
                     status_message=_render_progress(progress, total, message),
                     last_updated_at=now_iso(),
                 ),
+                progress=progress,
+                total=total,
             )
             store.save(updated)
         except Exception:  # noqa: BLE001 — a telemetry write must not fail the work.
