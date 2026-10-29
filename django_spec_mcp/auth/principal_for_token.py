@@ -32,7 +32,7 @@ def principal_for_token(token: TokenInfo) -> str:
     rather than a fallback.
 
     Lives in ``auth/`` rather than ``transport/`` because handlers call it and
-    ``transport/__init__`` eagerly imports the viewsets, so a home in
+    ``transport/__init__`` eagerly imports the views, so a home in
     ``transport`` closes an import cycle.
     """
     user: Any = token.user

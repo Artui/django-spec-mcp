@@ -222,6 +222,14 @@ carries; releases up to 0.54.0 are in
   bearer token's principal from the moment the request authenticates, so an
   `MCPPermission` never judges the user a session cookie names, and the auth
   backend is handed an anonymous request whatever the cookie says.
+  The classes are `StreamableHttpView`, `AsyncStreamableHttpView` and
+  `ProtectedResourceMetadataView`, in `transport.streamable_http_view`,
+  `transport.async_streamable_http_view` and
+  `auth.protected_resource_metadata_view`, and they carry no routing map:
+  `as_view` takes only the collaborators as keyword arguments, each view
+  answers `post`, `get` and `delete` (`get` alone on the metadata view) by its
+  own method, and the function `as_view` returns carries Django's `view_class`
+  and no `actions` or `cls`.
 - **`django-service-specs` 0.19.0 is the floor.** Its root holds every kernel name
   this package reads, among them the `check_seeds` registration asks and the
   `InvalidArguments.missing` a missing-argument message is worded from. It

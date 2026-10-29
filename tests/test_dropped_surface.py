@@ -13,6 +13,7 @@ still there. So each one is asserted absent.
 
 from __future__ import annotations
 
+import importlib
 import importlib.metadata
 import importlib.util
 
@@ -67,3 +68,51 @@ def test_a_settings_key_drf_mcp_once_removed_is_not_refused(settings) -> None:
 def test_a_dropped_extra_is_not_declared(extra: str) -> None:
     declared = importlib.metadata.metadata("django-spec-mcp").get_all("Provides-Extra") or []
     assert extra not in declared
+
+
+@pytest.mark.parametrize(
+    "module",
+    [
+        "django_spec_mcp.transport.streamable_http_viewset",
+        "django_spec_mcp.transport.async_streamable_http_viewset",
+        "django_spec_mcp.auth.protected_resource_metadata",
+    ],
+)
+def test_a_viewset_module_is_not_importable(module: str) -> None:
+    """The endpoints are plain Django views, in modules named for them."""
+    assert importlib.util.find_spec(module) is None
+
+
+@pytest.mark.parametrize(
+    ("module", "name"),
+    [
+        ("django_spec_mcp.transport", "StreamableHttpViewSet"),
+        ("django_spec_mcp.transport", "AsyncStreamableHttpViewSet"),
+        ("django_spec_mcp.auth", "ProtectedResourceMetadataViewSet"),
+    ],
+)
+def test_a_viewset_name_is_not_exported(module: str, name: str) -> None:
+    namespace = importlib.import_module(module)
+    assert name not in namespace.__all__
+    assert not hasattr(namespace, name)
+
+
+@pytest.mark.parametrize(
+    "view_class_path",
+    [
+        "django_spec_mcp.transport.StreamableHttpView",
+        "django_spec_mcp.transport.AsyncStreamableHttpView",
+        "django_spec_mcp.auth.ProtectedResourceMetadataView",
+    ],
+)
+def test_an_endpoint_takes_no_action_map(view_class_path: str) -> None:
+    """``as_view`` routes by the HTTP method's own name, so a map is refused."""
+    module, _, name = view_class_path.rpartition(".")
+    view_class = getattr(importlib.import_module(module), name)
+    with pytest.raises(TypeError):
+        view_class.as_view({"get": "get"})
+    assert not hasattr(view_class, "actions")
+    view = view_class.as_view()
+    assert view.view_class is view_class
+    assert not hasattr(view, "actions")
+    assert not hasattr(view, "cls")

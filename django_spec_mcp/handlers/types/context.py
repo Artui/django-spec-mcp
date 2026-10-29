@@ -110,7 +110,7 @@ class MCPCallContext:
     project could not otherwise differ on any of them.
 
     The default builds a config from settings for a context constructed without a server
-    (a hand-wired viewset, or a test driving a handler directly), which does make the
+    (a hand-wired view, or a test driving a handler directly), which does make the
     *default* a settings read at construction time; a context built by
     [`MCPServer`][django_spec_mcp.server.mcp_server.MCPServer] never takes that
     path."""

@@ -48,6 +48,6 @@ A backend of your own compares the token's audience with
 The view serving the document is a plain Django view, mounted under the
 server's URLs as `protected-resource-metadata`.
 
-::: django_spec_mcp.auth.protected_resource_metadata.ProtectedResourceMetadataViewSet
+::: django_spec_mcp.auth.protected_resource_metadata_view.ProtectedResourceMetadataView
 ::: django_spec_mcp.auth.types.protected_resource_metadata.ProtectedResourceMetadata
 ::: django_spec_mcp.auth.types.authorization_server_metadata.AuthorizationServerMetadata

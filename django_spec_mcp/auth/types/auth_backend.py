@@ -19,7 +19,7 @@ class MCPAuthBackend(Protocol):
     ``None`` signals "no valid credentials" and the transport emits a 401 whose
     ``WWW-Authenticate`` comes from ``www_authenticate_challenge``.
     ``protected_resource_metadata`` powers the
-    ``/.well-known/oauth-protected-resource`` view (RFC 9728); the PRM ViewSet
+    ``/.well-known/oauth-protected-resource`` view (RFC 9728); the PRM view
     calls ``.to_dict()`` on the returned dataclass for the wire shape.
 
     ``authorization_server_metadata`` describes the authorization server a

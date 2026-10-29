@@ -37,7 +37,7 @@ from django_spec_mcp.adapters.utils import merge_meta
 from django_spec_mcp.auth.backends.django_oauth_toolkit_backend import (
     DjangoOAuthToolkitBackend,
 )
-from django_spec_mcp.auth.protected_resource_metadata import ProtectedResourceMetadataViewSet
+from django_spec_mcp.auth.protected_resource_metadata_view import ProtectedResourceMetadataView
 from django_spec_mcp.auth.types.auth_backend import MCPAuthBackend
 from django_spec_mcp.auth.types.self_checking import SelfChecking
 from django_spec_mcp.auth.types.token_info import TokenInfo
@@ -90,16 +90,10 @@ from django_spec_mcp.tasks.run_task import run_task as _run_task
 from django_spec_mcp.tasks.types.task_executor import TaskExecutor
 from django_spec_mcp.tasks.types.task_record import TaskRecord
 from django_spec_mcp.tasks.types.task_store import TaskStore
-from django_spec_mcp.transport.async_streamable_http_viewset import (
-    ASYNC_STREAMABLE_HTTP_ACTION_MAP,
-    AsyncStreamableHttpViewSet,
-)
+from django_spec_mcp.transport.async_streamable_http_view import AsyncStreamableHttpView
 from django_spec_mcp.transport.django_cache_session_store import DjangoCacheSessionStore
 from django_spec_mcp.transport.in_memory_sse_broker import InMemorySSEBroker
-from django_spec_mcp.transport.streamable_http_viewset import (
-    STREAMABLE_HTTP_ACTION_MAP,
-    StreamableHttpViewSet,
-)
+from django_spec_mcp.transport.streamable_http_view import StreamableHttpView
 from django_spec_mcp.transport.types.session_store import SessionStore
 from django_spec_mcp.transport.types.sse_broker import SSEBroker
 from django_spec_mcp.transport.types.sse_replay_buffer import SSEReplayBuffer
@@ -275,7 +269,7 @@ class MCPServer:
         # The sentences this server writes for a model. Instance state like the
         # seeds above, and for the same reason: two servers in one project can
         # be talking to different readers. Read into every context this server
-        # builds, in-process here and over HTTP by both viewsets.
+        # builds, in-process here and over HTTP by both views.
         self._conventions: AgentConventions = (
             conventions if conventions is not None else AgentConventions()
         )
@@ -1444,8 +1438,7 @@ class MCPServer:
         when running under ASGI to get non-blocking dispatch for the I/O-bound
         handlers.
         """
-        view = StreamableHttpViewSet.as_view(
-            STREAMABLE_HTTP_ACTION_MAP,
+        view = StreamableHttpView.as_view(
             tools=self._tools,
             resources=self._resources,
             prompts=self._prompts,
@@ -1454,7 +1447,7 @@ class MCPServer:
             task_store=self._task_store,
             task_executor=self._task_executor,
             # Without this a tool's ``invalidates=`` announcements are silently
-            # dropped on WSGI: the viewset has nowhere to publish them, and a
+            # dropped on WSGI: the view has nowhere to publish them, and a
             # dropped announcement looks exactly like a tool that changed nothing.
             # ``async_urls`` has always passed it.
             subscription_broker=self._subscription_broker,
@@ -1477,8 +1470,7 @@ class MCPServer:
         fully sync stack still works; async-native ones are detected by
         signature and called directly.
         """
-        view = AsyncStreamableHttpViewSet.as_view(
-            ASYNC_STREAMABLE_HTTP_ACTION_MAP,
+        view = AsyncStreamableHttpView.as_view(
             tools=self._tools,
             resources=self._resources,
             prompts=self._prompts,
@@ -1508,9 +1500,7 @@ class MCPServer:
             path("", view, name="endpoint"),
             path(
                 ".well-known/oauth-protected-resource",
-                ProtectedResourceMetadataViewSet.as_view(
-                    {"get": "list"}, auth_backend=self._auth_backend
-                ),
+                ProtectedResourceMetadataView.as_view(auth_backend=self._auth_backend),
                 name="protected-resource-metadata",
             ),
         ]

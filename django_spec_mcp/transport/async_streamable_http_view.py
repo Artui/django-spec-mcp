@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from typing import Any
 
 from django.http import (
@@ -69,7 +69,6 @@ from django_spec_mcp.transport.utils import (
     modern_error_status,
     not_acceptable,
     raised_denial_error,
-    route_actions,
     seat_anonymous,
     session_gate_failure,
 )
@@ -88,15 +87,6 @@ _VERSION_HEADER: str = "Mcp-Protocol-Version"
 # client to send for the GET stream, so it is served rather than refused
 # (``test_an_accept_naming_only_a_stream_reaches_the_async_endpoint``).
 _ANSWERS_WITH: tuple[str, ...] = ("application/json", "text/event-stream")
-
-# Passed to ``as_view`` by ``MCPServer``, so the canonical routing lives next to
-# the view rather than in the URL conf.
-ASYNC_STREAMABLE_HTTP_ACTION_MAP: dict[str, str] = {
-    "post": "handle_jsonrpc",
-    "get": "handle_get",
-    "delete": "terminate_session",
-}
-
 
 logger = get_logger(__name__)
 
@@ -139,10 +129,10 @@ def _internal_error_response(message: JsonRpcRequest) -> JsonResponse:
     )
 
 
-class AsyncStreamableHttpViewSet(View):
-    """Async sibling of ``StreamableHttpViewSet`` for ASGI deployments.
+class AsyncStreamableHttpView(View):
+    """Async sibling of ``StreamableHttpView`` for ASGI deployments.
 
-    A plain Django view whose actions are all ``async def``, so Django awaits it
+    A plain Django view whose methods are all ``async def``, so Django awaits it
     with no thread hop. Wire behaviour matches the sync view for POST and DELETE — same headers, same
     status codes, same JSON-RPC shapes — and the reasoning behind the shared checks
     lives there. The async path additionally serves server-initiated SSE on GET when an
@@ -153,14 +143,6 @@ class AsyncStreamableHttpViewSet(View):
     through ``asgiref.sync.sync_to_async``, so a fully sync stack still
     works under ASGI.
     """
-
-    actions: Mapping[str, str] = ASYNC_STREAMABLE_HTTP_ACTION_MAP
-    # Declared rather than computed: Django derives it from the class's own
-    # ``get`` / ``post`` / ... methods, and these are bound per instance from
-    # ``actions``, so the class has none for it to read. Every action is
-    # ``async def``, and with this set Django's ``options`` and ``405`` answer
-    # as coroutines too.
-    view_is_async: bool = True
 
     tools: ToolRegistry | None = None
     resources: ResourceRegistry | None = None
@@ -193,21 +175,13 @@ class AsyncStreamableHttpViewSet(View):
     conventions: AgentConventions = AgentConventions()
 
     @classonlymethod
-    def as_view(
-        cls, actions: Mapping[str, str] | None = None, **initkwargs: Any
-    ) -> Callable[..., Any]:
-        """Build the view function routing ``actions``, the canonical map if ``None``.
+    def as_view(cls, **initkwargs: Any) -> Callable[..., Any]:
+        """Build the view function, opted out of CSRF and of the login redirect.
 
-        Django marks the function a coroutine function because
-        ``view_is_async`` is set, so the handler awaits it.
+        Django marks the function a coroutine function because every method the
+        class answers is ``async def``, so the handler awaits it.
         """
-        routed: Mapping[str, str] = cls.actions if actions is None else actions
-        view = super().as_view(actions=routed, **initkwargs)
-        return exempt_endpoint(view, routed, cls)
-
-    def setup(self, request: HttpRequest, *args: Any, **kwargs: Any) -> None:
-        route_actions(self, self.actions)
-        super().setup(request, *args, **kwargs)
+        return exempt_endpoint(super().as_view(**initkwargs))
 
     async def dispatch(  # ty: ignore[invalid-method-override]
         self, request: HttpRequest, *args: Any, **kwargs: Any
@@ -221,9 +195,9 @@ class AsyncStreamableHttpViewSet(View):
         routed: Any = super().dispatch(request, *args, **kwargs)
         return await routed
 
-    # ----- actions (routed by ``as_view``'s map) -----
+    # ----- the methods the endpoint serves -----
 
-    async def handle_jsonrpc(self, http_request: HttpRequest) -> HttpResponseBase:
+    async def post(self, http_request: HttpRequest) -> HttpResponseBase:
         guard: HttpResponse | None = self._check_origin(http_request)
         if guard is not None:
             return guard
@@ -385,7 +359,7 @@ class AsyncStreamableHttpViewSet(View):
     async def _handle_modern(
         self, http_request: Any, message: Any, metadata: RequestMetadata
     ) -> HttpResponseBase:
-        """Async sibling of the sync viewset's modern path — same rules.
+        """Async sibling of the sync view's modern path — same rules.
 
         A full parallel implementation rather than a wrapper, as everywhere
         else in this transport: threading a sync/async switch through would put
@@ -473,7 +447,7 @@ class AsyncStreamableHttpViewSet(View):
             return response
         return JsonResponse(JsonRpcResponse(id=message.id, result=result).to_dict())
 
-    async def handle_get(self, http_request: HttpRequest) -> HttpResponseBase:
+    async def get(self, http_request: HttpRequest) -> HttpResponseBase:
         """GET action: open a server-pushed SSE stream for the current session.
 
         - 405 if no broker is configured, or sessions are off (nothing to
@@ -574,7 +548,7 @@ class AsyncStreamableHttpViewSet(View):
             max_seconds=config.sse_stream_max_seconds,
         )
 
-    async def terminate_session(self, http_request: HttpRequest) -> HttpResponse:
+    async def delete(self, http_request: HttpRequest) -> HttpResponse:
         """DELETE action: end the session named by ``MCP-Session-Id``.
 
         Requires authentication, and only the principal a session was
@@ -777,27 +751,27 @@ class AsyncStreamableHttpViewSet(View):
 
     def _require_tools(self) -> ToolRegistry:
         if self.tools is None:  # pragma: no cover - guarded by MCPServer
-            raise RuntimeError("AsyncStreamableHttpViewSet is missing a ToolRegistry")
+            raise RuntimeError("AsyncStreamableHttpView is missing a ToolRegistry")
         return self.tools
 
     def _require_resources(self) -> ResourceRegistry:
         if self.resources is None:  # pragma: no cover - guarded by MCPServer
-            raise RuntimeError("AsyncStreamableHttpViewSet is missing a ResourceRegistry")
+            raise RuntimeError("AsyncStreamableHttpView is missing a ResourceRegistry")
         return self.resources
 
     def _require_prompts(self) -> PromptRegistry:
         if self.prompts is None:  # pragma: no cover - guarded by MCPServer
-            raise RuntimeError("AsyncStreamableHttpViewSet is missing a PromptRegistry")
+            raise RuntimeError("AsyncStreamableHttpView is missing a PromptRegistry")
         return self.prompts
 
     def _require_auth_backend(self) -> MCPAuthBackend:
         if self.auth_backend is None:  # pragma: no cover - guarded by MCPServer
-            raise RuntimeError("AsyncStreamableHttpViewSet is missing an MCPAuthBackend")
+            raise RuntimeError("AsyncStreamableHttpView is missing an MCPAuthBackend")
         return self.auth_backend
 
     def _require_config(self) -> MCPConfig:
         if self.config is None:  # pragma: no cover - guarded by MCPServer
-            raise RuntimeError("AsyncStreamableHttpViewSet is missing an MCPConfig")
+            raise RuntimeError("AsyncStreamableHttpView is missing an MCPConfig")
         return self.config
 
     def _sessions_enabled(self) -> bool:
@@ -806,7 +780,7 @@ class AsyncStreamableHttpViewSet(View):
 
     def _require_session_store(self) -> SessionStore:
         if self.session_store is None:  # pragma: no cover - guarded by MCPServer
-            raise RuntimeError("AsyncStreamableHttpViewSet is missing a SessionStore")
+            raise RuntimeError("AsyncStreamableHttpView is missing a SessionStore")
         return self.session_store
 
 
@@ -818,4 +792,4 @@ def _params_dict(params: Any) -> dict[str, Any] | None:
     return None  # JSON-RPC list params are not used by MCP today.
 
 
-__all__ = ["ASYNC_STREAMABLE_HTTP_ACTION_MAP", "AsyncStreamableHttpViewSet"]
+__all__ = ["AsyncStreamableHttpView"]
