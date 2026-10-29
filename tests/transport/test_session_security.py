@@ -154,28 +154,10 @@ async def test_session_is_bound_to_initializing_principal(make_view: Any) -> Non
     assert other.status_code == 404
 
 
-# ---------- GET: authentication required where it decides anything ----------
-
-
-def test_sync_get_does_not_authenticate_at_all() -> None:
-    """WSGI serves no GET stream on any configuration, so 405 is the whole
-    answer and a 401 could only send the caller after a useless token."""
-    view = _sync_view(InMemorySessionStore())
-    response = view(factory.get("/mcp/"))
-    assert response.status_code == 405
-    assert "WWW-Authenticate" not in response
-
-
-def test_sync_get_authenticated_is_405() -> None:
-    view = _sync_view(InMemorySessionStore())
-    response = view(factory.get("/mcp/", headers={"X-Principal": "alice"}))
-    assert response.status_code == 405
-
-
-async def test_async_get_requires_authentication() -> None:
-    view = _async_view(InMemorySessionStore(), broker=InMemorySSEBroker())
-    response = await view(factory.get("/mcp/"))
-    assert response.status_code == 401
+# ---------- GET: the stream is bound to its principal too ----------
+#
+# Whether GET authenticates at all, on each view and configuration, is held by
+# ``test_unauthenticated_method_support.py``.
 
 
 async def test_async_get_wrong_principal_is_404() -> None:
