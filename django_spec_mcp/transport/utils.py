@@ -406,9 +406,17 @@ def origin_refusal(http_request: HttpRequest, config: MCPConfig) -> JsonResponse
     )
 
 
-def unauthenticated_response(backend: MCPAuthBackend) -> HttpResponse:
-    """The ``401`` for a caller the backend could not authenticate, with its challenge."""
-    return build_unauthenticated_response(backend.www_authenticate_challenge(error="invalid_token"))
+def unauthenticated_response(backend: MCPAuthBackend, request: HttpRequest) -> HttpResponse:
+    """The ``401`` for a caller the backend could not authenticate, with its challenge.
+
+    The challenge names ``invalid_token`` only when the request sent an
+    ``Authorization`` header: RFC 6750 3.1 says a request lacking any
+    authentication information SHOULD NOT get an error code, and a client
+    reading ``invalid_token`` there would take it as a verdict on a token it
+    never presented rather than as the cue to start the authorization flow.
+    """
+    error: str | None = "invalid_token" if "Authorization" in request.headers else None
+    return build_unauthenticated_response(backend.www_authenticate_challenge(error=error))
 
 
 def unsupported_version_response(request_id: Any = None) -> JsonResponse:

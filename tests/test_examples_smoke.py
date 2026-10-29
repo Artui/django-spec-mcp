@@ -531,18 +531,18 @@ def test_invoicing_authenticates_bearer_tokens_and_gates_its_prompt_on_a_scope()
 
     A request with no token, or a token the backend does not know, is a ``401``
     whose challenge points at the metadata document, which is served where it
-    points; a token without ``invoices:email`` is the ``403`` naming that scope;
+    points, and names ``invalid_token`` only for the token sent; a token without ``invoices:email`` is the ``403`` naming that scope;
     that token still calls a tool and reads the resource, which the scope does
     not gate; the clerk's token renders the prompt.
     """
     replies = json.loads(_run_in_example("invoicing", _INVOICING_AUTH))
     pointer = "http://localhost:8000/mcp/.well-known/oauth-protected-resource"
 
-    # The transport answers both alike, ``invalid_token`` included.
-    for refused in ("anonymous", "unknown"):
+    # Only the request that sent a token is told it is ``invalid_token``.
+    for refused, error in (("anonymous", ""), ("unknown", ', error="invalid_token"')):
         assert replies[refused] == {
             "status": 401,
-            "challenge": f'Bearer realm="mcp", resource_metadata="{pointer}", error="invalid_token"',
+            "challenge": f'Bearer realm="mcp", resource_metadata="{pointer}"{error}',
             "body": {"error": "unauthorized", "error_description": "Authentication required."},
         }
 

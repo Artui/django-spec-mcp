@@ -244,7 +244,7 @@ class StreamableHttpView(View):
         token = self._authenticate(http_request)
         if token is None:
             logger.warning("Authentication failed for %s", http_request.path)
-            return unauthenticated_response(self._require_auth_backend())
+            return unauthenticated_response(self._require_auth_backend(), http_request)
 
         # A session is bound to the principal it was minted for at
         # ``initialize``; a wrong-principal presentation renders the same
@@ -325,7 +325,7 @@ class StreamableHttpView(View):
 
         token = self._authenticate(http_request)
         if token is None:
-            return unauthenticated_response(self._require_auth_backend())
+            return unauthenticated_response(self._require_auth_backend(), http_request)
 
         context: MCPCallContext = self._context(
             http_request,
@@ -385,7 +385,7 @@ class StreamableHttpView(View):
             return self._method_not_allowed()
         token = self._authenticate(http_request)
         if token is None:
-            return unauthenticated_response(self._require_auth_backend())
+            return unauthenticated_response(self._require_auth_backend(), http_request)
         session_id: str | None = http_request.headers.get(_SESSION_HEADER)
         if session_id:
             store = self._require_session_store()

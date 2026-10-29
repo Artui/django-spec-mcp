@@ -218,7 +218,7 @@ class AsyncStreamableHttpView(View):
         token = await self._authenticate(http_request)
         if token is None:
             logger.warning("Authentication failed for %s", http_request.path)
-            return unauthenticated_response(self._require_auth_backend())
+            return unauthenticated_response(self._require_auth_backend(), http_request)
 
         # A wrong-principal presentation renders the same 404 as an unknown id,
         # so the gate is not an ownership oracle.
@@ -291,7 +291,7 @@ class AsyncStreamableHttpView(View):
 
         token = await self._authenticate(http_request)
         if token is None:
-            return unauthenticated_response(self._require_auth_backend())
+            return unauthenticated_response(self._require_auth_backend(), http_request)
 
         context: MCPCallContext = self._context(
             http_request,
@@ -377,7 +377,7 @@ class AsyncStreamableHttpView(View):
 
         token = await self._authenticate(http_request)
         if token is None:
-            return unauthenticated_response(self._require_auth_backend())
+            return unauthenticated_response(self._require_auth_backend(), http_request)
 
         config: MCPConfig = self._require_config()
         if (
@@ -428,7 +428,7 @@ class AsyncStreamableHttpView(View):
             return self._method_not_allowed()
         token = await self._authenticate(http_request)
         if token is None:
-            return unauthenticated_response(self._require_auth_backend())
+            return unauthenticated_response(self._require_auth_backend(), http_request)
         session_id: str | None = http_request.headers.get(_SESSION_HEADER)
         if session_id:
             store = self._require_session_store()
