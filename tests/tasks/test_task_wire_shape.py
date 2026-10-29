@@ -13,6 +13,7 @@ kernel spec's own refusal before a task exists is
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import pytest
@@ -122,19 +123,21 @@ def _running(**kwargs: Any) -> MCPServer:
     return _server(task_store=store, task_executor=RecordingExecutor(store), **kwargs)
 
 
-def test_an_optional_tool_runs_inline_when_the_server_cannot_run_tasks() -> None:
-    """Falling back is the whole point of ``OPTIONAL`` — a server without a
-    queue still serves the tool."""
-    server = _server()
-    assert maybe_create_task(server._tools.get("p.optional"), {}, context(server)) is None
-
-
-def test_an_optional_tool_runs_inline_when_the_client_did_not_declare() -> None:
-    server = _running()
-    assert (
-        maybe_create_task(server._tools.get("p.optional"), {}, context(server, declares=False))
-        is None
-    )
+@pytest.mark.parametrize(
+    ("make_server", "declares"),
+    [
+        pytest.param(_server, True, id="the-server-cannot-run-tasks"),
+        pytest.param(_running, False, id="the-client-did-not-declare"),
+    ],
+)
+def test_an_optional_tool_runs_inline_when_a_task_is_not_possible(
+    make_server: Callable[[], MCPServer], declares: bool
+) -> None:
+    """Falling back is the whole point of ``OPTIONAL``: a server without a
+    queue, or a client that cannot poll, still gets the tool."""
+    server = make_server()
+    binding = server._tools.get("p.optional")
+    assert maybe_create_task(binding, {}, context(server, declares=declares)) is None
 
 
 def test_an_optional_tool_answers_a_declaring_client_with_a_task() -> None:
