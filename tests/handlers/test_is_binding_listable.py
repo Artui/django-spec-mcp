@@ -150,36 +150,41 @@ def test_a_tool_is_hidden_from_the_caller_its_spec_s_checks_refuse() -> None:
     assert _listed(server, _user("ann")) == {"open"}
 
 
-def test_every_check_must_admit_the_caller() -> None:
+# (the checks, the registration, the caller's staffness, the scopes it holds, whether it lists)
+@pytest.mark.parametrize(
+    ("checks", "registration", "is_staff", "scopes", "listed"),
+    [
+        # Every check must admit the caller.
+        ((Unrestricted(), _Refuse(), Unrestricted()), {}, False, (), False),
+        # The scope gate passes and the spec's check refuses: the listing asks both.
+        ((_IsStaff(),), {"scopes": ("invoices",)}, False, ("invoices",), False),
+        # The spec's check admits and the scope gate refuses: still hidden.
+        ((_IsStaff(),), {"scopes": ("invoices",)}, True, (), False),
+        ((_IsStaff(),), {"scopes": ("invoices",)}, True, ("invoices",), True),
+        # ``always_listed`` lists a tool the spec refuses.
+        ((_Refuse(),), {"always_listed": True}, False, (), True),
+    ],
+    ids=[
+        "every-check-must-admit",
+        "scope-held-spec-refuses",
+        "spec-admits-scope-missing",
+        "spec-admits-scope-held",
+        "always-listed",
+    ],
+)
+def test_a_tool_lists_when_its_scope_gate_and_every_check_admit(
+    checks: tuple[PermissionCheck, ...],
+    registration: dict[str, Any],
+    is_staff: bool,
+    scopes: tuple[str, ...],
+    listed: bool,
+) -> None:
     server = _server()
-    server.register_tool(_service(Unrestricted(), _Refuse(), Unrestricted()), name="t")
+    server.register_tool(_service(*checks), name="t", **registration)
 
-    assert _listed(server, _user("ann")) == set()
-
-
-def test_a_scope_held_does_not_list_a_tool_the_spec_refuses() -> None:
-    # The scope gate passes and the spec's check refuses: the listing asks both.
-    server = _server()
-    server.register_tool(_service(_IsStaff()), name="t", scopes=("invoices",))
-
-    assert _listed(server, _user("ann"), scopes=("invoices",)) == set()
-
-
-def test_a_spec_that_admits_does_not_list_a_tool_whose_scope_is_missing() -> None:
-    # The spec's check admits and the scope gate refuses: still hidden.
-    server = _server()
-    server.register_tool(_service(_IsStaff()), name="t", scopes=("invoices",))
-    staff = _user("staff", is_staff=True)
-
-    assert _listed(server, staff) == set()
-    assert _listed(server, staff, scopes=("invoices",)) == {"t"}
-
-
-def test_always_listed_lists_a_tool_the_spec_refuses() -> None:
-    server = _server()
-    server.register_tool(_service(_Refuse()), name="t", always_listed=True)
-
-    assert _listed(server, _user("ann")) == {"t"}
+    assert _listed(server, _user("caller", is_staff=is_staff), scopes=scopes) == (
+        {"t"} if listed else set()
+    )
 
 
 def test_a_deactivated_caller_is_listed_nothing() -> None:
