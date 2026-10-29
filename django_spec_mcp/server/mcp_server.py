@@ -3,7 +3,8 @@ from __future__ import annotations
 import os
 import re
 import sys
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Generator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import replace
 from typing import Any, cast
 
@@ -470,10 +471,8 @@ class MCPServer:
         # tool on the server. The kernel's refusal does not name the tool, so
         # this does
         # (``test_a_presenter_whose_markings_cannot_project_is_refused_at_registration``).
-        try:
+        with _named(f"MCP tool {binding.name!r}"):
             _ = binding.audience_projection
-        except ImproperlyConfigured as exc:
-            raise ImproperlyConfigured(f"MCP tool {binding.name!r}: {exc}") from exc
         # A declaration this server's calls cannot run as written is refused
         # here, rather than listed and failed on every call: a parameter a
         # registered seed or the call's own ``request`` / ``view`` meets, a
@@ -486,10 +485,8 @@ class MCPServer:
         # ``server_arguments`` fill is never left out, so it is judged as
         # demanded (``_as_called``). The binding keeps the spec as declared.
         bound = frozenset(binding.server_arguments.values)
-        try:
+        with _named(f"MCP tool {binding.name!r}"):
             check_seeds(_as_called(binding.spec, bound), pool_seeds=self._pool_seeds)
-        except ImproperlyConfigured as exc:
-            raise ImproperlyConfigured(f"MCP tool {binding.name!r}: {exc}") from exc
         # The spec's own permissions are the tool's guard; the scope gate on
         # ``binding.permissions`` is not one, so it is not what is counted.
         if check_kernel_spec_guarded(
@@ -1127,12 +1124,10 @@ class MCPServer:
         # the template names is checked as demanded, as a bound server argument
         # is (``test_an_optional_read_the_template_names_registers_and_is_read``,
         # ``test_an_optional_read_the_template_does_not_name_is_still_refused``).
-        try:
+        with _named(f"Resource {name!r}"):
             check_seeds(
                 _demanding(spec, frozenset(template_variables)), pool_seeds=self._pool_seeds
             )
-        except ImproperlyConfigured as exc:
-            raise ImproperlyConfigured(f"Resource {name!r}: {exc}") from exc
         # The spec's own permissions are the guard, as for ``register_tool``.
         if check_kernel_spec_guarded(
             binding.name, spec, require=self._config.require_tool_permissions, kind="resource"
@@ -1539,6 +1534,19 @@ class MCPServer:
             ),
         ]
         return patterns, self._url_namespace, self._url_namespace
+
+
+@contextmanager
+def _named(label: str) -> Generator[None]:
+    """Re-raise an ``ImproperlyConfigured`` from the block with ``label`` in front.
+
+    The kernel's refusals name the spec's callable, not the registration, and
+    a server registering many tools needs the name to find the one at fault.
+    """
+    try:
+        yield
+    except ImproperlyConfigured as exc:
+        raise ImproperlyConfigured(f"{label}: {exc}") from exc
 
 
 def _caller_stacklevel() -> int:
