@@ -20,7 +20,7 @@ from django_spec_mcp.auth.types.auth_backend import MCPAuthBackend
 from django_spec_mcp.config.types.mcp_config import MCPConfig
 from django_spec_mcp.handlers.dispatch import dispatch
 from django_spec_mcp.handlers.types.context import MCPCallContext
-from django_spec_mcp.observability import get_logger
+from django_spec_mcp.observability.get_logger import get_logger
 from django_spec_mcp.protocol.types.implementation import Implementation
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.protocol.types.json_rpc_message import JsonRpcMessage

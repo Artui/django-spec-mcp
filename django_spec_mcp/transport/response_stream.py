@@ -9,7 +9,7 @@ from typing import Any
 from django.http import StreamingHttpResponse
 from django_service_specs import ProgressReporter
 
-from django_spec_mcp.observability import get_logger
+from django_spec_mcp.observability.get_logger import get_logger
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.protocol.types.json_rpc_response import JsonRpcResponse
 from django_spec_mcp.transport.sse_response import format_event, keepalive_interval_seconds

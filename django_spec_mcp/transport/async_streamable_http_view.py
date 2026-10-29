@@ -25,7 +25,7 @@ from django_spec_mcp.handlers.tasks_utils import (
     missing_capability_error,
 )
 from django_spec_mcp.handlers.types.context import MCPCallContext
-from django_spec_mcp.observability import get_logger
+from django_spec_mcp.observability.get_logger import get_logger
 from django_spec_mcp.protocol.types.implementation import Implementation
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.protocol.types.json_rpc_message import JsonRpcMessage

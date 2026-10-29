@@ -9,14 +9,15 @@ from typing import Any
 
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import PermissionDenied
-from django.http import HttpRequest, JsonResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.views import View
 
 from django_spec_mcp.auth.types.auth_backend import MCPAuthBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.auth.unauthenticated_response import build_unauthenticated_response
 from django_spec_mcp.config.types.mcp_config import MCPConfig
 from django_spec_mcp.handlers.kernel_utils import carry_token, seat
-from django_spec_mcp.observability import session_fingerprint
+from django_spec_mcp.observability.session_fingerprint import session_fingerprint
 from django_spec_mcp.protocol.parse_message import parse_message
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.protocol.types.json_rpc_message import JsonRpcMessage
@@ -131,7 +132,7 @@ def is_raised_denial(exc: BaseException) -> bool:
     return isinstance(exc, PermissionDenied)
 
 
-def is_permission_denial(result: Any) -> bool:
+def _is_permission_denial(result: Any) -> bool:
     """Whether a dispatch result is a permission denial needing HTTP 403.
 
     The MCP authorization spec's error table is normative: ``401`` for
@@ -161,7 +162,7 @@ def raised_denial_error() -> JsonRpcError:
     return JsonRpcError(JsonRpcErrorCode.FORBIDDEN, "Insufficient permission")
 
 
-def insufficient_scope_challenge(result: JsonRpcError, backend: MCPAuthBackend) -> str:
+def _insufficient_scope_challenge(result: JsonRpcError, backend: MCPAuthBackend) -> str:
     """Build the ``WWW-Authenticate`` challenge for a permission denial.
 
     RFC 6750 §3.1 defines ``insufficient_scope`` plus a ``scope`` parameter
@@ -180,7 +181,7 @@ def insufficient_scope_challenge(result: JsonRpcError, backend: MCPAuthBackend) 
     )
 
 
-def modern_error_status(error: JsonRpcError) -> int:
+def _modern_error_status(error: JsonRpcError) -> int:
     """HTTP status for a JSON-RPC error on the modern transport.
 
     The modern revision makes several statuses normative, each carrying
@@ -216,13 +217,13 @@ _MODERN_BAD_REQUEST_CODES: frozenset[int] = frozenset(
 )
 
 
-def session_gate_failure(
+def _session_gate_failure(
     session_id: str | None, *, owner_matches: bool
 ) -> tuple[str, int, str] | None:
     """Decide the legacy session gate's outcome. ``None`` means the request passes.
 
-    Returns ``(message, status, hint)``, shared by the sync and async views
-    so the two cannot drift. ``hint`` is the ``MCP-Error`` slug.
+    Returns ``(message, status, hint)``, which ``session_rejection`` answers
+    with for both views. ``hint`` is the ``MCP-Error`` slug.
 
     **The two statuses are not interchangeable.** A request *without* an
     ``Mcp-Session-Id`` header "SHOULD" get ``400``, while ``404`` is specified
@@ -324,11 +325,11 @@ def session_rejection(
     """The legacy session gate's refusal, logged, or ``None`` when the request passes.
 
     The log names the *exact* condition while the response merges unknown-id
-    with wrong-principal (``session_gate_failure``): the gate must not be an
+    with wrong-principal (``_session_gate_failure``): the gate must not be an
     ownership oracle, but a log line is not the wire. ``logger`` is the calling
     view's own.
     """
-    failure = session_gate_failure(session_id, owner_matches=owner_matches)
+    failure = _session_gate_failure(session_id, owner_matches=owner_matches)
     if failure is None:
         return None
     message_text, status, hint = failure
@@ -405,15 +406,9 @@ def origin_refusal(http_request: HttpRequest, config: MCPConfig) -> JsonResponse
     )
 
 
-def unauthenticated_response(backend: MCPAuthBackend) -> JsonResponse:
+def unauthenticated_response(backend: MCPAuthBackend) -> HttpResponse:
     """The ``401`` for a caller the backend could not authenticate, with its challenge."""
-    challenge: str = backend.www_authenticate_challenge(error="invalid_token")
-    response = JsonResponse(
-        {"error": "unauthorized", "error_description": "Authentication required."},
-        status=401,
-    )
-    response["WWW-Authenticate"] = challenge
-    return response
+    return build_unauthenticated_response(backend.www_authenticate_challenge(error="invalid_token"))
 
 
 def unsupported_version_response(request_id: Any = None) -> JsonResponse:
@@ -453,7 +448,7 @@ def modern_refusal(error: JsonRpcError, request_id: Any) -> JsonResponse:
         code=error.code,
         message=error.message,
         data=error.data,
-        status=modern_error_status(error),
+        status=_modern_error_status(error),
         request_id=request_id,
     )
 
@@ -492,11 +487,11 @@ def challenged_error_response(
     A permission denial is a 403 with a challenge naming the missing scopes,
     not a 200 with the error tucked inside: the MCP authorization spec's
     error table makes the status normative, and the challenge is how a client
-    learns what to ask for (``insufficient_scope_challenge``).
+    learns what to ask for (``_insufficient_scope_challenge``).
     """
     response = JsonResponse(JsonRpcResponse(id=request_id, error=error).to_dict(), status=status)
     if status == 403:
-        response["WWW-Authenticate"] = insufficient_scope_challenge(error, backend)
+        response["WWW-Authenticate"] = _insufficient_scope_challenge(error, backend)
     return response
 
 
@@ -508,16 +503,16 @@ def legacy_result_response(request_id: Any, result: Any, backend: MCPAuthBackend
     """
     if not isinstance(result, JsonRpcError):
         return JsonResponse(JsonRpcResponse(id=request_id, result=result).to_dict())
-    status: int = 403 if is_permission_denial(result) else 200
+    status: int = 403 if _is_permission_denial(result) else 200
     return challenged_error_response(result, request_id=request_id, status=status, backend=backend)
 
 
 def modern_result_response(request_id: Any, result: Any, backend: MCPAuthBackend) -> JsonResponse:
-    """A modern-era dispatch result as its response, an error under ``modern_error_status``."""
+    """A modern-era dispatch result as its response, an error under ``_modern_error_status``."""
     if not isinstance(result, JsonRpcError):
         return JsonResponse(JsonRpcResponse(id=request_id, result=result).to_dict())
     return challenged_error_response(
-        result, request_id=request_id, status=modern_error_status(result), backend=backend
+        result, request_id=request_id, status=_modern_error_status(result), backend=backend
     )
 
 
@@ -528,14 +523,11 @@ __all__ = [
     "challenged_error_response",
     "error_response",
     "exempt_endpoint",
-    "insufficient_scope_challenge",
     "internal_error_response",
-    "is_permission_denial",
     "is_raised_denial",
     "legacy_result_response",
     "modern_era_requested",
     "modern_header_refusal",
-    "modern_error_status",
     "modern_refusal",
     "modern_result_response",
     "not_acceptable",
@@ -544,7 +536,6 @@ __all__ = [
     "raised_denial_error",
     "read_message",
     "seat_anonymous",
-    "session_gate_failure",
     "session_rejection",
     "unauthenticated_response",
     "unknown_session_response",
