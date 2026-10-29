@@ -1,11 +1,10 @@
 """An exception escaping dispatch is still answered with a JSON-RPC reply.
 
 Every case goes through the real URL conf, on both views and in both eras,
-because the defect lived at the HTTP edge: the handlers were never asked to
-catch everything, and before the backstop an escaping DRF ``APIException`` was
-rendered by DRF's ``handle_exception`` as a bare DRF body (a ``400`` reading
-``["`items` field is not found"]``, with no ``jsonrpc`` and no ``id``), while
-anything else became Django's ``500`` page.
+because the backstop lives at the HTTP edge: the handlers are not asked to
+catch everything, and without it an escaping exception becomes Django's
+``500`` page, a reply with no ``jsonrpc`` and no ``id`` that no client can
+match to its request.
 
 The second half pins the responses the backstop must **not** absorb. None of
 them is an exception escaping dispatch - each is either a value a handler
@@ -542,8 +541,8 @@ async def test_a_streamed_dispatch_that_raises_ends_with_a_generic_error_frame(
 ) -> None:
     """Once the stream is open the status is spent, so the error rides as the last frame.
 
-    It used to read ``ValidationError: [ErrorDetail(...)]``: the exception's
-    own text, which is written for an operator rather than a client.
+    The frame never carries the exception's own text, which is written for an
+    operator rather than a client.
     """
     caplog.set_level(logging.ERROR, logger="django_spec_mcp")
     response = await _post_async(

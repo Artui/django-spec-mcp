@@ -94,13 +94,13 @@ def test_initialize_mints_no_session_id_when_disabled() -> None:
 
 
 def test_initialize_still_mints_by_default() -> None:
-    """Default is unchanged — this is opt-out, not a behaviour change."""
+    """Sessions stay on by default: this mode is an opt-out."""
     response = _view(sessions=True)(_post_request("initialize"))
     assert response.status_code == 200
     assert response[_SESSION_HEADER]
 
 
-# ---------- POST: the gate the incident tripped over ----------
+# ---------- POST: the session gate stands aside ----------
 
 
 @pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
@@ -181,8 +181,8 @@ def test_a_missing_session_is_labelled_in_a_header() -> None:
     """The body says why; the header says why to a client that only logs status.
 
     HTTP/2 has no reason phrase, so ``${status} ${statusText}`` — what clients
-    commonly log — is empty. That is how a live incident spent two days unable
-    to tell a dead session from a load balancer 404.
+    commonly log — is empty, and without the header a dead session reads
+    exactly like a load balancer's 404.
     """
     response = _view(sessions=True)(_post_request("ping"))
     assert response.status_code == 400

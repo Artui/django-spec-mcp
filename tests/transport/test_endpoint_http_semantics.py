@@ -4,14 +4,12 @@ The MCP endpoint (on both mounts) and the protected-resource metadata view are
 answered for ``HEAD`` and ``OPTIONS``, opt out of CSRF and of
 ``LoginRequiredMiddleware``, refuse an ``Accept`` header admitting nothing they
 can answer with, and put an ``Allow`` header on every ``405``. None of that is
-written in this package's handlers: each was a property of the endpoints being
-DRF viewsets, so these tests were written against the viewsets first and hold
-the plain Django views to the same answers.
+written in this package's handlers: each is a property of the views
+themselves, so it is held here at the HTTP level.
 
-Two things are deliberately left out, because they were DRF's and are not this
-package's to keep: the body of an ``OPTIONS`` answer (DRF served its metadata,
-the class docstring included) and the ``Allow`` header on answers that are not a
-``405``.
+Two things are deliberately not pinned, because the package promises neither:
+the body of an ``OPTIONS`` answer and the ``Allow`` header on answers that are
+not a ``405``.
 
 Requests go through the ``endpoint`` fixture, whose ``send`` says why headers
 travel as ``headers=``.

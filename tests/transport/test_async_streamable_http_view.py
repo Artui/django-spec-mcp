@@ -298,13 +298,13 @@ def test_async_view_opts_out_of_login_required() -> None:
 
 
 def test_async_view_names_its_class() -> None:
-    """Django's ``view_class`` names the class; the DRF-style ``cls`` and ``actions`` are gone."""
+    """Django's ``view_class`` names the class, with no viewset ``cls`` or ``actions``."""
     view = _async_view()
     assert view.view_class is AsyncStreamableHttpView
     assert not hasattr(view, "cls")
     assert not hasattr(view, "actions")
-    # No wrapper sits between Django and the view any more, so there is
-    # nothing for ``__wrapped__`` to point introspection at.
+    # No wrapper sits between Django and the view, so there is nothing for
+    # ``__wrapped__`` to point introspection at.
     assert not hasattr(view, "__wrapped__")
 
 
@@ -383,9 +383,8 @@ async def _call_gated(name: str) -> Any:
 async def test_async_permission_denial_is_403_with_a_scope_challenge() -> None:
     """The async transport maps a denial the same way the sync one does.
 
-    Added because the 403 mapping landed in both viewsets but only the sync
-    path had a denial test: the async branch was live and uncovered, which
-    is how the two paths drift.
+    Held on its own because a mapping only one path tests is how the two
+    paths drift.
     """
     response = await _call_gated("gated")
     assert response.status_code == 403, response.content

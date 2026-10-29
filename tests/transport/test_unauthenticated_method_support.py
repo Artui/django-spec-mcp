@@ -2,22 +2,20 @@
 
 Both transports answer ``GET /mcp/`` with ``405`` on configurations that offer
 no server-pushed stream: the sync one always, the async one when no broker is
-wired or sessions are off. Authentication used to run *first* on that path, so
-an unauthenticated caller received ``401`` and an RFC 9728
+wired or sessions are off, and decide it before authenticating. Authenticating
+first would answer an unauthenticated caller ``401`` with an RFC 9728
 ``WWW-Authenticate`` challenge naming the protected-resource metadata document
 — the signal an MCP client uses to begin an OAuth flow, which in desktop
-clients opens a browser window. The flow could only ever end in ``405``.
+clients opens a browser window, for a flow that could only end in ``405``.
 
-The rule the package already applied elsewhere is the one that settles it:
-``_handle_modern`` validates headers ahead of authentication because era
-detection "reveals nothing about who is asking" and gating it on credentials
-would break anonymous probes. Whether a resource supports a method is the same
-kind of fact, and ``DELETE`` on the same endpoint has always answered it
+The modern path validates headers ahead of authentication for the same
+reason: era detection reveals nothing about who is asking, and gating it on
+credentials would break anonymous probes. Whether a resource supports a method
+is the same kind of fact, and ``DELETE`` on the same endpoint answers it
 without a credential.
 
-Grouped in one file because the defect spans both transports and three
-configurations, and because a per-transport home would hide that the two
-siblings disagreed with each other.
+Grouped in one file because the rule spans both transports and three
+configurations, and a per-transport home would hide whether the two agree.
 """
 
 from __future__ import annotations
@@ -113,12 +111,12 @@ def test_sync_get_is_405_without_a_credential(sessions: bool) -> None:
 
 @pytest.mark.parametrize("sessions", [True, False])
 def test_sync_get_answers_the_same_with_a_credential(sessions: bool) -> None:
-    """The point of the change: the credential never mattered here."""
+    """The credential never matters here."""
     assert _view(sessions=sessions)(_get(principal="alice")).status_code == 405
 
 
 def test_sync_get_is_405_for_a_modern_caller_too() -> None:
-    """Previously ``401`` where the async sibling already answered ``405``."""
+    """A modern caller gets the same ``405``, not a challenge."""
     assert _view(sessions=True)(_get(version=_MODERN_VERSION)).status_code == 405
 
 
@@ -137,8 +135,8 @@ async def test_async_get_is_405_without_a_credential_when_no_broker_is_wired() -
     """Holds the ``broker is None`` conjunct of the guard on its own.
 
     ``MCPServer(sse_broker=None)`` with sessions *enabled* is a documented
-    configuration (``docs/async.md``), and it reaches the identical defect —
-    which is why this file does not scope the fix to ``SESSIONS_ENABLED``.
+    configuration (``docs/async.md``), so the rule cannot be scoped to
+    ``SESSIONS_ENABLED``.
     """
     view = _view(sessions=True, is_async=True, broker=None)
     response = await view(_get())
@@ -188,12 +186,12 @@ async def test_async_get_past_the_gate_reaches_the_session_checks() -> None:
     assert response.status_code == 404  # authenticated, but named no session
 
 
-# ---------- DELETE already behaved, and is what proved the 401 bought nothing ----------
+# ---------- DELETE answers the same question without a credential ----------
 
 
 @pytest.mark.parametrize("is_async", [False, True])
 async def test_delete_answers_405_without_a_credential(is_async: bool) -> None:
-    """Unchanged: the same condition, already ahead of authentication."""
+    """The same condition, ahead of authentication."""
     view = _view(sessions=False, is_async=is_async)
     request = factory.delete("/mcp/")
     response = await view(request) if is_async else view(request)
@@ -206,8 +204,8 @@ async def test_delete_discloses_the_setting_to_anyone_who_asks(is_async: bool) -
 
     ``DELETE`` distinguishes sessions-on from sessions-off without a
     credential, and sessions-off is precisely what makes the legacy ``GET``
-    a ``405``. The confidentiality the old ordering claimed to protect was
-    already published on the same endpoint by the neighbouring verb.
+    a ``405``. Challenging GET would protect nothing the neighbouring verb
+    does not already publish on the same endpoint.
     """
     off = _view(sessions=False, is_async=is_async)
     on = _view(sessions=True, is_async=is_async)

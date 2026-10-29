@@ -66,9 +66,9 @@ def _initialize_request() -> HttpRequest:
 def test_async_auth_backend_on_sync_transport_is_refused() -> None:
     """An ``async def authenticate`` under ``server.urls`` fails loudly, not open.
 
-    Regression test for a documented configuration that authenticated every
-    caller: the sync view cannot await, so the coroutine sailed through the
-    ``token is None`` gate on its truthiness alone.
+    Served, it would authenticate every caller: the sync view cannot await,
+    so the coroutine would pass the ``token is None`` gate on its truthiness
+    alone.
     """
     view = StreamableHttpView.as_view(
         tools=ToolRegistry(),
