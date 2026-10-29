@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Iterable, Mapping
+from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from typing import Any
 
 from django.http import HttpRequest
@@ -17,6 +17,7 @@ from django_spec_mcp._compat.reject_awaitable import reject_awaitable
 from django_spec_mcp.auth.rate_limits.types.mcp_rate_limit import MCPRateLimit
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.config.types.mcp_config import MCPConfig
+from django_spec_mcp.handlers.pagination import paginate
 from django_spec_mcp.handlers.render_prompt_messages import normalize_render_result
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.observability.get_logger import get_logger
@@ -545,6 +546,42 @@ def catalog_cache_hints(*, ttl_ms: int, per_caller: bool) -> dict[str, Any]:
     return {"ttlMs": ttl_ms, "cacheScope": scope.value}
 
 
+def catalog_cursor(params: dict[str, Any] | None) -> str | None | JsonRpcError:
+    """The opaque ``cursor`` a list method was sent, ``None`` for the first
+    page, or the protocol error a cursor that is not a string gets."""
+    cursor: Any = (params or {}).get("cursor")
+    if cursor is not None and not isinstance(cursor, str):
+        return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, "'cursor' must be a string")
+    return cursor
+
+
+def catalog_page(
+    key: str,
+    bindings: Sequence[Any],
+    cursor: str | None,
+    entry: Callable[[Any], dict[str, Any]],
+    context: MCPCallContext,
+    *,
+    per_caller: bool,
+) -> dict[str, Any] | JsonRpcError:
+    """One page of a list method's ``bindings``, each rendered by ``entry``
+    under ``key``, with the catalog cache hints and a ``nextCursor`` when the
+    page does not reach the end. ``bindings`` arrive already filtered, so the
+    cursor walks the slice this caller sees. A malformed cursor is
+    ``-32602``."""
+    try:
+        page, next_cursor = paginate(bindings, cursor, page_size=context.config.page_size)
+    except ValueError as exc:
+        return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, str(exc))
+    response: dict[str, Any] = {
+        key: [entry(binding) for binding in page],
+        **catalog_cache_hints(ttl_ms=context.config.catalog_cache_ttl_ms, per_caller=per_caller),
+    }
+    if next_cursor is not None:
+        response["nextCursor"] = next_cursor
+    return response
+
+
 def resource_cache_hints(ttl_ms: int) -> dict[str, Any]:
     """``ttlMs`` / ``cacheScope`` for a ``resources/read`` result.
 
@@ -623,6 +660,8 @@ def span_attrs(binding_name: str, context: MCPCallContext) -> dict[str, Any]:
 
 
 __all__ = [
+    "catalog_cursor",
+    "catalog_page",
     "apply_tool_server_arguments",
     "consume_rate_limits",
     "effective_rate_limits",
