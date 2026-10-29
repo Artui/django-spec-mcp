@@ -43,7 +43,7 @@ from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
 from django_spec_mcp.handlers.types.context import MCPCallContext
-from tests.utils import tool_error
+from tests.utils import call_context, tool_error
 
 _POOL = "django_spec_mcp.handlers.offered_tools.base_pool"
 """Where the filter looks ``base_pool`` up, so a spy there sees every pool it builds."""
@@ -107,15 +107,10 @@ def _server(**config: Any) -> MCPServer:
 
 
 def _ctx(server: MCPServer, *, user: Any = None, http_request: Any = None) -> MCPCallContext:
-    return MCPCallContext(
-        http_request=http_request if http_request is not None else HttpRequest(),
-        token=TokenInfo(user=user),
-        tools=server.tools,
-        resources=server.resources,
-        prompts=server.prompts,
-        protocol_version="2025-11-25",
-        config=server.config,
-    )
+    overrides: dict[str, Any] = {"token": TokenInfo(user=user)}
+    if http_request is not None:
+        overrides["http_request"] = http_request
+    return call_context(server, **overrides)
 
 
 def _listed(server: MCPServer, **kwargs: Any) -> list[str]:
@@ -191,19 +186,16 @@ def test_row_conditions_are_not_asked_at_list_time(django_assert_num_queries: An
 # ---------- always_listed ----------
 
 
-@pytest.mark.parametrize("filter_by_permissions", [False, True], ids=["filter-off", "filter-on"])
-def test_always_listed_keeps_an_unavailable_tool(filter_by_permissions: bool) -> None:
+@pytest.mark.parametrize(
+    ("filter_by_permissions", "scopes"),
+    [(False, None), (True, None), (True, ("books:write",))],
+    ids=["filter-off", "filter-on", "both-filters-would-drop"],
+)
+def test_always_listed_keeps_an_unavailable_tool(
+    filter_by_permissions: bool, scopes: tuple[str, ...] | None
+) -> None:
     server = _server(filter_listings_by_permissions=filter_by_permissions)
-    server.register_tool(_service(_CLOSED), name="close_books", always_listed=True)
-
-    assert _listed(server) == ["close_books"]
-
-
-def test_always_listed_keeps_a_tool_both_filters_would_drop() -> None:
-    server = _server(filter_listings_by_permissions=True)
-    server.register_tool(
-        _service(_CLOSED), name="close_books", scopes=("books:write",), always_listed=True
-    )
+    server.register_tool(_service(_CLOSED), name="close_books", scopes=scopes, always_listed=True)
 
     assert _listed(server) == ["close_books"]
 
