@@ -43,79 +43,82 @@ from tests.utils import call_context
 # ----- rendering -----
 
 
-def test_a_placeholder_is_filled_from_the_result() -> None:
-    assert render_invalidations(
-        ("invoices://{pk}",), payload={"structuredContent": {"pk": 7}}, arguments={}
-    ) == ("invoices://7",)
-
-
-def test_a_placeholder_is_filled_from_the_arguments_when_the_result_lacks_it() -> None:
-    """The delete case: the call returns nothing and ``{pk}`` lives only in the
-    input."""
-    assert render_invalidations(
-        ("invoices://{pk}",), payload={"structuredContent": {}}, arguments={"pk": 3}
-    ) == ("invoices://3",)
-
-
-def test_the_result_wins_over_the_arguments() -> None:
-    """After a write the result is authoritative — a service that reassigns a
-    key leaves the argument stale."""
-    assert render_invalidations(
-        ("invoices://{pk}",),
-        payload={"structuredContent": {"pk": "new"}},
-        arguments={"pk": "old"},
-    ) == ("invoices://new",)
-
-
-def test_a_template_with_no_placeholders_is_the_static_case() -> None:
-    """Which is why there is one mechanism rather than a separate static list."""
-    assert render_invalidations(("invoices://",), payload={}, arguments={}) == ("invoices://",)
-
-
-def test_an_unfillable_template_is_dropped_not_raised() -> None:
-    """By now the write has committed. Failing the call over a formatting
-    mistake would report failure for work that succeeded."""
-    assert render_invalidations(("invoices://{nope}",), payload={}, arguments={}) == ()
-
-
-def test_a_null_value_is_as_unusable_as_a_missing_one() -> None:
-    """Rendering it would publish the literal topic ``invoices://None``, which
-    nobody could have subscribed to."""
-    assert (
-        render_invalidations(
-            ("invoices://{pk}",), payload={"structuredContent": {"pk": None}}, arguments={}
-        )
-        == ()
-    )
-
-
-def test_one_unfillable_template_does_not_take_the_others_with_it() -> None:
-    assert render_invalidations(("invoices://{nope}", "invoices://"), payload={}, arguments={}) == (
-        "invoices://",
-    )
-
-
-def test_duplicates_collapse_and_order_is_kept() -> None:
-    assert render_invalidations(
-        ("b://{pk}", "a://", "b://{pk}"),
-        payload={"structuredContent": {"pk": 1}},
-        arguments={},
-    ) == ("b://1", "a://")
-
-
-def test_a_list_payload_contributes_no_keys() -> None:
-    """``{pk}`` over many rows has no single answer, and guessing one would
-    publish a URI for an arbitrary member."""
-    assert (
-        render_invalidations(
-            ("invoices://{pk}",), payload={"structuredContent": [{"pk": 1}]}, arguments={}
-        )
-        == ()
-    )
-
-
-def test_a_non_dict_result_contributes_no_keys() -> None:
-    assert render_invalidations(("a://{pk}",), payload="text", arguments={}) == ()
+@pytest.mark.parametrize(
+    ("templates", "payload", "arguments", "expected"),
+    [
+        pytest.param(
+            ("invoices://{pk}",),
+            {"structuredContent": {"pk": 7}},
+            {},
+            ("invoices://7",),
+            id="a-placeholder-is-filled-from-the-result",
+        ),
+        # The delete case: the call returns nothing and ``{pk}`` lives only in
+        # the input.
+        pytest.param(
+            ("invoices://{pk}",),
+            {"structuredContent": {}},
+            {"pk": 3},
+            ("invoices://3",),
+            id="the-arguments-fill-what-the-result-lacks",
+        ),
+        # After a write the result is authoritative: a service that reassigns a
+        # key leaves the argument stale.
+        pytest.param(
+            ("invoices://{pk}",),
+            {"structuredContent": {"pk": "new"}},
+            {"pk": "old"},
+            ("invoices://new",),
+            id="the-result-wins-over-the-arguments",
+        ),
+        # Which is why there is one mechanism rather than a separate static list.
+        pytest.param(
+            ("invoices://",), {}, {}, ("invoices://",), id="no-placeholders-is-the-static-case"
+        ),
+        # By now the write has committed. Failing the call over a formatting
+        # mistake would report failure for work that succeeded.
+        pytest.param(
+            ("invoices://{nope}",), {}, {}, (), id="an-unfillable-template-is-dropped-not-raised"
+        ),
+        # Rendering it would publish the literal topic ``invoices://None``, which
+        # nobody could have subscribed to.
+        pytest.param(
+            ("invoices://{pk}",),
+            {"structuredContent": {"pk": None}},
+            {},
+            (),
+            id="a-null-value-is-as-unusable-as-a-missing-one",
+        ),
+        pytest.param(
+            ("invoices://{nope}", "invoices://"),
+            {},
+            {},
+            ("invoices://",),
+            id="one-unfillable-template-does-not-take-the-others-with-it",
+        ),
+        pytest.param(
+            ("b://{pk}", "a://", "b://{pk}"),
+            {"structuredContent": {"pk": 1}},
+            {},
+            ("b://1", "a://"),
+            id="duplicates-collapse-and-order-is-kept",
+        ),
+        # ``{pk}`` over many rows has no single answer, and guessing one would
+        # publish a URI for an arbitrary member.
+        pytest.param(
+            ("invoices://{pk}",),
+            {"structuredContent": [{"pk": 1}]},
+            {},
+            (),
+            id="a-list-payload-contributes-no-keys",
+        ),
+        pytest.param(("a://{pk}",), "text", {}, (), id="a-non-dict-result-contributes-no-keys"),
+    ],
+)
+def test_render_invalidations(
+    templates: tuple[str, ...], payload: Any, arguments: dict[str, Any], expected: tuple[str, ...]
+) -> None:
+    assert render_invalidations(templates, payload=payload, arguments=arguments) == expected
 
 
 # ----- dispatch -----
