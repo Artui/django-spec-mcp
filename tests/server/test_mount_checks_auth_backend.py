@@ -34,22 +34,14 @@ def test_constructing_without_a_backend_still_works() -> None:
     assert server.auth_backend is None
 
 
-def test_mounting_without_a_backend_refuses_by_name() -> None:
+@pytest.mark.parametrize("attribute", ["urls", "async_urls"])
+def test_mounting_without_a_backend_refuses_by_name(attribute: str) -> None:
     server = MCPServer(name="mounted")
 
     with pytest.raises(ImproperlyConfigured) as caught:
-        _ = server.urls
+        getattr(server, attribute)
 
     assert str(caught.value) == _refusal("mounted")
-
-
-def test_async_mounting_without_a_backend_refuses_by_name() -> None:
-    server = MCPServer(name="mounted-async")
-
-    with pytest.raises(ImproperlyConfigured) as caught:
-        _ = server.async_urls
-
-    assert str(caught.value) == _refusal("mounted-async")
 
 
 def test_mounting_with_a_backend_serves_the_endpoint_and_its_metadata() -> None:

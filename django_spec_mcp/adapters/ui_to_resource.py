@@ -158,12 +158,11 @@ def _refuse_caller_aware_render(name: str, render: Callable[..., str]) -> None:
     document for whoever they serve next, which is why the template renders with
     no context and why an unguarded view exposes nothing.
 
-    ``render=`` was the hole in that argument. It is documented and typed as a
-    zero-argument callable, but nothing enforced it, and ``handle_resources_read``
+    ``render=`` is where that argument needs enforcing: ``handle_resources_read``
     resolves every binding's callable by name against a pool that deliberately
-    carries ``request`` and ``user``. So ``render=lambda user: ...`` was handed
-    the authenticated caller, registered without permissions because of the
-    exemption, and served into a document a host may cache across callers --
+    carries ``request`` and ``user``, so ``render=lambda user: ...`` would be
+    handed the authenticated caller, registered without permissions because of
+    the exemption, and served into a document a host may cache across callers --
     three assumptions that are each fine alone.
 
     Refused here rather than guarded later, for the reason every other

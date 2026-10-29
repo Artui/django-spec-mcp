@@ -19,9 +19,8 @@ class UnguardedToolWarning(UserWarning):
     """A tool, resource or prompt was registered with no MCP permissions at all.
 
     Its own category so consumers can filter it precisely via
-    ``warnings.filterwarnings``. Named for tools, which is where the check
-    started; one category keeps a consumer's existing filter working now that
-    every registration kind reports through it.
+    ``warnings.filterwarnings``. Named for tools, though every registration
+    kind reports through it, so one filter covers them all.
     """
 
 

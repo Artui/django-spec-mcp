@@ -3,7 +3,8 @@ from __future__ import annotations
 import os
 import re
 import sys
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Generator, Mapping, Sequence
+from contextlib import contextmanager
 from dataclasses import replace
 from typing import Any, cast
 
@@ -470,10 +471,8 @@ class MCPServer:
         # tool on the server. The kernel's refusal does not name the tool, so
         # this does
         # (``test_a_presenter_whose_markings_cannot_project_is_refused_at_registration``).
-        try:
+        with _named(f"MCP tool {binding.name!r}"):
             _ = binding.audience_projection
-        except ImproperlyConfigured as exc:
-            raise ImproperlyConfigured(f"MCP tool {binding.name!r}: {exc}") from exc
         # A declaration this server's calls cannot run as written is refused
         # here, rather than listed and failed on every call: a parameter a
         # registered seed or the call's own ``request`` / ``view`` meets, a
@@ -486,10 +485,8 @@ class MCPServer:
         # ``server_arguments`` fill is never left out, so it is judged as
         # demanded (``_as_called``). The binding keeps the spec as declared.
         bound = frozenset(binding.server_arguments.values)
-        try:
+        with _named(f"MCP tool {binding.name!r}"):
             check_seeds(_as_called(binding.spec, bound), pool_seeds=self._pool_seeds)
-        except ImproperlyConfigured as exc:
-            raise ImproperlyConfigured(f"MCP tool {binding.name!r}: {exc}") from exc
         # The spec's own permissions are the tool's guard; the scope gate on
         # ``binding.permissions`` is not one, so it is not what is counted.
         if check_kernel_spec_guarded(
@@ -815,22 +812,10 @@ class MCPServer:
         if request is None:
             http_request.user = user
             http_request.method = "POST"
-        return MCPCallContext(
-            http_request=http_request,
-            token=TokenInfo(user=user, scopes=tuple(scopes or ())),
-            tools=self._tools,
-            resources=self._resources,
-            prompts=self._prompts,
-            protocol_version=self._config.protocol_versions[0],
+        return self._context(
+            http_request,
+            TokenInfo(user=user, scopes=tuple(scopes or ())),
             session_id=session_id,
-            server_info=self._server_info,
-            instructions=self.description,
-            config=self._config,
-            tasks=self._task_store,
-            task_executor=self._task_executor,
-            subscriptions=self._subscription_broker,
-            pool_seeds=self._pool_seeds,
-            conventions=self._conventions,
         )
 
     def run_task(self, task_id: str) -> None:
@@ -881,6 +866,19 @@ class MCPServer:
         http_request.method = "POST"
         token: TokenInfo = build_worker_token(record)
         http_request.user = token.user
+        return self._context(http_request, token, enforce_rate_limits=False, in_task_worker=True)
+
+    def _context(
+        self,
+        http_request: HttpRequest,
+        token: TokenInfo,
+        *,
+        session_id: str | None = None,
+        enforce_rate_limits: bool = True,
+        in_task_worker: bool = False,
+    ) -> MCPCallContext:
+        """A context around the caller's request and token, with this server's half read in one
+        place so an in-process call and a task worker cannot drift apart."""
         return MCPCallContext(
             http_request=http_request,
             token=token,
@@ -888,6 +886,7 @@ class MCPServer:
             resources=self._resources,
             prompts=self._prompts,
             protocol_version=self._config.protocol_versions[0],
+            session_id=session_id,
             server_info=self._server_info,
             instructions=self.description,
             config=self._config,
@@ -896,8 +895,8 @@ class MCPServer:
             subscriptions=self._subscription_broker,
             pool_seeds=self._pool_seeds,
             conventions=self._conventions,
-            enforce_rate_limits=False,
-            in_task_worker=True,
+            enforce_rate_limits=enforce_rate_limits,
+            in_task_worker=in_task_worker,
         )
 
     async def notify_resource_updated(self, uri: str) -> int:
@@ -1090,8 +1089,9 @@ class MCPServer:
         # a provider always fills is replaced
         # (``test_a_variable_a_provider_always_fills_is_refused``). A reflected
         # read is owned too, but only under a name a seed or ``CALL_SEEDS``
-        # holds, and each of those was refused above. ``server_owned_keys`` is the kernel's list of
-        # the server's names, the one ``admitted_arguments`` subtracts for a tool.
+        # holds, and each of those was refused above. ``server_owned_keys`` is
+        # the kernel's list of the server's names, the one ``admitted_arguments``
+        # subtracts for a tool.
         owned = server_owned_keys(spec, pool_seeds=self._pool_seeds)
         undeclared = sorted(set(template_variables) - spec.parameters().names())
         filled = sorted(set(template_variables) & owned)
@@ -1121,12 +1121,10 @@ class MCPServer:
         # the template names is checked as demanded, as a bound server argument
         # is (``test_an_optional_read_the_template_names_registers_and_is_read``,
         # ``test_an_optional_read_the_template_does_not_name_is_still_refused``).
-        try:
+        with _named(f"Resource {name!r}"):
             check_seeds(
                 _demanding(spec, frozenset(template_variables)), pool_seeds=self._pool_seeds
             )
-        except ImproperlyConfigured as exc:
-            raise ImproperlyConfigured(f"Resource {name!r}: {exc}") from exc
         # The spec's own permissions are the guard, as for ``register_tool``.
         if check_kernel_spec_guarded(
             binding.name, spec, require=self._config.require_tool_permissions, kind="resource"
@@ -1244,12 +1242,10 @@ class MCPServer:
         # Requiring permissions on it would be noise on every MCP Apps install.
         #
         # That third source is only caller-blind because ``ui_view_to_resource``
-        # refuses a ``render`` that declares any fillable parameter. It did not
-        # always: ``handle_resources_read`` resolves every binding's callable
-        # against a pool carrying ``request`` and ``user``, so
-        # ``render=lambda user: ...`` was handed the caller while this comment
-        # said it could not be — and skipped the declaration check on the
-        # strength of the claim. The exemption is sound *because* of that
+        # refuses a ``render`` that declares any fillable parameter:
+        # ``handle_resources_read`` resolves every binding's callable against a
+        # pool carrying ``request`` and ``user``, so ``render=lambda user: ...``
+        # would be handed the caller. The exemption is sound *because* of that
         # refusal, not on its own, and the two have to move together.
         self._resources.register(binding)
         return binding
@@ -1460,26 +1456,7 @@ class MCPServer:
         when running under ASGI to get non-blocking dispatch for the I/O-bound
         handlers.
         """
-        view = StreamableHttpView.as_view(
-            tools=self._tools,
-            resources=self._resources,
-            prompts=self._prompts,
-            auth_backend=self._auth_backend,
-            session_store=self._session_store,
-            task_store=self._task_store,
-            task_executor=self._task_executor,
-            # Without this a tool's ``invalidates=`` announcements are silently
-            # dropped on WSGI: the view has nowhere to publish them, and a
-            # dropped announcement looks exactly like a tool that changed nothing.
-            # ``async_urls`` has always passed it.
-            subscription_broker=self._subscription_broker,
-            pool_seeds=self._pool_seeds,
-            conventions=self._conventions,
-            server_info=self._server_info,
-            instructions=self.description,
-            config=self._config,
-        )
-        return self._urls_with_view(view)
+        return self._urls_with_view(StreamableHttpView)
 
     @property
     def async_urls(self) -> tuple[list[URLPattern], str, str]:
@@ -1492,7 +1469,21 @@ class MCPServer:
         fully sync stack still works; async-native ones are detected by
         signature and called directly.
         """
-        view = AsyncStreamableHttpView.as_view(
+        return self._urls_with_view(
+            AsyncStreamableHttpView,
+            sse_broker=self._sse_broker,
+            sse_replay_buffer=self._sse_replay_buffer,
+        )
+
+    def _urls_with_view(
+        self, view_class: type[StreamableHttpView | AsyncStreamableHttpView], **extra: Any
+    ) -> tuple[list[URLPattern], str, str]:
+        # The collaborators both endpoints take; ``extra`` is what only the async
+        # one streams with. ``subscription_broker`` is on both: without it a
+        # tool's ``invalidates=`` announcements are silently dropped on WSGI,
+        # where the view has nowhere to publish them, and a dropped announcement
+        # looks exactly like a tool that changed nothing.
+        view = view_class.as_view(
             tools=self._tools,
             resources=self._resources,
             prompts=self._prompts,
@@ -1503,21 +1494,18 @@ class MCPServer:
             subscription_broker=self._subscription_broker,
             pool_seeds=self._pool_seeds,
             conventions=self._conventions,
-            sse_broker=self._sse_broker,
-            sse_replay_buffer=self._sse_replay_buffer,
             server_info=self._server_info,
             instructions=self.description,
             config=self._config,
+            **extra,
         )
-        return self._urls_with_view(view)
-
-    def _urls_with_view(self, view: Any) -> tuple[list[URLPattern], str, str]:
         # Mounting is where the auth backend stops being optional: from here on
         # every request reaches ``authenticate``. Both ``urls`` and
-        # ``async_urls`` land here, so one check covers them (the two
-        # ``..._without_a_backend_refuses_by_name`` tests). There is no default
-        # to fall back to: this package ships no backend that verifies tokens,
-        # and one that answers every caller would serve a mount nobody secured.
+        # ``async_urls`` land here, so one check covers them
+        # (``test_mounting_without_a_backend_refuses_by_name``, one case each).
+        # There is no default to fall back to: this package ships no backend
+        # that verifies tokens, and one that answers every caller would serve a
+        # mount nobody secured.
         if self._auth_backend is None:
             raise ImproperlyConfigured(
                 f"MCPServer {self.name!r} is mounted with no auth_backend=. Every request "
@@ -1541,6 +1529,19 @@ class MCPServer:
             ),
         ]
         return patterns, self._url_namespace, self._url_namespace
+
+
+@contextmanager
+def _named(label: str) -> Generator[None]:
+    """Re-raise an ``ImproperlyConfigured`` from the block with ``label`` in front.
+
+    The kernel's refusals name the spec's callable, not the registration, and
+    a server registering many tools needs the name to find the one at fault.
+    """
+    try:
+        yield
+    except ImproperlyConfigured as exc:
+        raise ImproperlyConfigured(f"{label}: {exc}") from exc
 
 
 def _caller_stacklevel() -> int:
@@ -1568,8 +1569,8 @@ def _refuse_pagination_named_reads(binding: KernelToolBinding) -> None:
 
     The read pipeline owns both names on a tool that paginates: the listing
     advertises them as the page and its size, and the call takes them from the
-    arguments before the selector runs, so a read of either name registered,
-    was advertised as the pipeline's integer and never received the caller's
+    arguments before the selector runs, so a read of either name would be
+    advertised as the pipeline's integer and never receive the caller's
     value. Only under ``paginate=True``: an unpaginated LIST tool hands either
     name to its selector as any read
     (``test_an_unpaginated_list_tools_pagination_named_read_reaches_the_selector``).
@@ -1604,18 +1605,10 @@ def _as_called(
     one case per seat). Only for the check: the binding keeps the declared spec.
     """
     if isinstance(spec, KernelServiceSpec):
-        if spec.instance_selector_spec is not None:
-            spec = spec.derive(
-                instance_selector_spec=cast(
-                    KernelSelectorSpec, _demanding(spec.instance_selector_spec, bound)
-                )
-            )
-        if spec.collection_selector_spec is not None:
-            spec = spec.derive(
-                collection_selector_spec=cast(
-                    KernelSelectorSpec, _demanding(spec.collection_selector_spec, bound)
-                )
-            )
+        for seat in ("instance_selector_spec", "collection_selector_spec"):
+            target: KernelSelectorSpec | None = getattr(spec, seat)
+            if target is not None:
+                spec = spec.derive(**{seat: _demanding(target, bound)})
     return _demanding(spec, bound)
 
 

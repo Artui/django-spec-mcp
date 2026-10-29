@@ -158,16 +158,11 @@ def test_a_hand_built_session_store_keeps_its_own_namespace() -> None:
     assert DjangoCacheSessionStore().owner(session_id) == "user:2"
 
 
-def test_urls_is_the_namespaced_triple() -> None:
-    patterns, app_name, namespace = _make().urls
+@pytest.mark.parametrize("attribute", ["urls", "async_urls"])
+def test_urls_is_the_namespaced_triple(attribute: str) -> None:
+    patterns, app_name, namespace = getattr(_make(), attribute)
     # (patterns, app_name, namespace) — the shape path() mounts directly, like
     # admin.site.urls (no include()).
-    assert app_name == namespace == "mcp"
-    assert [p.name for p in patterns] == ["endpoint", "protected-resource-metadata"]
-
-
-def test_async_urls_is_the_namespaced_triple() -> None:
-    patterns, app_name, namespace = _make().async_urls
     assert app_name == namespace == "mcp"
     assert [p.name for p in patterns] == ["endpoint", "protected-resource-metadata"]
 
