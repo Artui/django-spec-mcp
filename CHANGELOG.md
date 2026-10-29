@@ -11,6 +11,8 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+## [0.1.0] — 2026-10-29
+
 ### Added
 
 - **`bearer_challenge`.** `django_spec_mcp.auth.bearer_challenge(*,
@@ -506,4 +508,5 @@ carries; releases up to 0.54.0 are in
   running. The worker's run now enters below that decision. A client that did
   not declare the extension is still refused `-32021` by a `REQUIRED` tool.
 
-[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.0.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Artui/django-spec-mcp/compare/v0.0.0...v0.1.0
