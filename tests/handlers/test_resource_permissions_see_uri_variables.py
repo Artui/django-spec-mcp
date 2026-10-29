@@ -79,26 +79,21 @@ async def _read(server: MCPServer, uri: str, *, is_async: bool) -> Any:
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
-async def test_a_resource_permission_sees_the_uri_variables_of_the_read(is_async: bool) -> None:
+@pytest.mark.parametrize(("pk", "granted"), [(7, True), (8, False)], ids=["granted", "denied"])
+async def test_a_resource_permission_judges_the_uri_variables_of_the_read(
+    is_async: bool, pk: int, granted: bool
+) -> None:
     check = _GrantsProjectSeven()
 
-    out = await _read(_server(check), "projects://7", is_async=is_async)
+    out = await _read(_server(check), f"projects://{pk}", is_async=is_async)
 
-    assert not isinstance(out, JsonRpcError), f"refused: {out!r}"
-    assert out["contents"]
-    assert check.seen == [({"project_pk": 7}, "project")]
-
-
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
-async def test_a_resource_permission_still_denies_a_uri_it_does_not_grant(is_async: bool) -> None:
-    check = _GrantsProjectSeven()
-
-    out = await _read(_server(check), "projects://8", is_async=is_async)
-
-    assert isinstance(out, JsonRpcError)
-    assert out.code == JsonRpcErrorCode.FORBIDDEN
-    assert check.seen == [({"project_pk": 8}, "project")]
+    if granted:
+        assert not isinstance(out, JsonRpcError), f"refused: {out!r}"
+        assert out["contents"]
+    else:
+        assert isinstance(out, JsonRpcError)
+        assert out.code == JsonRpcErrorCode.FORBIDDEN
+    assert check.seen == [({"project_pk": pk}, "project")]
 
 
 class _ReadsTheRequest(PermissionCheck):

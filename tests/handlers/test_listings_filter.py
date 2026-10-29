@@ -327,23 +327,17 @@ def _listed(listing: _Listing, server: MCPServer) -> list[str]:
 
 
 @_ALL_LISTINGS
-def test_a_listing_with_the_setting_on_hides_what_the_caller_is_refused(
-    listing: _Listing,
+@pytest.mark.parametrize(
+    ("filtered", "listed"), [(True, ["a"]), (False, ["a", "b"])], ids=["setting-on", "setting-off"]
+)
+def test_a_listing_hides_what_the_caller_is_refused_only_with_the_setting_on(
+    listing: _Listing, filtered: bool, listed: list[str]
 ) -> None:
-    server = _server()
+    server = _server(filtered=filtered)
     listing.register(server, "a")
     listing.register(server, "b", _Refuse())
 
-    assert _listed(listing, server) == ["a"]
-
-
-@_ALL_LISTINGS
-def test_a_listing_with_the_setting_off_returns_all(listing: _Listing) -> None:
-    server = _server(filtered=False)
-    listing.register(server, "a")
-    listing.register(server, "b", _Refuse())
-
-    assert _listed(listing, server) == ["a", "b"]
+    assert _listed(listing, server) == listed
 
 
 # ---------- a check that reads the call's arguments ----------

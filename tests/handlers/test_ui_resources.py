@@ -75,16 +75,17 @@ class TestRead:
             UI_META_KEY: {"csp": {"connectDomains": ["https://api.x"]}}
         }
 
-    def test_a_view_whose_source_returns_a_non_string_is_a_clean_error(self) -> None:
+    @pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
+    async def test_a_view_whose_source_returns_a_non_string_is_a_clean_error(
+        self, is_async: bool
+    ) -> None:
         """Not a transport-level 500 — the client gets a JSON-RPC error."""
         server = _server(html=None, render=lambda: {"oops": True})
-        out = handle_resources_read({"uri": URI}, call_context(server))
-
-        assert out.code == JsonRpcErrorCode.INTERNAL_ERROR
-
-    async def test_the_async_transport_reports_that_error_too(self) -> None:
-        server = _server(html=None, render=lambda: {"oops": True})
-        out = await handle_resources_read_async({"uri": URI}, call_context(server))
+        context = call_context(server)
+        if is_async:
+            out = await handle_resources_read_async({"uri": URI}, context)
+        else:
+            out = handle_resources_read({"uri": URI}, context)
 
         assert out.code == JsonRpcErrorCode.INTERNAL_ERROR
 
