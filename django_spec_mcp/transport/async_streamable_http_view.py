@@ -321,9 +321,9 @@ class AsyncStreamableHttpView(View):
             )
 
         # The stream decision sits inside the backstop with the dispatch: its
-        # permission pre-flight runs the same consumer permission classes the
-        # dispatch would, so a raise there is the same server fault, and it
-        # happens before any stream has committed a status.
+        # permission pre-flight asks the binding's scope gate and the spec's
+        # PermissionChecks as the dispatch would, so a raise there is the same
+        # server fault, and it happens before any stream has committed a status.
         try:
             streamed: HttpResponseBase | None = await self._maybe_stream(message, context)
             if streamed is not None:
@@ -419,7 +419,8 @@ class AsyncStreamableHttpView(View):
         #
         # Everything that runs consumer code for this request sits inside the
         # backstop: the subscription grant and the stream's permission
-        # pre-flight evaluate the same permission classes a dispatch does.
+        # pre-flight ask the same scope gates and PermissionChecks a dispatch
+        # does.
         # Neither has committed a status when it raises, so a JSON-RPC answer
         # is still possible; once a stream is open, the stream's own error
         # frame takes over.

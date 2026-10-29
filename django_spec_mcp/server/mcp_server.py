@@ -799,9 +799,9 @@ class MCPServer:
         """Build the per-call context the wire handlers thread through.
 
         When ``request`` is ``None`` a minimal
-        ``HttpRequest`` is synthesised bearing the user, so
-        permission classes reading ``request.user`` behave as they would on
-        HTTP. A handed request is the caller's own, and the call's user is
+        ``HttpRequest`` is synthesised bearing the user, so a spec's
+        ``PermissionCheck`` reading ``request.user`` off ``call_context``
+        behaves as it would on HTTP. A handed request is the caller's own, and the call's user is
         never written to it: the call works on a copy (``copy_request``),
         which the handlers then seat the token's principal on, and which
         shares the handed request's body and parse state, so what a spec

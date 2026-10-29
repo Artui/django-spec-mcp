@@ -2355,11 +2355,11 @@ be handed a session cookie's user by any page that user visits.
 
 **The endpoints are plain Django views.** `server.urls` and `server.async_urls`
 mount views of their own, exempt from CSRF and from `LoginRequiredMiddleware`,
-since a bearer-token client can satisfy neither. No `REST_FRAMEWORK` setting
-reaches `/mcp/`: not its throttles, its authentication classes, its renderers
-or its `EXCEPTION_HANDLER`. What applies is this package's own: the
-`auth_backend=` the server was given, each binding's `rate_limits=`, and the
-`SPEC_MCP` settings.
+since a bearer-token client can satisfy neither. What applies to them is this
+package's own: the `auth_backend=` the server was given, each binding's
+`rate_limits=`, and the `SPEC_MCP` settings ([Moving from
+drf-mcp](moving-from-drf-mcp.md#settings) says which settings that leaves
+out).
 
 [Authentication](auth.md) walks through the backends, the gates and audience
 binding.

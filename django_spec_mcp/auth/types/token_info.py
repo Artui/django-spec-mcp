@@ -9,8 +9,9 @@ class TokenInfo:
     """Authenticated principal carried alongside an MCP request.
 
     Backends construct this once per request and attach it to the Django
-    ``HttpRequest`` (as ``request.mcp_token``). Permission classes consult it
-    to gate tool/resource access.
+    ``HttpRequest`` (as ``request.mcp_token``). A binding's scope gate reads its
+    ``scopes``, and a spec's ``PermissionCheck`` reads it off the request in
+    ``call_context``.
 
     Attributes:
         user: The resolved Django user, or an ``AnonymousUser`` equivalent.
