@@ -105,9 +105,8 @@ def seat_anonymous(request: HttpRequest) -> None:
 
     The endpoints are CSRF-exempt, so a backend taking a session cookie's
     user for the caller (``AllowAnyBackend`` reads ``request.user``) would let
-    any page the user visits call tools as them. The backend sees an
-    anonymous request, as it did when DRF's empty ``authentication_classes``
-    wrote ``AnonymousUser`` there
+    any page the user visits call tools as them, so the backend sees an
+    anonymous request
     (``test_a_session_user_is_not_the_caller_the_auth_backend_sees``).
     """
     seat(request, AnonymousUser())

@@ -353,18 +353,16 @@ class StreamableHttpView(View):
     def get(self, http_request: HttpRequest) -> HttpResponse:
         """GET action: SSE-from-server isn't implemented in v1; 405 per spec.
 
-        Unconditional, and so decided without authenticating. This once
-        challenged unauthenticated callers first, to keep the endpoint from
-        revealing even its 405 — but that confidentiality never existed:
-        ``delete`` answers 405 to an anonymous DELETE whenever
-        sessions are off, and POST answers 401 with a challenge naming the
-        publicly fetchable protected-resource metadata. What the challenge did
-        buy was an OAuth flow, browser window and all, ending at the 405 the
-        caller would have got for free.
+        Unconditional, and so decided without authenticating. Challenging
+        first would not keep even the 405 confidential: ``delete`` answers 405
+        to an anonymous DELETE whenever sessions are off, and POST answers 401
+        with a challenge naming the publicly fetchable protected-resource
+        metadata. All a challenge buys here is an OAuth flow, browser window
+        and all, ending at the 405 the caller gets for free.
 
-        The async sibling still authenticates on this path, because there it
-        guards a stream a credential can actually open. WSGI serves no stream
-        on any configuration, so it inherited the gate without the reason.
+        The async sibling authenticates on this path, because there it guards
+        a stream a credential can actually open. WSGI serves no stream on any
+        configuration.
         """
         refused: JsonResponse | None = origin_refusal(http_request, self._require_config())
         if refused is not None:
