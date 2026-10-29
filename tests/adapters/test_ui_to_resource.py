@@ -77,7 +77,7 @@ class TestContentSources:
         assert binding.selector() == "<h1>Hi</h1>"
 
     def test_a_callable_supplies_the_document(self) -> None:
-        binding = _register(_make(), html=None, selector=lambda: "<p>built</p>")
+        binding = _register(_make(), html=None, render=lambda: "<p>built</p>")
         assert binding.selector() == "<p>built</p>"
 
     def test_a_template_is_rendered(self) -> None:
@@ -127,8 +127,12 @@ class TestContentSources:
             _register(_make(), html=None)
 
     def test_two_content_sources_raise(self) -> None:
-        with pytest.raises(ValueError, match="exactly one content source"):
-            _register(_make(), html="<p>x</p>", selector=lambda: "<p>y</p>")
+        with pytest.raises(ValueError) as caught:
+            _register(_make(), html="<p>x</p>", render=lambda: "<p>y</p>")
+        assert str(caught.value) == (
+            "register_ui_resource('invoices_table') needs exactly one content source — "
+            "body_template_name=, template_name=, html= or render=. Got 2."
+        )
 
     def test_the_two_template_sources_are_mutually_exclusive(self) -> None:
         """They differ in what the template is expected to contain — a whole
@@ -213,39 +217,39 @@ class TestUIMetadata:
         assert binding.meta == {UI_META_KEY: {"future": True}}
 
 
-class TestAViewSelectorCannotReadTheCaller:
+class TestAViewRenderCannotReadTheCaller:
     """The premise the permissions exemption rests on, made true by construction.
 
     ``register_ui_resource`` is the one registration on this server that skips
     ``check_tool_permissions_declared``, and the reason given is that a view's
     content cannot depend on who is asking. Two of the three content sources
-    make that true on their own. The third did not: ``selector=`` was documented
+    make that true on their own. The third did not: ``render=`` was documented
     and typed as zero-argument, nothing enforced it, and
-    ``handle_resources_read`` resolves every binding's selector by name against a
+    ``handle_resources_read`` resolves every binding's callable by name against a
     pool that deliberately carries ``request`` and ``user``.
 
-    So ``selector=lambda user: ...`` was handed the authenticated caller, was
+    So ``render=lambda user: ...`` was handed the authenticated caller, was
     registered unguarded because of the exemption, and produced a document a host
     may cache across callers. Each of those is defensible alone.
     """
 
-    def test_a_selector_naming_the_user_is_refused(self) -> None:
+    def test_a_render_naming_the_user_is_refused(self) -> None:
         with pytest.raises(ValueError, match="must take no arguments"):
             _register(
                 _make(),
                 html=None,
-                selector=lambda user: f"<h1>{user}</h1>",  # ty: ignore[invalid-argument-type]
+                render=lambda user: f"<h1>{user}</h1>",  # ty: ignore[invalid-argument-type]
             )
 
-    def test_a_selector_naming_the_request_is_refused(self) -> None:
+    def test_a_render_naming_the_request_is_refused(self) -> None:
         with pytest.raises(ValueError, match="must take no arguments"):
             _register(
                 _make(),
                 html=None,
-                selector=lambda request: "<h1>hi</h1>",  # ty: ignore[invalid-argument-type]
+                render=lambda request: "<h1>hi</h1>",  # ty: ignore[invalid-argument-type]
             )
 
-    def test_a_selector_taking_anything_at_all_is_refused(self) -> None:
+    def test_a_render_taking_anything_at_all_is_refused(self) -> None:
         # The pool is not a fixed set -- URI-template variables land in it too --
         # so the refusal is about declaring a fillable parameter, not about the
         # two names that happen to be the dangerous ones today.
@@ -253,52 +257,59 @@ class TestAViewSelectorCannotReadTheCaller:
             _register(
                 _make(),
                 html=None,
-                selector=lambda anything: "<h1>hi</h1>",  # ty: ignore[invalid-argument-type]
+                render=lambda anything: "<h1>hi</h1>",  # ty: ignore[invalid-argument-type]
             )
 
-    def test_a_selector_with_a_default_is_still_refused(self) -> None:
+    def test_a_render_with_a_default_is_still_refused(self) -> None:
         # A default does not stop resolve_callable_kwargs filling the parameter
         # when the name is in the pool; it only hides the failure if it is not.
         with pytest.raises(ValueError, match="must take no arguments"):
             _register(
                 _make(),
                 html=None,
-                selector=lambda user=None: "<h1>hi</h1>",  # ty: ignore[invalid-argument-type]
+                render=lambda user=None: "<h1>hi</h1>",  # ty: ignore[invalid-argument-type]
             )
 
-    def test_a_var_keyword_selector_is_refused(self) -> None:
+    def test_a_var_keyword_render_is_refused(self) -> None:
         # The worst case rather than an edge one: resolve_callable_kwargs hands
         # the *entire* pool to a callable declaring **kwargs.
-        def selector(**kwargs: object) -> str:
+        def render(**kwargs: object) -> str:
             return "<h1>hi</h1>"
 
         with pytest.raises(ValueError, match="must take no arguments"):
-            _register(_make(), html=None, selector=selector)
+            _register(_make(), html=None, render=render)
 
     def test_the_message_names_the_remedy(self) -> None:
         with pytest.raises(ValueError) as caught:
             _register(
                 _make(),
                 html=None,
-                selector=lambda user: "<h1>hi</h1>",  # ty: ignore[invalid-argument-type]
+                render=lambda user: "<h1>hi</h1>",  # ty: ignore[invalid-argument-type]
             )
-        message = str(caught.value)
         # A registration-time refusal is only useful if it says what to do next.
-        assert "register_resource" in message
-        assert "'user'" in message
+        assert str(caught.value) == (
+            "register_ui_resource('invoices_table') got a render callable taking ['user']. "
+            "A view's render callable must take no arguments: it is read through the same "
+            "keyword pool as any other resource, which carries `request` and `user`, so a "
+            "parameter here is handed the authenticated caller. Views skip the "
+            "permissions-declared check precisely because they cannot read the caller, and "
+            "hosts may cache one document across callers. Build the document from nothing "
+            "and let the view hydrate itself from tool results, or register it with "
+            "`register_resource` as a data resource, where the declaration check applies."
+        )
 
-    def test_a_zero_argument_selector_is_accepted(self) -> None:
-        binding = _register(_make(), html=None, selector=lambda: "<h1>hi</h1>")
+    def test_a_zero_argument_render_is_accepted(self) -> None:
+        binding = _register(_make(), html=None, render=lambda: "<h1>hi</h1>")
 
         assert binding.selector() == "<h1>hi</h1>"
 
-    def test_a_variadic_positional_selector_is_accepted(self) -> None:
+    def test_a_variadic_positional_render_is_accepted(self) -> None:
         # resolve_callable_kwargs only ever builds keyword arguments, so this
         # one is still called with nothing.
-        def selector(*args: object) -> str:
+        def render(*args: object) -> str:
             return "<h1>hi</h1>"
 
-        binding = _register(_make(), html=None, selector=selector)
+        binding = _register(_make(), html=None, render=render)
 
         assert binding.selector() == "<h1>hi</h1>"
 

@@ -43,7 +43,6 @@ from django_spec_mcp.transport.types.sse_replay_buffer import SSEReplayBuffer
 from django_spec_mcp.types.icon_theme import IconTheme
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from django_spec_mcp.types.notification_kind import NotificationKind
-from django_spec_mcp.types.output_format import OutputFormat
 from django_spec_mcp.types.resource_encoding import ResourceEncoding
 from django_spec_mcp.types.task_policy import TaskPolicy
 from django_spec_mcp.types.task_status import TaskStatus
@@ -69,7 +68,6 @@ __all__ = [
     "JsonRpcErrorCode",
     "MCPAuthBackend",
     "MCPServer",
-    "OutputFormat",
     "PromptArgument",
     "PromptMessage",
     "PromptRegistry",

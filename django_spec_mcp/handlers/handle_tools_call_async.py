@@ -27,7 +27,6 @@ from django_spec_mcp.handlers.utils import (
     judge_tool_permissions,
     resolve_bound,
     run_with_deadline,
-    validate_output_format,
 )
 from django_spec_mcp.output.error_tool_result import build_error_tool_result
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
@@ -69,12 +68,6 @@ async def handle_tools_call_async(
         arguments_raw = {}
     if not isinstance(arguments_raw, dict):
         return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, "'arguments' must be an object")
-
-    # See the sync sibling: checked here so an unrenderable format cannot become
-    # a 500 after the tool has run.
-    bad_format: JsonRpcError | None = validate_output_format(params)
-    if bad_format is not None:
-        return bad_format
 
     # See the sync sibling: before the task and the permission check read them.
     arguments_raw = apply_tool_server_arguments(binding, arguments_raw)

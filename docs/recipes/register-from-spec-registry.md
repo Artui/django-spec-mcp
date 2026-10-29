@@ -86,7 +86,7 @@ server.register_tools(
 ```
 
 Each value is the keyword arguments of `register_tool` for that entry, so
-anything it accepts works — `title`, `output_format`, `include_output_schema`,
+anything it accepts works — `title`, `include_output_schema`,
 `rate_limits`, `server_arguments`, and the rest.
 
 A fact about the **operation** is not an MCP knob, though, even when MCP has a

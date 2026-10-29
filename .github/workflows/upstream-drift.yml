@@ -94,8 +94,8 @@ jobs:
       # The sync above installs every optional extra, which is the one install
       # shape most consumers never have. `pip install django-spec-mcp`
       # resolves the base dependencies only, and this package's whole
-      # optional-extra contract — TOON, OAuth, redis, OTel imported lazily, so a
-      # tool call never fails because an extra is absent — lives on that path.
+      # optional-extra contract — redis and OTel imported lazily, so a tool call
+      # never fails because an extra is absent — lives on that path.
       # tests.yml proves it against the committed lock in its `smoke-no-extras`
       # job; without repeating it here the drift job would report green while
       # the resolve a consumer actually gets was never built. That resolve also

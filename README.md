@@ -133,8 +133,6 @@ See the [quickstart](docs/quickstart.md) for the full end-to-end recipe.
 - **Per-binding rate limits** — `MCPRateLimit` Protocol with
   `FixedWindowRateLimit`, `SlidingWindowRateLimit`, and
   `TokenBucketRateLimit` implementations shipped.
-- **Output formats** — JSON (default) and TOON (token-oriented;
-  optional extra with safe JSON fallback).
 - **Async POST/DELETE + GET-side SSE push** — sync `urls` for WSGI,
   `async_urls` for ASGI; `MCPServer.notify(session_id, payload)`
   pushes JSON-RPC frames on the session's SSE stream. Per-worker
@@ -154,25 +152,20 @@ See the [quickstart](docs/quickstart.md) for the full end-to-end recipe.
 ## Install
 
 ```bash
-pip install django-spec-mcp                              # JSON only
-pip install "django-spec-mcp[toon]"                      # +TOON encoder
+pip install django-spec-mcp                              # base install
 pip install "django-spec-mcp[redis]"                     # +Redis SSE broker for multi-worker ASGI
 pip install "django-spec-mcp[otel]"                      # +OpenTelemetry instrumentation
-pip install "django-spec-mcp[toon,redis,otel]"           # everything
+pip install "django-spec-mcp[redis,otel]"                # everything
 ```
 
 …or with `uv`:
 
 ```bash
-uv add django-spec-mcp                                   # JSON only
-uv add "django-spec-mcp[toon]"                           # +TOON encoder
+uv add django-spec-mcp                                   # base install
 uv add "django-spec-mcp[redis]"                          # +Redis SSE broker for multi-worker ASGI
 uv add "django-spec-mcp[otel]"                           # +OpenTelemetry instrumentation
-uv add "django-spec-mcp[toon,redis,otel]"                # everything
+uv add "django-spec-mcp[redis,otel]"                     # everything
 ```
-
-Optional extras degrade gracefully: TOON falls back to JSON with a runtime
-warning if `python-toon` is not installed.
 
 ## Try it
 
@@ -189,7 +182,7 @@ walks the OAuth auth flow against your configured Authorization Server.
 ## Documentation
 
 - [Quickstart](docs/quickstart.md) — copy-pasteable end-to-end.
-- [Concepts](docs/concepts.md) — tools vs resources, sessions, output formats.
+- [Concepts](docs/concepts.md) — tools vs resources, sessions, tool results.
 - [Authentication](docs/auth.md) — backends, permissions, audience binding,
   bring-your-own AS recipe.
 - [Recipes](docs/recipes/index.md) — focused cookbook entries.

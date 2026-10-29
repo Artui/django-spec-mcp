@@ -65,8 +65,6 @@ Skip it when you don't need the MCP wire format — call your services directly.
 - **Per-binding rate limits** — `MCPRateLimit` Protocol with
   `FixedWindowRateLimit`, `SlidingWindowRateLimit`, and
   `TokenBucketRateLimit` implementations shipped.
-- **Output formats** — JSON (default) and TOON (token-oriented;
-  optional extra with safe JSON fallback).
 - **Async POST/DELETE + GET-side SSE push** — sync `urls` for WSGI,
   `async_urls` for ASGI; `MCPServer.notify(session_id, payload)`
   pushes JSON-RPC frames on the session's SSE stream. Per-worker
@@ -86,26 +84,23 @@ Skip it when you don't need the MCP wire format — call your services directly.
 ## Install
 
 ```bash
-pip install django-spec-mcp                              # JSON only
-pip install "django-spec-mcp[toon]"                      # +TOON encoder
+pip install django-spec-mcp                              # base install
 pip install "django-spec-mcp[redis]"                     # +Redis SSE broker for multi-worker ASGI
 pip install "django-spec-mcp[otel]"                      # +OpenTelemetry instrumentation
-pip install "django-spec-mcp[toon,redis,otel]"           # everything
+pip install "django-spec-mcp[redis,otel]"                # everything
 ```
 
 …or with `uv`:
 
 ```bash
-uv add django-spec-mcp                                   # JSON only
-uv add "django-spec-mcp[toon]"                           # +TOON encoder
+uv add django-spec-mcp                                   # base install
 uv add "django-spec-mcp[redis]"                          # +Redis SSE broker for multi-worker ASGI
 uv add "django-spec-mcp[otel]"                           # +OpenTelemetry instrumentation
-uv add "django-spec-mcp[toon,redis,otel]"                # everything
+uv add "django-spec-mcp[redis,otel]"                     # everything
 ```
 
 Optional extras degrade gracefully:
 
-- TOON falls back to JSON with a runtime warning if `python-toon` is not installed.
 - `RedisSSEBroker` / `RedisSSEReplayBuffer` raise a clear `ImportError` from
   `__init__` if `redis` isn't installed.
 - The OTel tracing helper yields a no-op span when `opentelemetry-api` isn't
@@ -116,7 +111,7 @@ Optional extras degrade gracefully:
 ## Where to next
 
 - [Quickstart](quickstart.md) — copy-pasteable end-to-end recipe.
-- [Concepts](concepts.md) — tools vs resources, sessions, output formats, origin
+- [Concepts](concepts.md) — tools vs resources, sessions, tool results, origin
   allowlist.
 - [Authentication](auth.md) — backends, permissions, RFC 9728 PRM, RFC 8707
   audience binding.

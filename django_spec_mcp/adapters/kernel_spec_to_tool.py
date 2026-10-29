@@ -20,7 +20,6 @@ from django_spec_mcp.adapters.utils import merge_tool_annotations
 from django_spec_mcp.protocol.types.icon import Icon
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from django_spec_mcp.registry.types.utils import scope_names
-from django_spec_mcp.types.output_format import OutputFormat
 from django_spec_mcp.types.task_policy import TaskPolicy
 from django_spec_mcp.types.tool_content_kind import ToolContentKind
 
@@ -36,7 +35,6 @@ def kernel_spec_to_tool(
     icons: tuple[Icon, ...],
     annotations: dict[str, Any] | None,
     meta: dict[str, Any],
-    output_format: OutputFormat,
     content_kind: ToolContentKind,
     content_mime_type: str | None,
     include_structured_content: bool | None,
@@ -104,7 +102,6 @@ def kernel_spec_to_tool(
             idempotent=spec.idempotent if isinstance(spec, ServiceSpec) else None,
         ),
         meta=meta,
-        output_format=output_format,
         content_kind=content_kind,
         content_mime_type=content_mime_type,
         include_structured_content=include_structured_content,

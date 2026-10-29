@@ -1,6 +1,6 @@
 # Output
 
-`OutputFormat`, encoders, and the `ToolResult` builder.
+The JSON encoder and the `ToolResult` builder.
 
 A tool's result has two halves and they are toggled independently:
 `structuredContent` on the call result, and `outputSchema` on the `tools/list`
@@ -26,7 +26,5 @@ for when to turn either off, and
 schema an agent sees — field markings project the payload and the advertised
 `outputSchema` from the same declaration.
 
-::: django_spec_mcp.types.OutputFormat
 ::: django_spec_mcp.output.encode_json.encode_json
-::: django_spec_mcp.output.encode_toon.encode_toon
 ::: django_spec_mcp.output.tool_result.build_tool_result

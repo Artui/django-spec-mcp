@@ -411,9 +411,6 @@ redis = [
 test = [
     { name = "jsonschema", extra = ["format-nongpl"] },
 ]
-toon = [
-    { name = "python-toon" },
-]
 
 [package.dev-dependencies]
 dev = [
@@ -447,10 +444,9 @@ requires-dist = [
     { name = "django-service-specs", specifier = ">=0.19.0" },
     { name = "jsonschema", extras = ["format-nongpl"], marker = "extra == 'test'", specifier = ">=4.0.1" },
     { name = "opentelemetry-api", marker = "extra == 'otel'", specifier = ">=1.27" },
-    { name = "python-toon", marker = "extra == 'toon'", specifier = ">=0.1.3" },
     { name = "redis", marker = "extra == 'redis'", specifier = ">=5.0.1" },
 ]
-provides-extras = ["otel", "redis", "test", "toon"]
+provides-extras = ["otel", "redis", "test"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -1311,15 +1307,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/0c/57/250bd238b966cece44328235eb85290045d059265fdaf7527a3a958123db/python_discovery-1.6.1.tar.gz", hash = "sha256:cf87d3627dfb4412437fdd5b13eae402607722998d21567993aedbc59b23c15e", size = 84338, upload-time = "2026-09-18T01:31:53.971Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/16/7d/e9ffbadfbf89c93848412d04594135c4ae8c1d37d9e053b9c3ed718fabc4/python_discovery-1.6.1-py3-none-any.whl", hash = "sha256:d43fcdef879fe795352bd13ccf8d185ba5a9f86f36cfcd00529f596e737442b3", size = 38664, upload-time = "2026-09-18T01:31:52.448Z" },
-]
-
-[[package]]
-name = "python-toon"
-version = "0.2.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/40/78/25f79f308d1a685da4969b6b84585f3a3148523c05a3de0848338a33eefc/python_toon-0.2.0.tar.gz", hash = "sha256:1b9fcb3fa225cb7973a2637834de08a26236013ab04da0cf80c4af73e141ccf2", size = 55594, upload-time = "2026-09-29T07:40:49.991Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/ea/9a/90ba108ce3ce3e7f50855066fe0269a2f29e399ac9d6a69df94ecbe8fa9e/python_toon-0.2.0-py3-none-any.whl", hash = "sha256:40056dafb8f28ad71440fce11cc12dda63045c752319a0d87bc7b95761a45955", size = 24894, upload-time = "2026-09-29T07:40:48.754Z" },
 ]
 
 [[package]]

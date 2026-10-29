@@ -19,7 +19,6 @@ from django_service_specs import (
 
 from django_spec_mcp.protocol.types.icon import Icon
 from django_spec_mcp.registry.types.utils import scope_names, validate_content_kind
-from django_spec_mcp.types.output_format import OutputFormat
 from django_spec_mcp.types.task_policy import TaskPolicy
 from django_spec_mcp.types.tool_content_kind import ToolContentKind
 
@@ -63,7 +62,6 @@ class KernelToolBinding:
     # a caller builds a typed object and merges its ``to_dict()`` in via
     # ``merge_meta`` — not in place of it.
     meta: dict[str, Any] = field(default_factory=dict)
-    output_format: OutputFormat = OutputFormat.JSON
     content_kind: ToolContentKind = ToolContentKind.TEXT
     content_mime_type: str | None = None
     include_structured_content: bool | None = None

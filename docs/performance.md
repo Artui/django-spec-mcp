@@ -70,8 +70,7 @@ A few specific things that can show up at scale:
   Django's cache (per-token TTL) and reuse across requests.
 - **Presenter** — presenting thousands of rows, each of which follows a
   relation, is N+1-prone. Add `.select_related()` /
-  `.prefetch_related()` in the selector; use `output_format="toon"`
-  to reduce token count if the bottleneck is downstream LLM cost.
+  `.prefetch_related()` in the selector.
 - **`atomic=True` on a service that doesn't write** — services
   default to wrapping in `transaction.atomic()`. If a service is
   read-shaped, set `atomic=False` on the spec, or — better — register

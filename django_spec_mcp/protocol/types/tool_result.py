@@ -13,8 +13,8 @@ class ToolResult:
     """The result of a successful ``tools/call``.
 
     Attributes:
-        content: The human-readable / token-efficient projection the encoder
-            produces (JSON, TOON, or a media block).
+        content: The human-readable projection of the answer: its JSON text,
+            or a media or resource-link block.
         structured_content: The same answer JSON-shaped, for clients to parse
             directly. ``UNSET`` — the default — means the result carries no
             structured channel at all and the key is left off the wire. A

@@ -26,7 +26,7 @@ def ui_view_to_resource(
     body_template_name: str | None = None,
     diagnostics: bool | None = None,
     html: str | None = None,
-    selector: Callable[[], str] | None = None,
+    render: Callable[[], str] | None = None,
     description: str | None = None,
     title: str | None = None,
     icons: tuple[Icon, ...] = (),
@@ -68,10 +68,10 @@ def ui_view_to_resource(
       Everything the view needs, the bridge included, is then the template's own
       responsibility.
     - ``html`` — a literal document, for a view small enough to inline.
-    - ``selector`` — a callable returning the document, for a project that
+    - ``render`` — a callable returning the document, for a project that
       assembles it some other way. It **must take no arguments**, and one that
       declares a parameter is refused here rather than guarded later: the read
-      path resolves a selector against a pool carrying ``request`` and ``user``,
+      path resolves the callable against a pool carrying ``request`` and ``user``,
       so a parameter would be handed the authenticated caller — which is exactly
       what the permissions exemption on views assumes cannot happen.
 
@@ -80,16 +80,16 @@ def ui_view_to_resource(
     *shell*, hydrated at runtime from tool results. Rendering tenant data into
     one would leak it across the cache.
     """
-    sources = [s for s in (template_name, body_template_name, html, selector) if s is not None]
+    sources = [s for s in (template_name, body_template_name, html, render) if s is not None]
     if len(sources) != 1:
         raise ValueError(
             f"register_ui_resource({name!r}) needs exactly one content source — "
-            "body_template_name=, template_name=, html= or selector=. "
+            "body_template_name=, template_name=, html= or render=. "
             f"Got {len(sources)}."
         )
 
-    if selector is not None:
-        _refuse_caller_aware_selector(name, selector)
+    if render is not None:
+        _refuse_caller_aware_render(name, render)
 
     if ui is not None and meta is not None and UI_META_KEY in meta:
         raise ValueError(
@@ -123,7 +123,7 @@ def ui_view_to_resource(
             return html
 
     else:
-        resolved = selector  # ty: ignore[invalid-assignment] - narrowed by the count check
+        resolved = render  # ty: ignore[invalid-assignment] - narrowed by the count check
 
     ui_meta: dict[str, Any] = {UI_META_KEY: ui.to_dict()} if ui is not None else {}
 
@@ -149,8 +149,8 @@ def ui_view_to_resource(
 __all__ = ["ui_view_to_resource"]
 
 
-def _refuse_caller_aware_selector(name: str, selector: Callable[..., str]) -> None:
-    """Refuse a view selector that would be handed the caller.
+def _refuse_caller_aware_render(name: str, render: Callable[..., str]) -> None:
+    """Refuse a view's render callable that would be handed the caller.
 
     A view is the one registration on this server that skips
     ``check_tool_permissions_declared``, and the exemption rests entirely on a
@@ -158,10 +158,10 @@ def _refuse_caller_aware_selector(name: str, selector: Callable[..., str]) -> No
     document for whoever they serve next, which is why the template renders with
     no context and why an unguarded view exposes nothing.
 
-    ``selector=`` was the hole in that argument. It is documented and typed as a
+    ``render=`` was the hole in that argument. It is documented and typed as a
     zero-argument callable, but nothing enforced it, and ``handle_resources_read``
-    resolves every binding's selector by name against a pool that deliberately
-    carries ``request`` and ``user``. So ``selector=lambda user: ...`` was handed
+    resolves every binding's callable by name against a pool that deliberately
+    carries ``request`` and ``user``. So ``render=lambda user: ...`` was handed
     the authenticated caller, registered without permissions because of the
     exemption, and served into a document a host may cache across callers --
     three assumptions that are each fine alone.
@@ -172,10 +172,10 @@ def _refuse_caller_aware_selector(name: str, selector: Callable[..., str]) -> No
     whoever reads the exemption's comment stops looking.
 
     ``*args`` is left alone: ``resolve_callable_kwargs`` only ever builds
-    keyword arguments, so a variadic-positional selector is still called with
+    keyword arguments, so a variadic-positional callable is still called with
     nothing.
     """
-    parameters = inspect.signature(selector).parameters
+    parameters = inspect.signature(render).parameters
     fillable: list[str] = [
         parameter_name
         for parameter_name, parameter in parameters.items()
@@ -189,12 +189,12 @@ def _refuse_caller_aware_selector(name: str, selector: Callable[..., str]) -> No
     if not fillable:
         return
     raise ValueError(
-        f"register_ui_resource({name!r}) got a selector taking {fillable!r}. A view's "
-        "selector must take no arguments: it is read through the same keyword pool as "
-        "any other resource, which carries `request` and `user`, so a parameter here "
-        "is handed the authenticated caller. Views skip the permissions-declared check "
-        "precisely because they cannot read the caller, and hosts may cache one "
-        "document across callers. Build the document from nothing and let the view "
-        "hydrate itself from tool results, or register it with `register_resource` as "
-        "a data resource, where the declaration check applies."
+        f"register_ui_resource({name!r}) got a render callable taking {fillable!r}. "
+        "A view's render callable must take no arguments: it is read through the same "
+        "keyword pool as any other resource, which carries `request` and `user`, so a "
+        "parameter here is handed the authenticated caller. Views skip the "
+        "permissions-declared check precisely because they cannot read the caller, and "
+        "hosts may cache one document across callers. Build the document from nothing "
+        "and let the view hydrate itself from tool results, or register it with "
+        "`register_resource` as a data resource, where the declaration check applies."
     )

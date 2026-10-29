@@ -34,7 +34,6 @@ DEFAULTS: dict[str, Any] = {
     "INPUT_REQUEST_TTL_SECONDS": 600,
     "MAX_INPUT_ROUNDS": 5,
     "ALLOWED_ORIGINS": [],
-    "DEFAULT_OUTPUT_FORMAT": "json",
     # Recognised keys: ``name``, ``version``, ``title``, ``description``,
     # ``websiteUrl``, ``icons``. All but ``description`` are also ``MCPServer``
     # constructor kwargs; the constructor's ``description=`` means the

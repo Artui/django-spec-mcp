@@ -28,8 +28,8 @@ class ResourceBinding(Generic[ResultT]):
 
     One built by hand and passed straight to ``server.resources.register`` is
     registered unchecked: the registrars' refusals (an undeclared permission
-    under ``REQUIRE_TOOL_PERMISSIONS``, a template variable naming a seed, a
-    completer for no variable) are not asked, and no kernel spec stands behind
+    under ``REQUIRE_TOOL_PERMISSIONS``, a template variable naming a seed or
+    one of the kernel's ``CALL_SEEDS``, a completer for no variable) are not asked, and no kernel spec stands behind
     it to refuse an unguarded call, so it carries its own ``permissions`` and
     ``scopes``. A
     bare callable meant to be served with those checks is a ``RETRIEVE``

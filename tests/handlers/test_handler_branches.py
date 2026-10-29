@@ -6,7 +6,7 @@ input reaches the service, a service returning ``None`` still serves an object,
 a validation refusal keeps its detail, a scope gate or a spec permission denies
 with ``-32006``, an output selector reshapes the result, the structured-content
 and output-schema knobs answer per binding and server-wide, and the request-shape
-guards name a malformed ``arguments`` or ``outputFormat`` before the tool runs.
+guard names a malformed ``arguments`` before the tool runs.
 
 Two of the questions are asked in a particular way:
 
@@ -380,21 +380,12 @@ def test_a_missing_or_null_arguments_field_still_means_no_arguments(
     assert out["structuredContent"] == {"ok": True}
 
 
-def test_an_unrenderable_output_format_is_refused_before_the_tool_runs(handle: Handle) -> None:
-    ran: list[int] = []
-    server = _one(ServiceSpec(service=lambda: ran.append(1), permissions=OPEN, atomic=False))
-    out = _call(handle, server, outputFormat="xml")
-    assert isinstance(out, JsonRpcError)
-    assert out.code == JsonRpcErrorCode.INVALID_PARAMS
-    assert "outputFormat" in out.message
-    assert ran == []
-
-
-@pytest.mark.parametrize("requested", ["json", "toon", "auto", ""])
-def test_a_supported_or_empty_output_format_passes_the_guard(
-    handle: Handle, requested: str
-) -> None:
-    """An empty format is read as unsupplied, as the kernel path's
-    ``output_format or binding.output_format`` reads it."""
+@pytest.mark.parametrize("requested", ["xml", "toon", "json", ""])
+def test_an_output_format_param_is_not_read(handle: Handle, requested: str) -> None:
+    """The text block is always JSON, so a client's ``outputFormat`` names nothing to
+    choose: whatever it says, known once or never, the tool runs and answers in JSON."""
     out = _call(handle, _echo(), outputFormat=requested)
-    assert "isError" not in out
+    assert out == {
+        "content": [{"type": "text", "text": '{\n  "ok": true\n}'}],
+        "structuredContent": {"ok": True},
+    }

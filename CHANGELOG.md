@@ -260,7 +260,7 @@ carries; releases up to 0.54.0 are in
   follow the import package.
 - **`rest_framework_mcp.constants` has no counterpart.** Its enums and constants
   are importable from `django_spec_mcp.types`, each from a module of its own
-  (`django_spec_mcp.types.output_format` for `OutputFormat`), and the names the
+  (`django_spec_mcp.types.json_rpc_error_code` for `JsonRpcErrorCode`), and the names the
   root exported from it still are. `UnknownArguments` and `RESERVED_POOL_SEEDS`
   were re-exports of names `django_service_specs` defines: import both from it.
   `ArgumentBinding` has no counterpart, as **Removed** says.
@@ -342,6 +342,11 @@ carries; releases up to 0.54.0 are in
   string, a class, not a `PermissionCheck`, or one whose `has_permission` is
   `async def`. A warnings filter or a test matching the old refusals' wording
   matches none of these.
+- **A view's callable source is `render=`.** `register_ui_resource(render=...)`
+  takes the zero-argument callable returning the document, where it took
+  `selector=`, a name every other registration here uses for a kernel
+  `SelectorSpec`'s selector. The rule is unchanged: a callable declaring a
+  parameter is refused, now in a message that names it a render callable.
 
 ### Removed
 
@@ -391,13 +396,27 @@ carries; releases up to 0.54.0 are in
   choose and no `argument_binding` to pass. Import `UnknownArguments` from
   `django_service_specs`, which defines it.
 
-- **`TOOL_EDGE_SEEDS` and `COMPLETION_EDGE_SEEDS`.** Both named what the DRF
-  edge filled itself (`request`, `view` and `serializer`). A kernel spec's
-  reads are checked against the kernel's `RESERVED_POOL_SEEDS` and the server's
-  `pool_seeds` instead, and the kernel refuses a read named `request` or `view`
-  when the spec is built. `RESOURCE_EDGE_SEEDS` (`request`) stays:
-  `register_resource` reserves it, so a URI-template variable of that name is
-  refused.
+- **`TOOL_EDGE_SEEDS`, `COMPLETION_EDGE_SEEDS` and `RESOURCE_EDGE_SEEDS`.** The
+  first two named what the DRF edge filled itself (`request`, `view` and
+  `serializer`), and the third the one key a resource read seeds beyond the
+  kernel's reserved set, `request`. A kernel spec's reads are checked against
+  the kernel's `RESERVED_POOL_SEEDS` and the server's `pool_seeds` instead, and
+  the kernel refuses a read named `request` or `view` when the spec is built.
+  `register_resource` reserves the kernel's `CALL_SEEDS` (`request` and `view`,
+  the call's own) beside them, so a URI-template variable named `request` or
+  `view` is refused as a reserved transport key, in the message a `{user}`
+  variable gets. Import `CALL_SEEDS` from `django_service_specs`.
+
+- **TOON output, `OutputFormat` and the `toon` extra.** A tool result's
+  `content[0]` text is always the payload as JSON, beside the same payload in
+  `structuredContent`. With one format left there is nothing to choose, so
+  `OutputFormat`, `encode_toon`, `register_tool(output_format=)` (and its
+  `register_tools` override), `KernelToolBinding.output_format`,
+  `build_tool_result(output_format=)` and the `DEFAULT_OUTPUT_FORMAT` setting go
+  with it. A `tools/call` carrying `outputFormat` is no longer refused for a
+  value other than `json`, `toon` or `auto`: the parameter is not read, and the
+  call is answered in JSON. Nothing reads a `SPEC_MCP["DEFAULT_OUTPUT_FORMAT"]`
+  left in a project's settings and nothing warns about it, so delete the key.
 
 - **The dependencies on djangorestframework, djangorestframework-services and
   djangorestframework-dataclasses.** None is in the package's requirements or

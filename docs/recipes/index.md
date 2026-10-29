@@ -6,7 +6,6 @@ that solves a single concrete problem. Browse the list:
 - [Expose a service](expose-a-service.md) — the smallest possible end-to-end.
 - [Swap the session store](swap-session-store.md) — when the default cache
   isn't what you want.
-- [Ship TOON for large lists](toon-output.md) — token-efficient tool output.
 - [Add a custom permission](custom-permission.md) — a kernel `PermissionCheck`
   on a spec, a prompt or a view.
 - [Write an async-native auth backend](async-auth-backend.md) — `httpx`

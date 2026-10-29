@@ -34,7 +34,6 @@ from django_spec_mcp.handlers.handle_resources_templates_list import (
 )
 from django_spec_mcp.handlers.utils import scope_verdict
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
-from django_spec_mcp.types.output_format import OutputFormat
 from django_spec_mcp.types.resource_encoding import ResourceEncoding
 from django_spec_mcp.types.task_policy import TaskPolicy
 from django_spec_mcp.types.tool_content_kind import ToolContentKind
@@ -246,17 +245,16 @@ def test_register_tools_refuses_an_override_for_a_name_it_does_not_hold() -> Non
         _server().register_tools(registry, overrides={"invoices.creat": {}})
 
 
-def test_the_output_format_and_content_knobs_reach_the_binding() -> None:
+def test_the_content_knobs_reach_the_binding() -> None:
     binding = _server().register_tool(
         _service(),
         name="t",
-        output_format="toon",
         content_kind=ToolContentKind.IMAGE,
         content_mime_type="image/png",
     )
-    assert (binding.output_format, binding.content_kind) == (
-        OutputFormat.TOON,
+    assert (binding.content_kind, binding.content_mime_type) == (
         ToolContentKind.IMAGE,
+        "image/png",
     )
 
 

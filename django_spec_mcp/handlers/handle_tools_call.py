@@ -21,7 +21,6 @@ from django_spec_mcp.handlers.utils import (
     forbidden,
     judge_tool_permissions,
     resolve_bound,
-    validate_output_format,
 )
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
@@ -65,13 +64,6 @@ def handle_tools_call(
         arguments_raw = {}
     if not isinstance(arguments_raw, dict):
         return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, "'arguments' must be an object")
-
-    # Before dispatch, so an unrenderable format is a ``-32602`` the caller can
-    # act on rather than a 500 raised once the tool has already run. This is
-    # what lets the coercions further down the dispatch paths stay bare.
-    bad_format: JsonRpcError | None = validate_output_format(params)
-    if bad_format is not None:
-        return bad_format
 
     # The binding's ``server_arguments`` in place before anything reads the
     # arguments: a task records what the tool will run with, and the permission

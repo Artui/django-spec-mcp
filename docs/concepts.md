@@ -648,7 +648,7 @@ registration order.
 
 Beyond `description=`, `scopes=` and [`server_arguments=`](#server-arguments),
 `register_tool` takes the facts of the MCP binding rather than of the
-operation: `title`, `icons`, `annotations`, `meta`, `ui`, `output_format`,
+operation: `title`, `icons`, `annotations`, `meta`, `ui`,
 `content_kind`, `content_mime_type`, `include_structured_content`,
 `include_output_schema`, `task_policy`, `invalidates` (service tools),
 `paginate` and `max_page_size` (selector tools), `max_result_bytes`,
@@ -928,8 +928,8 @@ result["structuredContent"]  # the wire's result payload (dict, not ToolResult)
   opaque-cursor pagination the HTTP transport uses. `alist_tools` is its twin for
   an event loop, running the listing in Django's thread-sensitive executor.
 - `acall_tool(name, arguments=None, *, user, request=None, scopes=None)` invokes
-  a tool with the **full** transport applied: the `scopes=` gate, the rate
-  limits and the output format — everything `call_tool` deliberately omits. It
+  a tool with the **full** transport applied: the `scopes=` gate and the rate
+  limits — everything `call_tool` deliberately omits. It
   returns the wire's `dict` payload (`content` / `structuredContent` /
   `isError`) or a `JsonRpcError` for a protocol fault (unknown tool, malformed
   `arguments` shape, denied permission).
@@ -1162,8 +1162,8 @@ server.register_tool(
 )
 ```
 
-`ToolContentKind.TEXT` (the default) renders JSON per the binding's
-`output_format` and mirrors it in `structuredContent`. `IMAGE` and `AUDIO` take
+`ToolContentKind.TEXT` (the default) renders the result as JSON and mirrors it
+in `structuredContent`. `IMAGE` and `AUDIO` take
 the media itself — `bytes`, or a `str` already in base64 — and carry **no**
 `structuredContent` or `outputSchema`, since neither can describe a PNG;
 registering one alongside those is refused rather than ignored.
@@ -1884,14 +1884,14 @@ server.register_ui_resource(
 scripts, and wraps it in a document carrying
 [`build_app_document`][django_spec_mcp.ui.build_app_document.build_app_document]'s
 shell and bridge. The other three sources — `template_name=`, `html=`,
-`selector=` — hand you a whole document to fill, bridge included.
+`render=` — hand you a whole document to fill, bridge included.
 
 A view is an ordinary resource — one URI namespace with your data resources,
 listed in `resources/list`, and guardable with `permissions=` and `scopes=` — with three
 things fixed for you: the `text/html;profile=mcp-app` mime type, `TEXT` body
 encoding, and a `_meta` bundle under the extension's key. Give it exactly one
 content source: `template_name=` (a Django template, the idiomatic choice),
-`html=` (a literal document), or `selector=` (a callable returning one, which
+`html=` (a literal document), or `render=` (a callable returning one, which
 **must take no arguments** — one that declares a parameter is refused at
 registration, because the read path would fill it from a pool carrying
 `request` and `user`, and a view that varies by caller is exactly what the
@@ -1954,7 +1954,7 @@ implement Apps is unaffected.
 ### Writing the bridge yourself
 
 `body_template_name=` exists so you do not have to read this. Everything below
-is what `template_name=`, `html=` and `selector=` hand back to you along with
+is what `template_name=`, `html=` and `render=` hand back to you along with
 the whole document, and it is written as a checklist because every item on it
 has cost somebody at least one debugging round.
 
@@ -2079,9 +2079,9 @@ The MCP package owns its transport and hands each spec to the kernel's
 9. A `not_found` dispatch result, a lookup that found no row, is an `isError`
    result of type `not_found` (`"<tool>: no matching instance found"`).
 10. Present the result through the spec's presenter, with the call's
-    [shapes](#read-shaping-values-shapes), and wrap it as a `ToolResult` with
-    `OutputFormat`-driven encoding for the human-readable `content[0]` block.
-    `structuredContent` is always JSON.
+    [shapes](#read-shaping-values-shapes), and wrap it as a `ToolResult` whose
+    human-readable `content[0]` block is the result encoded as JSON, beside it
+    in `structuredContent`.
 
 A presenter that refuses while rendering joins step 8's `validation_error` arm
 only when the caller sent one of the spec's shapes
@@ -2195,32 +2195,13 @@ SSE stream for the caller's own session — available on `async_urls` only
 loop). See [Async deployment](async.md) for the wire details and
 `MCPServer.notify(...)` for pushing frames.
 
-## Output formats
+## Tool results
 
 Per the MCP tools spec, a tool result has both a `content` block list and an
 optional `structuredContent`:
 
 - `structuredContent` is always JSON-shaped — clients parse it directly.
-- `content[0]` is a text block whose payload is encoded per `OutputFormat`.
-
-```python
-from django_spec_mcp import OutputFormat
-
-server.register_tool(
-    list_invoices_spec,
-    name="invoices.list",
-    description="List invoices.",
-    output_format=OutputFormat.AUTO,  # JSON, TOON, or AUTO
-)
-```
-
-`AUTO` picks per-payload — TOON for uniform list-of-objects, JSON otherwise.
-TOON is wrapped in a fenced ` ```toon ` block with a leading `# format: toon`
-marker so clients that don't parse it natively can still render it.
-
-If TOON is requested but the optional extra is missing, the encoder falls back
-to JSON with a `warnings.warn` — a tool call never fails because an optional
-extra is absent.
+- `content[0]` is a text block carrying the same payload encoded as JSON.
 
 ### Omitting `structuredContent` and `outputSchema`
 
@@ -2251,7 +2232,7 @@ Common patterns:
 - **Drop both**: useful when a downstream client echoes both fields back to
   the LLM (doubling token usage) or chokes on `structuredContent`. Set both
   to `False`. The text payload in `content[0]` still carries the full result
-  (JSON-encoded by default, or TOON when requested).
+  (JSON-encoded).
 
 The fourth combination — advertising `outputSchema` while suppressing
 `structuredContent` — violates the spec. It is rejected with

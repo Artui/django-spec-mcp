@@ -12,6 +12,7 @@ from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest
 from django.urls import URLPattern, path
 from django_service_specs import (
+    CALL_SEEDS,
     DEFAULT_POOL_SEEDS,
     RESERVED_POOL_SEEDS,
     UNSET,
@@ -97,9 +98,7 @@ from django_spec_mcp.transport.types.sse_broker import SSEBroker
 from django_spec_mcp.transport.types.sse_replay_buffer import SSEReplayBuffer
 from django_spec_mcp.types.jsonrpc_version import JSONRPC_VERSION
 from django_spec_mcp.types.notification_kind import NotificationKind
-from django_spec_mcp.types.output_format import OutputFormat
 from django_spec_mcp.types.reserved_post_fetch_keys import RESERVED_POST_FETCH_KEYS
-from django_spec_mcp.types.resource_edge_seeds import RESOURCE_EDGE_SEEDS
 from django_spec_mcp.types.resource_encoding import ResourceEncoding
 from django_spec_mcp.types.resource_updated_method import RESOURCE_UPDATED_METHOD
 from django_spec_mcp.types.task_policy import TaskPolicy
@@ -292,7 +291,6 @@ class MCPServer:
         annotations: dict[str, Any] | None = None,
         meta: dict[str, Any] | None = None,
         ui: UIToolMeta | None = None,
-        output_format: OutputFormat | str = OutputFormat.JSON,
         content_kind: ToolContentKind = ToolContentKind.TEXT,
         content_mime_type: str | None = None,
         include_structured_content: bool | None = None,
@@ -379,7 +377,6 @@ class MCPServer:
             annotations=annotations,
             meta=meta,
             ui=ui,
-            output_format=output_format,
             content_kind=content_kind,
             content_mime_type=content_mime_type,
             include_structured_content=include_structured_content,
@@ -412,7 +409,6 @@ class MCPServer:
         annotations: dict[str, Any] | None = None,
         meta: dict[str, Any] | None = None,
         ui: UIToolMeta | None = None,
-        output_format: OutputFormat | str = OutputFormat.JSON,
         content_kind: ToolContentKind = ToolContentKind.TEXT,
         content_mime_type: str | None = None,
         include_structured_content: bool | None = None,
@@ -452,7 +448,6 @@ class MCPServer:
             icons=icons,
             annotations=annotations,
             meta=merge_meta(ui_meta, meta),
-            output_format=OutputFormat.coerce(output_format),
             content_kind=content_kind,
             content_mime_type=content_mime_type,
             include_structured_content=include_structured_content,
@@ -1060,15 +1055,17 @@ class MCPServer:
         _check_kernel_resource_encoding(name, binding.spec, encoding)
         template_variables: tuple[str, ...] = _template_variables(uri_template)
         # A URI-template variable is a caller-controlled name laid into the
-        # read's arguments, so one the server's own seeds or the read's
-        # ``request`` would occupy, or one declared twice, is refused here
+        # read's arguments, so one the server's own seeds or the kernel's
+        # ``CALL_SEEDS`` (``request`` and ``view``, the call's own) would occupy,
+        # or one declared twice, is refused here
         # (``test_a_template_variable_named_after_a_pool_seed_is_refused``,
         # ``test_a_uri_template_variable_named_after_a_seed_is_refused``,
+        # ``test_a_variable_named_view_is_refused_as_the_call_s_own``,
         # ``test_a_duplicated_template_variable_is_refused``). A tool's
         # pagination names are deliberately not reserved: a resource has no
         # page, so ``docs://{page}`` is a legitimate locator.
         _refuse_reserved_template_variables(
-            name, template_variables, reserved=self._pool_seeds.names | RESOURCE_EDGE_SEEDS
+            name, template_variables, reserved=self._pool_seeds.names | CALL_SEEDS
         )
         check_completions_declared(f"Resource {name!r}", binding.completions, template_variables)
         # Two ways a variable can never carry the URI's value into a read, each
@@ -1077,12 +1074,11 @@ class MCPServer:
         # (``test_a_template_variable_no_read_declares_is_refused_at_registration``;
         # ``parameters()`` is the reads then the shapes, so a shape is declared:
         # ``test_a_template_variable_naming_a_shape_registers_and_is_read``). A
-        # variable the server fills is declared and still never the URI's: a
-        # reflected ``request`` or ``view`` read is refused as an unknown argument
-        # (``test_a_variable_a_reflected_read_the_server_fills_is_refused``) and a
-        # key a provider always fills is replaced
-        # (``test_a_variable_a_provider_always_fills_is_refused``). A name a pool
-        # seed fills was refused above. ``server_owned_keys`` is the kernel's list of
+        # variable the server fills is declared and still never the URI's: a key
+        # a provider always fills is replaced
+        # (``test_a_variable_a_provider_always_fills_is_refused``). A reflected
+        # read is owned too, but only under a name a seed or ``CALL_SEEDS``
+        # holds, and each of those was refused above. ``server_owned_keys`` is the kernel's list of
         # the server's names, the one ``admitted_arguments`` subtracts for a tool.
         owned = server_owned_keys(spec, pool_seeds=self._pool_seeds)
         undeclared = sorted(set(template_variables) - spec.parameters().names())
@@ -1096,9 +1092,9 @@ class MCPServer:
             )
         if filled:
             refusals.append(
-                f"variables {filled} are names the server fills for the call (a reflected "
-                "read, or a key a typed provider fills), so a value in the URI would be "
-                "refused or replaced; name them differently"
+                f"variables {filled} are names the server fills for the call (a key a "
+                "typed provider fills), so a value in the URI would be replaced; name them "
+                "differently"
             )
         if refusals:
             raise ImproperlyConfigured(
@@ -1136,7 +1132,7 @@ class MCPServer:
         body_template_name: str | None = None,
         diagnostics: bool | None = None,
         html: str | None = None,
-        selector: Callable[[], str] | None = None,
+        render: Callable[[], str] | None = None,
         description: str | None = None,
         title: str | None = None,
         icons: tuple[Icon, ...] = (),
@@ -1175,8 +1171,8 @@ class MCPServer:
         - ``template_name`` — a Django template holding a whole document, whose
           bridge is then yours to write.
         - ``html`` — a literal document, same.
-        - ``selector`` — a callable returning one, which **must take no
-          arguments**: a selector that declares a parameter is refused at
+        - ``render`` — a callable returning one, which **must take no
+          arguments**: one that declares a parameter is refused at
           registration, because the read path would fill it from a pool carrying
           ``request`` and ``user``.
 
@@ -1212,7 +1208,7 @@ class MCPServer:
             body_template_name=body_template_name,
             diagnostics=diagnostics,
             html=html,
-            selector=selector,
+            render=render,
             description=description,
             title=title,
             icons=icons,
@@ -1236,10 +1232,10 @@ class MCPServer:
         # Requiring permissions on it would be noise on every MCP Apps install.
         #
         # That third source is only caller-blind because ``ui_view_to_resource``
-        # refuses a selector that declares any fillable parameter. It did not
-        # always: ``handle_resources_read`` resolves every binding's selector
+        # refuses a ``render`` that declares any fillable parameter. It did not
+        # always: ``handle_resources_read`` resolves every binding's callable
         # against a pool carrying ``request`` and ``user``, so
-        # ``selector=lambda user: ...`` was handed the caller while this comment
+        # ``render=lambda user: ...`` was handed the caller while this comment
         # said it could not be — and skipped the declaration check on the
         # strength of the claim. The exemption is sound *because* of that
         # refusal, not on its own, and the two have to move together.
@@ -1675,7 +1671,7 @@ def _refuse_reserved_template_variables(
 ) -> None:
     """Refuse a URI-template variable a seed occupies, or one declared twice.
 
-    ``reserved`` is the server's own seeds and the read's edge seeds; the
+    ``reserved`` is the server's own seeds and the kernel's ``CALL_SEEDS``; the
     kernel's ``RESERVED_POOL_SEEDS`` are always added, since they are the
     dispatcher's authoritative names, and a URI segment routed onto one would
     stand in for the caller's identity. A name declared twice would have the

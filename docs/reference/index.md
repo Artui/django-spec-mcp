@@ -7,7 +7,7 @@ generated from the live source — nothing duplicated by hand.
 - [Protocol types](protocol.md) — JSON-RPC envelope, MCP message types, error codes.
 - [Registries](registries.md) — `ToolRegistry`, `ResourceRegistry`, bindings, session stores.
 - [Auth](auth.md) — backends, permissions, response builders.
-- [Output](output.md) — `OutputFormat`, encoders, `build_tool_result`.
+- [Output](output.md) — `encode_json`, `build_tool_result`.
 - [Testing](testing.md) — `assert_tool_result_conforms`, for a consumer's
   own suite.
 - [Settings](settings.md) — every `SPEC_MCP` key, its default,
