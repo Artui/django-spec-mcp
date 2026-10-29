@@ -266,10 +266,3 @@ async def test_an_unknown_modern_method_is_404(make_view: Any) -> None:
     )
     assert response.status_code == 404
     assert json.loads(response.content)["error"]["code"] == -32601
-
-
-async def test_modern_delete_is_405(make_view: Any) -> None:
-    """Session termination does not exist in the revision the caller named."""
-    request = factory.delete("/mcp/", headers={"Mcp-Protocol-Version": "2026-07-28"})
-    response = await _answer(make_view(InMemorySessionStore()), request)
-    assert response.status_code == 405

@@ -166,6 +166,7 @@ async def test_a_delete_with_sessions_off_is_a_405_naming_the_methods(endpoint: 
 
 
 async def test_a_modern_era_delete_is_a_405_naming_the_methods(endpoint: Endpoint) -> None:
+    """Session termination does not exist in the revision the caller named."""
     response = await endpoint.send(
         "delete", _ENDPOINT, headers={"Mcp-Protocol-Version": "2026-07-28"}
     )
