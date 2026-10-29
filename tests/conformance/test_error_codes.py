@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator
+from typing import Any
 
 import pytest
 from django.test import Client, override_settings
@@ -59,22 +60,21 @@ def test_an_unknown_resource_is_32002(caller: KernelClient) -> None:
     assert error["data"] == {"uri": "conformance://nothing-here"}
 
 
-def test_an_unknown_tool_is_32602(caller: KernelClient) -> None:
-    response = caller.post("tools/call", {"name": "no_such_tool", "arguments": {}})
+@pytest.mark.parametrize(
+    ("method", "params", "code"),
+    [
+        ("tools/call", {"name": "no_such_tool", "arguments": {}}, -32602),
+        ("prompts/get", {"name": "no_such_prompt", "arguments": {}}, -32602),
+        ("nonsense/method", {}, -32601),
+    ],
+    ids=["unknown-tool", "unknown-prompt", "unknown-method"],
+)
+def test_an_unknown_name_or_method_has_the_code_the_spec_names(
+    caller: KernelClient, method: str, params: dict[str, Any], code: int
+) -> None:
+    response = caller.post(method, params)
     assert response.status_code == 200, response.content
-    assert response.json()["error"]["code"] == -32602
-
-
-def test_an_unknown_prompt_is_32602(caller: KernelClient) -> None:
-    response = caller.post("prompts/get", {"name": "no_such_prompt", "arguments": {}})
-    assert response.status_code == 200, response.content
-    assert response.json()["error"]["code"] == -32602
-
-
-def test_an_unknown_method_is_32601(caller: KernelClient) -> None:
-    response = caller.post("nonsense/method", {})
-    assert response.status_code == 200, response.content
-    assert response.json()["error"]["code"] == -32601
+    assert response.json()["error"]["code"] == code
 
 
 def test_a_kernel_permission_denial_does_not_squat_on_32002(caller: KernelClient) -> None:

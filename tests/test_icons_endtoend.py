@@ -12,8 +12,10 @@ spec.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
+import pytest
 from django.http import HttpRequest
 from django.test import override_settings
 from django_service_specs import (
@@ -71,44 +73,34 @@ def _ctx(server: MCPServer) -> MCPCallContext:
     )
 
 
-def test_service_tool_icons_reach_tools_list() -> None:
-    server = _server()
+def _service_tool(server: MCPServer) -> None:
     server.register_tool(
         ServiceSpec(service=lambda: {}, permissions=OPEN),
         name="t.svc",
         description="d",
         icons=(ICON,),
     )
-    result = handle_tools_list(None, _ctx(server))
-    assert result["tools"][0]["icons"] == [ICON_DICT]
 
 
-def test_selector_tool_icons_reach_tools_list() -> None:
-    server = _server()
+def _selector_tool(server: MCPServer) -> None:
     server.register_tool(
         SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda: None, permissions=OPEN),
         name="t.sel",
         description="d",
         icons=(ICON,),
     )
-    result = handle_tools_list(None, _ctx(server))
-    assert result["tools"][0]["icons"] == [ICON_DICT]
 
 
-def test_resource_icons_reach_resources_list() -> None:
-    server = _server()
+def _resource(server: MCPServer) -> None:
     server.register_resource(
         SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda: None, permissions=OPEN),
         name="r",
         uri_template="things://all",
         icons=(ICON,),
     )
-    result = handle_resources_list(None, _ctx(server))
-    assert result["resources"][0]["icons"] == [ICON_DICT]
 
 
-def test_template_icons_reach_templates_list() -> None:
-    server = _server()
+def _template(server: MCPServer) -> None:
     server.register_resource(
         SelectorSpec(
             kind=SelectorKind.RETRIEVE,
@@ -120,15 +112,29 @@ def test_template_icons_reach_templates_list() -> None:
         uri_template="things://{pk}",
         icons=(ICON,),
     )
-    result = handle_resources_templates_list(None, _ctx(server))
-    assert result["resourceTemplates"][0]["icons"] == [ICON_DICT]
 
 
-def test_prompt_icons_reach_prompts_list() -> None:
-    server = _server()
+def _prompt(server: MCPServer) -> None:
     server.register_prompt(name="p", render=lambda: "hi", icons=(ICON,))
-    result = handle_prompts_list(None, _ctx(server))
-    assert result["prompts"][0]["icons"] == [ICON_DICT]
+
+
+@pytest.mark.parametrize(
+    ("register", "handler", "listing"),
+    [
+        (_service_tool, handle_tools_list, "tools"),
+        (_selector_tool, handle_tools_list, "tools"),
+        (_resource, handle_resources_list, "resources"),
+        (_template, handle_resources_templates_list, "resourceTemplates"),
+        (_prompt, handle_prompts_list, "prompts"),
+    ],
+    ids=["service-tool", "selector-tool", "resource", "template", "prompt"],
+)
+def test_icons_reach_the_listing(
+    register: Callable[[MCPServer], None], handler: Callable[..., Any], listing: str
+) -> None:
+    server = _server()
+    register(server)
+    assert handler(None, _ctx(server))[listing][0]["icons"] == [ICON_DICT]
 
 
 def test_no_icons_means_no_key() -> None:
