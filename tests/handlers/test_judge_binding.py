@@ -417,6 +417,32 @@ def test_an_answer_still_to_be_awaited_is_refused_not_read_as_a_pass() -> None:
     )
 
 
+class _HandsBackAnAsyncGenerator(PermissionCheck):
+    """A plain ``def`` whose answer is an async generator: truthy, and not awaitable."""
+
+    def has_permission(self, principal: Any, spec: Any) -> Any:
+        async def later() -> Any:
+            yield True
+
+        return later()
+
+
+def test_an_async_generator_answer_is_refused_not_read_as_a_pass() -> None:
+    server = _server()
+    server.register_prompt(
+        name="p", render=lambda: "hi", permissions=[_HandsBackAnAsyncGenerator()]
+    )
+
+    with pytest.raises(ImproperlyConfigured) as raised:
+        handle_prompts_get({"name": "p"}, _ctx(server, ALICE))
+    assert str(raised.value) == (
+        "_HandsBackAnAsyncGenerator.has_permission answered with an awaitable "
+        "(async_generator) where a bool was asked for. A permission check is sync-only and "
+        "is never awaited, so the call is refused rather than allowed; declare the method "
+        "with def."
+    )
+
+
 # ---------- a check that raises, in a filtered listing ----------
 
 

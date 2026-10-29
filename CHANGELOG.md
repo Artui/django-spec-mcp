@@ -350,7 +350,9 @@ carries; releases up to 0.54.0 are in
   three check methods, and an empty list, which admits everyone, are each
   refused; leave `permissions` out for no checks, or declare
   `[Unrestricted()]`. Each answer is read through the kernel's `sync_answer`, so
-  a plain `def` handing back a coroutine is refused in the kernel's words. A
+  a plain `def` handing back a coroutine is refused in the kernel's words, and
+  one handing back an async generator, which used to be admitted because it is
+  truthy and not awaitable, is refused too. A
   warnings filter or a test matching the old refusals' wording matches none of
   these.
 - **A view's callable source is `render=`.** `register_ui_resource(render=...)`
