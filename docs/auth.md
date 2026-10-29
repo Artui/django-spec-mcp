@@ -61,7 +61,6 @@ A backend implements `MCPAuthBackend`:
 | --- | --- |
 | `authenticate(request)` | A `TokenInfo` for a request carrying a valid token, `None` for one that does not (the transport answers 401) |
 | `protected_resource_metadata()` | The RFC 9728 document served at `.well-known/oauth-protected-resource`: the resource's URL and the authorization servers that issue tokens for it |
-| `authorization_server_metadata()` | The metadata of an authorization server the backend hosts; a backend that hosts none raises `NotImplementedError` |
 | `www_authenticate_challenge(scopes=, error=)` | The `WWW-Authenticate` value of a 401 or an insufficient-scope 403 |
 
 This one verifies tokens with a function the project supplies (a JWKS check, an
@@ -73,9 +72,6 @@ from django.http import HttpRequest
 
 from django_spec_mcp.auth import TokenInfo, bearer_challenge
 from django_spec_mcp.auth.audience import audience_matches
-from django_spec_mcp.auth.types.authorization_server_metadata import (
-    AuthorizationServerMetadata,
-)
 from django_spec_mcp.auth.types.protected_resource_metadata import ProtectedResourceMetadata
 
 
@@ -105,9 +101,6 @@ class BearerBackend:
             authorization_servers=[self._authorization_server],
             scopes_supported=list(self._scopes_supported),
         )
-
-    def authorization_server_metadata(self) -> AuthorizationServerMetadata:
-        raise NotImplementedError("The authorization server is not hosted here.")
 
     def www_authenticate_challenge(self, *, scopes=None, error=None) -> str:
         # The server mounts its metadata view under its own URL, so the pointer
@@ -284,7 +277,10 @@ The same judgement answers `prompts/get`, `resources/read`,
 `completion/complete` and a subscription. With `FILTER_LISTINGS_BY_PERMISSIONS`
 on, it answers `prompts/list` and `resources/list` too, so a caller is never
 shown a prompt or view it would then be refused; with the setting off, the
-default, the listings show every prompt and view.
+default, the listings show every prompt and view. In a filtered listing a check
+that raises hides its own prompt or view and no other, as a spec's check that
+cannot decide without a call's arguments hides only its tool; an
+`ImproperlyConfigured` still fails the listing, as it fails the call.
 
 Registration holds the list to the kernel's rule for a spec's `permissions`,
 through the kernel's own `check_permissions`: a bare string or anything else

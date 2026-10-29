@@ -338,7 +338,10 @@ carries; releases up to 0.54.0 are in
   `has_permission(principal, binding)`, and `scopes=`, the scope gate a tool
   takes, asked first. A deactivated principal is refused as a spec's dispatch
   refuses one, and the same judgement answers the listings, `prompts/get`,
-  `resources/read`, `completion/complete` and a subscription. A prompt
+  `resources/read`, `completion/complete` and a subscription. In a filtered
+  listing a check that raises hides only its own prompt or view, as a kernel
+  spec's check that raises hides only its tool, while an `ImproperlyConfigured`
+  fails the listing as it fails the call. A prompt
   registered with neither is refused, or warned about with
   `REQUIRE_TOOL_PERMISSIONS` off, in a message that names both and no DRF
   permission classes. Registration holds `permissions=` to the kernel's own rule
@@ -347,7 +350,9 @@ carries; releases up to 0.54.0 are in
   three check methods, and an empty list, which admits everyone, are each
   refused; leave `permissions` out for no checks, or declare
   `[Unrestricted()]`. Each answer is read through the kernel's `sync_answer`, so
-  a plain `def` handing back a coroutine is refused in the kernel's words. A
+  a plain `def` handing back a coroutine is refused in the kernel's words, and
+  one handing back an async generator, which used to be admitted because it is
+  truthy and not awaitable, is refused too. A
   warnings filter or a test matching the old refusals' wording matches none of
   these.
 - **A view's callable source is `render=`.** `register_ui_resource(render=...)`
@@ -438,7 +443,11 @@ carries; releases up to 0.54.0 are in
   `check_oauth_url_shadowing`, `build_authorize_passthrough_view`,
   `AuthUserAdapter` and `SimpleJWTCookieAdapter` are gone, and so are the settings
   only they read: `DCR_ENABLED`, `DCR_INITIAL_ACCESS_TOKEN` and
-  `SIMPLEJWT_ACCESS_COOKIE`. OAuth is the project's: run the authorization server
+  `SIMPLEJWT_ACCESS_COOKIE`. So is what fed the metadata view:
+  `authorization_server_metadata()` on `MCPAuthBackend` and `AllowAnyBackend`,
+  and the `AuthorizationServerMetadata` dataclass it returned, since an
+  authorization server's metadata is that server's to serve. OAuth is the
+  project's: run the authorization server
   you choose (django-oauth-toolkit serves its own registration and discovery
   endpoints from 3.4.0, and so does any outside identity provider), sign users in
   at its own authorize endpoint, and verify its tokens through an

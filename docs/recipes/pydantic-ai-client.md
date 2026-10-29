@@ -183,8 +183,8 @@ If the confirmation must come from a human, the modern stack is not optional.
 ## What you still have to configure
 
 **Authentication.** `MCPToolset` sends whatever headers you give it; this
-server checks them with its `MCPAuthBackend`. For the default OAuth backend,
-pass the bearer token through:
+server checks them with its `MCPAuthBackend`. For a backend that verifies
+bearer tokens, pass the token through:
 
 ```python
 MCPToolset(
@@ -209,7 +209,8 @@ when the agent should receive push notifications or when dispatch is I/O-bound
 ## Trying it locally
 
 The [`invoicing` example](https://github.com/Artui/django-spec-mcp/tree/main/examples/invoicing)
-is a complete server to point this at:
+is a complete server to point this at. Its backend is a demo that knows two
+hard-coded tokens, and `demo-clerk` is the one that may do everything:
 
 ```bash
 cd examples/invoicing
@@ -224,7 +225,9 @@ from pydantic_ai.mcp import MCPToolset
 
 
 async def main() -> None:
-    async with MCPToolset("http://127.0.0.1:8000/mcp/") as toolset:
+    async with MCPToolset(
+        "http://127.0.0.1:8000/mcp/", headers={"Authorization": "Bearer demo-clerk"}
+    ) as toolset:
         print([tool.name for tool in await toolset.list_tools()])
         print(await toolset.direct_call_tool("invoices.list", {}))
 

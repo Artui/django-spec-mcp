@@ -13,7 +13,7 @@ transport built on the kernel.
 
 | Example                        | What it shows                                                     |
 |--------------------------------|-------------------------------------------------------------------|
-| [`invoicing/`](invoicing/)     | Service tools (one validated by a Django form; one targeted by lookup, declared idempotent; one with no Validator, its reads the service's keywords under a closed schema, declaring `allow_none`), selector tools with a `FilterSet` + ordering + pagination + a field-selection shape and with `allow_none`, a `pool_seeds=` seed, `server_arguments=`, a `conventions=` override of the model-facing wording, resource by PK, prompt. |
+| [`invoicing/`](invoicing/)     | Service tools (one validated by a Django form; one targeted by lookup, declared idempotent; one with no Validator, its reads the service's keywords under a closed schema, declaring `allow_none`), selector tools with a `FilterSet` + ordering + pagination + a field-selection shape and with `allow_none`, a `pool_seeds=` seed, `server_arguments=`, a `conventions=` override of the model-facing wording, resource by PK, a prompt behind a `scopes=` gate, and a demo bearer backend of its own. |
 | [`job_status/`](job_status/)   | A long-running job exposed as a templated resource, with SSE push notification on completion. |
 
 ## Running an example
@@ -49,9 +49,12 @@ npx @modelcontextprotocol/inspector
 
 ## Notes
 
-- Examples use `AllowAnyBackend` for simplicity. Production deployments
-  should use an `MCPAuthBackend` of their own that verifies their tokens;
-  `docs/auth.md` walks through one.
+- `invoicing/` mounts a demo `MCPAuthBackend` of its own that knows two
+  hard-coded tokens, so every request to it carries
+  `-H 'Authorization: Bearer demo-clerk'` (its README says which token may
+  do what); `job_status/` uses `AllowAnyBackend` for simplicity. Production
+  deployments use an `MCPAuthBackend` of their own that verifies their
+  authorization server's tokens; `docs/auth.md` walks through one.
 - SQLite is used for portability. Swap `DATABASES` in the example's
   `settings.py` for Postgres/MySQL when adapting to your stack.
 - Each example registers its specs imperatively in `mcp.py` to keep the

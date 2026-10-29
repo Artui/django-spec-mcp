@@ -108,6 +108,13 @@ What went with the django-oauth-toolkit backend:
   `check_oauth_url_shadowing`, `build_authorize_passthrough_view`,
   `AuthUserAdapter` and `SimpleJWTCookieAdapter`.
 
+**A backend no longer answers `authorization_server_metadata()`.** The method
+is gone from `MCPAuthBackend` and from `AllowAnyBackend`, and the
+`AuthorizationServerMetadata` dataclass and its export from
+`django_spec_mcp.auth.types` with it. An authorization server's metadata is the
+authorization server's to serve, and this package is only the resource server
+beside it. Nothing calls the method, so delete it from a backend of your own.
+
 The authorization server is yours to run, and this package is the resource
 server beside it. Write the backend for the authorization server you run:
 [Writing your own backend](auth.md#writing-your-own-backend) walks through one

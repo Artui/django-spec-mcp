@@ -32,7 +32,7 @@ from django_spec_mcp import (
     PromptArgument,
     PromptMessage,
 )
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from invoices.auth import DemoTokenBackend
 from invoices.filters import InvoiceFilterSet
 from invoices.forms import InvoiceForm
 from invoices.models import Invoice
@@ -79,9 +79,12 @@ def build_server() -> MCPServer:
         name="invoicing-example",
         version="0.0.1",
         description="Demo invoicing MCP surface",
-        # Dev-only: accepts any caller. A mounted server has no default
-        # backend, so production passes one of its own (docs/auth.md).
-        auth_backend=AllowAnyBackend(),
+        # A mounted server has no default backend. This one knows two
+        # hard-coded tokens (invoices/auth.py) and is a demo of the seam: a
+        # request without one of them is a 401 whose challenge points at the
+        # metadata document. Production verifies its own authorization
+        # server's tokens instead (docs/auth.md).
+        auth_backend=DemoTokenBackend(),
         # Fine for single-process dev. The default DjangoCacheSessionStore
         # works across workers.
         session_store=InMemorySessionStore(),
@@ -287,6 +290,10 @@ def build_server() -> MCPServer:
         # asked has_permission(principal, binding). Deliberately open, as the
         # specs are; swap Unrestricted() for the real check in anything real.
         permissions=[Unrestricted()],
+        # The scope gate, asked before the checks: a token without
+        # ``invoices:email`` is refused with a 403 whose challenge names the
+        # scope, so a client knows what to ask its authorization server for.
+        scopes="invoices:email",
     )
 
     return server

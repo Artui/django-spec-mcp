@@ -74,11 +74,6 @@ class IntrospectingAuthBackend:
             bearer_methods_supported=["header"],
         )
 
-    def authorization_server_metadata(self):
-        # This backend consumes a remote authorization server, it doesn't host
-        # one. `NotImplementedError` is the documented signal for that.
-        raise NotImplementedError("Authorization is hosted by the IDP, not by this resource.")
-
     def www_authenticate_challenge(self, *, scopes=None, error=None) -> str:
         # `resource_metadata` is what lets a client find the authorization server.
         return bearer_challenge(

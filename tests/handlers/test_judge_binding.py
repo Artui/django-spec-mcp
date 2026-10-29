@@ -415,3 +415,78 @@ def test_an_answer_still_to_be_awaited_is_refused_not_read_as_a_pass() -> None:
         "bool was asked for. A permission check is sync-only and is never awaited, so the "
         "call is refused rather than allowed; declare the method with def."
     )
+
+
+class _HandsBackAnAsyncGenerator(PermissionCheck):
+    """A plain ``def`` whose answer is an async generator: truthy, and not awaitable."""
+
+    def has_permission(self, principal: Any, spec: Any) -> Any:
+        async def later() -> Any:
+            yield True
+
+        return later()
+
+
+def test_an_async_generator_answer_is_refused_not_read_as_a_pass() -> None:
+    server = _server()
+    server.register_prompt(
+        name="p", render=lambda: "hi", permissions=[_HandsBackAnAsyncGenerator()]
+    )
+
+    with pytest.raises(ImproperlyConfigured) as raised:
+        handle_prompts_get({"name": "p"}, _ctx(server, ALICE))
+    assert str(raised.value) == (
+        "_HandsBackAnAsyncGenerator.has_permission answered with an awaitable "
+        "(async_generator) where a bool was asked for. A permission check is sync-only and "
+        "is never awaited, so the call is refused rather than allowed; declare the method "
+        "with def."
+    )
+
+
+# ---------- a check that raises, in a filtered listing ----------
+
+
+class _ReadsAMissingKey(PermissionCheck):
+    """A check that cannot decide and raises, as one reading a value it was not handed does."""
+
+    def has_permission(self, principal: Any, spec: Any) -> bool:
+        return {}["tenant"]
+
+
+def test_a_prompt_check_that_raises_hides_that_prompt_and_no_other() -> None:
+    # The listing failed whole, answered -32603, where the kernel arm hides
+    # only the binding whose check raised.
+    server = _server()
+    server.register_prompt(name="open", render=lambda: "hi", permissions=[Unrestricted()])
+    server.register_prompt(name="broken", render=lambda: "hi", permissions=[_ReadsAMissingKey()])
+    server.register_prompt(name="also-open", render=lambda: "hi", permissions=[Unrestricted()])
+
+    assert _prompt_names(server, ALICE) == ["open", "also-open"]
+
+
+def test_a_view_check_that_raises_hides_that_view_and_no_other() -> None:
+    server = _server()
+    server.register_ui_resource(
+        name="open", uri="ui://open", html="<html></html>", permissions=[Unrestricted()]
+    )
+    server.register_ui_resource(
+        name="broken", uri="ui://broken", html="<html></html>", permissions=[_ReadsAMissingKey()]
+    )
+
+    assert _resource_uris(server, ALICE) == ["ui://open"]
+
+
+def test_a_check_misconfigured_at_call_time_still_fails_the_listing() -> None:
+    # A configuration error the get raises as well, so the listing fails with
+    # it rather than hiding the prompt and leaving the error for later.
+    server = _server()
+    server.register_prompt(name="open", render=lambda: "hi", permissions=[Unrestricted()])
+    server.register_prompt(name="p", render=lambda: "hi", permissions=[_HandsBackACoroutine()])
+
+    with pytest.raises(ImproperlyConfigured) as raised:
+        handle_prompts_list(None, _ctx(server, ALICE))
+    assert str(raised.value) == (
+        "_HandsBackACoroutine.has_permission answered with an awaitable (coroutine) where a "
+        "bool was asked for. A permission check is sync-only and is never awaited, so the "
+        "call is refused rather than allowed; declare the method with def."
+    )

@@ -2,7 +2,8 @@
 
 Each name below was public there and is gone here on purpose: the bundled
 authorization-server pieces (a project runs its own authorization server and
-verifies its own tokens through ``MCPAuthBackend``), the transport's own
+verifies its own tokens through ``MCPAuthBackend``, and it serves its own
+metadata, so no backend answers ``authorization_server_metadata``), the transport's own
 permission types (the kernel's ``PermissionCheck`` gates a prompt and a view),
 the guard against settings
 keys a fresh package never had, chain tools (a service spec that calls the
@@ -31,8 +32,11 @@ from django_service_specs import ServiceSpec, Unrestricted
 import django_spec_mcp
 import django_spec_mcp.auth
 import django_spec_mcp.auth.backends
+import django_spec_mcp.auth.types
 import django_spec_mcp.output
 import django_spec_mcp.types
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.auth_backend import MCPAuthBackend
 from django_spec_mcp.conf import DEFAULTS
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.config.types.mcp_config import MCPConfig
@@ -57,6 +61,7 @@ from django_spec_mcp.server.mcp_server import MCPServer
         "django_spec_mcp.output.utils",
         "django_spec_mcp.types.output_format",
         "django_spec_mcp.types.resource_edge_seeds",
+        "django_spec_mcp.auth.types.authorization_server_metadata",
     ],
 )
 def test_a_dropped_module_is_not_importable(module: str) -> None:
@@ -78,6 +83,24 @@ def test_a_dropped_backend_name_is_exported_nowhere(name: str) -> None:
     assert not hasattr(django_spec_mcp, name)
     assert not hasattr(django_spec_mcp.auth, name)
     assert not hasattr(django_spec_mcp.auth.backends, name)
+
+
+@pytest.mark.parametrize(
+    "namespace", [django_spec_mcp, django_spec_mcp.auth, django_spec_mcp.auth.types]
+)
+def test_the_authorization_server_metadata_is_exported_nowhere(namespace: object) -> None:
+    """An authorization server's metadata is the authorization server's to serve.
+
+    This package is only the resource server beside it, so it publishes the
+    protected-resource document and nothing describing an authorization server.
+    """
+    assert "AuthorizationServerMetadata" not in getattr(namespace, "__all__", ())
+    assert not hasattr(namespace, "AuthorizationServerMetadata")
+
+
+@pytest.mark.parametrize("backend", [MCPAuthBackend, AllowAnyBackend])
+def test_no_backend_answers_for_an_authorization_server(backend: type) -> None:
+    assert not hasattr(backend, "authorization_server_metadata")
 
 
 @pytest.mark.parametrize(
