@@ -1,0 +1,1875 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Serve django-service-specs services and selectors as a Model Context Protocol (MCP) server.">
+      
+      
+      
+        <link rel="canonical" href="https://artui.github.io/django-spec-mcp/reference/settings/">
+      
+      
+        <link rel="prev" href="../registries/">
+      
+      
+        <link rel="next" href="../auth/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Settings - django-spec-mcp</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#settings" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="django-spec-mcp" class="md-header__button md-logo" aria-label="django-spec-mcp" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            django-spec-mcp
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Settings
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Artui/django-spec-mcp" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Artui/django-spec-mcp
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="django-spec-mcp" class="md-nav__button md-logo" aria-label="django-spec-mcp" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    django-spec-mcp
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Artui/django-spec-mcp" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Artui/django-spec-mcp
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../moving-from-drf-mcp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Moving from drf-mcp
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../auth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authentication
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../async/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Async deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../prompts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prompts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_11" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../recipes/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Recipes
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_11" id="__nav_11_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Recipes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/expose-a-service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Expose a service
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/swap-session-store/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Swap the session store
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/agent-audience/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hide plumbing from the model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/custom-permission/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add a custom permission
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/async-auth-backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Async-native auth backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/rate-limiting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add rate limiting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/redis-sse-broker/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-worker SSE with Redis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/sse-replay-buffer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Resume SSE with Last-Event-ID
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/selector-tool-with-filterset/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Selector tool with FilterSet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/interactive-view/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Render a list as an interactive table
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/register-from-spec-registry/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Register tools from a spec registry
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/pydantic-ai-client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Connect a Pydantic-AI agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/migrating/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from fastapi-mcp / hand-rolled
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_12" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_12" id="__nav_12_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp-server/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCPServer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Protocol types
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../registries/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Registries
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Settings
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#protocol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Protocol
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#transport-security" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transport &amp; security
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tools-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tools &amp; output
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#outbound-bounds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Outbound bounds
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#permissions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Permissions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#observability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Observability
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../auth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Auth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../output/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Output
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#protocol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Protocol
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#transport-security" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transport &amp; security
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tools-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tools &amp; output
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#outbound-bounds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Outbound bounds
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#permissions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Permissions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#observability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Observability
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/Artui/django-spec-mcp/edit/main/docs/reference/settings.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="settings">Settings<a class="headerlink" href="#settings" title="Permanent link">&para;</a></h1>
+<p>Every key lives in a single <code>SPEC_MCP</code> dict in your Django settings.
+All of them are optional — the defaults below apply when a key is absent.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># settings.py</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">SPEC_MCP</span> <span class="o">=</span> <span class="p">{</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="s2">&quot;ALLOWED_ORIGINS&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;https://app.example.com&quot;</span><span class="p">],</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="s2">&quot;REQUIRE_TOOL_PERMISSIONS&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">,</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="p">}</span>
+</span></code></pre></div>
+<p>Reading an unknown key raises <code>KeyError</code>, so a typo surfaces immediately rather
+than silently taking a default.</p>
+<div class="admonition warning">
+<p class="admonition-title">Assigning the dict replaces it; it does not merge</p>
+<p>Absent <strong>keys</strong> fall back to the defaults above, so a partial
+<code>SPEC_MCP</code> is fine. But assigning the dict — including
+<code>settings.SPEC_MCP = {...}</code> in a test, or <code>@override_settings</code> —
+replaces whatever was there, so a project-level opt-out silently disappears
+inside that scope. Repeat the keys you rely on in those literals.</p>
+<p>The same holds one level down: a <strong>dict-valued</strong> setting such as
+<code>SERVER_INFO</code> is taken whole, not deep-merged. Supplying
+<code>{"version": "1.0"}</code> drops any <code>name</code> you had configured alongside it (the
+package name is used as the fallback), so give the dict every key you want.</p>
+</div>
+<p><strong>These settings are per-project defaults.</strong> Every scalar below can be
+overridden per server, which is what you want as soon as you mount more than
+one:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># urls.py</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">server</span> <span class="o">=</span> <span class="n">MCPServer</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;internal&quot;</span><span class="p">,</span> <span class="n">config</span><span class="o">=</span><span class="n">build_mcp_config</span><span class="p">(</span><span class="n">page_size</span><span class="o">=</span><span class="mi">500</span><span class="p">))</span>
+</span></code></pre></div>
+<p>Collaborators are <strong>not</strong> configured here at all — the auth backend, session
+store, SSE broker and server identity are passed to
+<code>MCPServer(...)</code> in <code>urls.py</code>, because a settings dict can't hold a live
+object.</p>
+<h2 id="protocol">Protocol<a class="headerlink" href="#protocol" title="Permanent link">&para;</a></h2>
+<p>The companion <code>cacheScope</code> is <strong>derived, not configured</strong>: a listing filtered by
+<code>FILTER_LISTINGS_BY_PERMISSIONS</code> is <code>private</code>, and so is a <code>tools/list</code> that asked
+a tool's operation-scope affordance, since that answer is this caller's; any other
+listing is <code>public</code>, and a resource body is always <code>private</code>. <code>public</code> licenses a shared proxy to serve
+one response across authorization contexts, which is not a preference — getting
+it wrong is a cross-tenant disclosure with a cache in front of it.</p>
+<div class="admonition note">
+<p class="admonition-title">What <code>public</code> on a catalog does and doesn't say</p>
+<p>The spec's criterion for <code>public</code> is that <em>"the response does not contain
+user-specific data"</em> — which an unfiltered catalog satisfies exactly: every
+caller gets byte-identical output, so the derivation is the spec's own test
+rather than a judgement call. It is also why asking an affordance makes a
+<code>tools/list</code> <code>private</code> even with filtering off: the answer is asked against
+the caller's user and request, so two callers may be told different things.</p>
+<p>It is worth being clear what follows, though. <code>public</code> is not a statement
+that the catalog is <em>non-confidential</em>. It permits a shared intermediary to
+serve a stored copy across authorization contexts, and a tool catalog does
+describe the server's capability surface. If that surface is something you
+would rather not have cached in front of an authenticated endpoint, turn on
+<code>FILTER_LISTINGS_BY_PERMISSIONS</code> — the result becomes per-caller and the
+derivation follows it to <code>private</code>.</p>
+</div>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Default</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>PROTOCOL_VERSIONS</code></td>
+<td><code>["2026-07-28", "2025-11-25", "2025-06-18"]</code></td>
+<td>Every revision this server speaks, most-preferred first, across <strong>both eras</strong> — <code>2026-07-28</code> is modern (per-request metadata, no session), the rest are legacy (<code>initialize</code> handshake). <code>server/discover</code> reports the whole list; each era validates against its own half. <code>initialize</code> never offers a modern version whatever heads the list: the handshake does not exist there, so answering with it would hand the client a protocol the transport would refuse on its next request.</td>
+</tr>
+<tr>
+<td><code>REQUIRE_PROTOCOL_VERSION_HEADER</code></td>
+<td><code>True</code></td>
+<td>Reject a post-<code>initialize</code> request that omits <code>MCP-Protocol-Version</code> (HTTP 400). Set <code>False</code> for clients that never send it. A header that is <em>present but unsupported</em> is rejected either way — downgrading silently there would mask a real version mismatch.</td>
+</tr>
+<tr>
+<td><code>SERVER_INFO</code></td>
+<td><code>{"name": "django-spec-mcp"}</code></td>
+<td>Default <code>serverInfo</code> for <code>initialize</code>. Recognised keys: <code>name</code>, <code>version</code>, <code>title</code>, <code>description</code>, <code>websiteUrl</code>, <code>icons</code> (a list of <code>{src, mimeType, sizes, theme}</code> dicts). Prefer per-server identity: <code>MCPServer(name=…, version=…, title=…, website_url=…, icons=…)</code>. <code>description</code> is settings-only — the constructor's <code>description=</code> is the <code>initialize</code> <code>instructions</code> string, which is written for the model rather than for a connection list.</td>
+</tr>
+<tr>
+<td><code>CATALOG_CACHE_TTL_MS</code></td>
+<td><code>60000</code></td>
+<td>How long a client may cache a catalog result — <code>server/discover</code> plus the four list methods — emitted as <code>ttlMs</code>. <code>0</code> means "immediately stale". The registered bindings are fixed once the process boots, so for them the honest ceiling is "until the next deploy", which nothing here can know; a minute costs a client one stale minute after a release rather than a stale catalog for the life of its connection. A tool an operation-scope affordance leaves out of <code>tools/list</code> is the exception: it can come and go under a running client, and one honouring <code>ttlMs</code> may not re-list for this long unless it is sent <code>notifications/tools/list_changed</code> — see <a href="../../concepts/#a-tool-that-cannot-run-now-is-not-listed">Concepts</a>.</td>
+</tr>
+<tr>
+<td><code>RESOURCE_CACHE_TTL_MS</code></td>
+<td><code>0</code></td>
+<td>The same for <code>resources/read</code>. <code>0</code> by default because a resource body is whatever a selector just produced. A genuinely static resource — an interactive view, a rendered document — opts in per binding with <code>cache_ttl_ms=</code>.</td>
+</tr>
+<tr>
+<td><code>TASK_TTL_MS</code></td>
+<td><code>86400000</code> (24 h)</td>
+<td>How long a created task stays readable, reported to the client as <code>ttlMs</code>. Both a promise and a bound: after it elapses the record may be dropped, and a client still politely polling gets "unknown task" — which looks exactly like work that vanished, hence the generous default. <code>None</code> disables expiry, which is only sound for a store that evicts on its own (the cache-backed one falls back to a week so an un-polled task cannot pin memory).</td>
+</tr>
+<tr>
+<td><code>TASK_POLL_INTERVAL_MS</code></td>
+<td><code>5000</code></td>
+<td>Suggested <code>tasks/get</code> cadence, sent as <code>pollIntervalMs</code>. Advisory — clients <em>SHOULD</em> honour it, and a server <em>MAY</em> rate-limit one that polls faster. Worth tuning to how long the work actually takes: too low and every task costs a stream of no-op polls, too high and a finished task sits while its client waits. <code>None</code> omits the hint.</td>
+</tr>
+<tr>
+<td><code>INPUT_REQUEST_TTL_SECONDS</code></td>
+<td><code>600</code> (10 min)</td>
+<td>How long a <code>requestState</code> handed to a client stays redeemable. Bounds the replay window on the one value in this protocol that leaves the server, passes through the client, and comes back trusted — the spec requires the expiry alongside the principal and originating-request checks, which are not configurable because there is no defensible value other than "enforced". Long enough to read a confirmation dialog and decide; short enough that a token captured from a log is dead before anyone replays it.</td>
+</tr>
+<tr>
+<td><code>MAX_INPUT_ROUNDS</code></td>
+<td><code>5</code></td>
+<td>How many times one call may ask the user for something before failing instead of asking again. The spec explicitly allows asking repeatedly, and a service that wants a confirmation <em>and</em> a reason legitimately needs two rounds. What this bounds is the service whose condition the answer never clears — otherwise client and server volley the same question at a user indefinitely. Past the cap the call returns the service's own message as an <code>isError</code> result.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="transport-security">Transport &amp; security<a class="headerlink" href="#transport-security" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Default</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ALLOWED_ORIGINS</code></td>
+<td><code>[]</code></td>
+<td>Origin allowlist, enforced on every request (mandatory per the MCP spec). <code>["*"]</code> allows any origin — local development only.</td>
+</tr>
+<tr>
+<td><code>MAX_PROGRESS_NOTIFICATIONS</code></td>
+<td><code>1000</code></td>
+<td>Ceiling on <code>notifications/progress</code> frames emitted for one request. The spec asks both parties to rate-limit progress, and the failure mode is the familiar one: a service reporting per row over a large table turns one call into a flood. Past the cap further reports are dropped — the dispatch is untouched and the final response still arrives.</td>
+</tr>
+<tr>
+<td><code>MAX_REQUEST_BYTES</code></td>
+<td><code>1048576</code> (1 MiB)</td>
+<td>Maximum accepted request body size.</td>
+</tr>
+<tr>
+<td><code>SESSIONS_ENABLED</code></td>
+<td><code>True</code></td>
+<td>Whether the server mints and requires an <code>Mcp-Session-Id</code>. <code>False</code> runs the sessionless legacy mode, which is conformant rather than a fallback — but the session id is what addresses a client's SSE channel, so with it gone the <code>GET</code> stream has no address and answers <code>405</code>. Request/response tool calling is untouched.</td>
+</tr>
+<tr>
+<td><code>SESSION_TTL_SECONDS</code></td>
+<td><code>86400</code> (24 h)</td>
+<td>How long a session may sit <strong>idle</strong> before it expires. The window restarts on every successful read, so a session in continuous use never lapses.</td>
+</tr>
+<tr>
+<td><code>SESSION_MAX_AGE_SECONDS</code></td>
+<td><code>604800</code> (7 days)</td>
+<td>Ceiling on a session's <strong>total</strong> lifetime regardless of activity. Not optional in spirit, though <code>None</code> disables it: a session's principal binding is checked once, at <code>initialize</code>, so without an absolute cap a sliding idle window keeps a <em>revoked</em> principal alive for as long as it keeps talking. A cache-backed store may also evict earlier under memory pressure, which is indistinguishable from expiry on the client side — if sessions vanish early, check the eviction policy before this setting.</td>
+</tr>
+<tr>
+<td><code>SUBSCRIPTION_MAX_SECONDS</code></td>
+<td><code>3600</code> (1 h)</td>
+<td>How long one <code>subscriptions/listen</code> stream may stay open before the server closes it gracefully and the client re-subscribes. An authorization control as much as a resource one: a subscription's permissions are checked once, when it opens, so without a cap a principal whose access was revoked keeps receiving change signals for as long as it holds the connection. <code>None</code> disables the cap — and both bounds with it.</td>
+</tr>
+<tr>
+<td><code>MAX_CONCURRENT_SUBSCRIPTIONS</code></td>
+<td><code>100</code></td>
+<td>Ceiling on concurrent subscription streams <strong>per worker</strong>. Each parks an ASGI task for its lifetime, so without a bound an authenticated caller can exhaust the worker pool by opening streams in a loop. Past the cap a subscription is refused with <code>503</code> / <code>-32603</code> rather than queued. <code>None</code> disables.</td>
+</tr>
+<tr>
+<td><code>SSE_STREAM_MAX_SECONDS</code></td>
+<td><code>3600</code> (1 h)</td>
+<td>How long one <code>GET</code> session stream may stay open before the server closes it gracefully with a <code>: stream closed</code> comment frame. The session stream's counterpart to <code>SUBSCRIPTION_MAX_SECONDS</code>, and an authorization control on the same terms: the caller is authenticated once, when the stream opens, so without a cap a principal whose access was revoked keeps receiving that session's pushes for as long as it holds the connection — and it holds it indefinitely, since the keep-alive is what stops any proxy reaping it. An SSE client reconnects by itself; pair with <code>sse_replay_buffer=</code> for a gapless reconnect. <code>None</code> disables.</td>
+</tr>
+<tr>
+<td><code>MAX_CONCURRENT_SSE_STREAMS</code></td>
+<td><code>100</code></td>
+<td>Ceiling on concurrent <code>GET</code> session streams <strong>per worker</strong>. Each parks an ASGI task for its lifetime and minting sessions is uncapped, so without a bound an authenticated caller opens one stream per session it minted and exhausts the worker pool. Past the cap the <code>GET</code> is refused with <code>503</code> / <code>-32603</code> rather than queued. <code>None</code> disables.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="tools-output">Tools &amp; output<a class="headerlink" href="#tools-output" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Default</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>INCLUDE_STRUCTURED_CONTENT</code></td>
+<td><code>True</code></td>
+<td>Emit <code>structuredContent</code> on tool results.</td>
+</tr>
+<tr>
+<td><code>INCLUDE_OUTPUT_SCHEMA</code></td>
+<td><code>True</code></td>
+<td>Advertise <code>outputSchema</code> on tool definitions.</td>
+</tr>
+<tr>
+<td><code>INCLUDE_VALIDATION_VALUE</code></td>
+<td><code>False</code></td>
+<td>Include the offending <code>arguments</code> dict under <code>value</code> in validation errors: beside <code>detail</code> in a <code>tools/call</code> <code>validation_error</code> result's <code>error</code> object, and in the <code>-32602</code> <code>data</code> that <code>prompts/get</code> and a kernel <code>resources/read</code> answer (for a read, the URI's variables as sent). Off by default — that dict can carry PII or secrets, which would then flow back to the client and into its logs.</td>
+</tr>
+<tr>
+<td><code>PAGE_SIZE</code></td>
+<td><code>100</code></td>
+<td>Maximum items returned by one <strong>listing</strong> call (<code>tools/list</code>, <code>resources/list</code>, <code>resources/templates/list</code>, <code>prompts/list</code>). Clients page with the opaque <code>cursor</code> echoed in the response.</td>
+</tr>
+</tbody>
+</table>
+<div class="admonition warning">
+<p class="admonition-title">One combination is a spec violation</p>
+<p><code>INCLUDE_STRUCTURED_CONTENT</code> and <code>INCLUDE_OUTPUT_SCHEMA</code> are independent,
+but advertising <code>outputSchema</code> while suppressing <code>structuredContent</code> is
+forbidden by the spec and raises <code>ImproperlyConfigured</code> at request time. If
+you turn <code>INCLUDE_STRUCTURED_CONTENT</code> off, turn <code>INCLUDE_OUTPUT_SCHEMA</code> off
+too (or set <code>include_output_schema=False</code> per binding). The other direction
+— <code>structuredContent</code> without <code>outputSchema</code> — is allowed.</p>
+</div>
+<h2 id="outbound-bounds">Outbound bounds<a class="headerlink" href="#outbound-bounds" title="Permanent link">&para;</a></h2>
+<p>The mirror of <code>MAX_REQUEST_BYTES</code> on the way out. All three accept <code>None</code> to
+disable, and all three can be overridden per tool at registration
+(<code>max_result_bytes=</code>, <code>dispatch_timeout=</code>, <code>max_page_size=</code>) — pass <code>None</code>
+there to lift the bound for one deliberately-large or deliberately-slow tool.
+See <a href="../../performance/#what-the-package-bounds">What the package bounds</a>.</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Default</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>MAX_RESULT_BYTES</code></td>
+<td><code>5242880</code> (5 MiB)</td>
+<td>Ceiling on one tool result or resource read, measured on the <strong>encoded wire payload</strong>. A successful tool result carries the payload twice — as <code>structuredContent</code> and as the spec's backwards-compatibility text mirror — so a ceiling counting one copy would be wrong by 2× against the thing that matters, the client's context window. Over the ceiling the call returns an <code>isError</code> result naming the remedy; <strong>it is never truncated</strong>, because a clipped list reads as complete to the model reasoning from it.</td>
+</tr>
+<tr>
+<td><code>MAX_PAGE_SIZE</code></td>
+<td><code>100</code></td>
+<td>Ceiling on how many rows one selector-tool call returns, paged or not. For a <code>paginate=True</code> tool it bounds the model-supplied <code>limit</code>, and clamps <code>page</code> to the last page that exists so an arbitrarily large page number cannot become an arbitrarily large SQL <code>OFFSET</code>. For a <code>paginate=False</code> tool it is applied as a <code>LIMIT</code> before rendering and the call is <strong>refused</strong> over the ceiling rather than truncated, for the reason <code>REQUIRE_LIST_PAGINATION</code> gives below. <code>None</code> disables the ceiling on both. Advertised as <code>maximum</code> on the generated <code>inputSchema</code> <em>and</em> clamped at dispatch — the schema tells a well-behaved model what to ask for, the clamp is what stops you trusting it. Clamping is safe here because <code>totalPages</code> / <code>hasNext</code> keep a clamped page self-describing. The default matches the page a selector tool serves when the model omits <code>limit</code> entirely, so an unconfigured deployment never advertises a page larger than the one it defaults to.</td>
+</tr>
+<tr>
+<td><code>DISPATCH_TIMEOUT</code></td>
+<td><code>60.0</code></td>
+<td>Wall-clock ceiling, in seconds, on one dispatch. <strong>ASGI only</strong> — a sync WSGI view has no in-process way to bound its own dispatch. It does <strong>not</strong> reclaim the worker: a thread parked in a database driver's socket read is not interruptible by asyncio cancellation, so the query runs on. What it buys is a <em>terminal protocol event</em> instead of an open request that never resolves. Pair it with a database statement timeout.</td>
+</tr>
+<tr>
+<td><code>REQUIRE_LIST_PAGINATION</code></td>
+<td><code>False</code></td>
+<td>Registering a LIST selector tool with <code>paginate=False</code> raises <code>ImproperlyConfigured</code> instead of emitting <code>UnboundedListWarning</code>. Such a tool serialises whatever its selector resolves to — the whole table, for a plain <code>Model.objects.all()</code> — and unlike a paginated tool there is no honest way to clamp it, because the result carries no metadata saying rows were dropped. <code>MAX_PAGE_SIZE</code> is the backstop — applied as a <code>LIMIT</code> before the rows are rendered, so an oversized table is refused rather than fetched and measured, which is what <code>MAX_RESULT_BYTES</code> alone could not do. <code>paginate=True</code> is the fix.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="permissions">Permissions<a class="headerlink" href="#permissions" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Default</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>REQUIRE_TOOL_PERMISSIONS</code></td>
+<td><code>True</code></td>
+<td>Registering a <strong>tool or resource</strong> whose kernel spec declares no permissions (<code>permissions=None</code>), or a <strong>prompt</strong> with neither <code>permissions=[…]</code> nor <code>scopes=</code>, raises <code>ImproperlyConfigured</code>. Set it to <code>False</code> to downgrade that to an <code>UnguardedToolWarning</code> while migrating a large surface. The warning exists because a guard outside the spec — a decorator on another view, a middleware scoped to another route, a <code>REST_FRAMEWORK</code> default — has <strong>no effect over MCP</strong>: what reaches <code>/mcp/</code> is the auth backend, the spec's own permissions and the gates passed at registration, so an operation that looks guarded on another route ships here as an unguarded binding. Interactive views (<code>register_ui_resource</code>) are exempt: a view carries no tenant data by construction. A kernel spec counts as guarded by its own <code>permissions</code> alone, a scope gate apart; with the setting off, one declaring <code>permissions=None</code> and registered through <code>register_tool</code> or <code>register_resource</code> is called under a kernel <code>Grant</code> built at each call for that spec and caller, so it runs with no permission check rather than failing. A binding built by hand and passed to a registry is never granted, so the kernel refuses an unguarded one at dispatch. See <a href="../../auth/">Authentication</a> and <a href="../../concepts/#kernel-specs">Kernel specs</a>.</td>
+</tr>
+<tr>
+<td><code>REQUIRE_TOOL_DESCRIPTIONS</code></td>
+<td><code>False</code></td>
+<td>Registering a tool with no <code>description</code> raises <code>ImproperlyConfigured</code> instead of emitting <code>UndescribedToolWarning</code>. The description is the only thing a model reads to decide whether and how to call a tool, so an empty one ships a tool that cannot be used correctly — and <code>tools/list</code> renders it indistinguishably from a documented one. There is deliberately <strong>no docstring fallback</strong>: a docstring is written for the next developer, not for a model choosing between tools. See <a href="../../concepts/#documenting-tools">Documenting tools</a>.</td>
+</tr>
+<tr>
+<td><code>FILTER_LISTINGS_BY_PERMISSIONS</code></td>
+<td><code>False</code></td>
+<td>Drop bindings whose <code>permissions</code> deny the caller from <code>tools/list</code>, <code>resources/list</code>, <code>resources/templates/list</code> and <code>prompts/list</code>, and, for a kernel binding, those its spec's checks refuse when asked with no arguments (<a href="../../auth/#filtering-listings-by-permissions">Filtering listings</a>). Per-binding <code>always_listed=True</code> opts one back in as a discovery aid. A tool whose operation-scope affordance is unmet is left out of <code>tools/list</code> whatever this says.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="observability">Observability<a class="headerlink" href="#observability" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Default</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>RECORD_SERVICE_EXCEPTIONS</code></td>
+<td><code>False</code></td>
+<td>Record a <code>ServiceError</code> raised from a tool callable on the active OpenTelemetry span before mapping it to a JSON-RPC error. Off by default because services often raise <code>ServiceError</code> for routine business-rule denials, which would flood error pipelines. <code>ServiceValidationError</code> is <em>never</em> recorded — it is client input failure, not a server fault. See <a href="../../observability/">Observability</a>.</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.indexes", "navigation.top", "search.highlight", "search.share", "search.suggest", "content.code.copy", "content.code.annotate", "content.action.edit", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

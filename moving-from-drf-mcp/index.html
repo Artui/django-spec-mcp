@@ -1,0 +1,2079 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Serve django-service-specs services and selectors as a Model Context Protocol (MCP) server.">
+      
+      
+      
+        <link rel="canonical" href="https://artui.github.io/django-spec-mcp/moving-from-drf-mcp/">
+      
+      
+        <link rel="prev" href="../quickstart/">
+      
+      
+        <link rel="next" href="../concepts/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Moving from drf-mcp - django-spec-mcp</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#moving-from-drf-mcp" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="django-spec-mcp" class="md-header__button md-logo" aria-label="django-spec-mcp" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            django-spec-mcp
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Moving from drf-mcp
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Artui/django-spec-mcp" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Artui/django-spec-mcp
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="django-spec-mcp" class="md-nav__button md-logo" aria-label="django-spec-mcp" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    django-spec-mcp
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Artui/django-spec-mcp" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Artui/django-spec-mcp
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Moving from drf-mcp
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Moving from drf-mcp
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#before-the-first-deploy-live-state-is-dropped" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Before the first deploy: live state is dropped
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#install-and-imports" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Install and imports
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Settings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Authentication
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#registering-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Registering operations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#permissions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Permissions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prompts-completers-and-views" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prompts, completers and views
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tool-output-is-json" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tool output is JSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-an-http-client-sees" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What an HTTP client sees
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#calling-a-tool-in-process" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Calling a tool in process
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../auth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authentication
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../async/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Async deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../prompts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prompts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_11" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../recipes/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Recipes
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_11" id="__nav_11_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Recipes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/expose-a-service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Expose a service
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/swap-session-store/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Swap the session store
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/agent-audience/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hide plumbing from the model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/custom-permission/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add a custom permission
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/async-auth-backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Async-native auth backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/rate-limiting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add rate limiting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/redis-sse-broker/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-worker SSE with Redis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/sse-replay-buffer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Resume SSE with Last-Event-ID
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/selector-tool-with-filterset/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Selector tool with FilterSet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/interactive-view/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Render a list as an interactive table
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/register-from-spec-registry/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Register tools from a spec registry
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/pydantic-ai-client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Connect a Pydantic-AI agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/migrating/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from fastapi-mcp / hand-rolled
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_12" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../reference/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_12" id="__nav_12_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/mcp-server/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCPServer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Protocol types
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/registries/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Registries
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/settings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/auth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Auth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/output/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Output
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#before-the-first-deploy-live-state-is-dropped" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Before the first deploy: live state is dropped
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#install-and-imports" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Install and imports
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#settings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Settings
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Authentication
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#registering-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Registering operations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#permissions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Permissions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prompts-completers-and-views" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prompts, completers and views
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tool-output-is-json" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tool output is JSON
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-an-http-client-sees" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What an HTTP client sees
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#calling-a-tool-in-process" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Calling a tool in process
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/Artui/django-spec-mcp/edit/main/docs/moving-from-drf-mcp.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="moving-from-drf-mcp">Moving from drf-mcp<a class="headerlink" href="#moving-from-drf-mcp" title="Permanent link">&para;</a></h1>
+<p><code>django-spec-mcp</code> is <code>djangorestframework-mcp-server</code> (drf-mcp) carried onto the
+<a href="https://github.com/Artui/django-service-specs"><code>django-service-specs</code></a> kernel.
+It serves the same protocol from the same kind of mount, but the unit of
+registration is a kernel spec, nothing in it imports Django REST framework, and
+the names it stores outside the process are new. This page lists what a project
+moving across has to do, in the order it meets each step. The changelog's
+<code>[Unreleased]</code> section is the full list of changes; this page covers what you
+have to act on.</p>
+<h2 id="before-the-first-deploy-live-state-is-dropped">Before the first deploy: live state is dropped<a class="headerlink" href="#before-the-first-deploy-live-state-is-dropped" title="Permanent link">&para;</a></h2>
+<p>Every name the server stores outside the process is new. The cache and Redis
+prefixes are <code>spec-mcp:*</code> (<code>spec-mcp:session:</code>, <code>spec-mcp:task:</code>,
+<code>spec-mcp:sse</code>, <code>spec-mcp:sse-replay</code>, <code>spec-mcp:sub</code> and the rate-limit
+prefixes <code>spec-mcp:rl</code>, <code>spec-mcp:rl-sw</code> and <code>spec-mcp:rl-tb</code>), and an
+elicitation's <code>requestState</code> is signed with a new salt,
+<code>django_spec_mcp.elicitation.request_state</code>. Nothing reads drf-mcp's names, so
+<strong>the first deploy drops every live session, in-flight task, rate-limit window
+and pending elicitation</strong>:</p>
+<ul>
+<li>a client on the <code>2025-11-25</code> era is answered <code>404</code> on its session and starts
+  a new one with <code>initialize</code>;</li>
+<li>a task created before the deploy is unknown to <code>tasks/get</code>;</li>
+<li>a rate-limit window starts again from zero;</li>
+<li>a <code>requestState</code> signed before the deploy fails its signature, so the
+  answers it carried are dropped and the call asks again for what it still
+  needs.</li>
+</ul>
+<p>Deploy at a time when that is acceptable. A sessionless <code>2026-07-28</code> client
+holds no session to lose.</p>
+<h2 id="install-and-imports">Install and imports<a class="headerlink" href="#install-and-imports" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>drf-mcp</th>
+<th>django-spec-mcp</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>pip install djangorestframework-mcp-server</code></td>
+<td><code>pip install django-spec-mcp</code></td>
+</tr>
+<tr>
+<td><code>import rest_framework_mcp</code></td>
+<td><code>import django_spec_mcp</code>, with the same module paths below it apart from the exceptions in this table and the modules removed below</td>
+</tr>
+<tr>
+<td><code>transport.streamable_http_viewset</code>, <code>transport.async_streamable_http_viewset</code>, <code>auth.protected_resource_metadata</code></td>
+<td><code>transport.streamable_http_view</code>, <code>transport.async_streamable_http_view</code>, <code>auth.protected_resource_metadata_view</code>; see <a href="#what-an-http-client-sees">What an HTTP client sees</a></td>
+</tr>
+<tr>
+<td><code>rest_framework_mcp.constants</code></td>
+<td><code>django_spec_mcp.types</code>, one module per name (<code>JsonRpcErrorCode</code> is in <code>django_spec_mcp.types.json_rpc_error_code</code>)</td>
+</tr>
+<tr>
+<td><code>UnknownArguments</code>, <code>RESERVED_POOL_SEEDS</code> from the package</td>
+<td>import both from <code>django_service_specs</code>, which defines them</td>
+</tr>
+<tr>
+<td><code>service_spec_to_tool</code>, <code>selector_to_resource</code> from <code>django_spec_mcp.adapters</code>; <code>build_input_schema</code>, <code>build_output_schema</code> from <code>django_spec_mcp.schema</code></td>
+<td>gone: a kernel tool's schemas are the kernel's. <code>django_spec_mcp.schema.kernel_tool_input_schema</code> and <code>django_spec_mcp.schema.kernel_tool_output_schema</code> build what a tool advertises</td>
+</tr>
+<tr>
+<td>the <code>jwt</code>, <code>spectacular</code>, <code>filter</code>, <code>oauth</code> and <code>toon</code> extras</td>
+<td>gone. <code>filter_set=</code> on a selector spec needs <code>django-filter</code>, which the kernel's <code>filter</code> extra installs: <code>pip install "django-service-specs[filter]"</code></td>
+</tr>
+</tbody>
+</table>
+<p>The root still exports what it exported from <code>constants</code>, apart from four names
+that are gone: <code>UnknownArguments</code> (import it from the kernel), and
+<code>ArgumentBinding</code>, <code>OutputFormat</code> and <code>ToolKind</code>, which the sections below
+cover.
+<code>django-service-specs</code> <strong>0.20.0</strong> is the lowest kernel release the package
+runs on. It reserves <code>shapes</code> as a pool name, so a <code>PoolSeeds</code> entry named
+<code>shapes</code> is refused with a <code>ValueError</code> when it is built, as one named <code>user</code> is.</p>
+<p>djangorestframework, djangorestframework-services and
+djangorestframework-dataclasses are no longer dependencies, and nothing in the
+package imports them. If <code>"rest_framework"</code> is in <code>INSTALLED_APPS</code> only for
+drf-mcp, remove it.</p>
+<h2 id="settings">Settings<a class="headerlink" href="#settings" title="Permanent link">&para;</a></h2>
+<p>Rename the settings key: everything drf-mcp read from <code>REST_FRAMEWORK_MCP</code> is
+read from <code>SPEC_MCP</code>. <strong>A <code>REST_FRAMEWORK_MCP</code> setting is no longer read, and
+nothing warns about it</strong>, so a project that only installs the new package runs
+on the defaults until the key is renamed.</p>
+<p><strong>No <code>REST_FRAMEWORK</code> setting reaches <code>/mcp/</code>.</strong> The MCP endpoints and the
+protected-resource metadata view are plain Django views, not DRF views, so a
+project's default authentication and permission classes, its throttles
+(<code>DEFAULT_THROTTLE_CLASSES</code> and the rest), its renderers and its
+<code>EXCEPTION_HANDLER</code> do not apply to them. What authenticates a caller is the
+server's <code>auth_backend=</code>; what guards a tool or resource is its spec's
+<code>permissions</code> and the <code>scopes=</code> gate at registration; what limits a caller is
+the <code>rate_limits=</code> on each tool, resource and prompt
+(<a href="../recipes/rate-limiting/">Add rate limiting</a>).</p>
+<p>These keys are read by nothing now, and nothing warns about them. Delete them:</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Why it went</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>DEFAULT_OUTPUT_FORMAT</code></td>
+<td>TOON is gone; a tool result is always JSON. See <a href="#tool-output-is-json">Tool output</a>.</td>
+</tr>
+<tr>
+<td><code>RESOURCE_URL</code>, <code>ENFORCE_AUDIENCE</code></td>
+<td>Only the django-oauth-toolkit backend read them, and it is gone. See <a href="#authentication">Authentication</a>.</td>
+</tr>
+<tr>
+<td><code>DCR_ENABLED</code>, <code>DCR_INITIAL_ACCESS_TOKEN</code>, <code>SIMPLEJWT_ACCESS_COOKIE</code></td>
+<td>Only the bundled authorization-server pieces read them, and they are gone.</td>
+</tr>
+<tr>
+<td><code>SERVER_INFO</code>'s <code>resource</code>, <code>authorization_servers</code>, <code>scopes_supported</code>, <code>resource_metadata_url</code> and <code>documentation</code></td>
+<td>The removed backend read them to build its metadata. A backend of your own publishes its metadata itself.</td>
+</tr>
+</tbody>
+</table>
+<p>The rest of <code>SERVER_INFO</code> is read as before, and its <code>name</code> defaults to
+<code>django-spec-mcp</code>.</p>
+<h2 id="authentication">Authentication<a class="headerlink" href="#authentication" title="Permanent link">&para;</a></h2>
+<p><strong>A mounted server needs an <code>auth_backend=</code>.</strong> drf-mcp fell back to its
+django-oauth-toolkit backend; no backend that verifies tokens ships now, so
+<code>server.urls</code> and <code>server.async_urls</code> raise <code>ImproperlyConfigured</code> naming the
+server when none was given. <code>MCPServer(...)</code> itself still builds without one,
+and <code>call_tool</code>, <code>acall_tool</code> and <code>list_tools</code> never authenticate, so a server
+used only in process needs none.</p>
+<p>What went with the django-oauth-toolkit backend:</p>
+<ul>
+<li><code>DjangoOAuthToolkitBackend</code>, <code>UnenforcedAudienceWarning</code> and
+  <code>MountedAuthorizationServerWarning</code>;</li>
+<li><code>MCPServer(resource_url=)</code>, and the <code>RESOURCE_URL</code> and <code>ENFORCE_AUDIENCE</code>
+  settings;</li>
+<li>the <code>oauth</code> extra;</li>
+<li>the <code>SERVER_INFO</code> keys the backend read, listed above;</li>
+<li>the bundled authorization-server pieces in <code>rest_framework_mcp.contrib</code>:
+  Dynamic Client Registration, the authorization-server metadata and OpenID
+  discovery views, <code>build_oauth_urlpatterns</code> and its <code>mcp-oauth-*</code> URL names,
+  <code>check_oauth_url_shadowing</code>, <code>build_authorize_passthrough_view</code>,
+  <code>AuthUserAdapter</code> and <code>SimpleJWTCookieAdapter</code>.</li>
+</ul>
+<p><strong>A backend no longer answers <code>authorization_server_metadata()</code>.</strong> The method
+is gone from <code>MCPAuthBackend</code> and from <code>AllowAnyBackend</code>, and the
+<code>AuthorizationServerMetadata</code> dataclass and its export from
+<code>django_spec_mcp.auth.types</code> with it. An authorization server's metadata is the
+authorization server's to serve, and this package is only the resource server
+beside it. Nothing calls the method, so delete it from a backend of your own.</p>
+<p>The authorization server is yours to run, and this package is the resource
+server beside it. Write the backend for the authorization server you run:
+<a href="../auth/#writing-your-own-backend">Writing your own backend</a> walks through one
+that verifies a token, checks its audience with <code>audience_matches</code> and builds its
+<code>401</code> challenge with <code>bearer_challenge</code>:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_mcp.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">bearer_challenge</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">bearer_challenge</span><span class="p">(</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">resource_metadata_url</span><span class="o">=</span><span class="s2">&quot;https://example.com/mcp/.well-known/oauth-protected-resource&quot;</span><span class="p">,</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">scopes</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;invoices:read&quot;</span><span class="p">],</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">error</span><span class="o">=</span><span class="s2">&quot;insufficient_scope&quot;</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="p">)</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="c1"># &#39;Bearer realm=&quot;mcp&quot;, resource_metadata=&quot;https://example.com/mcp/.well-known/oauth-protected-resource&quot;, error=&quot;insufficient_scope&quot;, scope=&quot;invoices:read&quot;&#39;</span>
+</span></code></pre></div>
+<p><strong>A backend refuses a caller by returning <code>None</code>.</strong> <code>None</code> from <code>authenticate</code>
+is the <code>401</code> carrying the backend's challenge. Under drf-mcp every <code>401</code> asked
+for that challenge with <code>error="invalid_token"</code>; a request with no
+<code>Authorization</code> header now asks with <code>error=None</code>, so its challenge carries no
+error code, as RFC 6750 3.1 says it should not. An exception a backend raises is
+no longer rendered by DRF, and nothing renders it in DRF's place: Django's
+<code>PermissionDenied</code> and <code>Http404</code> are Django's own HTML <code>403</code> and <code>404</code> pages,
+with no challenge, and any other exception is a <code>500</code>. That includes DRF's
+<code>AuthenticationFailed</code>, which was a <code>403</code> reading <code>{"detail": ...}</code> under
+drf-mcp. A backend that raised it returns <code>None</code> instead.</p>
+<p>The backend is handed an anonymous request whatever session cookie it carries,
+and from the moment the request authenticates, <code>request.user</code> and
+<code>request.auser()</code> are the token's principal.</p>
+<h2 id="registering-operations">Registering operations<a class="headerlink" href="#registering-operations" title="Permanent link">&para;</a></h2>
+<p>The drf-services registrars are gone. Declare each operation as a kernel
+<code>ServiceSpec</code> or <code>SelectorSpec</code> and register the spec:</p>
+<table>
+<thead>
+<tr>
+<th>drf-mcp</th>
+<th>django-spec-mcp</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>register_service_tool</code>, <code>@server.service_tool</code></td>
+<td><code>register_tool(spec, *, name, ...)</code> with a <code>ServiceSpec</code></td>
+</tr>
+<tr>
+<td><code>register_selector_tool</code>, <code>@server.selector_tool</code></td>
+<td><code>register_tool(spec, *, name, ...)</code> with a <code>SelectorSpec</code></td>
+</tr>
+<tr>
+<td><code>register_specs</code>, and the root <code>register_tools(server, definitions, *, selector_defaults=, service_defaults=)</code> with its <code>ToolDefinition</code>, <code>ToolKind</code>, <code>ServiceDefaults</code> and <code>SelectorDefaults</code></td>
+<td><code>server.register_tools(registry, *, overrides=)</code> over a kernel <code>SpecRegistry</code>; the knobs a defaults record held are passed per tool, under its name in <code>overrides</code></td>
+</tr>
+<tr>
+<td><code>register_resource(selector=...)</code>, <code>@server.resource</code></td>
+<td><code>register_resource(spec, /, *, name, uri_template, ...)</code> with a <code>RETRIEVE</code> <code>SelectorSpec</code></td>
+</tr>
+<tr>
+<td><code>register_chain_tool</code>, <code>ChainStep</code></td>
+<td>one <code>ServiceSpec</code> whose service calls the others, registered with <code>register_tool</code></td>
+</tr>
+</tbody>
+</table>
+<p>The spec's class decides the kind of tool: a <code>ServiceSpec</code> is a service tool
+and a <code>SelectorSpec</code> a selector tool.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_service_specs</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="n">DataclassPresenter</span><span class="p">,</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">DataclassValidator</span><span class="p">,</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="n">Parameter</span><span class="p">,</span>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="n">Parameters</span><span class="p">,</span>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="n">SelectorKind</span><span class="p">,</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>    <span class="n">SelectorSpec</span><span class="p">,</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>    <span class="n">ServiceSpec</span><span class="p">,</span>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    <span class="n">SpecRegistry</span><span class="p">,</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="p">)</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="nd">@dataclass</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="k">class</span><span class="w"> </span><span class="nc">InvoiceInput</span><span class="p">:</span>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>    <span class="n">number</span><span class="p">:</span> <span class="nb">str</span>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="n">create_invoice_spec</span> <span class="o">=</span> <span class="n">ServiceSpec</span><span class="p">(</span>
+</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>    <span class="n">service</span><span class="o">=</span><span class="n">create_invoice</span><span class="p">,</span>  <span class="c1"># def create_invoice(*, data): ...</span>
+</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>    <span class="n">validator</span><span class="o">=</span><span class="n">DataclassValidator</span><span class="p">(</span><span class="n">InvoiceInput</span><span class="p">),</span>
+</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>    <span class="n">presenter</span><span class="o">=</span><span class="n">DataclassPresenter</span><span class="p">(</span><span class="n">InvoiceOutput</span><span class="p">),</span>
+</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>    <span class="n">permissions</span><span class="o">=</span><span class="p">[</span><span class="n">IsBillingStaff</span><span class="p">()],</span>
+</span><span id="__span-1-25"><a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a><span class="p">)</span>
+</span><span id="__span-1-26"><a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a><span class="n">server</span><span class="o">.</span><span class="n">register_tool</span><span class="p">(</span><span class="n">create_invoice_spec</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;invoices.create&quot;</span><span class="p">)</span>
+</span><span id="__span-1-27"><a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a>
+</span><span id="__span-1-28"><a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a><span class="n">registry</span> <span class="o">=</span> <span class="n">SpecRegistry</span><span class="p">()</span>
+</span><span id="__span-1-29"><a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a><span class="n">registry</span><span class="o">.</span><span class="n">register</span><span class="p">(</span>
+</span><span id="__span-1-30"><a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a>    <span class="s2">&quot;invoices.list&quot;</span><span class="p">,</span>
+</span><span id="__span-1-31"><a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a>    <span class="n">SelectorSpec</span><span class="p">(</span>
+</span><span id="__span-1-32"><a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a>        <span class="n">kind</span><span class="o">=</span><span class="n">SelectorKind</span><span class="o">.</span><span class="n">LIST</span><span class="p">,</span>
+</span><span id="__span-1-33"><a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a>        <span class="n">selector</span><span class="o">=</span><span class="n">list_invoices</span><span class="p">,</span>
+</span><span id="__span-1-34"><a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a>        <span class="n">presenter</span><span class="o">=</span><span class="n">DataclassPresenter</span><span class="p">(</span><span class="n">InvoiceOutput</span><span class="p">),</span>
+</span><span id="__span-1-35"><a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a>        <span class="n">permissions</span><span class="o">=</span><span class="p">[</span><span class="n">IsBillingStaff</span><span class="p">()],</span>
+</span><span id="__span-1-36"><a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a>    <span class="p">),</span>
+</span><span id="__span-1-37"><a id="__codelineno-1-37" name="__codelineno-1-37" href="#__codelineno-1-37"></a><span class="p">)</span>
+</span><span id="__span-1-38"><a id="__codelineno-1-38" name="__codelineno-1-38" href="#__codelineno-1-38"></a><span class="n">server</span><span class="o">.</span><span class="n">register_tools</span><span class="p">(</span><span class="n">registry</span><span class="p">,</span> <span class="n">overrides</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;invoices.list&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;paginate&quot;</span><span class="p">:</span> <span class="kc">True</span><span class="p">}})</span>
+</span><span id="__span-1-39"><a id="__codelineno-1-39" name="__codelineno-1-39" href="#__codelineno-1-39"></a>
+</span><span id="__span-1-40"><a id="__codelineno-1-40" name="__codelineno-1-40" href="#__codelineno-1-40"></a><span class="n">server</span><span class="o">.</span><span class="n">register_resource</span><span class="p">(</span>
+</span><span id="__span-1-41"><a id="__codelineno-1-41" name="__codelineno-1-41" href="#__codelineno-1-41"></a>    <span class="n">SelectorSpec</span><span class="p">(</span>
+</span><span id="__span-1-42"><a id="__codelineno-1-42" name="__codelineno-1-42" href="#__codelineno-1-42"></a>        <span class="n">kind</span><span class="o">=</span><span class="n">SelectorKind</span><span class="o">.</span><span class="n">RETRIEVE</span><span class="p">,</span>
+</span><span id="__span-1-43"><a id="__codelineno-1-43" name="__codelineno-1-43" href="#__codelineno-1-43"></a>        <span class="n">selector</span><span class="o">=</span><span class="n">get_invoice</span><span class="p">,</span>  <span class="c1"># def get_invoice(*, pk): ...</span>
+</span><span id="__span-1-44"><a id="__codelineno-1-44" name="__codelineno-1-44" href="#__codelineno-1-44"></a>        <span class="n">reads</span><span class="o">=</span><span class="n">Parameters</span><span class="p">([</span><span class="n">Parameter</span><span class="p">(</span><span class="s2">&quot;pk&quot;</span><span class="p">,</span> <span class="s2">&quot;integer&quot;</span><span class="p">,</span> <span class="n">required</span><span class="o">=</span><span class="kc">True</span><span class="p">)]),</span>
+</span><span id="__span-1-45"><a id="__codelineno-1-45" name="__codelineno-1-45" href="#__codelineno-1-45"></a>        <span class="n">presenter</span><span class="o">=</span><span class="n">DataclassPresenter</span><span class="p">(</span><span class="n">InvoiceOutput</span><span class="p">),</span>
+</span><span id="__span-1-46"><a id="__codelineno-1-46" name="__codelineno-1-46" href="#__codelineno-1-46"></a>        <span class="n">permissions</span><span class="o">=</span><span class="p">[</span><span class="n">IsBillingStaff</span><span class="p">()],</span>
+</span><span id="__span-1-47"><a id="__codelineno-1-47" name="__codelineno-1-47" href="#__codelineno-1-47"></a>    <span class="p">),</span>
+</span><span id="__span-1-48"><a id="__codelineno-1-48" name="__codelineno-1-48" href="#__codelineno-1-48"></a>    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;invoice&quot;</span><span class="p">,</span>
+</span><span id="__span-1-49"><a id="__codelineno-1-49" name="__codelineno-1-49" href="#__codelineno-1-49"></a>    <span class="n">uri_template</span><span class="o">=</span><span class="s2">&quot;invoices://</span><span class="si">{pk}</span><span class="s2">&quot;</span><span class="p">,</span>
+</span><span id="__span-1-50"><a id="__codelineno-1-50" name="__codelineno-1-50" href="#__codelineno-1-50"></a><span class="p">)</span>
+</span></code></pre></div>
+<p><strong>A client sends a service tool's arguments at the top level.</strong> The advertised
+<code>inputSchema</code> is the kernel's, so the tool above takes <code>{"number": "A-1"}</code>,
+with no <code>data</code> key around it. A client or an agent prompt that still wraps the
+arguments in <code>data</code> gets a <code>validation_error</code> result naming what is missing,
+<code>Missing required argument(s): `number`.</code>, with <code>data</code> refused as an unknown
+argument in its detail.</p>
+<p>What a binding used to declare is declared on the spec: its <code>reads</code> are the
+arguments a call takes, a URL lookup among them; its <code>shapes</code> are the
+read-shaping arguments a caller may send; its presenter is what a result is
+rendered as; its <code>kwargs=</code> provider fills keys from the server's side. So
+<code>ToolBinding</code>, <code>SelectorToolBinding</code>, <code>ArgumentBinding</code>, <code>QueryParam</code> and
+<code>UrlKwarg</code> are gone, and every tool is a <code>KernelToolBinding</code>. A
+<code>ResourceBinding</code> built by hand loses <code>kind</code>, <code>output_serializer</code> and
+<code>kwargs_provider</code>. <a href="../concepts/#kernel-specs">Kernel specs</a> is the full
+account.</p>
+<p><strong>A URI-template variable named <code>request</code> or <code>view</code> is refused.</strong> Those are
+the kernel's <code>CALL_SEEDS</code>, the call's own, so <code>register_resource</code> reserves them
+beside the pool seeds and raises <code>ImproperlyConfigured</code> naming the resource and
+the variable. Rename the variable. <code>TOOL_EDGE_SEEDS</code>, <code>COMPLETION_EDGE_SEEDS</code>
+and <code>RESOURCE_EDGE_SEEDS</code> are gone; import <code>CALL_SEEDS</code> from
+<code>django_service_specs</code>.</p>
+<h2 id="permissions">Permissions<a class="headerlink" href="#permissions" title="Permanent link">&para;</a></h2>
+<p><code>MCPPermission</code>, <code>ScopeRequired</code>, <code>DjangoPermRequired</code> and
+<code>DRFPermissionAdapter</code> are gone, and a DRF permission class gates nothing.
+Every guard is a kernel <code>PermissionCheck</code> in <code>permissions=</code>, on the spec or on
+a prompt or view:</p>
+<table>
+<thead>
+<tr>
+<th>drf-mcp</th>
+<th>django-spec-mcp</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ScopeRequired(["invoices:read"])</code></td>
+<td><code>scopes=["invoices:read"]</code> at registration</td>
+</tr>
+<tr>
+<td><code>DjangoPermRequired("billing.view_invoice")</code></td>
+<td>a <code>PermissionCheck</code> reading <code>principal.has_perm("billing.view_invoice")</code></td>
+</tr>
+<tr>
+<td>an <code>MCPPermission</code> asked <code>has_permission(request, token)</code></td>
+<td>a <code>PermissionCheck</code> asked <code>has_permission(principal, spec)</code></td>
+</tr>
+</tbody>
+</table>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_service_specs</span><span class="w"> </span><span class="kn">import</span> <span class="n">PermissionCheck</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">CanViewInvoices</span><span class="p">(</span><span class="n">PermissionCheck</span><span class="p">):</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">message</span> <span class="o">=</span> <span class="s2">&quot;You may not view invoices.&quot;</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">has_permission</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">principal</span><span class="p">,</span> <span class="n">spec</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>        <span class="k">return</span> <span class="n">principal</span><span class="o">.</span><span class="n">has_perm</span><span class="p">(</span><span class="s2">&quot;billing.view_invoice&quot;</span><span class="p">)</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="n">server</span><span class="o">.</span><span class="n">register_prompt</span><span class="p">(</span>
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;summarise-ledger&quot;</span><span class="p">,</span>
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>    <span class="n">render</span><span class="o">=</span><span class="n">render_summary</span><span class="p">,</span>
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>    <span class="n">permissions</span><span class="o">=</span><span class="p">[</span><span class="n">CanViewInvoices</span><span class="p">()],</span>
+</span><span id="__span-2-15"><a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>    <span class="n">scopes</span><span class="o">=</span><span class="s2">&quot;ledger:read&quot;</span><span class="p">,</span>
+</span><span id="__span-2-16"><a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="p">)</span>
+</span></code></pre></div>
+<p>On a prompt or a view, two answers changed:</p>
+<ul>
+<li><strong>A deactivated principal is refused</strong>, as a spec's dispatch refuses one: a
+  <code>prompts/get</code> or <code>resources/read</code> of a view by a token whose user is
+  inactive is answered <code>-32006</code>.</li>
+<li><strong><code>permissions=[]</code> is refused</strong> with <code>ImproperlyConfigured</code>, as on a spec,
+  because an empty list reads as a gate and admits everyone. Leave
+  <code>permissions=</code> out for no checks, or declare <code>[Unrestricted()]</code>.</li>
+</ul>
+<p><a href="../auth/#prompts-and-interactive-views">Prompts and interactive views</a> has the
+rest of the rule, and <a href="../recipes/custom-permission/">Add a custom permission</a> a
+worked check.</p>
+<p><strong>Only Django's <code>PermissionDenied</code> is a denial.</strong> Raised from a check, it is
+still <code>-32006</code> under a <code>403</code>. DRF's <code>PermissionDenied</code> is not a subclass of it,
+so it is now a fault like any other exception: <code>-32603</code>, logged at <code>ERROR</code>. A
+check that raised DRF's class returns <code>False</code> or raises Django's.</p>
+<h2 id="prompts-completers-and-views">Prompts, completers and views<a class="headerlink" href="#prompts-completers-and-views" title="Permanent link">&para;</a></h2>
+<p><strong>A prompt's <code>render</code> and a completer declaring <code>request</code> receive Django's
+<code>HttpRequest</code>,</strong> not a DRF <code>Request</code>, with the caller's token on it as
+<code>request.mcp_token</code>. There is no <code>request.data</code> or <code>request.query_params</code>: a
+render reads the prompt's arguments by name, and a completer reads what was
+typed from <code>value</code> and the client's resolved siblings from <code>arguments</code>.</p>
+<p><strong>A <code>user</code> seed for a token naming no one is <code>AnonymousUser</code></strong>, not <code>None</code>, so
+a render testing <code>user is None</code> tests <code>user.is_authenticated</code> instead.</p>
+<p><strong>A completer is handed a sibling argument named <code>serializer</code></strong> like any other;
+drf-mcp stripped it.</p>
+<p><strong>A view's callable is <code>render=</code>.</strong> <code>register_ui_resource(selector=...)</code> is now
+<code>register_ui_resource(render=...)</code>; passing <code>selector=</code> is a <code>TypeError</code>.</p>
+<h2 id="tool-output-is-json">Tool output is JSON<a class="headerlink" href="#tool-output-is-json" title="Permanent link">&para;</a></h2>
+<p>TOON output is gone, along with <code>OutputFormat</code>, <code>encode_toon</code>,
+<code>register_tool(output_format=)</code> and its <code>register_tools</code> override,
+<code>KernelToolBinding.output_format</code>, <code>build_tool_result(output_format=)</code> and the
+<code>toon</code> extra. A tool result's <code>content[0]</code> text is the payload as JSON, beside
+the same payload in <code>structuredContent</code>.</p>
+<ul>
+<li>A <code>SPEC_MCP["DEFAULT_OUTPUT_FORMAT"]</code> left in settings is ignored, with no
+  warning. Delete it.</li>
+<li>A <code>tools/call</code> carrying <code>outputFormat</code> beside <code>name</code> and <code>arguments</code> is no
+  longer refused for an unknown value: the parameter is not read, and the call
+  is answered in JSON. Sent inside <code>arguments</code> instead, it is an argument the
+  tool does not declare, and is refused as one under <code>UnknownArguments.REJECT</code>.</li>
+</ul>
+<h2 id="what-an-http-client-sees">What an HTTP client sees<a class="headerlink" href="#what-an-http-client-sees" title="Permanent link">&para;</a></h2>
+<p>The endpoint classes are renamed and are plain Django views:</p>
+<table>
+<thead>
+<tr>
+<th>drf-mcp</th>
+<th>django-spec-mcp</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>StreamableHttpViewSet</code></td>
+<td><code>StreamableHttpView</code>, in <code>django_spec_mcp.transport.streamable_http_view</code></td>
+</tr>
+<tr>
+<td><code>AsyncStreamableHttpViewSet</code></td>
+<td><code>AsyncStreamableHttpView</code>, in <code>django_spec_mcp.transport.async_streamable_http_view</code></td>
+</tr>
+<tr>
+<td><code>ProtectedResourceMetadataViewSet</code></td>
+<td><code>ProtectedResourceMetadataView</code>, in <code>django_spec_mcp.auth.protected_resource_metadata_view</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>as_view</code> takes only the collaborators as keyword arguments, with no routing
+map. A project mounting <code>server.urls</code> or <code>server.async_urls</code> needs no change.</p>
+<p>A few answers change, which matters to a test suite that pins them:</p>
+<ul>
+<li><code>OPTIONS</code> answers <code>200</code> with <code>Allow</code> and an empty body, where it served DRF's
+  metadata.</li>
+<li>A method the endpoint does not route is a <code>405</code> with <code>Allow</code> and an empty
+  body, rather than a JSON <code>detail</code>.</li>
+<li>A <code>?format=</code> query is ignored rather than answered <code>404</code>.</li>
+<li>The <code>406</code> body and the metadata document are written with <code>json.dumps</code>
+  defaults: <code>", "</code> and <code>": "</code> separators, and non-ASCII escaped.</li>
+</ul>
+<h2 id="calling-a-tool-in-process">Calling a tool in process<a class="headerlink" href="#calling-a-tool-in-process" title="Permanent link">&para;</a></h2>
+<p><code>call_tool</code> and <code>acall_tool</code> never write the call's user to a request you hand
+them: each works on a copy of <code>request=</code> whose <code>user</code> is the call's <code>user=</code>, so
+a view handing its own request keeps serving as its own user after the call.
+<code>acall_tool</code> handed the request itself through under drf-mcp. See
+<a href="../concepts/#transport-neutral-invocation-call_tool">Transport-neutral invocation</a>
+for what the copy shares with the request it was made from.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.indexes", "navigation.top", "search.highlight", "search.share", "search.suggest", "content.code.copy", "content.code.annotate", "content.action.edit", "toc.follow"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

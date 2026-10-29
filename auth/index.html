@@ -1,0 +1,2178 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Serve django-service-specs services and selectors as a Model Context Protocol (MCP) server.">
+      
+      
+      
+        <link rel="canonical" href="https://artui.github.io/django-spec-mcp/auth/">
+      
+      
+        <link rel="prev" href="../concepts/">
+      
+      
+        <link rel="next" href="../async/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Authentication - django-spec-mcp</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#authentication" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="django-spec-mcp" class="md-header__button md-logo" aria-label="django-spec-mcp" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            django-spec-mcp
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Authentication
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Artui/django-spec-mcp" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Artui/django-spec-mcp
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="django-spec-mcp" class="md-nav__button md-logo" aria-label="django-spec-mcp" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    django-spec-mcp
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Artui/django-spec-mcp" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Artui/django-spec-mcp
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../moving-from-drf-mcp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Moving from drf-mcp
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authentication
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authentication
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-pieces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The pieces
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#allowanybackend-dev-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AllowAnyBackend (dev only)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#writing-your-own-backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Writing your own backend
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#who-may-call-a-tool" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Who may call a tool
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Who may call a tool">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-scope-gate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The scope gate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#prompts-and-interactive-views" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prompts and interactive views
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#object-level-permissions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Object-level permissions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#filtering-listings-by-permissions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Filtering listings by permissions
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#audience-binding-rfc-8707" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Audience binding (RFC 8707)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Audience binding (RFC 8707)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#if-you-are-writing-a-resource-server-against-the-official-mcp-sdk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        If you are writing a resource server against the official mcp SDK
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#try-it-with-mcp-inspector" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Try it with mcp-inspector
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../async/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Async deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../prompts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prompts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_11" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../recipes/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Recipes
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_11" id="__nav_11_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Recipes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/expose-a-service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Expose a service
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/swap-session-store/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Swap the session store
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/agent-audience/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hide plumbing from the model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/custom-permission/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add a custom permission
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/async-auth-backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Async-native auth backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/rate-limiting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add rate limiting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/redis-sse-broker/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-worker SSE with Redis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/sse-replay-buffer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Resume SSE with Last-Event-ID
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/selector-tool-with-filterset/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Selector tool with FilterSet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/interactive-view/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Render a list as an interactive table
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/register-from-spec-registry/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Register tools from a spec registry
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/pydantic-ai-client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Connect a Pydantic-AI agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../recipes/migrating/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from fastapi-mcp / hand-rolled
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_12" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../reference/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_12" id="__nav_12_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/mcp-server/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCPServer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Protocol types
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/registries/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Registries
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/settings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/auth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Auth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/output/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Output
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-pieces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The pieces
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#allowanybackend-dev-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AllowAnyBackend (dev only)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#writing-your-own-backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Writing your own backend
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#who-may-call-a-tool" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Who may call a tool
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Who may call a tool">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-scope-gate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The scope gate
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#prompts-and-interactive-views" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prompts and interactive views
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#object-level-permissions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Object-level permissions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#filtering-listings-by-permissions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Filtering listings by permissions
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#audience-binding-rfc-8707" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Audience binding (RFC 8707)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Audience binding (RFC 8707)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#if-you-are-writing-a-resource-server-against-the-official-mcp-sdk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        If you are writing a resource server against the official mcp SDK
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#try-it-with-mcp-inspector" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Try it with mcp-inspector
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/Artui/django-spec-mcp/edit/main/docs/auth.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="authentication">Authentication<a class="headerlink" href="#authentication" title="Permanent link">&para;</a></h1>
+<p><code>django-spec-mcp</code> is a <strong>resource server</strong>: it validates bearer tokens
+that someone else issued. The library does not implement a token issuer (that's
+the job of an Authorization Server / IDP), and it does not verify a token for
+you: how a token is verified depends on the authorization server a project
+runs, so that backend is the project's to write. What ships is the seam: the
+<code>MCPAuthBackend</code> protocol, the <code>bearer_challenge</code> helper that builds the 401
+challenge, the exact audience comparison, the RFC 9728 metadata view clients use
+to discover your authorization server, and <code>AllowAnyBackend</code> for development.</p>
+<h2 id="the-pieces">The pieces<a class="headerlink" href="#the-pieces" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Surface</th>
+<th>Protocol</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>MCPAuthBackend</code></td>
+<td>Authenticate request → <code>TokenInfo</code>, build <code>WWW-Authenticate</code>, supply PRM payload</td>
+<td><strong>none</strong>: <code>auth_backend=</code> is required to mount, and <code>urls</code> / <code>async_urls</code> refuse without one</td>
+</tr>
+<tr>
+<td>The spec's <code>permissions</code></td>
+<td>Kernel <code>PermissionCheck</code>s guarding a tool or resource</td>
+<td>required: a spec with none is refused at registration</td>
+</tr>
+<tr>
+<td><code>scopes=</code></td>
+<td>OAuth scopes a binding's caller must carry</td>
+<td><code>None</code> (no scope gate)</td>
+</tr>
+<tr>
+<td><code>permissions=</code> on a prompt or view</td>
+<td>Kernel <code>PermissionCheck</code>s, each handed the binding as the spec</td>
+<td><code>None</code> (no checks; <code>[]</code> is refused, as on a spec); a prompt with neither these nor <code>scopes=</code> is refused</td>
+</tr>
+<tr>
+<td><code>/.well-known/oauth-protected-resource</code></td>
+<td>RFC 9728 metadata</td>
+<td>served from backend's <code>protected_resource_metadata()</code></td>
+</tr>
+</tbody>
+</table>
+<p>The transport flow on every request:</p>
+<ol>
+<li>Validate <code>Origin</code>, <code>MCP-Protocol-Version</code>, <code>MCP-Session-Id</code> (where required).</li>
+<li><code>backend.authenticate(request)</code> → <code>TokenInfo | None</code>. <code>None</code>, the answer
+   for a caller the backend cannot authenticate, → 401 with the challenge from
+   <code>backend.www_authenticate_challenge(error=...)</code>: <code>error="invalid_token"</code>
+   when the request sent an <code>Authorization</code> header, <code>error=None</code> when it sent
+   none (RFC 6750 3.1: a request with no credentials gets no error code). A backend that raises instead is
+   not answered as MCP: a <code>PermissionDenied</code> or <code>Http404</code> renders as Django's
+   own HTML 403 or 404, and anything else is a 500. From here on
+   <code>request.user</code> and <code>request.auser()</code> are the token's principal.</li>
+<li>The binding's scope gate and its spec's permissions are asked; a denial →
+   403, with any required scopes surfaced in the challenge.</li>
+<li>Handler dispatched.</li>
+</ol>
+<h2 id="allowanybackend-dev-only"><code>AllowAnyBackend</code> (dev only)<a class="headerlink" href="#allowanybackend-dev-only" title="Permanent link">&para;</a></h2>
+<p>Authenticates every request as anonymous. The metadata payload is intentionally
+minimal and includes a <code>_warning</code>. Don't ship this to production.</p>
+<p>Pass it when you build the server:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_mcp</span><span class="w"> </span><span class="kn">import</span> <span class="n">MCPServer</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_mcp.auth.backends.allow_any_backend</span><span class="w"> </span><span class="kn">import</span> <span class="n">AllowAnyBackend</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">server</span> <span class="o">=</span> <span class="n">MCPServer</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;dev&quot;</span><span class="p">,</span> <span class="n">auth_backend</span><span class="o">=</span><span class="n">AllowAnyBackend</span><span class="p">())</span>
+</span></code></pre></div>
+<h2 id="writing-your-own-backend">Writing your own backend<a class="headerlink" href="#writing-your-own-backend" title="Permanent link">&para;</a></h2>
+<p>A mounted server has no default backend. Every request to its endpoint reaches
+<code>authenticate()</code>, and a package default would either verify against an
+authorization server you may not run or answer every caller, so
+<code>server.urls</code> and <code>server.async_urls</code> raise <code>ImproperlyConfigured</code> when
+<code>auth_backend=</code> was not given. A server used purely in process (<code>call_tool</code>,
+<code>list_tools</code>) never authenticates and needs no backend.</p>
+<p>A backend implements <code>MCPAuthBackend</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Answers</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>authenticate(request)</code></td>
+<td>A <code>TokenInfo</code> for a request carrying a valid token, <code>None</code> for one that does not (the transport answers 401)</td>
+</tr>
+<tr>
+<td><code>protected_resource_metadata()</code></td>
+<td>The RFC 9728 document served at <code>.well-known/oauth-protected-resource</code>: the resource's URL and the authorization servers that issue tokens for it</td>
+</tr>
+<tr>
+<td><code>www_authenticate_challenge(scopes=, error=)</code></td>
+<td>The <code>WWW-Authenticate</code> value of a 401 or an insufficient-scope 403. A 401 passes <code>error="invalid_token"</code> when the request sent an <code>Authorization</code> header and <code>error=None</code> when it did not; a 403 passes <code>error="insufficient_scope"</code> with the scopes</td>
+</tr>
+</tbody>
+</table>
+<p>This one verifies tokens with a function the project supplies (a JWKS check, an
+introspection call, a database lookup) and binds each token to this server's
+URL:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django.http</span><span class="w"> </span><span class="kn">import</span> <span class="n">HttpRequest</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_mcp.auth</span><span class="w"> </span><span class="kn">import</span> <span class="n">TokenInfo</span><span class="p">,</span> <span class="n">bearer_challenge</span>
+</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_mcp.auth.audience</span><span class="w"> </span><span class="kn">import</span> <span class="n">audience_matches</span>
+</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_mcp.auth.types.protected_resource_metadata</span><span class="w"> </span><span class="kn">import</span> <span class="n">ProtectedResourceMetadata</span>
+</span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+</span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="k">class</span><span class="w"> </span><span class="nc">BearerBackend</span><span class="p">:</span>
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Verifies tokens an outside authorization server issued for this server.&quot;&quot;&quot;</span>
+</span><span id="__span-1-10"><a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>
+</span><span id="__span-1-11"><a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">resource_url</span><span class="p">,</span> <span class="n">authorization_server</span><span class="p">,</span> <span class="n">scopes_supported</span><span class="p">,</span> <span class="n">verify</span><span class="p">):</span>
+</span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_resource_url</span> <span class="o">=</span> <span class="n">resource_url</span>
+</span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_authorization_server</span> <span class="o">=</span> <span class="n">authorization_server</span>
+</span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_scopes_supported</span> <span class="o">=</span> <span class="n">scopes_supported</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">_verify</span> <span class="o">=</span> <span class="n">verify</span>  <span class="c1"># raw token -&gt; TokenInfo, or None when it does not verify</span>
+</span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">authenticate</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">HttpRequest</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TokenInfo</span> <span class="o">|</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>        <span class="n">scheme</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">raw</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">headers</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;Authorization&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">partition</span><span class="p">(</span><span class="s2">&quot; &quot;</span><span class="p">)</span>
+</span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a>        <span class="k">if</span> <span class="n">scheme</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="o">!=</span> <span class="s2">&quot;bearer&quot;</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">raw</span><span class="p">:</span>
+</span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a>            <span class="k">return</span> <span class="kc">None</span>
+</span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>        <span class="n">info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_verify</span><span class="p">(</span><span class="n">raw</span><span class="p">)</span>
+</span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>        <span class="c1"># The audience MUST: a token issued for another resource on the same</span>
+</span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>        <span class="c1"># authorization server verifies fine and must still be refused here.</span>
+</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>        <span class="k">if</span> <span class="n">info</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">audience_matches</span><span class="p">(</span><span class="n">info</span><span class="o">.</span><span class="n">audience</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resource_url</span><span class="p">):</span>
+</span><span id="__span-1-25"><a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a>            <span class="k">return</span> <span class="kc">None</span>
+</span><span id="__span-1-26"><a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a>        <span class="k">return</span> <span class="n">info</span>
+</span><span id="__span-1-27"><a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a>
+</span><span id="__span-1-28"><a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">protected_resource_metadata</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ProtectedResourceMetadata</span><span class="p">:</span>
+</span><span id="__span-1-29"><a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a>        <span class="k">return</span> <span class="n">ProtectedResourceMetadata</span><span class="p">(</span>
+</span><span id="__span-1-30"><a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a>            <span class="n">resource</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_resource_url</span><span class="p">,</span>
+</span><span id="__span-1-31"><a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a>            <span class="n">authorization_servers</span><span class="o">=</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_authorization_server</span><span class="p">],</span>
+</span><span id="__span-1-32"><a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a>            <span class="n">scopes_supported</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_scopes_supported</span><span class="p">),</span>
+</span><span id="__span-1-33"><a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a>        <span class="p">)</span>
+</span><span id="__span-1-34"><a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a>
+</span><span id="__span-1-35"><a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">www_authenticate_challenge</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">scopes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">error</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+</span><span id="__span-1-36"><a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a>        <span class="c1"># The server mounts its metadata view under its own URL, so the pointer</span>
+</span><span id="__span-1-37"><a id="__codelineno-1-37" name="__codelineno-1-37" href="#__codelineno-1-37"></a>        <span class="c1"># a client follows to find the authorization server is derived from it.</span>
+</span><span id="__span-1-38"><a id="__codelineno-1-38" name="__codelineno-1-38" href="#__codelineno-1-38"></a>        <span class="k">return</span> <span class="n">bearer_challenge</span><span class="p">(</span>
+</span><span id="__span-1-39"><a id="__codelineno-1-39" name="__codelineno-1-39" href="#__codelineno-1-39"></a>            <span class="n">resource_metadata_url</span><span class="o">=</span><span class="p">(</span>
+</span><span id="__span-1-40"><a id="__codelineno-1-40" name="__codelineno-1-40" href="#__codelineno-1-40"></a>                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_resource_url</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">/.well-known/oauth-protected-resource&quot;</span>
+</span><span id="__span-1-41"><a id="__codelineno-1-41" name="__codelineno-1-41" href="#__codelineno-1-41"></a>            <span class="p">),</span>
+</span><span id="__span-1-42"><a id="__codelineno-1-42" name="__codelineno-1-42" href="#__codelineno-1-42"></a>            <span class="n">scopes</span><span class="o">=</span><span class="n">scopes</span><span class="p">,</span>
+</span><span id="__span-1-43"><a id="__codelineno-1-43" name="__codelineno-1-43" href="#__codelineno-1-43"></a>            <span class="n">error</span><span class="o">=</span><span class="n">error</span><span class="p">,</span>
+</span><span id="__span-1-44"><a id="__codelineno-1-44" name="__codelineno-1-44" href="#__codelineno-1-44"></a>        <span class="p">)</span>
+</span></code></pre></div>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_mcp</span><span class="w"> </span><span class="kn">import</span> <span class="n">MCPServer</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">server</span> <span class="o">=</span> <span class="n">MCPServer</span><span class="p">(</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;internal-mcp&quot;</span><span class="p">,</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="n">auth_backend</span><span class="o">=</span><span class="n">BearerBackend</span><span class="p">(</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>        <span class="n">resource_url</span><span class="o">=</span><span class="s2">&quot;https://example.com/internal/mcp/&quot;</span><span class="p">,</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>        <span class="n">authorization_server</span><span class="o">=</span><span class="s2">&quot;https://idp.example.com&quot;</span><span class="p">,</span>
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>        <span class="n">scopes_supported</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;invoices:read&quot;</span><span class="p">,</span> <span class="s2">&quot;invoices:write&quot;</span><span class="p">],</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>        <span class="n">verify</span><span class="o">=</span><span class="n">verify_access_token</span><span class="p">,</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>    <span class="p">),</span>
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="p">)</span>
+</span></code></pre></div>
+<p><code>bearer_challenge(resource_metadata_url=, scopes=, error=)</code> is where the header
+is formatted, once: the realm, then <code>resource_metadata</code>, <code>error</code> and <code>scope</code> in
+the order a client reads them. <code>resource_metadata_url</code> has no default on
+purpose. It is the URL a client follows to find your authorization server, and a
+challenge without it leaves the client no way to start the flow, with no error
+on either side. Pass the URL the server's <code>protected-resource-metadata</code> route
+answers at (<code>https://example.com/internal/mcp/.well-known/oauth-protected-resource</code>
+for a server whose resource URL is <code>https://example.com/internal/mcp/</code>), or
+<code>None</code> when the backend publishes no metadata.</p>
+<p>Mounting is where a backend becomes load-bearing, so a backend may check itself
+there: one that implements <code>check_configuration()</code> (the <code>SelfChecking</code>
+protocol) is asked once when <code>server.urls</code> or <code>server.async_urls</code> is read, and
+raising <code>ImproperlyConfigured</code> from it surfaces while the URLconf is imported,
+which <code>manage.py check</code> reaches, rather than as a 500 on the first request. A
+backend that needs no setup implements nothing and is left alone.</p>
+<div class="admonition note">
+<p class="admonition-title"><code>name</code> and <code>version</code> belong on the server</p>
+<p><code>SERVER_INFO["name"]</code> / <code>["version"]</code> are the <strong>fallback</strong> for a server
+built without <code>name=</code> / <code>version=</code>. Prefer the constructor — it is the only
+way to give two servers in one project distinct identities:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">MCPServer</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;internal&quot;</span><span class="p">,</span> <span class="n">version</span><span class="o">=</span><span class="s2">&quot;2.0.0&quot;</span><span class="p">,</span> <span class="n">url_namespace</span><span class="o">=</span><span class="s2">&quot;internal-mcp&quot;</span><span class="p">)</span>
+</span></code></pre></div>
+</div>
+<h2 id="who-may-call-a-tool">Who may call a tool<a class="headerlink" href="#who-may-call-a-tool" title="Permanent link">&para;</a></h2>
+<p>A tool or resource is guarded by its spec's <code>permissions</code>: a list of kernel
+<a class="autorefs autorefs-external" href="https://artui.github.io/django-service-specs/reference/#django_service_specs.authorization.permission_check.PermissionCheck"><code>PermissionCheck</code></a> instances, the same
+checks every other transport on the kernel asks. Each is asked through the
+kernel's <code>dispatch</code> of the principal the backend resolved, <code>TokenInfo.user</code>,
+before any rate limit is charged, the target is looked up or the service runs.</p>
+<p>Registering a spec that declares no <code>permissions</code> at all is <strong>refused</strong>:
+<code>ImproperlyConfigured</code> at registration. <code>[Unrestricted()]</code> is the honest choice
+for an operation open to every caller, because it says so out loud. Set
+<code>SPEC_MCP["REQUIRE_TOOL_PERMISSIONS"] = False</code> to downgrade the refusal to an
+<code>UnguardedToolWarning</code>; a spec declaring <code>permissions=None</code> then runs each call
+under a kernel <code>Grant</code> built for that spec and that caller, so it is called
+with no permission check. A <code>scopes=</code> gate does not count as a guard either
+way. See <a href="../concepts/#kernel-specs">Kernel specs</a>.</p>
+<p>A check is a subclass with a <code>has_permission(principal, spec)</code> method. A Django
+permission is a few lines:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_service_specs</span><span class="w"> </span><span class="kn">import</span> <span class="n">PermissionCheck</span><span class="p">,</span> <span class="n">ServiceSpec</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">HasDjangoPerm</span><span class="p">(</span><span class="n">PermissionCheck</span><span class="p">):</span>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">codename</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">codename</span> <span class="o">=</span> <span class="n">codename</span>
+</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>
+</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">has_permission</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">principal</span><span class="p">,</span> <span class="n">spec</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>        <span class="k">return</span> <span class="n">principal</span><span class="o">.</span><span class="n">has_perm</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">codename</span><span class="p">)</span>
+</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>
+</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>
+</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="n">server</span><span class="o">.</span><span class="n">register_tool</span><span class="p">(</span>
+</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>    <span class="n">ServiceSpec</span><span class="p">(</span><span class="n">service</span><span class="o">=</span><span class="n">refund_invoice</span><span class="p">,</span> <span class="n">permissions</span><span class="o">=</span><span class="p">[</span><span class="n">HasDjangoPerm</span><span class="p">(</span><span class="s2">&quot;invoices.refund_invoice&quot;</span><span class="p">)]),</span>
+</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;invoices.refund&quot;</span><span class="p">,</span>
+</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>    <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Refund an invoice.&quot;</span><span class="p">,</span>
+</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>    <span class="n">scopes</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;invoices:write&quot;</span><span class="p">,),</span>
+</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="p">)</span>
+</span></code></pre></div>
+<p>A check refusing the caller is answered <code>-32006</code> "Insufficient permission"
+with HTTP 403. The challenge names no <code>scope</code>, because no scope the client could
+obtain would change the answer.</p>
+<p><strong>A check that depends on the token</strong> rather than the user, a claim say, asks
+for the call's context by declaring a keyword <code>call_context</code>. Over HTTP its
+<code>"request"</code> is the Django <code>HttpRequest</code>, carrying the backend's <code>TokenInfo</code> as
+<code>request.mcp_token</code>; <code>request.user</code> and <code>request.auser()</code> are the token's
+principal from authentication on, whatever the session cookie names. An
+in-process <code>call_tool</code> or <code>acall_tool</code> is not over HTTP: its <code>"request"</code> may be
+<code>None</code>, or a request whose <code>mcp_token</code>, when it has one, carries the <code>scopes=</code>
+the call passed and <code>raw=None</code>. So a check reading the token decides for itself
+what an in-process call means, and never tells one apart by <code>request is None</code>:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_service_specs</span><span class="w"> </span><span class="kn">import</span> <span class="n">PermissionCheck</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">HasClaim</span><span class="p">(</span><span class="n">PermissionCheck</span><span class="p">):</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">claim</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">claim</span> <span class="o">=</span> <span class="n">claim</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">has_permission</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">principal</span><span class="p">,</span> <span class="n">spec</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">call_context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>        <span class="n">request</span> <span class="o">=</span> <span class="n">call_context</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;request&quot;</span><span class="p">)</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>        <span class="n">token</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="s2">&quot;mcp_token&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>        <span class="k">return</span> <span class="n">token</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">claim</span> <span class="ow">in</span> <span class="p">(</span><span class="n">token</span><span class="o">.</span><span class="n">raw</span> <span class="ow">or</span> <span class="p">{})</span>
+</span></code></pre></div>
+<p>A check may ask for the call's <code>arguments</code> the same way, and for a registered
+pool seed by its name. A check is <strong>synchronous</strong>: one declaring an <code>async def</code>
+method is refused with <code>ImproperlyConfigured</code> when the spec is built, because an
+un-awaited coroutine is truthy and would allow every call.</p>
+<h3 id="the-scope-gate">The scope gate<a class="headerlink" href="#the-scope-gate" title="Permanent link">&para;</a></h3>
+<p><code>scopes=</code> on <code>register_tool</code>, <code>register_resource</code>, <code>register_prompt</code> and
+<code>register_ui_resource</code> names the OAuth scopes the caller's token must carry, every one of them. A bare string is one scope:
+<code>scopes="invoices:write"</code>. A token missing one is answered <code>-32006</code> with HTTP
+403, every declared scope in <code>data.requiredScopes</code>, and a challenge carrying
+<code>error="insufficient_scope"</code> and the scopes, so the client knows what to ask
+for. <code>scopes=()</code> is refused, since it would read as a gate and admit every
+caller.</p>
+<p>The scope gate is a transport check, beside the spec's permissions rather than
+in place of them: on a tool or resource it never satisfies
+<code>REQUIRE_TOOL_PERMISSIONS</code>, which reads the spec's own <code>permissions</code>. A prompt
+has no spec, so there either guard counts.</p>
+<h3 id="prompts-and-interactive-views">Prompts and interactive views<a class="headerlink" href="#prompts-and-interactive-views" title="Permanent link">&para;</a></h3>
+<p>A prompt and an interactive view are not specs, so they are gated where they
+are registered: <code>register_prompt</code> and <code>register_ui_resource</code> take
+<code>permissions=[...]</code>, a list of the same kernel <code>PermissionCheck</code>s a spec
+declares, and <code>scopes=</code>, the scope gate above. The scope gate is asked first,
+then a deactivated caller is refused, then each check in order, the first
+refusal ending it. A check is asked <code>has_permission(principal, binding)</code>:
+<code>principal</code> is the token's user, an <code>AnonymousUser</code> when it has none, and
+<code>binding</code> is the prompt's or view's binding standing where a spec would, so a
+check can read its <code>name</code>.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_service_specs</span><span class="w"> </span><span class="kn">import</span> <span class="n">PermissionCheck</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">IsStaff</span><span class="p">(</span><span class="n">PermissionCheck</span><span class="p">):</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    <span class="n">message</span> <span class="o">=</span> <span class="s2">&quot;Staff only.&quot;</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">has_permission</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">principal</span><span class="p">,</span> <span class="n">spec</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>        <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">principal</span><span class="o">.</span><span class="n">is_staff</span><span class="p">)</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="n">server</span><span class="o">.</span><span class="n">register_prompt</span><span class="p">(</span>
+</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;summarise-ledger&quot;</span><span class="p">,</span>
+</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>    <span class="n">render</span><span class="o">=</span><span class="n">render_summary</span><span class="p">,</span>
+</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>    <span class="n">permissions</span><span class="o">=</span><span class="p">[</span><span class="n">IsStaff</span><span class="p">()],</span>
+</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>    <span class="n">scopes</span><span class="o">=</span><span class="s2">&quot;ledger:read&quot;</span><span class="p">,</span>
+</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="p">)</span>
+</span></code></pre></div>
+<p>The same judgement answers <code>prompts/get</code>, <code>resources/read</code>,
+<code>completion/complete</code> and a subscription. With <code>FILTER_LISTINGS_BY_PERMISSIONS</code>
+on, it answers <code>prompts/list</code> and <code>resources/list</code> too, so a caller is never
+shown a prompt or view it would then be refused; with the setting off, the
+default, the listings show every prompt and view. In a filtered listing a check
+that raises hides its own prompt or view and no other, as a spec's check that
+cannot decide without a call's arguments hides only its tool; an
+<code>ImproperlyConfigured</code> still fails the listing, as it fails the call.</p>
+<p>Registration holds the list to the kernel's rule for a spec's <code>permissions</code>,
+through the kernel's own <code>check_permissions</code>: a bare string or anything else
+that is not a sequence, a check class rather than an instance, an object that
+is not a <code>PermissionCheck</code>, a check with an <code>async def</code> method, whose answer
+would be a truthy coroutine nothing awaits, and an empty list, which reads as a
+gate and admits everyone, are each refused. Leave <code>permissions=</code> out for no
+checks, or declare <code>[Unrestricted()]</code>. A check that answers a coroutine anyway
+at call time is refused there by the kernel's <code>sync_answer</code>. Only the
+principal and the binding are passed: the keywords a spec's check may opt into,
+such as <code>arguments</code> or <code>call_context</code>, are the kernel's to offer at dispatch,
+so a check that requires one cannot gate a prompt.</p>
+<p>A prompt with neither <code>permissions=</code> nor <code>scopes=</code> is refused like a tool. Interactive
+<strong>views</strong> (<code>register_ui_resource</code>) are the one exemption, and a deliberate
+one — a view is a template rendered with no context, a literal document, or a
+zero-argument callable, none of which can read the caller's data.</p>
+<p>That third source is caller-blind <strong>because registration enforces it</strong>: a
+<code>render=</code> declaring any fillable parameter is refused, since the read path
+resolves every binding's callable against a pool carrying <code>request</code> and
+<code>user</code>. Without that refusal the exemption would be unsound for one of its
+three cases — a caller-aware view registered unguarded, served into a document
+hosts may cache across callers. If you want a view whose content depends on
+who is asking, you want <code>register_resource</code>, where the declaration check
+applies.</p>
+<h3 id="object-level-permissions">Object-level permissions<a class="headerlink" href="#object-level-permissions" title="Permanent link">&para;</a></h3>
+<p>A check's <code>has_object_permission(principal, spec, target)</code> runs against the
+row the dispatch resolved: the target of a retrieve, or the instance an update
+acts on. It allows by default, because most checks are class-level only.
+<code>has_scope_permission(principal, spec, scope)</code> is the same question for a call
+that resolves no single row: the set a bulk call acts on or a collection
+reads, and <code>None</code> for a create. A kernel spec's checks are asked once on a
+plain call, and on a streamed call once in its pre-flight and once more when
+the call runs, when its arguments pass the kernel's argument check.</p>
+<p>A resource read runs the same <code>dispatch</code>, so its spec's checks see the row the
+URI names. <code>completion/complete</code> on a resource template names the template
+rather than a URI, so the spec's checks are asked on no arguments, and a check
+scoping by a URI variable refuses the completion, whether it answers no on the
+missing arguments or raises on them.</p>
+<h3 id="filtering-listings-by-permissions">Filtering listings by permissions<a class="headerlink" href="#filtering-listings-by-permissions" title="Permanent link">&para;</a></h3>
+<p>By default <code>tools/list</code>, <code>resources/list</code>, <code>resources/templates/list</code>,
+and <code>prompts/list</code> return every registered binding regardless of whether
+the current caller's permissions would let it invoke one. (A tool that an
+operation-scope affordance refuses right now is the exception: <code>tools/list</code>
+leaves it out either way, because that condition cannot depend on the
+call's arguments — see
+<a href="../concepts/#a-tool-that-cannot-run-now-is-not-listed">Concepts</a>.) Set
+<code>SPEC_MCP["FILTER_LISTINGS_BY_PERMISSIONS"] = True</code> to drop
+bindings whose permissions deny the caller before paginating.</p>
+<p>This is <strong>binding-level</strong> gating. A binding's <code>scopes=</code> gate is evaluated
+against the caller's token, and a prompt's or view's checks against its
+principal, as a <code>prompts/get</code> or <code>resources/read</code> asks them. A tool or
+resource is judged by its spec's own checks as well, asked through the
+kernel's <code>authorize</code> with no arguments, because a listing has none; a create,
+a service spec with no instance or collection selector, is also asked each
+check's <code>has_scope_permission</code> of <code>None</code>, as every call to it is. Both
+questions get the caller's principal, the server's pool seeds and a
+<code>call_context</code> whose request carries the token, as a call does. A caller the
+checks refuse is not shown the binding, and neither is a deactivated caller. A
+spec declaring <code>permissions=None</code> is listed only where its call is granted, as
+<code>register_tool</code> grants it with <code>REQUIRE_TOOL_PERMISSIONS</code> off.</p>
+<p>A spec's check whose decision depends on the call arguments cannot answer at list time
+and will conservatively deny: when asking it raises, that binding alone is
+hidden and the rest of the listing is unaffected. Mark such a binding with
+<code>always_listed=True</code> to keep it visible as a discovery aid; the check still
+gates the actual invocation. An <code>ImproperlyConfigured</code> raised by a check is not
+a refusal: it is raised and fails the listing, because the call raises it too.</p>
+<h2 id="audience-binding-rfc-8707">Audience binding (RFC 8707)<a class="headerlink" href="#audience-binding-rfc-8707" title="Permanent link">&para;</a></h2>
+<p>The audience check is <strong>the backend's job</strong>, because only the backend knows where
+the audience lives (a JWT <code>aud</code> claim, an introspection response, a column on the
+token row). <code>TokenInfo.audience</code> carries it out, and <code>audience_matches</code> is the
+comparison, as the worked backend above calls it:</p>
+<ul>
+<li><code>audience_matches(token_audience, expected)</code> is exact equality. Token audiences
+  are URLs, not patterns, and a prefix or substring match is unsafe: a token
+  bound to <code>…/mcp</code> would otherwise satisfy a server expecting <code>…/mcp-admin</code>.</li>
+<li>A token that carries <strong>no</strong> audience is rejected when an <code>expected</code> URL is
+  given, which is the point of configuring one.</li>
+<li><code>expected=None</code> disables the check, for a deployment whose gateway already
+  binds the token upstream.</li>
+</ul>
+<div class="admonition danger">
+<p class="admonition-title">The MCP spec makes this a MUST</p>
+<p><code>2026-07-28</code> says a resource server <strong>MUST</strong> validate that access tokens were
+issued specifically for it. A backend that only verifies a signature leaves a
+conformance gap, and the failure mode is cross-resource token replay: a token
+minted for a different resource on the same authorization server is accepted
+here. Before you require it, check that the clients you serve send RFC 8707's
+<code>resource</code> parameter on the authorize and token requests, because a token that
+carries none is rejected.</p>
+</div>
+<p>Each server needs its <strong>own</strong> canonical URL. RFC 8707 binds a token to <em>a</em>
+resource, and that binding is what stops a token issued for one resource being
+replayed against another; two servers sharing one URL defeat it:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># urls.py</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">common</span> <span class="o">=</span> <span class="p">{</span>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    <span class="s2">&quot;authorization_server&quot;</span><span class="p">:</span> <span class="s2">&quot;https://idp.example.com&quot;</span><span class="p">,</span>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    <span class="s2">&quot;scopes_supported&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;invoices:read&quot;</span><span class="p">],</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    <span class="s2">&quot;verify&quot;</span><span class="p">:</span> <span class="n">verify_access_token</span><span class="p">,</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="p">}</span>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="n">internal</span> <span class="o">=</span> <span class="n">MCPServer</span><span class="p">(</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;internal-mcp&quot;</span><span class="p">,</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>    <span class="n">auth_backend</span><span class="o">=</span><span class="n">BearerBackend</span><span class="p">(</span><span class="n">resource_url</span><span class="o">=</span><span class="s2">&quot;https://example.com/internal/mcp/&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">common</span><span class="p">),</span>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>    <span class="n">url_namespace</span><span class="o">=</span><span class="s2">&quot;internal-mcp&quot;</span><span class="p">,</span>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="p">)</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="n">public</span> <span class="o">=</span> <span class="n">MCPServer</span><span class="p">(</span>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;public-mcp&quot;</span><span class="p">,</span>
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>    <span class="n">auth_backend</span><span class="o">=</span><span class="n">BearerBackend</span><span class="p">(</span><span class="n">resource_url</span><span class="o">=</span><span class="s2">&quot;https://example.com/public/mcp/&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">common</span><span class="p">),</span>
+</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>    <span class="n">url_namespace</span><span class="o">=</span><span class="s2">&quot;public-mcp&quot;</span><span class="p">,</span>
+</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="p">)</span>
+</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>
+</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="n">urlpatterns</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a>    <span class="n">path</span><span class="p">(</span><span class="s2">&quot;internal/mcp/&quot;</span><span class="p">,</span> <span class="n">internal</span><span class="o">.</span><span class="n">urls</span><span class="p">),</span>
+</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a>    <span class="n">path</span><span class="p">(</span><span class="s2">&quot;public/mcp/&quot;</span><span class="p">,</span> <span class="n">public</span><span class="o">.</span><span class="n">urls</span><span class="p">),</span>
+</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="p">]</span>
+</span></code></pre></div>
+<p>A token minted for <code>public-mcp</code> is now rejected by <code>internal-mcp</code>, and each
+server's <code>WWW-Authenticate</code> challenge points at <strong>its own</strong> metadata endpoint.</p>
+<h3 id="if-you-are-writing-a-resource-server-against-the-official-mcp-sdk">If you are writing a resource server against the official <code>mcp</code> SDK<a class="headerlink" href="#if-you-are-writing-a-resource-server-against-the-official-mcp-sdk" title="Permanent link">&para;</a></h3>
+<div class="admonition danger">
+<p class="admonition-title">The SDK publishes the metadata for you and never validates the audience</p>
+<p>This is the single easiest thing to get wrong in this area, and it is not
+specific to this package — it is worth knowing wherever you build an MCP
+resource server in Python.</p>
+<p><code>mcp.shared.auth_utils</code> provides <code>resource_url_from_server_url()</code> and
+<code>check_resource_allowed()</code>, and in the shipped wheel they are called <strong>only
+from client paths</strong>. <code>AccessToken</code> carries a <code>resource</code> field, but
+<code>BearerAuthBackend.authenticate()</code> checks the bearer prefix, the verifier's
+verdict and <code>expires_at</code> — and nothing else.</p>
+<p>So a <code>TokenVerifier</code> that merely checks a signature is <strong>non-compliant with
+the audience MUST, and cross-resource token replay works</strong>: a token minted
+for another resource on the same authorization server is accepted. FastMCP's
+<code>JWTVerifier</code> does validate audience out of the box; the official SDK's
+verifiers do not. If you are writing your own verifier anywhere, validate the
+audience in it.</p>
+</div>
+<h2 id="try-it-with-mcp-inspector">Try it with mcp-inspector<a class="headerlink" href="#try-it-with-mcp-inspector" title="Permanent link">&para;</a></h2>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>npx<span class="w"> </span>@modelcontextprotocol/inspector<span class="w"> </span>--url<span class="w"> </span>http://localhost:8000/mcp/
+</span></code></pre></div>
+<p>Inspector reads the protected-resource metadata, hits your authorization server's metadata, walks the auth flow, and exercises
+<code>tools/list</code> + <code>tools/call</code>. Common failure modes and where to look:</p>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Likely cause</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>401 with no <code>WWW-Authenticate</code></td>
+<td>The backend's <code>www_authenticate_challenge</code> returned an empty value. Return <code>bearer_challenge(...)</code>.</td>
+</tr>
+<tr>
+<td>401 with <code>WWW-Authenticate</code> but no <code>resource_metadata</code></td>
+<td>The backend passed <code>resource_metadata_url=None</code> to <code>bearer_challenge</code>.</td>
+</tr>
+<tr>
+<td>Token verifies but every call is still 401</td>
+<td>The backend's audience comparison fails: the token's audience is not the server's own resource URL (or the token carries none).</td>
+</tr>
+<tr>
+<td>403 with <code>error="insufficient_scope"</code> and <code>scope=</code> in the challenge</td>
+<td>Token authenticated, missing one of the per-binding scopes. The body also carries JSON-RPC <code>-32006</code> with <code>data.requiredScopes</code>.</td>
+</tr>
+<tr>
+<td>403 with no <code>scope=</code></td>
+<td>A spec's permission check refused the caller, or a prompt's or view's own check. RFC 6750 defines no error code for that case, so the challenge advertises nothing rather than a scope the client cannot obtain.</td>
+</tr>
+<tr>
+<td>403 with <code>INVALID_REQUEST</code> (<code>-32600</code>) in the body</td>
+<td>Not a permission failure — <code>Origin</code> rejection.</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.indexes", "navigation.top", "search.highlight", "search.share", "search.suggest", "content.code.copy", "content.code.annotate", "content.action.edit", "toc.follow"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

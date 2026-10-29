@@ -1,0 +1,3380 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Serve django-service-specs services and selectors as a Model Context Protocol (MCP) server.">
+      
+      
+      
+        <link rel="canonical" href="https://artui.github.io/django-spec-mcp/reference/mcp-server/">
+      
+      
+        <link rel="prev" href="../">
+      
+      
+        <link rel="next" href="../protocol/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>MCPServer - django-spec-mcp</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#mcpserver" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="django-spec-mcp" class="md-header__button md-logo" aria-label="django-spec-mcp" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            django-spec-mcp
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              MCPServer
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Artui/django-spec-mcp" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Artui/django-spec-mcp
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="django-spec-mcp" class="md-nav__button md-logo" aria-label="django-spec-mcp" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    django-spec-mcp
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Artui/django-spec-mcp" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Artui/django-spec-mcp
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../moving-from-drf-mcp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Moving from drf-mcp
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../auth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authentication
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../async/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Async deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../prompts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prompts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_11" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../recipes/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Recipes
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_11" id="__nav_11_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Recipes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/expose-a-service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Expose a service
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/swap-session-store/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Swap the session store
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/agent-audience/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hide plumbing from the model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/custom-permission/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add a custom permission
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/async-auth-backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Async-native auth backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/rate-limiting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add rate limiting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/redis-sse-broker/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-worker SSE with Redis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/sse-replay-buffer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Resume SSE with Last-Event-ID
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/selector-tool-with-filterset/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Selector tool with FilterSet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/interactive-view/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Render a list as an interactive table
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/register-from-spec-registry/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Register tools from a spec registry
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/pydantic-ai-client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Connect a Pydantic-AI agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/migrating/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from fastapi-mcp / hand-rolled
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_12" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_12" id="__nav_12_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCPServer
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCPServer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCPServer
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MCPServer">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        config
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.pool_seeds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        pool_seeds
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.conventions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        conventions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.auth_backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        auth_backend
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.urls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        urls
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.async_urls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        async_urls
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.register_tool" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        register_tool
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.register_tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        register_tools
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.call_tool" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        call_tool
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.list_tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        list_tools
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.alist_tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        alist_tools
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.unavailable_tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        unavailable_tools
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.aunavailable_tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        aunavailable_tools
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.acall_tool" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        acall_tool
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.run_task" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        run_task
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.notify_resource_updated" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        notify_resource_updated
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.notify_list_changed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        notify_list_changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.register_resource" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        register_resource
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.register_ui_resource" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        register_ui_resource
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.register_prompt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        register_prompt
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.prompt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        prompt
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.notify" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        notify
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.schema.types.agent_conventions.AgentConventions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AgentConventions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="AgentConventions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.schema.types.agent_conventions.AgentConventions.handle_field_description" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        handle_field_description
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.schema.types.agent_conventions.AgentConventions.handle_line" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        handle_line
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.schema.types.agent_conventions.AgentConventions.query_param_on_pages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        query_param_on_pages
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.schema.types.agent_conventions.AgentConventions.missing_arguments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        missing_arguments
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Protocol types
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../registries/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Registries
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../settings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../auth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Auth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../output/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Output
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCPServer
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MCPServer">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        config
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.pool_seeds" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        pool_seeds
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.conventions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        conventions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.auth_backend" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        auth_backend
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.urls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        urls
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.async_urls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        async_urls
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.register_tool" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        register_tool
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.register_tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        register_tools
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.call_tool" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        call_tool
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.list_tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        list_tools
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.alist_tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        alist_tools
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.unavailable_tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        unavailable_tools
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.aunavailable_tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        aunavailable_tools
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.acall_tool" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        acall_tool
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.run_task" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        run_task
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.notify_resource_updated" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        notify_resource_updated
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.notify_list_changed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        notify_list_changed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.register_resource" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        register_resource
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.register_ui_resource" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        register_ui_resource
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.register_prompt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        register_prompt
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.prompt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        prompt
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.notify" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        notify
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.schema.types.agent_conventions.AgentConventions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AgentConventions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="AgentConventions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.schema.types.agent_conventions.AgentConventions.handle_field_description" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        handle_field_description
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.schema.types.agent_conventions.AgentConventions.handle_line" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        handle_line
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.schema.types.agent_conventions.AgentConventions.query_param_on_pages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        query_param_on_pages
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.schema.types.agent_conventions.AgentConventions.missing_arguments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        missing_arguments
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/Artui/django-spec-mcp/edit/main/docs/reference/mcp-server.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="mcpserver">MCPServer<a class="headerlink" href="#mcpserver" title="Permanent link">&para;</a></h1>
+<p><code>register_tool</code> registers a kernel spec as a tool, <code>register_tools</code> every spec
+in a kernel <code>SpecRegistry</code>, and <code>register_resource</code> a kernel <code>RETRIEVE</code>
+selector as a resource.</p>
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.server.mcp_server.MCPServer" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">MCPServer</span>
+
+
+<a href="#django_spec_mcp.server.mcp_server.MCPServer" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>A pluggable MCP server serving kernel specs.</p>
+<p>The server owns its tool, resource and prompt registries, an auth backend,
+and a session store — all instance state, no module-level singletons. A
+tool or a resource is a <code>django_service_specs</code> spec, registered by
+passing it in:</p>
+<div class="language-text highlight"><pre><span></span><code>from django_service_specs import SelectorKind, SelectorSpec, ServiceSpec
+
+server = MCPServer(name=&quot;my-app&quot;)
+server.register_tool(
+    ServiceSpec(service=create_invoice, permissions=[IsBilling()]),
+    name=&quot;invoices.create&quot;,
+)
+server.register_resource(
+    SelectorSpec(
+        kind=SelectorKind.RETRIEVE, selector=get_invoice, permissions=[IsBilling()]
+    ),
+    name=&quot;invoice&quot;,
+    uri_template=&quot;invoices://{pk}&quot;,
+)
+</code></pre></div>
+<p>A <code>SpecRegistry</code> registers in one call, <code>register_tools</code>, with the MCP
+knobs per tool in <code>overrides</code>.</p>
+<p>Mount the URLs in your URL conf the <code>admin.site.urls</code> way — <code>.urls</code> is a
+namespaced <code>(patterns, app_name, namespace)</code> triple <code>path()</code> mounts
+directly (no <code>include()</code>):</p>
+<div class="language-text highlight"><pre><span></span><code>urlpatterns = [path(&quot;mcp/&quot;, server.urls)]
+# reverse(&quot;mcp:endpoint&quot;) · reverse(&quot;mcp:protected-resource-metadata&quot;)
+</code></pre></div>
+<p>What every spec on the mount may read -- a tenant, a locale, a clock -- is
+registered once as <code>pool_seeds=</code>, a kernel
+<a class="autorefs autorefs-external" href="https://artui.github.io/django-service-specs/reference/#django_service_specs.pool.pool_seeds.PoolSeeds"><code>PoolSeeds</code></a>:</p>
+<div class="language-text highlight"><pre><span></span><code>server = MCPServer(
+    pool_seeds=DEFAULT_POOL_SEEDS.extend(tenant=lambda *, user: user.tenant),
+)
+</code></pre></div>
+<p>Every spec the server runs receives the seeds (tools over either
+transport, <code>call_tool</code> / <code>acall_tool</code>, task workers and resource
+reads), every operation condition it asks is asked with them,
+<code>tools/list</code> availability included, and a registered name is reserved: a
+client argument cannot occupy it, and a spec read or a URI-template
+variable naming it is refused at registration.</p>
+<p>What the server tells a model in its own words -- the handle description and
+line, a paged tool's scope sentence, the missing-argument message -- is
+<code>conventions=</code>, an
+<a class="autorefs autorefs-internal" title="AgentConventions
+
+
+  
+      dataclass
+  " href="#django_spec_mcp.schema.types.agent_conventions.AgentConventions"><code>AgentConventions</code></a>.
+Change one sentence and keep the rest:</p>
+<div class="language-text highlight"><pre><span></span><code>server = MCPServer(
+    conventions=AgentConventions(handle_line=&quot;Pass ids to other tools; never show them.&quot;),
+)
+</code></pre></div>
+<p>The server still decides where each sentence appears; the conventions
+decide what it says, on every route the seeds above reach.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="django_spec_mcp.server.mcp_server.MCPServer.config" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">config</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#django_spec_mcp.server.mcp_server.MCPServer.config" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">config</span><span class="p">:</span> <span class="n">MCPConfig</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>This server's resolved scalars — a frozen snapshot taken at construction.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="django_spec_mcp.server.mcp_server.MCPServer.pool_seeds" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">pool_seeds</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#django_spec_mcp.server.mcp_server.MCPServer.pool_seeds" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">pool_seeds</span><span class="p">:</span> <span class="n">PoolSeeds</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The <code>pool_seeds=</code> every dispatch and condition on this server receives.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="django_spec_mcp.server.mcp_server.MCPServer.conventions" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">conventions</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#django_spec_mcp.server.mcp_server.MCPServer.conventions" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">conventions</span><span class="p">:</span> <span class="n">AgentConventions</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The <code>conventions=</code> every listing and refusal on this server is worded with.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="django_spec_mcp.server.mcp_server.MCPServer.auth_backend" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">auth_backend</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#django_spec_mcp.server.mcp_server.MCPServer.auth_backend" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">auth_backend</span><span class="p">:</span> <span class="n">MCPAuthBackend</span> <span class="o">|</span> <span class="kc">None</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The <code>auth_backend=</code> given at construction, or <code>None</code> when there is none.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="django_spec_mcp.server.mcp_server.MCPServer.urls" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">urls</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#django_spec_mcp.server.mcp_server.MCPServer.urls" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">urls</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="n">URLPattern</span><span class="p">],</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Sync URL patterns. Suitable for any deployment (WSGI or ASGI).</p>
+<p>Returns the namespaced <code>(patterns, app_name, namespace)</code> triple
+<code>path()</code> mounts directly — <code>path("mcp/", server.urls)</code>, the
+<code>admin.site.urls</code> idiom — so the endpoints reverse within the
+namespace (<code>reverse("mcp:endpoint")</code>). Use <code>async_urls</code> instead
+when running under ASGI to get non-blocking dispatch for the I/O-bound
+handlers.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="django_spec_mcp.server.mcp_server.MCPServer.async_urls" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">async_urls</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#django_spec_mcp.server.mcp_server.MCPServer.async_urls" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">async_urls</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="n">URLPattern</span><span class="p">],</span> <span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Async URL patterns for ASGI deployments.</p>
+<p>The namespaced triple (like <code>urls</code>), but <code>tools/call</code>,
+<code>resources/read</code> and <code>prompts/get</code> dispatch through async-native
+runners. Sync collaborators (auth backend, session store, custom
+permissions) are bridged via <code>asgiref.sync.sync_to_async</code>, so a
+fully sync stack still works; async-native ones are detected by
+signature and called directly.</p>
+
+    </div>
+
+</div>
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.server.mcp_server.MCPServer.register_tool" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">register_tool</span>
+
+
+<a href="#django_spec_mcp.server.mcp_server.MCPServer.register_tool" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">register_tool</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">spec</span><span class="p">:</span> <span class="n">ServiceSpec</span> <span class="o">|</span> <span class="n">SelectorSpec</span><span class="p">,</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="o">*</span><span class="p">,</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">title</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">display_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">display_description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">icons</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Icon</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">(),</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">annotations</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">meta</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">ui</span><span class="p">:</span> <span class="n">UIToolMeta</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">content_kind</span><span class="p">:</span> <span class="n">ToolContentKind</span> <span class="o">=</span> <span class="n">ToolContentKind</span><span class="o">.</span><span class="n">TEXT</span><span class="p">,</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="n">content_mime_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    <span class="n">include_structured_content</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    <span class="n">include_output_schema</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>    <span class="n">task_policy</span><span class="p">:</span> <span class="n">TaskPolicy</span> <span class="o">=</span> <span class="n">TaskPolicy</span><span class="o">.</span><span class="n">FORBIDDEN</span><span class="p">,</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>    <span class="n">invalidates</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">(),</span>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>    <span class="n">paginate</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>    <span class="n">max_page_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">|</span> <span class="n">UnsetType</span> <span class="o">=</span> <span class="n">UNSET</span><span class="p">,</span>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>    <span class="n">max_result_bytes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">|</span> <span class="n">UnsetType</span> <span class="o">=</span> <span class="n">UNSET</span><span class="p">,</span>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>    <span class="n">dispatch_timeout</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">|</span> <span class="n">UnsetType</span> <span class="o">=</span> <span class="n">UNSET</span><span class="p">,</span>
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>    <span class="n">always_listed</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>    <span class="n">rate_limits</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>    <span class="n">scopes</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>    <span class="n">unknown_arguments</span><span class="p">:</span> <span class="n">UnknownArguments</span> <span class="o">=</span> <span class="n">UnknownArguments</span><span class="o">.</span><span class="n">REJECT</span><span class="p">,</span>
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>    <span class="n">server_arguments</span><span class="p">:</span> <span class="n">ServerArguments</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">KernelToolBinding</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Register a kernel spec as a tool: a <code>ServiceSpec</code> or a <code>SelectorSpec</code>.</p>
+<p><code>spec</code> is a <code>django_service_specs</code> spec, and its class says which kind
+of tool this is. A service tool's arguments are the spec's parameters at
+the top level of <code>arguments</code>, as the kernel's <code>spec_input_schema</code>
+advertises them; a selector tool reads, and a <code>LIST</code> one paginates
+under <code>paginate=True</code>. The call runs through the kernel's <code>dispatch</code>
+/ <code>adispatch</code>, which asks the spec's own <code>permissions</code> of the
+principal the auth backend resolved for the request.</p>
+<p>Anything that is not a kernel spec is refused with a <code>TypeError</code>. A
+knob of the other kind of tool is
+refused: <code>paginate</code> / <code>max_page_size</code> on a service tool,
+<code>invalidates</code> on a selector tool.</p>
+<p>A <code>LIST</code> selector tool registered without <code>paginate=True</code> warns
+<code>UnboundedListWarning</code>, and <code>REQUIRE_LIST_PAGINATION</code> refuses it. A
+paginated one whose spec declares a read named <code>page</code> or <code>limit</code> is
+refused, since the pagination takes both names from the arguments
+before the selector runs. A presenter whose audience markings cannot be
+projected (two labels, say) is refused naming the tool, rather than
+failing every <code>tools/list</code> of the server.</p>
+<p>A declaration no call on this server can run as written is refused
+naming the tool, by the kernel's <code>check_seeds</code> with the server's
+<code>pool_seeds</code>: a parameter named like a registered seed or the call's
+own <code>request</code> or <code>view</code>, a positional-only parameter with no
+default, a keyword the callable requires that nothing fills, and an
+optional read over a keyword the callable requires. A read
+<code>server_arguments</code> binds a value to is filled on every call, so it is
+never refused as optional.</p>
+<p><code>display_name</code> and <code>display_description</code> are labels for in-process
+consumers, read off the binding and never sent on the wire.</p>
+<p><code>scopes</code> are the OAuth scopes the caller's token must carry, every one
+of them; a token missing one is answered <code>-32006</code> with every declared
+scope in <code>requiredScopes</code>, as a prompt's or a view's scope gate
+answers. A bare string is one scope. <code>scopes=()</code>
+is refused, since it would read as a gate and admit every caller. The
+scope gate is a transport check and does not count as the tool's guard
+for <code>REQUIRE_TOOL_PERMISSIONS</code>, which reads the spec's own
+<code>permissions</code>.</p>
+<p><code>task_policy</code> means the same for a service tool and a selector tool:
+<code>OPTIONAL</code> answers a client that declared the tasks extension
+with a task handle and runs inline for one that did not, and
+<code>REQUIRED</code> refuses the latter with <code>-32021</code>. The spec's own checks
+are asked before the task is created, and the worker runs the call,
+under either policy, through the same <code>dispatch</code> a direct call takes,
+under the server's <code>pool_seeds</code> and <code>conventions</code>.</p>
+<p>A refusal from <code>dispatch</code> is answered on the wire as
+<code>kernel_refusals</code> words it: <code>NotPermitted</code> and <code>PrincipalUnavailable</code> as
+<code>-32006</code>, <code>InvalidArguments</code>, <code>ServiceValidationError</code> and a bare
+<code>DispatchError</code> as the <code>validation_error</code> result, an
+<code>AdditionalInputRequired</code> as MRTR's <code>input_required</code>, and any other
+<code>ServiceError</code> as the <code>service_error</code> result.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.server.mcp_server.MCPServer.register_tools" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">register_tools</span>
+
+
+<a href="#django_spec_mcp.server.mcp_server.MCPServer.register_tools" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">register_tools</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">registry</span><span class="p">:</span> <span class="n">SpecRegistry</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">overrides</span><span class="p">:</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Mapping</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">KernelToolBinding</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Register every kernel spec in a <code>SpecRegistry</code> as a tool, in order.</p>
+<p>Each entry registers through <code>register_tool</code> under its registry name,
+with the knobs <code>overrides</code> holds under that name, so an entry and a
+direct <code>register_tool</code> of the same spec are the same tool. An
+<code>overrides</code> key the registry does not hold raises <code>ValueError</code>, as
+a typo rather than a no-op, and an entry that is not a kernel
+<code>ServiceSpec</code> or <code>SelectorSpec</code> (a <code>SpecSource</code> among them) is
+refused as <code>register_tool</code> refuses it. A refusal of any entry
+registers none of them: every entry is built and checked first.</p>
+<p>Returns the bindings in registration order.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.server.mcp_server.MCPServer.call_tool" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">call_tool</span>
+
+
+<a href="#django_spec_mcp.server.mcp_server.MCPServer.call_tool" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">call_tool</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">arguments</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="o">*</span><span class="p">,</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">user</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">request</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ToolResult</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Invoke a registered tool off the HTTP / JSON-RPC path.</p>
+<p>The transport-neutral entry point: hand a tool <code>name</code>, a flat
+<code>arguments</code> dict and the acting <code>user</code>, and get back the same
+<a class="autorefs autorefs-internal" title="ToolResult
+
+
+  
+      dataclass
+  " href="../protocol/#django_spec_mcp.protocol.types.tool_result.ToolResult"><code>ToolResult</code></a> the
+wire handlers build. An in-process consumer calls this instead of
+re-implementing dispatch.</p>
+<p>The call runs through the kernel's <code>dispatch</code> as on the wire: the
+binding's <code>server_arguments</code> in place, the spec's own <code>permissions</code>
+asked of <code>user</code>, then the spec run and presented, a paged tool's
+pagination included. The transport-level checks are not consulted: the
+<code>scopes=</code> gate and rate limits read a token, and there is none in
+process. For those, and for tool listing, use <code>acall_tool</code> /
+<code>list_tools</code>.</p>
+<p>A refusal the wire answers <code>-32006</code> (<code>NotPermitted</code>,
+<code>PrincipalUnavailable</code>) is raised for the caller to map to its own
+wire; every other refusal comes back as the <code>isError</code> result the wire
+serves.</p>
+<p><code>request</code> is the caller's own Django request when there is one, and
+the call never writes its user to it: the spec is handed a copy whose
+<code>user</code> is <code>user</code>, so a view handing the request it is serving keeps
+serving as its own user after the call. The copy shares the handed
+request's body, stream and parsed <code>POST</code> and <code>FILES</code>, so a body a
+spec reads is read for the caller, and an object a spec mutates through
+it, such as <code>META</code> or the session, is the caller's; an attribute a
+spec sets or deletes changes the copy alone. With no <code>request</code>, a
+minimal <code>POST</code> <code>HttpRequest</code> bearing <code>user</code> is synthesised.</p>
+<p>Raises <code>KeyError</code> when no tool is registered under <code>name</code>.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.server.mcp_server.MCPServer.list_tools" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">list_tools</span>
+
+
+<a href="#django_spec_mcp.server.mcp_server.MCPServer.list_tools" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">list_tools</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">cursor</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="o">*</span><span class="p">,</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">user</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">request</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">scopes</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">include_unavailable</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="n">JsonRpcError</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>List the tools this server exposes, exactly as the wire would.</p>
+<p>The in-process twin of a <code>tools/list</code> request: one page of the tool catalog
+with the <em>same</em> <code>inputSchema</code> the HTTP transport advertises (the spec's
+parameters, a paginated tool's <code>page</code> / <code>limit</code> and the
+<code>additionalProperties</code> policy), the same per-caller listing-permission filter
+(<code>FILTER_LISTINGS_BY_PERMISSIONS</code>) and the same opaque-cursor pagination —
+pass the returned <code>nextCursor</code> back for the next page. A
+<a class="autorefs autorefs-internal" title="JsonRpcError
+
+
+  
+      dataclass
+  " href="../protocol/#django_spec_mcp.protocol.types.json_rpc_error.JsonRpcError"><code>JsonRpcError</code></a>
+signals a bad cursor.</p>
+<p><code>scopes</code> are the caller's granted scopes; pass them so a tool
+registered with <code>scopes=</code> is visible under
+<code>FILTER_LISTINGS_BY_PERMISSIONS</code> exactly as it would be on the wire.
+A tool whose operation-scope <code>affordances</code> condition is unmet for
+<code>user</code> right now is left out, as on the wire, unless
+<code>include_unavailable=True</code>, which lists every tool the caller may see
+and asks no condition. That is for a consumer that builds its tool
+definitions once and asks <code>unavailable_tools</code> each step: it needs a
+definition for a tool that is unavailable when it lists and becomes
+available later. The wire has no such parameter.</p>
+<p>Unlike <code>call_tool</code> (the spec core) this is the full transport
+surface. Under an event loop use <code>alist_tools</code> — a listing
+permission filter or an affordance condition that hits the DB raises
+<code>SynchronousOnlyOperation</code> from a sync call on the loop.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.server.mcp_server.MCPServer.alist_tools" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">alist_tools</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+<a href="#django_spec_mcp.server.mcp_server.MCPServer.alist_tools" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">alist_tools</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">cursor</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="o">*</span><span class="p">,</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">user</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">request</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">scopes</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">include_unavailable</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="n">JsonRpcError</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Async <code>list_tools</code> — safe to call from an event loop.</p>
+<p>Listing itself is pure Python, but the per-caller permission filter
+(<code>FILTER_LISTINGS_BY_PERMISSIONS</code>) and a tool's operation-scope
+<code>affordances</code> condition may each run a DB-backed check, which raises
+<code>SynchronousOnlyOperation</code> when reached synchronously from within an
+event loop. The whole sync handler therefore runs in Django's
+thread-sensitive executor.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.server.mcp_server.MCPServer.unavailable_tools" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">unavailable_tools</span>
+
+
+<a href="#django_spec_mcp.server.mcp_server.MCPServer.unavailable_tools" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">unavailable_tools</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="o">*</span><span class="p">,</span> <span class="n">user</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">scopes</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Affordance</span><span class="p">]</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The tools <code>list_tools</code> leaves out for this caller right now, and why.</p>
+<p>Maps each omitted tool's name to the operation-scope <code>Affordance</code> whose
+condition is unmet: its <code>code</code> and its <code>reason</code>, the sentence written
+for people and models alike. The answer comes from the same pass <code>tools/list</code> makes, over the
+same tools the caller may see (<code>FILTER_LISTINGS_BY_PERMISSIONS</code>
+included), so a name is here exactly when the listing omits it, and a
+tool hidden from this caller is never named with its reason.</p>
+<p>For an in-process consumer that lists once with
+<code>include_unavailable=True</code> and asks this each step: it offers its model
+what a fresh <code>tools/list</code> would, and can tell the model why the rest
+are missing, which a listing cannot, since it only leaves them out.
+<code>always_listed=True</code> tools are never here, as they are never left out.
+Advisory like the listing: <code>acall_tool</code> still enforces every condition.</p>
+<p>Under an event loop use <code>aunavailable_tools</code>; a condition or listing
+permission that queries raises <code>SynchronousOnlyOperation</code> from here.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.server.mcp_server.MCPServer.aunavailable_tools" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">aunavailable_tools</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+<a href="#django_spec_mcp.server.mcp_server.MCPServer.aunavailable_tools" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">aunavailable_tools</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="o">*</span><span class="p">,</span> <span class="n">user</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">scopes</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Affordance</span><span class="p">]</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Async <code>unavailable_tools</code> -- safe to call from an event loop.</p>
+<p>Runs in Django's thread-sensitive executor, as <code>alist_tools</code> does, since
+a condition or a listing permission may query. A server none of whose
+tools declares an operation-scope condition answers <code>{}</code> without the
+hop: that is decided from the declarations alone, and a consumer asking
+on every model step should not pay a thread switch per step to learn it.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.server.mcp_server.MCPServer.acall_tool" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">acall_tool</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+<a href="#django_spec_mcp.server.mcp_server.MCPServer.acall_tool" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">acall_tool</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">arguments</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="o">*</span><span class="p">,</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">user</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">request</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">scopes</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="n">JsonRpcError</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Invoke a tool off the HTTP path with full transport semantics (async).</p>
+<p>The in-process twin of a <code>tools/call</code> request: routes through the same async
+handler the wire uses, so the <code>scopes=</code> gate and the rate limits apply —
+what <code>call_tool</code> omits — beside the spec's own permissions and the
+pagination of a <code>LIST</code> tool. Returns the wire's result payload (a
+<code>dict</code> carrying <code>content</code> / <code>structuredContent</code> / <code>isError</code>), or a
+<a class="autorefs autorefs-internal" title="JsonRpcError
+
+
+  
+      dataclass
+  " href="../protocol/#django_spec_mcp.protocol.types.json_rpc_error.JsonRpcError"><code>JsonRpcError</code></a>
+for a protocol fault (unknown tool, malformed <code>arguments</code> shape, denied
+permission).</p>
+<p><code>request</code> is the originating Django request when there is one, handled
+as <code>call_tool</code> handles it: the call works on a copy bearing <code>user</code>
+and never writes its user to the handed request. A minimal one is
+synthesised otherwise.
+<code>scopes</code> populate the synthetic token so a tool registered with
+<code>scopes=</code> is invokable in-process just as it is on the wire.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.server.mcp_server.MCPServer.run_task" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">run_task</span>
+
+
+<a href="#django_spec_mcp.server.mcp_server.MCPServer.run_task" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">run_task</span><span class="p">(</span><span class="n">task_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Execute a queued task. <strong>This is what a worker calls.</strong></p>
+<p>The other end of <code>task_executor.enqueue</code>, and the whole public
+surface of the worker side:</p>
+<div class="language-text highlight"><pre><span></span><code>@shared_task
+def run_mcp_task(task_id: str) -&gt; None:
+    my_server.run_task(task_id)
+</code></pre></div>
+<p>Everything it needs comes out of the store: the tool, the arguments,
+and the authorization context to re-check them under. Nothing is
+returned — the client learns the outcome by polling <code>tasks/get</code>.</p>
+<p>Safe to call for an id that is unknown, already claimed or already
+finished: each is a no-op. Queues deliver at least once, and a retried
+delivery must not run a mutation twice.</p>
+<p>Raises when the server has no task store: a worker calling this on a
+server that cannot run tasks would otherwise fail as silence — the job
+"succeeds" and the client polls a handle forever.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.server.mcp_server.MCPServer.notify_resource_updated" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">notify_resource_updated</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+<a href="#django_spec_mcp.server.mcp_server.MCPServer.notify_resource_updated" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">notify_resource_updated</span><span class="p">(</span><span class="n">uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Tell every subscriber watching <code>uri</code> that it changed.</p>
+<p>The explicit trigger, and the one that always works. Call it from
+wherever the write actually happens — a management command, a Celery
+job, a <code>save()</code> override, a signal handler you wrote yourself:</p>
+<div class="language-text highlight"><pre><span></span><code>await server.notify_resource_updated(f&quot;invoices://{invoice.pk}&quot;)
+</code></pre></div>
+<p>Returns how many subscribers were reached — a diagnostic, not a
+guarantee: <code>0</code> means nobody was listening, which is the ordinary case
+and not an error. Notifications are best-effort by design; a client
+that misses one re-reads the resource.</p>
+<p><strong>A URI, not a template.</strong> Publish the concrete URI that changed, and
+the collection URI too if watchers of the collection should hear about
+it — matching is exact, deliberately (see
+<a class="autorefs autorefs-internal" title="topic_for_resource" href="../protocol/#django_spec_mcp.subscriptions.utils.topic_for_resource"><code>topic_for_resource</code></a>).</p>
+<p><strong>Publish after the transaction commits.</strong> Inside
+<code>transaction.atomic()</code> this announces a change that may still roll
+back, and a subscriber that re-reads immediately sees the old value —
+worse than no notification at all. <code>transaction.on_commit</code> is the
+Django-native answer.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.server.mcp_server.MCPServer.notify_list_changed" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">notify_list_changed</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+<a href="#django_spec_mcp.server.mcp_server.MCPServer.notify_list_changed" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">notify_list_changed</span><span class="p">(</span><span class="n">kind</span><span class="p">:</span> <span class="n">NotificationKind</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Tell subscribers that one of the catalogs changed.</p>
+<p>Registration happens once at configuration time, so the set of
+registered bindings is fixed for the life of the process. Two things
+still change a catalog under a running client: a server that registers
+tools from data — a plugin loader, a per-tenant catalog — and a tool
+whose operation-scope <code>affordances</code> condition flips, which
+<code>tools/list</code> answers on every request and so starts or stops listing
+it. Call this with <code>TOOLS_LIST_CHANGED</code> after the event that flipped
+the condition, once it has committed. It reaches only clients this
+server can push to: a subscription broker configured and a modern-era
+caller listening, the same two things <code>listChanged</code> is advertised on.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.server.mcp_server.MCPServer.register_resource" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">register_resource</span>
+
+
+<a href="#django_spec_mcp.server.mcp_server.MCPServer.register_resource" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">register_resource</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">spec</span><span class="p">:</span> <span class="n">SelectorSpec</span><span class="p">,</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="o">/</span><span class="p">,</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="o">*</span><span class="p">,</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">uri_template</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">title</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">icons</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Icon</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">(),</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">mime_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;application/json&quot;</span><span class="p">,</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">encoding</span><span class="p">:</span> <span class="n">ResourceEncoding</span> <span class="o">=</span> <span class="n">ResourceEncoding</span><span class="o">.</span><span class="n">JSON</span><span class="p">,</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">rate_limits</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">annotations</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="n">meta</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    <span class="n">always_listed</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    <span class="n">cache_ttl_ms</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="n">UnsetType</span> <span class="o">=</span> <span class="n">UNSET</span><span class="p">,</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>    <span class="n">completions</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Callable</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>    <span class="n">scopes</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">KernelResourceBinding</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Register a kernel <code>RETRIEVE</code> <code>SelectorSpec</code> as an MCP resource.</p>
+<p><code>register_resource(spec, uri_template=..., name=...)</code> takes a
+<code>django_service_specs</code> spec positionally. The read runs it through the
+kernel's <code>dispatch</code> / <code>adispatch</code>, with the URI-template variables
+as its arguments, so the spec's <code>reads</code> name them and its presenter
+renders the row. Anything that is not a kernel <code>RETRIEVE</code>
+<code>SelectorSpec</code> is refused with a <code>TypeError</code>. <code>scopes</code> gate the
+read as they gate <code>register_tool</code>.</p>
+<p><code>meta</code> is the generic <code>_meta</code> bundle for this resource's listing
+entry — <code>resources/list</code> for a concrete URI,
+<code>resources/templates/list</code> for a template — and for the <code>contents</code>
+block <code>resources/read</code> returns.</p>
+<p><code>encoding</code> decides how what the presenter returns becomes the read
+body. <code>JSON</code> pretty-prints it; <code>TEXT</code> returns it verbatim, and it
+must be a <code>str</code>; <code>BLOB</code> base64-encodes it into the <code>contents</code>
+entry's <code>blob</code> instead of <code>text</code>, and it must be <code>bytes</code>,
+<code>bytearray</code> or <code>memoryview</code>. A value of the wrong type is answered
+at read time as an <code>INTERNAL_ERROR</code> naming what produced it. Anything
+whose <code>mime_type</code> is not JSON — Markdown, CSV, plain text — wants
+<code>TEXT</code>, or the document comes back wrapped in a quoted string literal,
+and an image wants <code>BLOB</code>: a presenter rendering the row as Markdown
+pairs with <code>encoding=TEXT</code> and <code>mime_type="text/markdown"</code>.
+<code>mime_type</code> is advertised as given and never inferred from or checked
+against the encoding, so <code>TEXT</code> left at the default
+<code>application/json</code> serves a <code>str</code> that is already a JSON document as
+it is. The result ceiling and the cache hints apply to every encoding.
+A <code>TEXT</code> or <code>BLOB</code> resource is refused, naming both, beside a spec
+declaring <code>affordances</code>, which the kernel adds to a presented object,
+or <code>allow_none</code>, under which a missing row presents as <code>None</code>
+without the presenter running: neither is a document or bytes. For an
+HTML view use <code>register_ui_resource</code>, which sets both.</p>
+<p>A <code>uri_template</code> variable is a caller-controlled name that reaches the
+read's arguments, so one named after a pool seed (<code>user</code>,
+<code>request</code>, <code>data</code> …) or declared twice raises here rather than
+letting a URI segment stand in for the authenticated identity. So does
+a variable no read of the spec declares, and one the server fills for
+the call. A spec no read can run as written is refused naming the
+resource, as <code>register_tool</code> refuses one. A read the URI template
+names is filled on every read, as a value <code>server_arguments</code> binds is
+on every call, so it is never refused as optional.</p>
+<p>A resource whose spec declares no <code>permissions</code> is refused for the
+same reason a tool is — see <code>REQUIRE_TOOL_PERMISSIONS</code>. The same
+selector exposed as a resource is as reachable as it is exposed as a
+tool.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.server.mcp_server.MCPServer.register_ui_resource" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">register_ui_resource</span>
+
+
+<a href="#django_spec_mcp.server.mcp_server.MCPServer.register_ui_resource" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">register_ui_resource</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="o">*</span><span class="p">,</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">template_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">body_template_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">diagnostics</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">html</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">render</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[],</span> <span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">title</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">icons</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Icon</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">(),</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">ui</span><span class="p">:</span> <span class="n">UIResourceMeta</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="n">mime_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">UI_RESOURCE_MIME_TYPE</span><span class="p">,</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    <span class="n">permissions</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">PermissionCheck</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    <span class="n">scopes</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>    <span class="n">rate_limits</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>    <span class="n">annotations</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>    <span class="n">meta</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>    <span class="n">always_listed</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>    <span class="n">cache_ttl_ms</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="n">UnsetType</span> <span class="o">=</span> <span class="n">UNSET</span><span class="p">,</span>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ResourceBinding</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Register an interactive HTML view (an MCP App) as a resource.</p>
+<p>A tool links to the view and a <strong>host</strong> renders it inline in the chat,
+inside a sandboxed iframe it constructs itself. The iframe and the CSP
+<em>enforcement</em> are the host's and are deliberately not implemented here.</p>
+<p>The <code>ui/*</code> postMessage bridge is <strong>not</strong> in that list, and reading it
+as though it were is what this parameter set exists to prevent. The
+bridge has two ends: the host runs its end, and the <em>document</em> runs the
+other. That second end is a view's mandatory startup handshake, every
+one of its failure modes is silent, and one of them leaves the frame
+hidden with the view unable to say why.</p>
+<p>So give exactly one content source, and prefer the first:</p>
+<ul>
+<li><code>body_template_name</code> — a Django template holding the view's markup
+  only. The package wraps it in a document whose bridge is already
+  written and already correct. <code>diagnostics=</code> decides whether that
+  bridge writes a protocol failure into the document as well as logging
+  it; <code>None</code> follows <code>settings.DEBUG</code>, because the text is written
+  for whoever wrote the view and a rendered view's audience is whoever
+  is using the product.</li>
+<li><code>template_name</code> — a Django template holding a whole document, whose
+  bridge is then yours to write.</li>
+<li><code>html</code> — a literal document, same.</li>
+<li><code>render</code> — a callable returning one, which <strong>must take no
+  arguments</strong>: one that declares a parameter is refused at
+  registration, because the read path would fill it from a pool carrying
+  <code>request</code> and <code>user</code>.</li>
+</ul>
+<p><strong>Keep tenant data out of the view.</strong> Hosts may prefetch and cache a
+view before any tool call, so it is a shell that hydrates itself at
+runtime from tool results — which is also why the template renders with
+no context.</p>
+<p><code>ui=</code> is the typed
+<a class="autorefs autorefs-internal" title="UIResourceMeta
+
+
+  
+      dataclass
+  " href="../registries/#django_spec_mcp.registry.types.ui_resource_meta.UIResourceMeta"><code>UIResourceMeta</code></a>
+— CSP origins, browser permissions, publisher <code>domain</code>, border preference —
+which serialises into <code>_meta</code> under the extension's key. <code>meta=</code> remains
+available for <em>other</em> extensions; passing both <code>ui=</code> and that same key inside
+<code>meta=</code> raises, rather than letting one silently win.</p>
+<p>The result is an ordinary
+<a class="autorefs autorefs-internal" title="ResourceBinding
+
+
+  
+      dataclass
+  " href="../registries/#django_spec_mcp.registry.types.resource_binding.ResourceBinding"><code>ResourceBinding</code></a>,
+so it shares one URI namespace with data resources (a collision raises as
+always), appears in <code>resources/list</code>, and honours <code>permissions</code> /
+<code>scopes</code> / <code>always_listed</code>. Views default to <strong>unguarded</strong> — the MCP
+session is already authenticated and a view is a static asset, not tenant
+data.</p>
+<p><code>permissions</code> are kernel <code>PermissionCheck</code>s, the instances a spec
+carries, each asked <code>has_permission(principal, binding)</code> with the view's
+<code>ResourceBinding</code> as the spec; <code>scopes</code> are the OAuth scopes the
+caller's token must carry, every one, asked first. Both gate the listing,
+the read and a subscription alike.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.server.mcp_server.MCPServer.register_prompt" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">register_prompt</span>
+
+
+<a href="#django_spec_mcp.server.mcp_server.MCPServer.register_prompt" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">register_prompt</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="o">*</span><span class="p">,</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">render</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">title</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">icons</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Icon</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">(),</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">arguments</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">PromptArgument</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">completions</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Callable</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">permissions</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">PermissionCheck</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">scopes</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">rate_limits</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">annotations</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="n">meta</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    <span class="n">always_listed</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">PromptBinding</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Register a render callable as an MCP prompt.</p>
+<p><code>render</code> receives the prompt arguments as kwargs (plus <code>request</code> and
+<code>user</code> if it declares them) and returns either a string, a list of strings, a
+list of
+<a class="autorefs autorefs-internal" title="PromptMessage
+
+
+  
+      dataclass
+  " href="../protocol/#django_spec_mcp.protocol.types.prompt_message.PromptMessage"><code>PromptMessage</code></a>,
+or a coroutine yielding any of those — the dispatch layer normalises the result.</p>
+<p><code>request</code> and <code>user</code> are seeded <strong>over</strong> the client's arguments at
+<code>prompts/get</code>, so an argument named after one of them never reaches
+<code>render</code> in the seed's place.</p>
+<p><code>permissions</code> are kernel <code>PermissionCheck</code>s, the instances a spec
+carries: a prompt is not a spec, so each is asked
+<code>has_permission(principal, binding)</code> with the prompt's
+<code>PromptBinding</code> as the spec, and a check on the principal alone answers
+a prompt as it answers a spec. <code>scopes</code> are the OAuth scopes the
+caller's token must carry, every one, asked first; a bare string is one
+scope. Both gate <code>prompts/list</code>, <code>prompts/get</code> and a completion alike.</p>
+<p>A prompt with neither is refused like a tool — see
+<code>REQUIRE_TOOL_PERMISSIONS</code>; <code>permissions=[Unrestricted()]</code> is the
+way to say it is open. A <code>render</code> callable reads whatever its
+author gave it access to, so nothing about a prompt makes it safe by
+construction.</p>
+<p><code>meta</code> is the generic <code>_meta</code> bundle for this prompt's
+<code>prompts/list</code> entry — see <code>register_tool</code>.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.server.mcp_server.MCPServer.prompt" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">prompt</span>
+
+
+<a href="#django_spec_mcp.server.mcp_server.MCPServer.prompt" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">prompt</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="o">*</span><span class="p">,</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">title</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">icons</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Icon</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">(),</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">arguments</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">PromptArgument</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">completions</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Callable</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">permissions</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">PermissionCheck</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">scopes</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">rate_limits</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">annotations</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">meta</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="n">always_listed</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">Callable</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">Any</span><span class="p">]],</span> <span class="n">Callable</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Decorator form: register the wrapped callable as a prompt.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.server.mcp_server.MCPServer.notify" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">notify</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+<a href="#django_spec_mcp.server.mcp_server.MCPServer.notify" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">notify</span><span class="p">(</span><span class="n">session_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">payload</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Push a JSON-RPC payload to a session's open SSE stream.</p>
+<p>Returns <code>True</code> if a subscriber was present, <code>False</code> if no client is
+connected — a missed push is not generally an error, since clients pull
+state via <code>tools/call</code> round-trips. The broker enforces one
+subscriber per session: re-subscribing replaces the old queue silently.</p>
+<p>With a
+<a class="autorefs autorefs-internal" title="SSEReplayBuffer" href="../registries/#django_spec_mcp.transport.types.sse_replay_buffer.SSEReplayBuffer"><code>SSEReplayBuffer</code></a>
+configured the payload is recorded <em>before</em> publishing, so the frame carries an
+event ID the SSE generator emits on the wire (<code>id: &lt;id&gt;\ndata:
+&lt;payload&gt;\n\n</code>) and a later reconnect with <code>Last-Event-ID</code> drains what it
+missed before resuming live mode. Without a buffer there are no <code>id:</code> lines
+and resume is disabled.</p>
+<p>Multi-process deployments need an out-of-process broker to fan out
+across workers; the in-process broker only sees its own.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.schema.types.agent_conventions.AgentConventions" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">AgentConventions</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#django_spec_mcp.schema.types.agent_conventions.AgentConventions" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>The sentences this server writes for a model, one field per sentence.</p>
+<p>Passed as <code>MCPServer(conventions=...)</code>, per server, because two servers in
+one project can be talking to different readers. <code>AgentConventions()</code> is
+the default, and its fields carry the wording a server uses when it is given
+none; change one field and every other sentence stays the package's, so a
+later correction to a line you did not override still reaches you.</p>
+<p>The server still decides <strong>whether</strong> each sentence appears: a tool with no
+handle gets no handle line, a tool that returns no page no scope sentence.
+A field changes <strong>what it says</strong>, never when. <code>None</code> drops a sentence where
+dropping one leaves a well-formed answer.</p>
+<p><strong>Every field is a <code>str.format</code> template</strong>, rendered wherever it lands
+whether or not it has a placeholder, so a literal brace is written twice,
+<code>{{</code> or <code>}}</code>, in every field alike. The placeholders a field accepts are
+the ones listed on it, and only <code>missing_arguments</code> accepts one. Anything
+the server could not render raises <code>ImproperlyConfigured</code> naming the field
+when the conventions are built, so a typo fails when the server is, rather
+than inside the first call that reaches it. This is the Pydantic-AI
+toolset's rule for its <code>AgentConventions</code>, so one template reads the same
+on both transports.</p>
+<p>Some of these sentences state facts about how the server behaves: that a
+selection applies to each item and never to the envelope, that the
+envelope's keys are <code>items</code>, <code>page</code>, <code>totalPages</code> and <code>hasNext</code>.
+Wording you supply owns keeping those facts true.</p>
+
+
+<p><span class="doc-section-title">Raises:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td>
+                  <code><span title="django.core.exceptions.ImproperlyConfigured">ImproperlyConfigured</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A field uses a placeholder it does not accept, is
+not a valid format string, cannot be rendered with the values it
+will be given (<code>{names:q}</code>), is neither a string nor <code>None</code>, or
+is <code>missing_arguments</code> set to <code>None</code> or to an empty or
+whitespace-only string.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="django_spec_mcp.schema.types.agent_conventions.AgentConventions.handle_field_description" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">handle_field_description</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+  </span>
+
+<a href="#django_spec_mcp.schema.types.agent_conventions.AgentConventions.handle_field_description" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">handle_field_description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">HANDLE_DESCRIPTION</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The <code>outputSchema</code> description of a handle field that declares none of
+its own, beside the field in every tool's output schema. <code>None</code> leaves
+such a field undescribed. A <code>FieldMarking.handle("...")</code> keeps its own
+words whatever this says. No placeholders.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="django_spec_mcp.schema.types.agent_conventions.AgentConventions.handle_line" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">handle_line</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+  </span>
+
+<a href="#django_spec_mcp.schema.types.agent_conventions.AgentConventions.handle_line" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">handle_line</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">HANDLE_LINE</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The line appended to the description of a tool whose output carries a
+handle, after <code>Identify records by `&lt;label&gt;`.</code> when the presenter
+declares a label. <code>None</code> drops the line and that prefix with it. No
+placeholders.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="django_spec_mcp.schema.types.agent_conventions.AgentConventions.query_param_on_pages" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">query_param_on_pages</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+  </span>
+
+<a href="#django_spec_mcp.schema.types.agent_conventions.AgentConventions.query_param_on_pages" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">query_param_on_pages</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">PAGED_QUERY_PARAM_SCOPE</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>What a read-shaping parameter, one of a spec's <code>shapes</code>, applies to on
+a tool that returns a page. Appended to the param's description in the tool's <code>inputSchema</code>, and
+to the <code>isError</code> message when a value it supplied is refused while that
+tool's result is rendered. <code>None</code> drops it from both. No placeholders.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="django_spec_mcp.schema.types.agent_conventions.AgentConventions.missing_arguments" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">missing_arguments</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+  </span>
+
+<a href="#django_spec_mcp.schema.types.agent_conventions.AgentConventions.missing_arguments" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">missing_arguments</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">MISSING_ARGUMENTS</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The message of a <code>validation_error</code> result for a call that left out
+arguments the tool's selectors cannot run without: a selector parameter
+with no default or a service tool's target lookup. <code>{names}</code> is the missing names, sorted, each
+in backticks, joined with <code>", "</code>; the <code>detail</code> stays keyed by each name.
+A validator's own refusal, a missing field included, keeps
+<code>"Invalid arguments"</code>. Never <code>None</code>, empty or only whitespace: it is
+the result's whole message.</p>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.indexes", "navigation.top", "search.highlight", "search.share", "search.suggest", "content.code.copy", "content.code.annotate", "content.action.edit", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

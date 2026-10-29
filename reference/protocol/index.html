@@ -1,0 +1,7074 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Serve django-service-specs services and selectors as a Model Context Protocol (MCP) server.">
+      
+      
+      
+        <link rel="canonical" href="https://artui.github.io/django-spec-mcp/reference/protocol/">
+      
+      
+        <link rel="prev" href="../mcp-server/">
+      
+      
+        <link rel="next" href="../registries/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Protocol types - django-spec-mcp</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#protocol-types" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="django-spec-mcp" class="md-header__button md-logo" aria-label="django-spec-mcp" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            django-spec-mcp
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Protocol types
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+          <a href="javascript:void(0)" class="md-search__icon md-icon" title="Share" aria-label="Share" data-clipboard data-clipboard-text="" data-md-component="search-share" tabindex="-1">
+            
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9a3 3 0 0 0-3 3 3 3 0 0 0 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.15c-.05.21-.08.43-.08.66 0 1.61 1.31 2.91 2.92 2.91s2.92-1.3 2.92-2.91A2.92 2.92 0 0 0 18 16.08"/></svg>
+          </a>
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/Artui/django-spec-mcp" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Artui/django-spec-mcp
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="django-spec-mcp" class="md-nav__button md-logo" aria-label="django-spec-mcp" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    django-spec-mcp
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/Artui/django-spec-mcp" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    Artui/django-spec-mcp
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quickstart/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quickstart
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../moving-from-drf-mcp/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Moving from drf-mcp
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../auth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authentication
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../async/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Async deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../prompts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prompts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../observability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../troubleshooting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../performance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Performance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_11" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../recipes/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Recipes
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_11" id="__nav_11_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Recipes
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/expose-a-service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Expose a service
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/swap-session-store/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Swap the session store
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/agent-audience/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hide plumbing from the model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/custom-permission/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add a custom permission
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/async-auth-backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Async-native auth backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/rate-limiting/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add rate limiting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/redis-sse-broker/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-worker SSE with Redis
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/sse-replay-buffer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Resume SSE with Last-Event-ID
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/selector-tool-with-filterset/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Selector tool with FilterSet
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/interactive-view/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Render a list as an interactive table
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/register-from-spec-registry/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Register tools from a spec registry
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/pydantic-ai-client/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Connect a Pydantic-AI agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../recipes/migrating/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Migrate from fastapi-mcp / hand-rolled
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_12" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_12" id="__nav_12_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mcp-server/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCPServer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Protocol types
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Protocol types
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#json-rpc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        JSON-RPC
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.json_rpc_request.JsonRpcRequest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        JsonRpcRequest
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.json_rpc_notification.JsonRpcNotification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        JsonRpcNotification
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.json_rpc_response.JsonRpcResponse" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        JsonRpcResponse
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="JsonRpcResponse">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.json_rpc_response.JsonRpcResponse.result_type" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        result_type
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.json_rpc_error.JsonRpcError" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        JsonRpcError
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.types.JsonRpcErrorCode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        JsonRpcErrorCode
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.parse_message.parse_message" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        parse_message
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#display-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Display metadata
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.icon.Icon" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Icon
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.types.IconTheme" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        IconTheme
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#result-envelope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Result envelope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.types.ResultType" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ResultType
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ResultType">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.types.ResultType.TASK" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TASK
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.types.CacheScope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CacheScope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#discovery-and-the-initialize-handshake" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Discovery and the initialize handshake
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.discover_result.DiscoverResult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DiscoverResult
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.implementation.Implementation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.client_capabilities.ClientCapabilities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ClientCapabilities
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ClientCapabilities">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.client_capabilities.ClientCapabilities.extensions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        extensions
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.server_capabilities.ServerCapabilities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ServerCapabilities
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ServerCapabilities">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.server_capabilities.ServerCapabilities.extensions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        extensions
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.initialize_params.InitializeParams" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        InitializeParams
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.initialize_result.InitializeResult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        InitializeResult
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tools
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.tool.Tool" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tool
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tool">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.tool.Tool.icons" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        icons
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.tool_content_block.ToolContentBlock" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ToolContentBlock
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ToolContentBlock">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.tool_content_block.ToolContentBlock.text_block" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        text_block
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.tool_content_block.ToolContentBlock.image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        image
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.tool_content_block.ToolContentBlock.audio" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        audio
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.tool_content_block.ToolContentBlock.resource_link" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        resource_link
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.tool_content_block.ToolContentBlock.embedded_resource" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        embedded_resource
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.types.ToolContentKind" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ToolContentKind
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.tool_result.ToolResult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ToolResult
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resources
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.resource.Resource" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resource
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Resource">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.resource.Resource.icons" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        icons
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.resource_template.ResourceTemplate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ResourceTemplate
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ResourceTemplate">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.resource_template.ResourceTemplate.icons" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        icons
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.resource_contents.ResourceContents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ResourceContents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prompts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prompts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.prompt.Prompt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prompt
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Prompt">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.prompt.Prompt.icons" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        icons
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.prompt_argument.PromptArgument" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PromptArgument
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.prompt_message.PromptMessage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PromptMessage
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="PromptMessage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.prompt_message.PromptMessage.text" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        text
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.prompt_message.PromptMessage.block" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        block
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.get_prompt_result.GetPromptResult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GetPromptResult
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#completion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Completion
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.completion.Completion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Completion
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#subscriptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Subscriptions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.subscriptions.types.subscription_filter.SubscriptionFilter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SubscriptionFilter
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="SubscriptionFilter">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.subscriptions.types.subscription_filter.SubscriptionFilter.from_params" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        from_params
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.subscriptions.types.subscription_filter.SubscriptionFilter.to_dict" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        to_dict
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.types.NotificationKind" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NotificationKind
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="NotificationKind">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.types.NotificationKind.filter_field" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        filter_field
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.subscriptions.types.subscription_broker.SubscriptionBroker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SubscriptionBroker
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="SubscriptionBroker">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.subscriptions.types.subscription_broker.SubscriptionBroker.active_subscriptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        active_subscriptions
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.subscriptions.in_memory_subscription_broker.InMemorySubscriptionBroker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        InMemorySubscriptionBroker
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="InMemorySubscriptionBroker">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.subscriptions.in_memory_subscription_broker.InMemorySubscriptionBroker.publish" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        publish
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.subscriptions.redis_subscription_broker.RedisSubscriptionBroker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RedisSubscriptionBroker
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="RedisSubscriptionBroker">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.subscriptions.redis_subscription_broker.RedisSubscriptionBroker.subscribe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        subscribe
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.subscriptions.redis_subscription_broker.RedisSubscriptionBroker.publish" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        publish
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.subscriptions.utils.topic_for_resource" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        topic_for_resource
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tasks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tasks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.task.Task" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Task
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Task">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.task.Task.to_dict" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        to_dict
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.types.TaskStatus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TaskStatus
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.types.TaskPolicy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TaskPolicy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.tasks.types.task_store.TaskStore" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TaskStore
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.tasks.types.task_executor.TaskExecutor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TaskExecutor
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.tasks.types.task_record.TaskRecord" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TaskRecord
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="TaskRecord">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.tasks.types.task_record.TaskRecord.progress" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        progress
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.tasks.types.task_record.TaskRecord.total" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        total
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.tasks.types.task_record.TaskRecord.input_responses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        input_responses
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.tasks.types.task_record.TaskRecord.with_task" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        with_task
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.tasks.django_cache_task_store.DjangoCacheTaskStore" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DjangoCacheTaskStore
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.tasks.in_memory_task_store.InMemoryTaskStore" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        InMemoryTaskStore
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../registries/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Registries
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../settings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Settings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../auth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Auth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../output/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Output
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#json-rpc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        JSON-RPC
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.json_rpc_request.JsonRpcRequest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        JsonRpcRequest
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.json_rpc_notification.JsonRpcNotification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        JsonRpcNotification
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.json_rpc_response.JsonRpcResponse" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        JsonRpcResponse
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="JsonRpcResponse">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.json_rpc_response.JsonRpcResponse.result_type" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        result_type
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.json_rpc_error.JsonRpcError" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        JsonRpcError
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.types.JsonRpcErrorCode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        JsonRpcErrorCode
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.parse_message.parse_message" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        parse_message
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#display-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Display metadata
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.icon.Icon" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Icon
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.types.IconTheme" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        IconTheme
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#result-envelope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Result envelope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.types.ResultType" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ResultType
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ResultType">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.types.ResultType.TASK" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TASK
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.types.CacheScope" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CacheScope
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#discovery-and-the-initialize-handshake" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Discovery and the initialize handshake
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.discover_result.DiscoverResult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DiscoverResult
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.implementation.Implementation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.client_capabilities.ClientCapabilities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ClientCapabilities
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ClientCapabilities">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.client_capabilities.ClientCapabilities.extensions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        extensions
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.server_capabilities.ServerCapabilities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ServerCapabilities
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ServerCapabilities">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.server_capabilities.ServerCapabilities.extensions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        extensions
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.initialize_params.InitializeParams" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        InitializeParams
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.initialize_result.InitializeResult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        InitializeResult
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tools
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.tool.Tool" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tool
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tool">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.tool.Tool.icons" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        icons
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.tool_content_block.ToolContentBlock" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ToolContentBlock
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ToolContentBlock">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.tool_content_block.ToolContentBlock.text_block" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        text_block
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.tool_content_block.ToolContentBlock.image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        image
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.tool_content_block.ToolContentBlock.audio" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        audio
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.tool_content_block.ToolContentBlock.resource_link" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        resource_link
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.tool_content_block.ToolContentBlock.embedded_resource" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        embedded_resource
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.types.ToolContentKind" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ToolContentKind
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.tool_result.ToolResult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ToolResult
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resources
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.resource.Resource" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resource
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Resource">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.resource.Resource.icons" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        icons
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.resource_template.ResourceTemplate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ResourceTemplate
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ResourceTemplate">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.resource_template.ResourceTemplate.icons" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        icons
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.resource_contents.ResourceContents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ResourceContents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prompts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prompts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.prompt.Prompt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prompt
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Prompt">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.prompt.Prompt.icons" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        icons
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.prompt_argument.PromptArgument" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PromptArgument
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.prompt_message.PromptMessage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PromptMessage
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="PromptMessage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.prompt_message.PromptMessage.text" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        text
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.prompt_message.PromptMessage.block" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        block
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.get_prompt_result.GetPromptResult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GetPromptResult
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#completion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Completion
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.completion.Completion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Completion
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#subscriptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Subscriptions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.subscriptions.types.subscription_filter.SubscriptionFilter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SubscriptionFilter
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="SubscriptionFilter">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.subscriptions.types.subscription_filter.SubscriptionFilter.from_params" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        from_params
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.subscriptions.types.subscription_filter.SubscriptionFilter.to_dict" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        to_dict
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.types.NotificationKind" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NotificationKind
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="NotificationKind">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.types.NotificationKind.filter_field" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        filter_field
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.subscriptions.types.subscription_broker.SubscriptionBroker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SubscriptionBroker
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="SubscriptionBroker">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.subscriptions.types.subscription_broker.SubscriptionBroker.active_subscriptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        active_subscriptions
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.subscriptions.in_memory_subscription_broker.InMemorySubscriptionBroker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        InMemorySubscriptionBroker
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="InMemorySubscriptionBroker">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.subscriptions.in_memory_subscription_broker.InMemorySubscriptionBroker.publish" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        publish
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.subscriptions.redis_subscription_broker.RedisSubscriptionBroker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RedisSubscriptionBroker
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="RedisSubscriptionBroker">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.subscriptions.redis_subscription_broker.RedisSubscriptionBroker.subscribe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        subscribe
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.subscriptions.redis_subscription_broker.RedisSubscriptionBroker.publish" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        publish
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.subscriptions.utils.topic_for_resource" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        topic_for_resource
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tasks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tasks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.task.Task" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Task
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Task">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.protocol.types.task.Task.to_dict" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        to_dict
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.types.TaskStatus" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TaskStatus
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.types.TaskPolicy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TaskPolicy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.tasks.types.task_store.TaskStore" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TaskStore
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.tasks.types.task_executor.TaskExecutor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TaskExecutor
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.tasks.types.task_record.TaskRecord" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        TaskRecord
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="TaskRecord">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.tasks.types.task_record.TaskRecord.progress" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        progress
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.tasks.types.task_record.TaskRecord.total" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        total
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.tasks.types.task_record.TaskRecord.input_responses" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        input_responses
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.tasks.types.task_record.TaskRecord.with_task" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        with_task
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.tasks.django_cache_task_store.DjangoCacheTaskStore" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DjangoCacheTaskStore
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.tasks.in_memory_task_store.InMemoryTaskStore" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        InMemoryTaskStore
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+    <a href="https://github.com/Artui/django-spec-mcp/edit/main/docs/reference/protocol.md" title="Edit this page" class="md-content__button md-icon" rel="edit">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M10 20H6V4h7v5h5v3.1l2-2V8l-6-6H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h4zm10.2-7c.1 0 .3.1.4.2l1.3 1.3c.2.2.2.6 0 .8l-1 1-2.1-2.1 1-1c.1-.1.2-.2.4-.2m0 3.9L14.1 23H12v-2.1l6.1-6.1z"/></svg>
+    </a>
+  
+  
+
+
+<h1 id="protocol-types">Protocol types<a class="headerlink" href="#protocol-types" title="Permanent link">&para;</a></h1>
+<p>JSON-RPC envelope, MCP message types, and error codes.</p>
+<h2 id="json-rpc">JSON-RPC<a class="headerlink" href="#json-rpc" title="Permanent link">&para;</a></h2>
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.protocol.types.json_rpc_request.JsonRpcRequest" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">JsonRpcRequest</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.json_rpc_request.JsonRpcRequest" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>A JSON-RPC 2.0 request: has <code>id</code> and expects a response.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.protocol.types.json_rpc_notification.JsonRpcNotification" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">JsonRpcNotification</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.json_rpc_notification.JsonRpcNotification" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>A JSON-RPC 2.0 notification: no <code>id</code>, no response expected.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.protocol.types.json_rpc_response.JsonRpcResponse" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">JsonRpcResponse</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.json_rpc_response.JsonRpcResponse" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>A JSON-RPC 2.0 response: exactly one of <code>result</code> or <code>error</code> is set.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="django_spec_mcp.protocol.types.json_rpc_response.JsonRpcResponse.result_type" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">result_type</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.json_rpc_response.JsonRpcResponse.result_type" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">result_type</span><span class="p">:</span> <span class="n">ResultType</span> <span class="o">=</span> <span class="n">COMPLETE</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Stamped into the result object as <code>resultType</code>.</p>
+<p>Every result carries it from <code>2026-07-28</code> onward, so it is applied here —
+the one place a handler's return value becomes wire JSON — rather than in
+each handler. A result that has already named itself wins, which leaves room
+for a non-<code>complete</code> one to be built where it is produced.</p>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.protocol.types.json_rpc_error.JsonRpcError" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">JsonRpcError</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.json_rpc_error.JsonRpcError" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>JSON-RPC 2.0 error object.</p>
+<p><code>code</code> is typed as <code>int</code> so server-defined codes outside the
+<a class="autorefs autorefs-internal" title="JsonRpcErrorCode" href="#django_spec_mcp.types.JsonRpcErrorCode"><code>JsonRpcErrorCode</code></a> enum can still
+be represented faithfully.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.types.JsonRpcErrorCode" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">JsonRpcErrorCode</span>
+
+
+<a href="#django_spec_mcp.types.JsonRpcErrorCode" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="enum.IntEnum">IntEnum</span></code></p>
+
+
+
+        <p>JSON-RPC 2.0 standard error codes plus MCP-specific reservations.</p>
+<p>JSON-RPC defines -32700 through -32600 and -32603. MCP then partitions the
+server-error range: <code>-32000..-32019</code> is implementation-defined,
+<code>-32020..-32099</code> is reserved for the spec itself, and everything
+allocated here sits in the implementation-defined half — with one
+exception.</p>
+<p><strong><code>-32002</code> is not ours to allocate.</strong> The resources spec names it for
+"Resource not found", and the <code>2026-07-28</code> revision singles it out as the
+one legacy code clients should keep recognising, so a spec-following client
+reads it as a missing resource whatever a server spends it on. It belongs
+to <code>RESOURCE_NOT_FOUND</code> and nothing else.</p>
+<p><code>-32003</code> and <code>-32004</code> are <strong>burned</strong> rather than reused: they were this
+package's own not-found codes before the wire values were aligned with the
+spec, so an older client still reads them as "resource/prompt not found"
+and "unknown tool". The next implementation-defined code allocated is
+<code>-32006</code>.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="django_spec_mcp.protocol.parse_message.parse_message" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">parse_message</span>
+
+
+<a href="#django_spec_mcp.protocol.parse_message.parse_message" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">parse_message</span><span class="p">(</span><span class="n">payload</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">JsonRpcMessage</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Classify a parsed JSON object as request / notification / response.</p>
+<p>Raises <code>ValueError</code> if the payload has no recognizable shape — caller
+should translate that to a JSON-RPC <code>-32600</code> (Invalid Request) error.</p>
+
+
+    </div>
+
+</div><h2 id="display-metadata">Display metadata<a class="headerlink" href="#display-metadata" title="Permanent link">&para;</a></h2>
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.protocol.types.icon.Icon" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">Icon</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.icon.Icon" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>One entry in a wire type's <code>icons</code> array.</p>
+<p>Icons are pure display metadata: a client shows them beside a tool,
+resource, prompt or the server itself. This package only <em>emits</em> them —
+fetching, sanitising and rendering are the client's problem, and the spec
+puts a long list of MUSTs on the consumer side precisely because icon bytes
+are untrusted input.</p>
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.protocol.types.icon.Icon.src">src</span></code></td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>URI pointing at the image. Must be <code>https:</code> or <code>data:</code> — the
+spec requires clients to <em>reject</em> any other scheme, so an <code>http:</code>
+or <code>file:</code> icon would never render. Rejected at construction, so
+the failure is a startup error rather than a silent no-op.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.protocol.types.icon.Icon.mime_type">mime_type</span></code></td>
+            <td>
+                  <code><span title="str">str</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Overrides the type the source serves, for a source that
+serves a generic <code>application/octet-stream</code>.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.protocol.types.icon.Icon.sizes">sizes</span></code></td>
+            <td>
+                  <code><span title="tuple">tuple</span>[<span title="str">str</span>, ...]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>WxH strings — <code>("48x48",)</code>, or <code>("any",)</code> for a scalable
+format like SVG.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.protocol.types.icon.Icon.theme">theme</span></code></td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="IconTheme (django_spec_mcp.types.icon_theme.IconTheme)" href="#django_spec_mcp.types.IconTheme">IconTheme</a> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Which background the icon was drawn for. Omit when it works on
+both.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.types.IconTheme" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">IconTheme</span>
+
+
+<a href="#django_spec_mcp.types.IconTheme" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="str">str</span></code>, <code><span title="enum.Enum">Enum</span></code></p>
+
+
+
+        <p>Which background an <a class="autorefs autorefs-internal" title="Icon
+
+
+  
+      dataclass
+  " href="#django_spec_mcp.protocol.types.icon.Icon"><code>Icon</code></a>
+was designed for.</p>
+<p>Omitting the theme (<code>None</code>) tells the client the icon works on either,
+which is right for most artwork. Declare it only when shipping a
+light/dark pair.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div><h2 id="result-envelope">Result envelope<a class="headerlink" href="#result-envelope" title="Permanent link">&para;</a></h2>
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.types.ResultType" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">ResultType</span>
+
+
+<a href="#django_spec_mcp.types.ResultType" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="str">str</span></code>, <code><span title="enum.Enum">Enum</span></code></p>
+
+
+
+        <p>The discriminator every result carries from <code>2026-07-28</code> onward.</p>
+<p>A <strong>MUST</strong> for servers implementing that revision and harmless before it —
+a legacy result object is an open shape, and a client on an older revision
+reads an absent <code>resultType</code> as <code>complete</code> — so it is emitted
+unconditionally rather than era-branched.</p>
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.types.ResultType.COMPLETE">COMPLETE</span></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The result is the answer.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.types.ResultType.INPUT_REQUIRED">INPUT_REQUIRED</span></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The result asks the client for input and expects the
+original request to be retried with the answers. Nothing here
+produces one yet; the vocabulary is the spec's.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="django_spec_mcp.types.ResultType.TASK" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">TASK</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+  </span>
+
+<a href="#django_spec_mcp.types.ResultType.TASK" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">TASK</span> <span class="o">=</span> <span class="s1">&#39;task&#39;</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>A durable handle instead of the result — see <code>django_spec_mcp.tasks</code>.</p>
+<p>The spec types <code>ResultType</code> as <code>"complete" | "input_required" | string</code>,
+the open tail being how extensions add their own. Servers <strong>MUST NOT</strong> set
+this on any result other than a <code>CreateTaskResult</code>, which is why nothing
+stamps it centrally the way <code>COMPLETE</code> is stamped — the task handler sets
+it explicitly and no other handler can reach it.</p>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.types.CacheScope" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">CacheScope</span>
+
+
+<a href="#django_spec_mcp.types.CacheScope" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="str">str</span></code>, <code><span title="enum.Enum">Enum</span></code></p>
+
+
+
+        <p>How widely a cacheable result may be reused, per <code>Cache-Control</code>.</p>
+<p><strong>Derived, never configured.</strong> <code>PUBLIC</code> licenses any intermediary to
+serve the response <em>across authorization contexts</em>, so a result that varies
+by caller and is labelled <code>PUBLIC</code> is a cross-tenant disclosure with a
+cache in front of it — precisely the mistake a settings knob would invite.
+The handlers work it out from what shaped the response: a
+permission-filtered listing is <code>PRIVATE</code>, and so is a <code>tools/list</code> that
+asked an operation-scope affordance of this caller; any other listing is
+<code>PUBLIC</code>, and a resource body always <code>PRIVATE</code>.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div><h2 id="discovery-and-the-initialize-handshake">Discovery and the initialize handshake<a class="headerlink" href="#discovery-and-the-initialize-handshake" title="Permanent link">&para;</a></h2>
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.protocol.types.discover_result.DiscoverResult" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">DiscoverResult</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.discover_result.DiscoverResult" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>The server's response to a <code>server/discover</code> request.</p>
+<p><code>server/discover</code> is the <code>2026-07-28</code> revision's replacement for the
+<code>initialize</code> handshake: the same three answers, but as an ordinary request
+rather than a stateful negotiation, so it can be cached, repeated or
+skipped.</p>
+<p>Two shape differences from
+<a class="autorefs autorefs-internal" title="InitializeResult
+
+
+  
+      dataclass
+  " href="#django_spec_mcp.protocol.types.initialize_result.InitializeResult"><code>InitializeResult</code></a>,
+neither cosmetic:</p>
+<ul>
+<li><code>supportedVersions</code> is a <strong>list</strong>, not a negotiated single version.
+  Nothing is agreed here; the client picks one and puts it on subsequent
+  requests.</li>
+<li><code>serverInfo</code> moves into <code>_meta</code> under a reserved key, because it is
+  self-reported and unverified and clients <strong>SHOULD NOT</strong> change behaviour
+  or make security decisions from it.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.protocol.types.implementation.Implementation" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">Implementation</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.implementation.Implementation" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>Identifies an MCP client or server: name + version, with an optional title.</p>
+<p>Mirrors the spec's <code>Implementation extends BaseMetadata, Icons</code>.</p>
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.protocol.types.implementation.Implementation.name">name</span></code></td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><em>"Intended for programmatic or logical use"</em> — the stable
+identifier. What distinguishes two servers to a client, and what
+server-scoped state keys off. Not interchangeable with
+<code>title</code>; the split is the spec's own.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.protocol.types.implementation.Implementation.version">version</span></code></td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The implementation's version string.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.protocol.types.implementation.Implementation.title">title</span></code></td>
+            <td>
+                  <code><span title="str">str</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><em>"Intended for UI and end-user contexts"</em> — the human-readable
+label. Clients fall back to <code>name</code> when absent.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.protocol.types.implementation.Implementation.description">description</span></code></td>
+            <td>
+                  <code><span title="str">str</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>UI copy a client shows next to the server's name in a
+connection list. <strong>Not</strong> the <code>initialize</code> <code>instructions</code>
+string, which tells the <em>model</em> how to use this server and is
+consumed as context. <code>MCPServer(description=...)</code> sets
+<code>instructions</code>; this comes from the <code>SERVER_INFO</code> setting.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.protocol.types.implementation.Implementation.website_url">website_url</span></code></td>
+            <td>
+                  <code><span title="str">str</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A link a client can offer alongside the name.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.protocol.types.implementation.Implementation.icons">icons</span></code></td>
+            <td>
+                  <code><span title="tuple">tuple</span>[<a class="autorefs autorefs-internal" title="Icon
+
+
+  
+      dataclass
+   (django_spec_mcp.protocol.types.icon.Icon)" href="#django_spec_mcp.protocol.types.icon.Icon">Icon</a>, ...]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Display icons, emitted only when non-empty.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.protocol.types.client_capabilities.ClientCapabilities" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">ClientCapabilities</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.client_capabilities.ClientCapabilities" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>Capability bundle the client advertises in <code>initialize</code>.</p>
+<p>All fields are open-ended dicts because the MCP spec leaves room for
+future capability sub-keys. We round-trip them verbatim.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="django_spec_mcp.protocol.types.client_capabilities.ClientCapabilities.extensions" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">extensions</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.client_capabilities.ClientCapabilities.extensions" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">extensions</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Protocol extensions the client implements, keyed by extension id — how a
+client says it supports MCP Apps (<code>io.modelcontextprotocol/ui</code>).</p>
+<p>Parsed for introspection only; nothing gates on it, since the spec merely
+<em>SHOULD</em>-s a check and unsupporting clients are required to ignore what they
+did not ask for.</p>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.protocol.types.server_capabilities.ServerCapabilities" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">ServerCapabilities</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.server_capabilities.ServerCapabilities" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>Capability bundle the server advertises in the <code>initialize</code> response.</p>
+<p>Every field defaults to <code>None</code> and is omitted from the payload when unset,
+because a capability is a promise: a client that sees <code>resources</code> will
+call <code>resources/list</code>, and one that sees <code>completions</code> will send
+<code>completion/complete</code>. <code>handle_initialize</code> populates only what this
+server can actually answer.</p>
+<p>There is deliberately no <code>logging</code> field — the <code>2026-07-28</code> revision
+<strong>deprecated</strong> the logging utility outright.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="django_spec_mcp.protocol.types.server_capabilities.ServerCapabilities.extensions" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">extensions</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.server_capabilities.ServerCapabilities.extensions" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">extensions</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Extensions this server supports, keyed by identifier.</p>
+<p>First-class in the <code>2026-07-28</code> schema and the counterpart to the
+per-request <code>clientCapabilities.extensions</code>. Values are per-extension
+settings objects; <code>{}</code> means "supported, nothing to configure", which is
+what every extension here uses.</p>
+<p>Distinct from <code>experimental</code>: that is a free-for-all with no naming
+rules, while extension keys are namespaced identifiers a client matches
+exactly.</p>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.protocol.types.initialize_params.InitializeParams" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">InitializeParams</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.initialize_params.InitializeParams" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>Parsed <code>initialize</code> request params.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.protocol.types.initialize_result.InitializeResult" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">InitializeResult</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.initialize_result.InitializeResult" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>The server's response to an <code>initialize</code> request.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div><h2 id="tools">Tools<a class="headerlink" href="#tools" title="Permanent link">&para;</a></h2>
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.protocol.types.tool.Tool" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">Tool</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.tool.Tool" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>An MCP tool descriptor as returned by <code>tools/list</code>.</p>
+<p><code>input_schema</code> and <code>output_schema</code> are JSON Schema documents.
+<code>annotations</code> carries the MCP ToolAnnotations hint bundle
+(<code>readOnlyHint</code>, <code>destructiveHint</code>), a closed spec-defined set.</p>
+<p><code>meta</code> is the base-protocol <code>_meta</code> bundle, emitted under <code>"_meta"</code>.
+It stays a free-form dict at this wire boundary rather than a closed
+dataclass because <code>_meta</code> is MCP's open extension namespace — any
+extension may add its own key. The same holds for every <code>meta</code> field on
+the other wire types here.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="django_spec_mcp.protocol.types.tool.Tool.icons" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">icons</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.tool.Tool.icons" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">icons</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Icon</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">()</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Display icons for this entry, emitted only when non-empty.</p>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.protocol.types.tool_content_block.ToolContentBlock" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">ToolContentBlock</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.tool_content_block.ToolContentBlock" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>One entry in a
+<a class="autorefs autorefs-internal" title="ToolResult
+
+
+  
+      dataclass
+  " href="#django_spec_mcp.protocol.types.tool_result.ToolResult"><code>ToolResult</code></a>'s
+<code>content</code> array.</p>
+<p>The spec models content as a five-member union — <code>text</code>, <code>image</code>,
+<code>audio</code>, <code>resource_link</code>, <code>resource</code> — whose members share no fields
+beyond <code>type</code>, <code>annotations</code> and <code>_meta</code>. This is one dataclass with
+every member's fields optional rather than five behind a union: <code>content</code>
+is a wire boundary, the shape is decided by <code>type</code>, and <code>to_dict</code>
+emits only what is set.</p>
+<p><strong>Construct through the classmethods, not the initialiser.</strong> Each takes
+exactly the fields its block type requires, which is where the spec's rules
+live — an image without a <code>mimeType</code> or a <code>resource_link</code> without a
+<code>uri</code> is not a block a client can use, and the constructors make those
+unrepresentable. <code>text_block</code> and <code>embedded_resource</code> are named around
+the <code>text</code> and <code>resource</code> fields they would otherwise shadow.</p>
+<p><code>annotations</code> carry <code>audience</code> / <code>priority</code> / <code>lastModified</code> — the
+identical bundle resources use, which is why it stays a free-form dict.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.protocol.types.tool_content_block.ToolContentBlock.text_block" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">text_block</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.tool_content_block.ToolContentBlock.text_block" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">text_block</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="o">*</span><span class="p">,</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">annotations</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">meta</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ToolContentBlock</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>A plain text block — what every tool result carries today.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.protocol.types.tool_content_block.ToolContentBlock.image" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">image</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.tool_content_block.ToolContentBlock.image" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">image</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">data</span><span class="p">:</span> <span class="nb">bytes</span> <span class="o">|</span> <span class="nb">str</span><span class="p">,</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="o">*</span><span class="p">,</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">mime_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">annotations</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">meta</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ToolContentBlock</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>An image block. <code>data</code> may be raw bytes or an existing base64 string.</p>
+<p><code>mime_type</code> is required by the spec, not merely recommended — a client
+has no other way to know how to decode the bytes.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.protocol.types.tool_content_block.ToolContentBlock.audio" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">audio</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.tool_content_block.ToolContentBlock.audio" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">audio</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">data</span><span class="p">:</span> <span class="nb">bytes</span> <span class="o">|</span> <span class="nb">str</span><span class="p">,</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="o">*</span><span class="p">,</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">mime_type</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">annotations</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">meta</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ToolContentBlock</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>An audio block — the same contract as <code>image</code>.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.protocol.types.tool_content_block.ToolContentBlock.resource_link" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">resource_link</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.tool_content_block.ToolContentBlock.resource_link" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">resource_link</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="o">*</span><span class="p">,</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">mime_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">annotations</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">meta</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ToolContentBlock</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>A pointer to a resource the client can read separately.</p>
+<p>The cheapest way to return something large or non-JSON: the URI is one
+this server's own <code>resources/read</code> already serves, so no bytes ride on
+the tool-result path. Per the spec a linked resource need not appear in
+<code>resources/list</code>.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.protocol.types.tool_content_block.ToolContentBlock.embedded_resource" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">embedded_resource</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.tool_content_block.ToolContentBlock.embedded_resource" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">embedded_resource</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">resource</span><span class="p">:</span> <span class="n">ResourceContents</span><span class="p">,</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="o">*</span><span class="p">,</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">annotations</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">meta</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ToolContentBlock</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>A resource's contents inlined into the result.</p>
+<p>Prefer <code>resource_link</code> unless the client cannot make a second
+round trip — embedding spends the caller's context on bytes it may not
+need.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.types.ToolContentKind" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">ToolContentKind</span>
+
+
+<a href="#django_spec_mcp.types.ToolContentKind" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="str">str</span></code>, <code><span title="enum.Enum">Enum</span></code></p>
+
+
+
+        <p>What a tool's rendered payload becomes in the result's <code>content</code> array.</p>
+<p>Declared per binding rather than sniffed from the payload, for the same reason as
+<a class="autorefs autorefs-internal" title="ResourceEncoding" href="../registries/#django_spec_mcp.types.ResourceEncoding"><code>ResourceEncoding</code></a>: a base64
+<code>str</code> and a text body are indistinguishable by inspection.</p>
+<p>Embedded (<code>resource</code>) blocks have no kind here on purpose — inlining contents
+means producing them, which <code>resources/read</code> already does, so a tool returns a
+<code>RESOURCE_LINK</code> and lets the client decide whether to spend context on the body.
+<a class="autorefs autorefs-internal" title="embedded_resource
+
+
+  
+      classmethod
+  " href="#django_spec_mcp.protocol.types.tool_content_block.ToolContentBlock.embedded_resource"><code>ToolContentBlock.embedded_resource</code></a>
+remains available for a caller building blocks by hand.</p>
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.types.ToolContentKind.TEXT">TEXT</span></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>One text block carrying the payload as JSON, mirrored in
+<code>structuredContent</code>. The default.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.types.ToolContentKind.IMAGE">IMAGE</span></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The payload is the media itself — <code>bytes</code>, or a <code>str</code>
+already in base64. Carries <strong>no</strong> <code>structuredContent</code>: binary is
+not JSON, and an <code>outputSchema</code> over it would describe a shape
+that never arrives.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.types.ToolContentKind.AUDIO">AUDIO</span></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>As <code>IMAGE</code>.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.types.ToolContentKind.RESOURCE_LINK">RESOURCE_LINK</span></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The payload names resources rather than containing them
+— one mapping with <code>uri</code> / <code>name</code> (plus optional
+<code>description</code> / <code>mimeType</code>), or a list of them.
+<code>structuredContent</code> is kept, since the links <em>are</em> JSON.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.protocol.types.tool_result.ToolResult" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">ToolResult</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.tool_result.ToolResult" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>The result of a successful <code>tools/call</code>.</p>
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.protocol.types.tool_result.ToolResult.content">content</span></code></td>
+            <td>
+                  <code><span title="list">list</span>[<a class="autorefs autorefs-internal" title="ToolContentBlock
+
+
+  
+      dataclass
+   (django_spec_mcp.protocol.types.tool_content_block.ToolContentBlock)" href="#django_spec_mcp.protocol.types.tool_content_block.ToolContentBlock">ToolContentBlock</a>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The human-readable projection of the answer: its JSON text,
+or a media or resource-link block.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.protocol.types.tool_result.ToolResult.structured_content">structured_content</span></code></td>
+            <td>
+                  <code><span title="typing.Any">Any</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The same answer JSON-shaped, for clients to parse
+directly. <code>UNSET</code> — the default — means the result carries no
+structured channel at all and the key is left off the wire. A
+payload of <code>None</code> is a <em>value</em>: it is emitted as
+<code>"structuredContent": null</code>, so a client branching on the key's
+presence to decide whether the tool offers structured output is not
+told "no" by a tool whose answer simply is null.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.protocol.types.tool_result.ToolResult.is_error">is_error</span></code></td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p><code>True</code> when the tool itself reported failure. Distinct from
+a JSON-RPC protocol error — the envelope is still a successful
+response and the failure detail lives inside the result.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.protocol.types.tool_result.ToolResult.meta">meta</span></code></td>
+            <td>
+                  <code><span title="dict">dict</span>[<span title="str">str</span>, <span title="typing.Any">Any</span>] | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The base-protocol <code>_meta</code> bundle on the <em>result envelope</em>, so
+per-call, unlike the static <code>_meta</code> a <code>tools/list</code> entry
+carries.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div><h2 id="resources">Resources<a class="headerlink" href="#resources" title="Permanent link">&para;</a></h2>
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.protocol.types.resource.Resource" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">Resource</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.resource.Resource" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>A concrete MCP resource as returned by <code>resources/list</code>.</p>
+<p><code>uri</code> is the canonical address (e.g. <code>"invoices://1"</code>); <code>mime_type</code>
+advertises how the contents will be encoded by <code>resources/read</code>.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="django_spec_mcp.protocol.types.resource.Resource.icons" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">icons</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.resource.Resource.icons" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">icons</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Icon</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">()</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Display icons for this entry, emitted only when non-empty.</p>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.protocol.types.resource_template.ResourceTemplate" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">ResourceTemplate</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.resource_template.ResourceTemplate" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>A parameterised resource address (RFC 6570 URI Template).</p>
+<p>Returned by <code>resources/templates/list</code>. Clients fill in the template
+variables and call <code>resources/read</code> with the resulting URI.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="django_spec_mcp.protocol.types.resource_template.ResourceTemplate.icons" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">icons</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.resource_template.ResourceTemplate.icons" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">icons</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Icon</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">()</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Display icons for this entry, emitted only when non-empty.</p>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.protocol.types.resource_contents.ResourceContents" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">ResourceContents</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.resource_contents.ResourceContents" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>One <code>contents</code> entry returned by <code>resources/read</code>.</p>
+<p>Either <code>text</code> or <code>blob</code> is set — never both. <code>blob</code> is base64-
+encoded per the MCP spec.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div><h2 id="prompts">Prompts<a class="headerlink" href="#prompts" title="Permanent link">&para;</a></h2>
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.protocol.types.prompt.Prompt" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">Prompt</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.prompt.Prompt" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>An MCP prompt descriptor as returned by <code>prompts/list</code>.</p>
+<p>A server-defined template the client invokes by name to get back a sequence
+of LLM messages. Arguments are filled in at <code>prompts/get</code> time and
+threaded into the rendering callable as kwargs.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="django_spec_mcp.protocol.types.prompt.Prompt.icons" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">icons</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.prompt.Prompt.icons" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">icons</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Icon</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">()</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Display icons for this entry, emitted only when non-empty.</p>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.protocol.types.prompt_argument.PromptArgument" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">PromptArgument</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.prompt_argument.PromptArgument" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>One declared input to an MCP prompt.</p>
+<p>Mirrors the spec's <code>PromptArgument</code>: a name plus optional description,
+with a flag for whether the client must supply it. Advertised in
+<code>prompts/list</code>.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.protocol.types.prompt_message.PromptMessage" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">PromptMessage</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.prompt_message.PromptMessage" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>One conversation turn returned by <code>prompts/get</code>.</p>
+<p>The spec accepts <code>user</code> or <code>assistant</code> for <code>role</code>, and <code>content</code> is
+one content block — <code>text</code>, <code>image</code>, <code>audio</code> or an embedded
+<code>resource</code>. It stays a plain dict because that is exactly the wire shape;
+<code>block</code> is the typed way in and <code>text</code> covers the common case.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.protocol.types.prompt_message.PromptMessage.text" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">text</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.prompt_message.PromptMessage.text" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">text</span><span class="p">(</span><span class="n">role</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">text</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">PromptMessage</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Convenience constructor for the common case of a text turn.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.protocol.types.prompt_message.PromptMessage.block" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">block</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.prompt_message.PromptMessage.block" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">block</span><span class="p">(</span><span class="n">role</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">block</span><span class="p">:</span> <span class="n">ToolContentBlock</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">PromptMessage</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Build a turn from any content block.</p>
+<p>The spec uses one content vocabulary across tool results and prompt messages, so
+this reuses
+<a class="autorefs autorefs-internal" title="ToolContentBlock
+
+
+  
+      dataclass
+  " href="#django_spec_mcp.protocol.types.tool_content_block.ToolContentBlock"><code>ToolContentBlock</code></a>
+rather than growing a parallel set. <code>resource_link</code> is the one member prompts
+do not accept — a prompt message embeds content, it does not point at it.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.protocol.types.get_prompt_result.GetPromptResult" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">GetPromptResult</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.get_prompt_result.GetPromptResult" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>Result envelope returned by <code>prompts/get</code>.</p>
+<p><code>description</code> surfaces the prompt's purpose to the client UI alongside
+the rendered messages.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div><h2 id="completion">Completion<a class="headerlink" href="#completion" title="Permanent link">&para;</a></h2>
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.protocol.types.completion.Completion" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">Completion</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.completion.Completion" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>The <code>completion</code> object inside a <code>completion/complete</code> result.</p>
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.protocol.types.completion.Completion.values">values</span></code></td>
+            <td>
+                  <code><span title="tuple">tuple</span>[<span title="str">str</span>, ...]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Suggestions ranked by relevance, capped at
+<code>MAX_COMPLETION_VALUES</code> by the spec.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.protocol.types.completion.Completion.total">total</span></code></td>
+            <td>
+                  <code><span title="int">int</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Count of all matches. Optional, and left unset by this package:
+knowing it would mean counting every match, which is the work a
+queryset-backed completer should be allowed to skip.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.protocol.types.completion.Completion.has_more">has_more</span></code></td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether the completer had more to give.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div><h2 id="subscriptions">Subscriptions<a class="headerlink" href="#subscriptions" title="Permanent link">&para;</a></h2>
+<p>See <a href="../../concepts/#server-pushed-notifications-subscriptions">Server-pushed notifications</a>
+for how to wire one up.</p>
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.subscriptions.types.subscription_filter.SubscriptionFilter" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">SubscriptionFilter</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#django_spec_mcp.subscriptions.types.subscription_filter.SubscriptionFilter" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>What a subscription asked for, and what the server agreed to.</p>
+<p>One type for both directions, because they are the same shape: the client
+sends a filter on <code>subscriptions/listen</code> and the server answers with the
+subset it will honour. Two types could drift, and the point of the
+acknowledgement is that the client can compare them.</p>
+<p><strong>Empty means nothing is delivered.</strong> The spec makes every type opt-in and
+says the server <strong>MUST NOT</strong> send what was not requested, so an absent field
+is a refusal rather than a default: a client that sends <code>{}</code> is
+acknowledged with nothing and its stream closes immediately.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.subscriptions.types.subscription_filter.SubscriptionFilter.from_params" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">from_params</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-classmethod"><code>classmethod</code></small>
+  </span>
+
+<a href="#django_spec_mcp.subscriptions.types.subscription_filter.SubscriptionFilter.from_params" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">from_params</span><span class="p">(</span><span class="n">raw</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SubscriptionFilter</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Read a filter off the wire, ignoring anything unusable.</p>
+<p>A malformed entry is dropped rather than failing the request: the
+acknowledgement reports what actually took effect, so the drop is
+visible, which beats rejecting a subscription over one bad key.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.subscriptions.types.subscription_filter.SubscriptionFilter.to_dict" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">to_dict</span>
+
+
+<a href="#django_spec_mcp.subscriptions.types.subscription_filter.SubscriptionFilter.to_dict" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">to_dict</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The wire form, omitting everything not asked for.</p>
+<p>Only truthy entries appear: the acknowledgement reads as "these are the
+things you will receive", so a <code>false</code> or an empty list in it would
+read as a promise about something.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.types.NotificationKind" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">NotificationKind</span>
+
+
+<a href="#django_spec_mcp.types.NotificationKind" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="str">str</span></code>, <code><span title="enum.Enum">Enum</span></code></p>
+
+
+
+        <p>The notification types a client can opt in to, other than by URI or id.</p>
+<p><strong>Opt-in is a MUST</strong>, not a courtesy: <em>"the server MUST NOT send
+notification types the client has not explicitly requested."</em> So this is a
+closed set, and anything outside the request's filter is not sent.</p>
+<p>The values are the notification methods with the <code>notifications/</code> prefix
+stripped, and the filter field names are their camelCase forms — kept
+mechanically related so a new kind cannot be added to one and forgotten in
+the other.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="django_spec_mcp.types.NotificationKind.filter_field" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">filter_field</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#django_spec_mcp.types.NotificationKind.filter_field" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">filter_field</span><span class="p">:</span> <span class="nb">str</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The <code>SubscriptionFilter</code> key that opts in to this kind.</p>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.subscriptions.types.subscription_broker.SubscriptionBroker" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">SubscriptionBroker</span>
+
+
+<a href="#django_spec_mcp.subscriptions.types.subscription_broker.SubscriptionBroker" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="typing.Protocol">Protocol</span></code></p>
+
+
+
+        <p>Topic-keyed pub/sub for notifications, with <strong>many</strong> subscribers per topic.</p>
+<p><strong>Deliberately not <code>SSEBroker</code></strong>, which this package already has for the
+legacy GET stream: that one keys on session id and allows a session at most
+one live subscriber. Here a notification is addressed to a <em>topic</em>, whose
+subscriber set is discovered at publish time, and several clients — or
+several subscriptions from one client — legitimately watch the same
+resource, so replacing the previous subscriber would silently disconnect
+them.</p>
+<p><strong>Topics are opaque strings</strong> built by
+<code>django_spec_mcp.subscriptions.utils</code> — a resource URI, a task id, a
+notification kind. The broker never interprets them, so adding a new
+notification type needs no change here.</p>
+<p><strong>A topic is not an authorization boundary.</strong> Anyone who can name a topic
+can receive it, so the <em>subscription</em> checks what the caller may watch before
+it attaches — once per subscription rather than once per delivery, and
+without the broker having to understand principals.</p>
+<p><code>subscribe</code> returns a queue that receives every payload published to
+any of <code>topics</code> until <code>unsubscribe</code>. One queue per subscription, not
+per topic — a subscription watching five resources reads one stream, which
+is what the wire format wants. It is awaitable because that is load-bearing:
+it must not return until the subscription is genuinely live, or the caller
+emits "you are subscribed" while publishes still go nowhere.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="django_spec_mcp.subscriptions.types.subscription_broker.SubscriptionBroker.active_subscriptions" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">active_subscriptions</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-property"><code>property</code></small>
+  </span>
+
+<a href="#django_spec_mcp.subscriptions.types.subscription_broker.SubscriptionBroker.active_subscriptions" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">active_subscriptions</span><span class="p">:</span> <span class="nb">int</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>How many subscriptions this broker is currently feeding.</p>
+<p><strong>Per process, not per cluster.</strong> It bounds this worker's occupancy —
+see <code>MAX_CONCURRENT_SUBSCRIPTIONS</code> — and a cluster-wide count would
+cost a round trip per subscribe to bound a per-worker resource.</p>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.subscriptions.in_memory_subscription_broker.InMemorySubscriptionBroker" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">InMemorySubscriptionBroker</span>
+
+
+<a href="#django_spec_mcp.subscriptions.in_memory_subscription_broker.InMemorySubscriptionBroker" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>In-process topic fan-out, for development and tests.</p>
+<p><strong>A multi-worker deployment needs a cross-process broker.</strong> The write that
+triggers a notification lands on whichever worker served that request while
+the subscriber's stream is parked on a different one, so an in-process
+broker delivers to nobody, silently, and the failure looks exactly like "the
+resource never changed". Subscriptions are a <strong>single-worker feature</strong> until
+a cross-process broker is passed to <code>MCPServer(subscription_broker=…)</code>.</p>
+<p><strong>Not a default.</strong> <code>MCPServer</code> constructs no broker at all when none is
+given, precisely so this class cannot be reached by accident.</p>
+<p>Unlike the session broker this keeps a <em>set</em> of queues per topic, and a
+queue may sit under several topics at once — one subscription watching five
+resources reads a single stream. Both directions of that mapping are kept so
+<code>unsubscribe</code> does not have to walk every topic.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.subscriptions.in_memory_subscription_broker.InMemorySubscriptionBroker.publish" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">publish</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+<a href="#django_spec_mcp.subscriptions.in_memory_subscription_broker.InMemorySubscriptionBroker.publish" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">publish</span><span class="p">(</span><span class="n">topic</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">payload</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Deliver to every subscriber of <code>topic</code>; returns how many got it.</p>
+<p><code>0</code> means nobody was listening, which is ordinary and not an error:
+notifications are best-effort by design, and a client that missed one
+re-reads the resource.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.subscriptions.redis_subscription_broker.RedisSubscriptionBroker" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">RedisSubscriptionBroker</span>
+
+
+<a href="#django_spec_mcp.subscriptions.redis_subscription_broker.RedisSubscriptionBroker" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>Cross-process topic fan-out over Redis pub/sub. <strong>The deployable one.</strong></p>
+<p><a class="autorefs autorefs-internal" title="InMemorySubscriptionBroker" href="#django_spec_mcp.subscriptions.in_memory_subscription_broker.InMemorySubscriptionBroker"><code>InMemorySubscriptionBroker</code></a>
+delivers to nobody once the publisher and the subscriber's stream land on
+different workers, and does so
+silently, so anything past one worker wants this:</p>
+<div class="language-text highlight"><pre><span></span><code>from redis.asyncio import Redis
+from django_spec_mcp.subscriptions.redis_subscription_broker import (
+    RedisSubscriptionBroker,
+)
+
+server = MCPServer(
+    name=&quot;my-app&quot;,
+    subscription_broker=RedisSubscriptionBroker(
+        Redis.from_url(&quot;redis://…&quot;), namespace=&quot;my-app&quot;
+    ),
+)
+</code></pre></div>
+<p><strong>Pass <code>namespace</code> whenever one Redis serves more than one server.</strong>
+Topic names are built from caller-supplied values — a notification kind, a
+resource URI — so two servers that register the same <code>SelectorSpec</code> under
+the same URI derive the same topic. Sharing a broker (or two brokers on the
+same default prefix) then routes one server's change signals to the other's
+subscribers, past the <code>resources/read</code> permission <code>grant_subscription</code>
+gates them on. The cache-backed session and task stores fold the server's
+<code>name</code> into their key prefix for exactly this reason; a Redis client is
+the consumer's to construct, so here it is a constructor argument. The value
+is hashed into the prefix, since <code>name</code> is free-form.</p>
+<p><strong>One Redis channel per topic, one listener task per subscription.</strong> The
+mapping is many-to-many — a subscription watches several topics and several
+subscriptions watch one topic — so each subscription gets a single task
+subscribed to all of its channels, feeding the one queue its stream reads.
+That keeps the task count proportional to live subscriptions rather than to
+topics, and it is subscriptions that connections bound.</p>
+<p>The Redis client's lifecycle belongs to the consumer — close it during ASGI
+lifespan shutdown, as with the other Redis collaborators here.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.subscriptions.redis_subscription_broker.RedisSubscriptionBroker.subscribe" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">subscribe</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+<a href="#django_spec_mcp.subscriptions.redis_subscription_broker.RedisSubscriptionBroker.subscribe" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">subscribe</span><span class="p">(</span><span class="n">topics</span><span class="p">:</span> <span class="nb">frozenset</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">Queue</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Register the channels <strong>before returning</strong>, then pump them.</p>
+<p><strong>The await is the whole point.</strong> Registering inside the background task
+would return a queue that is not yet subscribed, and the caller emits
+"you are subscribed" immediately afterwards, so everything published in
+that window goes nowhere while the client has been told otherwise — a
+race this class's own deployment makes likely, since the publisher is
+another process and waits for nobody.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.subscriptions.redis_subscription_broker.RedisSubscriptionBroker.publish" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">publish</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+<a href="#django_spec_mcp.subscriptions.redis_subscription_broker.RedisSubscriptionBroker.publish" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">publish</span><span class="p">(</span><span class="n">topic</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">payload</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Publish to <code>topic</code>'s channel; returns Redis's subscriber count.</p>
+<p>The count is <strong>cluster-wide receivers, not confirmed deliveries</strong>, and a
+listener still connecting reports as zero. A diagnostic, not a delivery
+guarantee: notifications are best-effort and a client that missed one
+re-reads the resource.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="django_spec_mcp.subscriptions.utils.topic_for_resource" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">topic_for_resource</span>
+
+
+<a href="#django_spec_mcp.subscriptions.utils.topic_for_resource" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">topic_for_resource</span><span class="p">(</span><span class="n">uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>The topic <code>notifications/resources/updated</code> for <code>uri</code> goes to.</p>
+<p><strong>Exact URI, never a prefix.</strong> The spec permits notifying about a
+<em>sub</em>-resource of the one subscribed to, which invites prefix matching, but
+a prefix match over a free-form URI guesses at a scheme this package does
+not own and fails both ways: <code>invoices://1</code> would match <code>invoices://11</code>,
+while a tenant-scoped <code>t1/invoices://…</code> would match nothing.</p>
+<p>A publisher that wants a collection watched says so, by publishing the
+collection URI alongside the instance one — an <code>invalidates=</code> naming both
+<code>invoices://{pk}</code> and <code>invoices://</code> is explicit and reviewable where a
+matching rule is neither.</p>
+
+
+    </div>
+
+</div><h2 id="tasks">Tasks<a class="headerlink" href="#tasks" title="Permanent link">&para;</a></h2>
+<p>The <code>io.modelcontextprotocol/tasks</code> extension. See
+<a href="../../concepts/#long-running-work-tasks">Long-running work</a> for how to wire it
+up; these are the types.</p>
+<p>A kernel tool opts in with <code>task_policy=</code> on
+<a class="autorefs autorefs-internal" title="register_tool" href="../mcp-server/#django_spec_mcp.server.mcp_server.MCPServer.register_tool"><code>register_tool</code></a>
+or as a <code>register_tools</code> override; a <code>REQUIRED</code> tool called by a client that
+declared the extension gets a task handle, and the task runs the spec.</p>
+
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.protocol.types.task.Task" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">Task</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#django_spec_mcp.protocol.types.task.Task" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>The wire shape of a task, in every message that carries one.</p>
+<p>One type serves three roles the spec names separately — the
+<code>CreateTaskResult</code> body, the <code>tasks/get</code> result and the
+<code>notifications/tasks</code> params — because they are the same object with the
+same fields. The spec's <code>WorkingTask</code> / <code>InputRequiredTask</code> /
+<code>CompletedTask</code> / <code>FailedTask</code> / <code>CancelledTask</code> split is only <em>which
+extra field is present</em>, which is a property of <code>status</code>;
+<code>to_dict</code> emits the right one and refuses the wrong one.</p>
+<p><strong>Timestamps are ISO 8601 strings, stored as strings.</strong> They come from the
+store and go out verbatim; nothing here parses or compares them. A
+<code>datetime</code> would invite a comparison against <code>now()</code>, and TTL expiry
+belongs to the store — the only component that knows its backend's clock.</p>
+<p><code>ttl_ms</code> is <code>None</code> for "no expiry", the spec's own encoding
+(<code>ttlMs: number | null</code>) rather than an omission: the field is always
+present.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.protocol.types.task.Task.to_dict" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">to_dict</span>
+
+
+<a href="#django_spec_mcp.protocol.types.task.Task.to_dict" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">to_dict</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Project to the wire, carrying only the field this status licenses.</p>
+<p>Gated on the status rather than on whether a field happens to be set, so
+a record holding both a <code>result</code> and an <code>error</code> cannot emit a shape
+no spec variant describes.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.types.TaskStatus" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">TaskStatus</span>
+
+
+<a href="#django_spec_mcp.types.TaskStatus" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="str">str</span></code>, <code><span title="enum.Enum">Enum</span></code></p>
+
+
+
+        <p>Lifecycle of a task, per the extension.</p>
+<p><code>WORKING</code> and <code>INPUT_REQUIRED</code> are live; the other three are terminal
+and a task never leaves them.</p>
+<p><strong><code>FAILED</code> is narrower than it looks.</strong> The spec forbids using the status
+to represent non-JSON-RPC errors. A tool that raises <code>ServiceError</code> has
+<em>completed</em> — it produced a well-formed <code>CallToolResult</code> carrying
+<code>isError: true</code>. <code>FAILED</code> is for the task machinery itself failing: the
+worker died, the payload could not be revived. Getting this backwards would
+hide every tool error behind a status the client reads as "the server
+broke".</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.types.TaskPolicy" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">TaskPolicy</span>
+
+
+<a href="#django_spec_mcp.types.TaskPolicy" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="str">str</span></code>, <code><span title="enum.Enum">Enum</span></code></p>
+
+
+
+        <p>Whether a binding may — or must — answer with a task handle.</p>
+<p><strong>A policy surface, not a wire field.</strong> The shipped extension makes <em>"the
+server the sole decider; clients do not signal task preference on the
+request itself"</em>, so the decision has to be made on this side, and the
+binding is where every other per-tool knob lives.</p>
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.types.TaskPolicy.FORBIDDEN">FORBIDDEN</span></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Never a task. The default, so every tool registered before
+this existed behaves exactly as it did.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.types.TaskPolicy.OPTIONAL">OPTIONAL</span></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A task for a client that declared the extension, an ordinary
+inline call for one that did not. The safe choice for a slow tool
+that can still run inline.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.types.TaskPolicy.REQUIRED">REQUIRED</span></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A task, or nothing — a client that did not declare the
+extension gets <code>-32021</code>. For work that genuinely cannot finish
+inside a request, where running it anyway would just hit the
+deadline.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.tasks.types.task_store.TaskStore" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">TaskStore</span>
+
+
+<a href="#django_spec_mcp.tasks.types.task_store.TaskStore" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="typing.Protocol">Protocol</span></code></p>
+
+
+
+        <p>Pluggable persistence for tasks, mirroring <code>SessionStore</code>.</p>
+<p><strong>Unlike <code>SessionStore</code>, an in-process implementation is not deployable.</strong> A
+session only has to be recognised by the process that minted it, while a task is
+created by a web worker and finished by a <em>different</em> process. So
+<a class="autorefs autorefs-internal" title="InMemoryTaskStore" href="#django_spec_mcp.tasks.in_memory_task_store.InMemoryTaskStore"><code>InMemoryTaskStore</code></a>
+is a development and test convenience, and
+<a class="autorefs autorefs-internal" title="DjangoCacheTaskStore" href="#django_spec_mcp.tasks.django_cache_task_store.DjangoCacheTaskStore"><code>DjangoCacheTaskStore</code></a>
+is the default.</p>
+<p>Four operations, no more:</p>
+<ul>
+<li><code>create</code> writes the seed record and <strong>must not return until the task
+  is durable</strong>: the spec forbids answering with a <code>CreateTaskResult</code>
+  before a <code>tasks/get</code> for that id would resolve, and answering first is
+  the one race that hands a client an id it cannot use.</li>
+<li><code>get</code> reads one back, or <code>None</code> if it never existed or has
+  expired. Both are the same answer to a caller: <code>-32602</code>.</li>
+<li><code>save</code> overwrites in place, preserving the original expiry.</li>
+<li><code>delete</code> removes one.</li>
+</ul>
+<p><strong>Expiry belongs to the store.</strong> <code>ttlMs</code> is on the record, but only the
+store knows what clock its backend keeps and only the store can drop an
+entry unasked. Callers never compare a timestamp to now.</p>
+<p><strong>No locking, deliberately.</strong> Last write wins, and the guard against a
+finished task being reopened lives in
+<code>django_spec_mcp.tasks.transition_task</code> — one rule in one place
+beats four backends implementing compare-and-swap differently.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.tasks.types.task_executor.TaskExecutor" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">TaskExecutor</span>
+
+
+<a href="#django_spec_mcp.tasks.types.task_executor.TaskExecutor" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+            <p class="doc doc-class-bases">
+              Bases: <code><span title="typing.Protocol">Protocol</span></code></p>
+
+
+
+        <p>Where a created task goes to be worked on.</p>
+<p>One method taking one string, because that is the entire seam. The record is
+already in the store when this is called, so the id finds everything, and
+keeping the payload out of the queue message stops the queue holding a copy
+of the arguments that can drift from the stored ones or outlive the task.</p>
+<p>A Celery consumer writes:</p>
+<div class="language-text highlight"><pre><span></span><code>@shared_task
+def run_mcp_task(task_id: str) -&gt; None:
+    my_server.run_task(task_id)
+
+class CeleryExecutor:
+    def enqueue(self, task_id: str) -&gt; None:
+        run_mcp_task.delay(task_id)
+</code></pre></div>
+<p>…and nothing in this package imports Celery. The protocol is satisfied just
+as well by an RQ or Dramatiq call, a <code>ThreadPoolExecutor.submit</code> in a
+test, or a management command that drains the store on a schedule.</p>
+<p><strong><code>enqueue</code> must not run the work.</strong> It is called on the request path with
+the client waiting for its <code>CreateTaskResult</code>, so anything slow here
+reintroduces exactly the blocking the extension exists to remove.</p>
+<p><strong>Failures here are not silent.</strong> If <code>enqueue</code> raises, the task is already
+durable and would otherwise sit in <code>working</code> forever, so the caller marks
+it <code>failed</code> and the client finds out by polling — a status it can act on,
+rather than a handle that never resolves.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.tasks.types.task_record.TaskRecord" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">TaskRecord</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-dataclass"><code>dataclass</code></small>
+  </span>
+
+<a href="#django_spec_mcp.tasks.types.task_record.TaskRecord" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>What a store holds: the wire
+<a class="autorefs autorefs-internal" title="Task
+
+
+  
+      dataclass
+  " href="#django_spec_mcp.protocol.types.task.Task"><code>Task</code></a> plus what a worker needs.</p>
+<p>A <em>superset</em> rather than a parallel type. The extra fields never reach the
+client — no task message has a slot for them — but they are why a task can
+outlive the request that created it: the worker that finishes it shares
+nothing with that request except this record.</p>
+<p><strong>The scopes are stored, and that is the point.</strong> Without them the worker
+rebuilds a token that proves nothing, and every binding with <code>scopes=</code>
+denies the call it had already been authorized for — silently, long after
+the client was told the work had started.</p>
+<p><code>TokenInfo.raw</code> is <strong>not</strong> stored: it is backend-defined credential
+material, and persisting it would put that in a cache with a week-long
+fallback TTL. A rehydrated token has <code>raw=None</code>, so a permission reaching
+into it is one that cannot run as a task.</p>
+<p><strong>The separation is a security boundary.</strong> <code>to_wire</code> is the only route
+from a record to a message, which is what stops a principal id or a scope
+list leaking into a response because a field was added to the wrong
+dataclass.</p>
+
+
+<p><span class="doc-section-title">Attributes:</span></p>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.tasks.types.task_record.TaskRecord.task">task</span></code></td>
+            <td>
+                  <code><a class="autorefs autorefs-internal" title="Task
+
+
+  
+      dataclass
+   (django_spec_mcp.protocol.types.task.Task)" href="#django_spec_mcp.protocol.types.task.Task">Task</a></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The wire task — the only part a client ever sees.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.tasks.types.task_record.TaskRecord.tool_name">tool_name</span></code></td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The tool the worker replays, verbatim.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.tasks.types.task_record.TaskRecord.arguments">arguments</span></code></td>
+            <td>
+                  <code><span title="dict">dict</span>[<span title="str">str</span>, <span title="typing.Any">Any</span>]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The arguments it replays, verbatim.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.tasks.types.task_record.TaskRecord.principal_id">principal_id</span></code></td>
+            <td>
+                  <code><span title="str">str</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>The owner, in the form
+<code>principal_for_token</code>
+already produces for sessions.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.tasks.types.task_record.TaskRecord.user_pk">user_pk</span></code></td>
+            <td>
+                  <code><span title="typing.Any">Any</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Rehydrates the user on the worker.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.tasks.types.task_record.TaskRecord.scopes">scopes</span></code></td>
+            <td>
+                  <code><span title="tuple">tuple</span>[<span title="str">str</span>, ...]</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Rebuild the worker's <code>TokenInfo</code> so its permission checks see
+what the request path saw.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.tasks.types.task_record.TaskRecord.audience">audience</span></code></td>
+            <td>
+                  <code><span title="str">str</span> | None</code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Rebuilds that <code>TokenInfo</code>'s audience.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.tasks.types.task_record.TaskRecord.enqueued">enqueued</span></code></td>
+            <td>
+                  <code><span title="bool">bool</span></code>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>Whether the task reached the executor, so a worker cannot be
+tricked into running it twice.</p>
+              </div>
+            </td>
+          </tr>
+      </tbody>
+    </table>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="django_spec_mcp.tasks.types.task_record.TaskRecord.progress" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">progress</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+  </span>
+
+<a href="#django_spec_mcp.tasks.types.task_record.TaskRecord.progress" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">progress</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>How far along the running task said it was, or <code>None</code> if it never said.</p>
+<p>Written by
+<code>report_task_progress</code>,
+what a task's <code>progress</code> kwarg-pool seed resolves to. <strong>Server-side only,
+by protocol</strong>: the wire <code>Task</code> carries <code>statusMessage</code> and no numeric
+field, so a polling client sees only the <em>rendered</em> string this and
+<code>total</code> produce.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="django_spec_mcp.tasks.types.task_record.TaskRecord.total" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">total</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+  </span>
+
+<a href="#django_spec_mcp.tasks.types.task_record.TaskRecord.total" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">total</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>What <code>progress</code> counts toward, or <code>None</code> for an open-ended count.</p>
+<p><code>None</code> is the ordinary case for work that cannot say how much there is —
+the reporter renders a bare count rather than inventing a denominator.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="django_spec_mcp.tasks.types.task_record.TaskRecord.input_responses" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">input_responses</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+  </span>
+
+<a href="#django_spec_mcp.tasks.types.task_record.TaskRecord.input_responses" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">input_responses</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">)</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Answers the client has supplied via <code>tasks/update</code>, keyed as the
+matching <code>inputRequests</code> were.</p>
+<p>Accumulated rather than replaced, because the spec lets a client answer a
+strict subset of what is outstanding and come back for the rest; a worker
+parked on <code>input_required</code> reads this to find out what it was told.</p>
+<p>The spec requires the server never to reuse a key over a task's lifetime, so
+a key appearing here is answered for good and a later request picks a new
+one.</p>
+
+    </div>
+
+</div>
+
+
+
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.tasks.types.task_record.TaskRecord.with_task" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">with_task</span>
+
+
+<a href="#django_spec_mcp.tasks.types.task_record.TaskRecord.with_task" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">with_task</span><span class="p">(</span><span class="o">**</span><span class="n">changes</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TaskRecord</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Return a copy with fields changed on the embedded
+<a class="autorefs autorefs-internal" title="Task
+
+
+  
+      dataclass
+  " href="#django_spec_mcp.protocol.types.task.Task"><code>Task</code></a>.</p>
+<p>Saves every caller a nested <code>replace(record, task=replace(record.task,
+...))</code>.</p>
+
+
+    </div>
+
+</div>
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.tasks.django_cache_task_store.DjangoCacheTaskStore" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">DjangoCacheTaskStore</span>
+
+
+<a href="#django_spec_mcp.tasks.django_cache_task_store.DjangoCacheTaskStore" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>Task store backed by <code>django.core.cache</code>. <strong>The default.</strong></p>
+<p>Cross-process, which for tasks is not a nice-to-have: the web worker that
+creates a task and the worker that finishes it are different processes, so
+a store they do not share cannot work at all (see
+<a class="autorefs autorefs-internal" title="InMemoryTaskStore" href="#django_spec_mcp.tasks.in_memory_task_store.InMemoryTaskStore"><code>InMemoryTaskStore</code></a>).</p>
+<p><strong>Namespacing</strong> follows
+<a class="autorefs autorefs-internal" title="DjangoCacheSessionStore" href="../registries/#django_spec_mcp.transport.django_cache_session_store.DjangoCacheSessionStore"><code>DjangoCacheSessionStore</code></a>
+exactly — the server's <code>name</code>, hashed into the key prefix, so two servers in one
+project cannot read or overwrite each other's tasks. The digest is for key hygiene
+(<code>name</code> is free-form; memcached rejects spaces and caps length), not secrecy.</p>
+<p><strong>Records are serialised to plain dicts rather than pickled.</strong> The cache
+holds them across a deploy, and a pickled dataclass is a version of this
+package's class definition: rename a field and every in-flight task becomes
+unreadable exactly when a worker tries to finish it. Plain dicts also keep
+the store usable under a JSON-serialising backend.</p>
+<p><strong>Expiry</strong> is absolute, stamped once at <code>create</code> from <code>ttlMs</code> and
+carried in the envelope, so <code>save</code> renews the cache timeout to the
+<em>remaining</em> lifetime rather than restarting the clock — otherwise a task
+reporting progress often would never expire.</p>
+<p><strong>A malformed id is a miss, not an exception.</strong> <code>taskId</code> comes off the
+wire and lands in a cache key, and the memcached backends reject keys with
+spaces or control characters and keys over 250 bytes — raising out of a
+handler with no arm for it. An id that cannot be one this package minted
+cannot name a record either, so it is answered as the absence it is.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-class">
+
+
+
+<h2 id="django_spec_mcp.tasks.in_memory_task_store.InMemoryTaskStore" class="doc doc-heading">
+            <span class="doc doc-object-name doc-class-name">InMemoryTaskStore</span>
+
+
+<a href="#django_spec_mcp.tasks.in_memory_task_store.InMemoryTaskStore" class="headerlink" title="Permanent link">&para;</a></h2>
+
+
+    <div class="doc doc-contents first">
+
+
+
+        <p>Task store held in one process's memory. <strong>Development and tests only.</strong></p>
+<p><strong>Not a deployable backend, and not for the usual reason.</strong> An in-memory <em>session</em>
+store is merely restart-fragile; an in-memory <em>task</em> store is broken by design,
+because a task is created on a web worker and finished somewhere else — the worker
+writes its result into a dict the web process cannot see, and every poll answers
+"unknown task" until the client gives up. It fails silently and looks like a hung
+job, which is why
+<a class="autorefs autorefs-internal" title="DjangoCacheTaskStore" href="#django_spec_mcp.tasks.django_cache_task_store.DjangoCacheTaskStore"><code>DjangoCacheTaskStore</code></a>
+is the default. This class exists so tests and a single-process <code>runserver</code> can
+exercise the machinery without a cache.</p>
+<p>No expiry: <code>ttlMs</code> is advisory here, and a process short-lived enough to
+use this store is its own garbage collection.</p>
+
+
+
+
+
+
+
+
+
+
+
+<div class="doc doc-children">
+
+
+
+
+
+
+
+
+
+
+
+
+  </div>
+
+    </div>
+
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.instant", "navigation.tracking", "navigation.sections", "navigation.expand", "navigation.indexes", "navigation.top", "search.highlight", "search.share", "search.suggest", "content.code.copy", "content.code.annotate", "content.action.edit", "toc.follow"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
