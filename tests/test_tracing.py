@@ -11,9 +11,12 @@ rejection and no-OTel cases build no spec.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import pytest
+from asgiref.sync import async_to_sync
+from django.http import HttpRequest
 from django_service_specs import (
     Parameter,
     Parameters,
@@ -30,9 +33,12 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 
 from django_spec_mcp import MCPServer, PromptArgument
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_prompts_get import handle_prompts_get
 from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
+from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 
 
@@ -60,11 +66,6 @@ def _server() -> MCPServer:
 
 
 def _ctx(server: MCPServer) -> Any:
-    from django.http import HttpRequest
-
-    from django_spec_mcp.auth.types.token_info import TokenInfo
-    from django_spec_mcp.handlers.types.context import MCPCallContext
-
     return MCPCallContext(
         http_request=HttpRequest(),
         token=TokenInfo(user=None),
@@ -162,89 +163,44 @@ def test_span_helper_is_noop_without_otel(monkeypatch) -> None:
 # ---------- ServiceError exception recording (RECORD_SERVICE_EXCEPTIONS) ----------
 
 
-def _tools_raising_service_error() -> Any:
-    """A registry holding a kernel tool whose service raises ``ServiceError``."""
+def _server_raising_service_error() -> MCPServer:
+    """A server holding a kernel tool whose service raises ``ServiceError``."""
 
     def boom() -> None:
         raise ServiceError("nope")
 
     server = _server()
     server.register_tool(ServiceSpec(service=boom, permissions=OPEN), name="t.boom")
-    return server.tools
+    return server
 
 
-def _ctx_with_tools(tools: Any) -> Any:
-    from django.http import HttpRequest
-
-    from django_spec_mcp.auth.types.token_info import TokenInfo
-    from django_spec_mcp.handlers.types.context import MCPCallContext
-    from django_spec_mcp.registry.prompt_registry import PromptRegistry
-    from django_spec_mcp.registry.resource_registry import ResourceRegistry
-
-    return MCPCallContext(
-        http_request=HttpRequest(),
-        token=TokenInfo(user=None),
-        tools=tools,
-        resources=ResourceRegistry(),
-        prompts=PromptRegistry(),
-        protocol_version="2025-11-25",
-    )
+# The sync handler, and the async one driven to a result, so each question is asked
+# of both from one body.
+@pytest.fixture(params=["sync", "async"])
+def tools_call(request: pytest.FixtureRequest) -> Callable[[dict[str, Any], MCPCallContext], Any]:
+    return handle_tools_call if request.param == "sync" else async_to_sync(handle_tools_call_async)
 
 
-@pytest.mark.django_db
+def _exception_events(exporter: InMemorySpanExporter) -> list[str]:
+    [span] = [s for s in exporter.get_finished_spans() if s.name == "mcp.tools.call"]
+    return [e.name for e in span.events if e.name == "exception"]
+
+
+@pytest.mark.django_db(transaction=True)
 def test_service_error_recorded_when_setting_enabled(
-    exporter: InMemorySpanExporter, settings
+    exporter: InMemorySpanExporter, settings, tools_call
 ) -> None:
     """``RECORD_SERVICE_EXCEPTIONS=True`` attaches an exception event to the span."""
     settings.SPEC_MCP = {"RECORD_SERVICE_EXCEPTIONS": True}
-    handle_tools_call(
-        {"name": "t.boom", "arguments": {}}, _ctx_with_tools(_tools_raising_service_error())
-    )
-    spans = [s for s in exporter.get_finished_spans() if s.name == "mcp.tools.call"]
-    assert spans, "expected mcp.tools.call span"
-    events = spans[-1].events
-    assert any(e.name == "exception" for e in events), (
-        f"expected an exception event on the span; got {[e.name for e in events]}"
-    )
+    tools_call({"name": "t.boom", "arguments": {}}, _ctx(_server_raising_service_error()))
+    assert _exception_events(exporter) == ["exception"]
 
 
-@pytest.mark.django_db
-def test_service_error_not_recorded_by_default(exporter: InMemorySpanExporter, settings) -> None:
+@pytest.mark.django_db(transaction=True)
+def test_service_error_not_recorded_by_default(
+    exporter: InMemorySpanExporter, settings, tools_call
+) -> None:
     """Default state: ``ServiceError`` is mapped to JSON-RPC but not recorded."""
     settings.SPEC_MCP = {}
-    handle_tools_call(
-        {"name": "t.boom", "arguments": {}}, _ctx_with_tools(_tools_raising_service_error())
-    )
-    spans = [s for s in exporter.get_finished_spans() if s.name == "mcp.tools.call"]
-    assert spans
-    assert not any(e.name == "exception" for e in spans[-1].events)
-
-
-@pytest.mark.django_db(transaction=True)
-async def test_async_service_error_recorded_when_setting_enabled(
-    exporter: InMemorySpanExporter, settings
-) -> None:
-    from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
-
-    settings.SPEC_MCP = {"RECORD_SERVICE_EXCEPTIONS": True}
-    await handle_tools_call_async(
-        {"name": "t.boom", "arguments": {}}, _ctx_with_tools(_tools_raising_service_error())
-    )
-    spans = [s for s in exporter.get_finished_spans() if s.name == "mcp.tools.call"]
-    assert spans
-    assert any(e.name == "exception" for e in spans[-1].events)
-
-
-@pytest.mark.django_db(transaction=True)
-async def test_async_service_error_not_recorded_by_default(
-    exporter: InMemorySpanExporter, settings
-) -> None:
-    from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
-
-    settings.SPEC_MCP = {}
-    await handle_tools_call_async(
-        {"name": "t.boom", "arguments": {}}, _ctx_with_tools(_tools_raising_service_error())
-    )
-    spans = [s for s in exporter.get_finished_spans() if s.name == "mcp.tools.call"]
-    assert spans
-    assert not any(e.name == "exception" for e in spans[-1].events)
+    tools_call({"name": "t.boom", "arguments": {}}, _ctx(_server_raising_service_error()))
+    assert _exception_events(exporter) == []
