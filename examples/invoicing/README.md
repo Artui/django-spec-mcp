@@ -88,11 +88,13 @@ python manage.py runserver
 
 ## Drive it
 
-`initialize` to get a session id:
+`initialize` to get a session id. The example's backend knows two demo tokens,
+`demo-clerk` (scope `invoices:email`) and `demo-intern` (no scope):
 
 ```bash
+CLERK=demo-clerk INTERN=demo-intern
 curl -i -X POST http://localhost:8000/mcp/ \
-  -H 'Authorization: Bearer demo-clerk' \
+  -H "Authorization: Bearer $CLERK" \
   -H 'Content-Type: application/json' \
   -H 'Mcp-Protocol-Version: 2025-11-25' \
   -H 'Origin: http://localhost' \
@@ -107,7 +109,7 @@ Export the session id and walk through the surfaces:
 ```bash
 SID=<paste from above>
 # An array, so each header stays one argument once the shell expands it
-H=(-H 'Authorization: Bearer demo-clerk'
+H=(-H "Authorization: Bearer $CLERK"
    -H 'Content-Type: application/json'
    -H 'Mcp-Protocol-Version: 2025-11-25'
    -H 'Origin: http://localhost'
@@ -180,7 +182,7 @@ curl -s -X POST http://localhost:8000/mcp/ "${H[@]}" \
 # error="insufficient_scope", scope="invoices:email". `H` carries the clerk's
 # token, so this call spells its headers out.
 curl -i -X POST http://localhost:8000/mcp/ \
-  -H 'Authorization: Bearer demo-intern' \
+  -H "Authorization: Bearer $INTERN" \
   -H 'Content-Type: application/json' \
   -H 'Mcp-Protocol-Version: 2025-11-25' \
   -H 'Origin: http://localhost' \
