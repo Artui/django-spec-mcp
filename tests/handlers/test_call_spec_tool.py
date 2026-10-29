@@ -43,6 +43,13 @@ def _server() -> MCPServer:
     return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
 
 
+def _one(spec: Any, name: str, **registration: Any) -> MCPServer:
+    """A server with ``spec`` registered as the one tool ``name``."""
+    server = _server()
+    server.register_tool(spec, name=name, **registration)
+    return server
+
+
 def _error(result: ToolResult) -> dict[str, Any]:
     return json.loads(result.content[0].text)["error"]
 
@@ -76,26 +83,35 @@ def test_a_service_tool_returns_a_tool_result() -> None:
     assert result.structured_content == {"ok": True}
 
 
-def test_a_list_selector_renders_many() -> None:
-    server = _server()
-    server.register_tool(
-        SelectorSpec(
-            kind=SelectorKind.LIST, selector=lambda: [{"a": 1}, {"a": 2}], permissions=OPEN
+@pytest.mark.parametrize(
+    ("spec", "arguments", "rendered"),
+    [
+        (
+            SelectorSpec(
+                kind=SelectorKind.LIST, selector=lambda: [{"a": 1}, {"a": 2}], permissions=OPEN
+            ),
+            {},
+            [{"a": 1}, {"a": 2}],
         ),
-        name="things.list",
-    )
-    assert server.call_tool("things.list", user=None).structured_content == [{"a": 1}, {"a": 2}]
-
-
-def test_a_retrieve_selector_renders_one_instance() -> None:
-    server = _server()
-    server.register_tool(
-        SelectorSpec(
-            kind=SelectorKind.RETRIEVE, selector=lambda *, pk: {"a": pk}, reads=PK, permissions=OPEN
+        (
+            SelectorSpec(
+                kind=SelectorKind.RETRIEVE,
+                selector=lambda *, pk: {"a": pk},
+                reads=PK,
+                permissions=OPEN,
+            ),
+            {"pk": 1},
+            {"a": 1},
         ),
-        name="things.get",
-    )
-    assert server.call_tool("things.get", {"pk": 1}, user=None).structured_content == {"a": 1}
+    ],
+    ids=["list-renders-many", "retrieve-renders-one-instance"],
+)
+def test_a_selector_renders_what_its_kind_returns(
+    spec: SelectorSpec, arguments: dict[str, Any], rendered: Any
+) -> None:
+    result = _one(spec, "things.read").call_tool("things.read", arguments, user=None)
+
+    assert result.structured_content == rendered
 
 
 def test_an_allow_none_retrieve_returns_an_empty_result_not_an_error() -> None:
@@ -201,17 +217,6 @@ def test_a_write_whose_instance_selector_raises_http404_is_not_found_unrun() -> 
     assert ran == []
 
 
-def test_a_service_validation_error_becomes_a_tool_error() -> None:
-    def svc() -> Any:
-        raise ServiceValidationError("bad input")
-
-    server = _server()
-    server.register_tool(ServiceSpec(service=svc, permissions=OPEN, atomic=False), name="t.create")
-    result = server.call_tool("t.create", {}, user=None)
-    assert result.is_error is True
-    assert _error(result)["type"] == "validation_error"
-
-
 def test_an_undeclared_argument_is_a_validation_error_not_a_fault() -> None:
     """A kernel spec declares its reads, so an argument it does not declare
     (``{"x": 1}`` here) is refused under ``REJECT`` as the wire refuses it, in
@@ -225,15 +230,24 @@ def test_an_undeclared_argument_is_a_validation_error_not_a_fault() -> None:
     assert _error(result)["detail"] == {"x": ["Unknown argument."]}
 
 
-def test_a_service_error_becomes_a_tool_error() -> None:
+@pytest.mark.parametrize(
+    ("raised", "error_type"),
+    [
+        (ServiceValidationError("bad input"), "validation_error"),
+        (ServiceError("boom"), "service_error"),
+    ],
+    ids=["validation", "service"],
+)
+def test_a_service_error_becomes_a_tool_error(raised: Exception, error_type: str) -> None:
     def svc() -> Any:
-        raise ServiceError("boom")
+        raise raised
 
-    server = _server()
-    server.register_tool(ServiceSpec(service=svc, permissions=OPEN, atomic=False), name="t.create")
-    result = server.call_tool("t.create", user=None)
+    result = _one(ServiceSpec(service=svc, permissions=OPEN, atomic=False), "t.create").call_tool(
+        "t.create", {}, user=None
+    )
     assert result.is_error is True
-    assert _error(result) == {"message": "boom", "type": "service_error"}
+    assert _error(result)["type"] == error_type
+    assert _error(result)["message"] == str(raised)
 
 
 # ---------- protocol faults (propagate) ----------
