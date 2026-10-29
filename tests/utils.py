@@ -9,7 +9,9 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 import pytest
+from asgiref.sync import async_to_sync
 from django.http import HttpRequest
+from django.test import AsyncClient, Client
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.types.token_info import TokenInfo
@@ -142,3 +144,64 @@ def nested_past_the_decoders_limit_here() -> bytes:
         f"nested arrays up to the {cap}-byte request cap all decoded on this thread: "
         "its stack is too large for the decoder's recursion limit to be reached"
     )
+
+
+# The two protocol eras the endpoint serves: the modern one is sessionless and names its
+# method in a header, the legacy one opens a session first.
+MODERN: str = "2026-07-28"
+LEGACY: str = "2025-11-25"
+
+
+async def _awaited(response: Any) -> Any:
+    return await response
+
+
+def _send(
+    client: Any, is_async: bool, method: str, params: dict[str, Any], headers: dict[str, str]
+) -> Any:
+    response = client.post(
+        "/mcp/",
+        data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}),
+        content_type="application/json",
+        headers=headers,
+    )
+    return async_to_sync(_awaited)(response) if is_async else response
+
+
+def post_in_era(era: str, is_async: bool, method: str, params: dict[str, Any]) -> Any:
+    """One request to the mounted endpoint, in ``era``, on the chosen view; its ``result``.
+
+    A legacy request opens its own session first; a modern one carries the
+    per-request ``_meta`` and the routing headers the era reads.
+    """
+    client: Any = AsyncClient() if is_async else Client()
+    headers: dict[str, str] = {"Mcp-Protocol-Version": era}
+    body: dict[str, Any] = dict(params)
+    if era == MODERN:
+        headers["Mcp-Method"] = method
+        if method == "tools/call":
+            headers["Mcp-Name"] = params["name"]
+        elif method == "resources/read":
+            headers["Mcp-Name"] = params["uri"]
+        body["_meta"] = {
+            "io.modelcontextprotocol/protocolVersion": MODERN,
+            "io.modelcontextprotocol/clientInfo": {"name": "pytest", "version": "0"},
+            "io.modelcontextprotocol/clientCapabilities": {},
+        }
+    else:
+        opened = _send(
+            client,
+            is_async,
+            "initialize",
+            {
+                "protocolVersion": LEGACY,
+                "capabilities": {},
+                "clientInfo": {"name": "pytest", "version": "0"},
+            },
+            {},
+        )
+        assert opened.status_code == 200, opened.content
+        headers["Mcp-Session-Id"] = opened["Mcp-Session-Id"]
+    response = _send(client, is_async, method, body, headers)
+    assert response.status_code == 200, response.content
+    return json.loads(response.content)["result"]

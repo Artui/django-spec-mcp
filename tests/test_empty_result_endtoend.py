@@ -22,14 +22,13 @@ service presents its own return through its ``presenter``.
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from typing import Any
 
 import pytest
 from asgiref.sync import async_to_sync
 from django.http import HttpRequest
-from django.test import AsyncClient, Client, override_settings
+from django.test import override_settings
 from django_service_specs import (
     DataclassPresenter,
     DataclassValidator,
@@ -53,9 +52,8 @@ from django_spec_mcp.transport.in_memory_session_store import InMemorySessionSto
 from tests.testapp.kernel_shapes import InvoiceOutput
 from tests.testapp.models import Invoice
 from tests.testapp.urlconf_for import urlconf_for
+from tests.utils import LEGACY, MODERN, post_in_era
 
-MODERN = "2026-07-28"
-LEGACY = "2025-11-25"
 OPEN = [Unrestricted()]
 INVOICE = DataclassPresenter(InvoiceOutput)
 
@@ -350,55 +348,6 @@ def test_a_tool_that_can_present_nothing_moves_required_into_the_any_of(name: st
 # ---------- what the HTTP views serve ----------
 
 
-async def _awaited(response: Any) -> Any:
-    return await response
-
-
-def _send(
-    client: Any, is_async: bool, method: str, params: dict[str, Any], headers: dict[str, str]
-) -> Any:
-    response = client.post(
-        "/mcp/",
-        data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}),
-        content_type="application/json",
-        headers=headers,
-    )
-    return async_to_sync(_awaited)(response) if is_async else response
-
-
-def _post(era: str, is_async: bool, method: str, params: dict[str, Any]) -> Any:
-    """One request to the mounted endpoint, in ``era``, on the chosen view."""
-    client: Any = AsyncClient() if is_async else Client()
-    headers: dict[str, str] = {"Mcp-Protocol-Version": era}
-    body: dict[str, Any] = dict(params)
-    if era == MODERN:
-        headers["Mcp-Method"] = method
-        if method == "tools/call":
-            headers["Mcp-Name"] = params["name"]
-        body["_meta"] = {
-            "io.modelcontextprotocol/protocolVersion": MODERN,
-            "io.modelcontextprotocol/clientInfo": {"name": "pytest", "version": "0"},
-            "io.modelcontextprotocol/clientCapabilities": {},
-        }
-    else:
-        opened = _send(
-            client,
-            is_async,
-            "initialize",
-            {
-                "protocolVersion": LEGACY,
-                "capabilities": {},
-                "clientInfo": {"name": "pytest", "version": "0"},
-            },
-            {},
-        )
-        assert opened.status_code == 200, opened.content
-        headers["Mcp-Session-Id"] = opened["Mcp-Session-Id"]
-    response = _send(client, is_async, method, body, headers)
-    assert response.status_code == 200, response.content
-    return json.loads(response.content)["result"]
-
-
 @pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
 @pytest.mark.parametrize("era", [LEGACY, MODERN], ids=["legacy", "modern"])
 @pytest.mark.django_db(transaction=True)
@@ -418,10 +367,12 @@ def test_every_served_result_conforms_to_its_served_schema(era: str, is_async: b
         ("invoices.send", {"number": "INV-2"}, "INV-2"),
     ]
     with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=is_async)):
-        listed = _post(era, is_async, "tools/list", {})["tools"]
+        listed = post_in_era(era, is_async, "tools/list", {})["tools"]
         schemas = {tool["name"]: tool["outputSchema"] for tool in listed}
         for name, arguments, expected in calls:
-            result = _post(era, is_async, "tools/call", {"name": name, "arguments": arguments})
+            result = post_in_era(
+                era, is_async, "tools/call", {"name": name, "arguments": arguments}
+            )
 
             assert not result.get("isError"), result
             served = result["structuredContent"]
