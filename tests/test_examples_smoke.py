@@ -405,9 +405,13 @@ def test_invoicing_demonstrates_a_closed_spread_schema_and_a_declared_empty_resu
 
 _INVOICING_RESOURCE_PROMPT_AND_SEND = _INVOICING_CLIENT + textwrap.dedent(
     """
+    from invoicing.urls import server
+
     pk = Invoice.objects.get(number="INV-A").pk
+    prompt = server.prompts.get("compose_invoice_email")
     print(json.dumps({
         "pk": pk,
+        "prompt_checks": [type(check).__name__ for check in prompt.permissions],
         "read": post("resources/read", {"uri": f"invoices://{pk}", "_meta": META}),
         "missing": rpc("resources/read", {"uri": "invoices://999", "_meta": META}),
         "prompt": post(
@@ -426,7 +430,8 @@ def test_invoicing_serves_its_resource_prompt_and_send_tool() -> None:
 
     The resource reads one row through the URI template's ``pk``, presented by
     the same dataclass as the tools, and a URI naming no invoice is a missing
-    resource; the prompt renders from the database; and
+    resource; the prompt, gated by the kernel's ``Unrestricted()`` as the specs
+    are, renders from the database; and
     marking an invoice sent twice is a ``service_error`` result the second time.
     """
     result = subprocess.run(
@@ -454,6 +459,8 @@ def test_invoicing_serves_its_resource_prompt_and_send_tool() -> None:
     assert replies["missing"]["error"]["code"] == -32602
     assert replies["missing"]["error"]["message"] == "Resource not found: 'invoices://999'"
 
+    # Gated by the kernel's own check, the one every spec here declares.
+    assert replies["prompt_checks"] == ["Unrestricted"]
     [message] = replies["prompt"]["messages"]
     assert message["role"] == "user"
     assert "Invoice INV-A for $1.00 is now ready." in message["content"]["text"]

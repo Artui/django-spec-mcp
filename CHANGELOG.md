@@ -219,8 +219,8 @@ carries; releases up to 0.54.0 are in
   metadata document are serialized with `json.dumps` defaults, so they carry
   `", "` and `": "` separators and escape non-ASCII characters, where DRF wrote
   them compact and in UTF-8. `request.user` and `request.auser()` are the
-  bearer token's principal from the moment the request authenticates, so an
-  `MCPPermission` never judges the user a session cookie names, and the auth
+  bearer token's principal from the moment the request authenticates, so no
+  check ever judges the user a session cookie names, and the auth
   backend is handed an anonymous request whatever the cookie says.
 - **`django-service-specs` 0.19.0 is the floor.** Its root holds every kernel name
   this package reads, among them the `check_seeds` registration asks and the
@@ -304,14 +304,19 @@ carries; releases up to 0.54.0 are in
   beside them, so a completer declaring `serializer` is handed the client's value
   of that name like any other. The transport's own `request`, `user`, `value`
   and `arguments` are still written over a sibling of the same name.
-- **Two registration refusals name only what this package takes.** A prompt
-  registered with no `permissions=` is refused, or warned about with
-  `REQUIRE_TOOL_PERMISSIONS` off, in a message that names no
-  `spec.permission_classes` and no DRF default permission classes; a
-  `permissions=` entry on a prompt or a `register_ui_resource` view that cannot
-  answer `has_permission(request, token)` is refused in one that names no
-  `DRFPermissionAdapter`. A warnings filter or a test matching either message's
-  old wording matches neither.
+- **A prompt or a view is guarded by kernel checks and a scope gate.**
+  `register_prompt`, `@server.prompt` and `register_ui_resource` take
+  `permissions=`, a list of kernel `PermissionCheck`s each asked
+  `has_permission(principal, binding)`, and `scopes=`, the scope gate a tool
+  takes, asked first. A deactivated principal is refused as a spec's dispatch
+  refuses one, and the same judgement answers the listings, `prompts/get`,
+  `resources/read`, `completion/complete` and a subscription. A prompt
+  registered with neither is refused, or warned about with
+  `REQUIRE_TOOL_PERMISSIONS` off, in a message that names both and no DRF
+  permission classes. Registration refuses a `permissions=` entry that is a
+  string, a class, not a `PermissionCheck`, or one whose `has_permission` is
+  `async def`. A warnings filter or a test matching the old refusals' wording
+  matches none of these.
 
 ### Removed
 
@@ -347,11 +352,14 @@ carries; releases up to 0.54.0 are in
   its `kwargs=` provider fills keys from the server's side; and a resource's
   kind is its spec's `RETRIEVE`.
 
-- **`DRFPermissionAdapter`.** A DRF permission class does not gate anything
-  here. A spec's guard is the kernel `PermissionCheck`s in its own
-  `permissions=`, with `scopes=` at registration for an OAuth scope gate; a
-  prompt or a view takes an `MCPPermission`, such as `ScopeRequired` or
-  `DjangoPermRequired`, in `permissions=`.
+- **`DRFPermissionAdapter`, `MCPPermission`, `ScopeRequired` and
+  `DjangoPermRequired`.** A DRF permission class does not gate anything here,
+  and a prompt or a view no longer takes a transport-only permission object
+  asked `has_permission(request, token)`, nor its optional `is_listable(token)`.
+  Every guard is a kernel `PermissionCheck` in `permissions=`, on the spec or on
+  the prompt or view, with `scopes=` at registration for an OAuth scope gate:
+  `scopes=[...]` replaces `ScopeRequired([...])`, and a check reading
+  `principal.has_perm(...)` replaces `DjangoPermRequired`.
 
 - **`ArgumentBinding`, and the root re-export of `UnknownArguments`.** A kernel
   tool's arguments always sit at the top level, so there is no binding to

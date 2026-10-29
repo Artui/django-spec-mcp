@@ -7,11 +7,11 @@ from django_service_specs import resolve_callable_kwargs
 from django_spec_mcp._compat.acall import acall
 from django_spec_mcp._compat.tracing import span
 from django_spec_mcp.handlers.handle_tools_call import _span_attrs
+from django_spec_mcp.handlers.judge_binding import judge_binding
 from django_spec_mcp.handlers.kernel_utils import carry_token
 from django_spec_mcp.handlers.render_prompt_messages import normalize_render_result
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import (
-    check_permissions,
     consume_rate_limits,
     forbidden,
 )
@@ -68,12 +68,7 @@ async def handle_prompts_get_async(
 
     with span("mcp.prompts.get", attributes=_span_attrs(binding.name, context)):
         # See the sync sibling. Off the loop, since a permission may query.
-        allowed, required_scopes = await acall(
-            check_permissions,
-            binding.permissions,
-            context.http_request,
-            context.token,
-        )
+        allowed, required_scopes = await acall(judge_binding, binding, context.token)
         if not allowed:
             return forbidden(required_scopes)
 

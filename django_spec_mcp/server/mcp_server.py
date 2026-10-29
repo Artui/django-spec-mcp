@@ -17,6 +17,7 @@ from django_service_specs import (
     UNSET,
     Affordance,
     Parameters,
+    PermissionCheck,
     PoolSeeds,
     SelectorKind,
     ServerArguments,
@@ -70,12 +71,12 @@ from django_spec_mcp.registry.types.prompt_binding import PromptBinding
 from django_spec_mcp.registry.types.resource_binding import ResourceBinding
 from django_spec_mcp.registry.types.ui_resource_meta import UIResourceMeta
 from django_spec_mcp.registry.types.ui_tool_meta import UIToolMeta
+from django_spec_mcp.registry.types.utils import binding_checks, scope_names
 from django_spec_mcp.schema.types.agent_conventions import AgentConventions
 from django_spec_mcp.server.utils import (
     build_ui_tool_meta,
     check_completions_declared,
     check_list_pagination_declared,
-    check_permissions_shape,
     check_tool_description_present,
     check_tool_permissions_declared,
 )
@@ -364,8 +365,8 @@ class MCPServer:
 
         ``scopes`` are the OAuth scopes the caller's token must carry, every one
         of them; a token missing one is answered ``-32006`` with every declared
-        scope in ``requiredScopes``, as a ``ScopeRequired`` permission answers.
-        A bare string is one scope, as ``ScopeRequired`` reads it. ``scopes=()``
+        scope in ``requiredScopes``, as a prompt's or a view's scope gate
+        answers. A bare string is one scope. ``scopes=()``
         is refused, since it would read as a gate and admit every caller. The
         scope gate is a transport check and does not count as the tool's guard
         for ``REQUIRE_TOOL_PERMISSIONS``, which reads the spec's own
@@ -672,8 +673,8 @@ class MCPServer:
         [`JsonRpcError`][django_spec_mcp.protocol.types.json_rpc_error.JsonRpcError]
         signals a bad cursor.
 
-        ``scopes`` are the caller's granted scopes; pass them so a
-        ``ScopeRequired``-gated tool is visible under
+        ``scopes`` are the caller's granted scopes; pass them so a tool
+        registered with ``scopes=`` is visible under
         ``FILTER_LISTINGS_BY_PERMISSIONS`` exactly as it would be on the wire.
         A tool whose operation-scope ``affordances`` condition is unmet for
         ``user`` right now is left out, as on the wire, unless
@@ -791,8 +792,8 @@ class MCPServer:
 
         ``request`` is the originating Django request when there is one; a
         minimal one is synthesised otherwise, mirroring ``call_tool``.
-        ``scopes`` populate the synthetic token so a ``ScopeRequired``-gated
-        tool is invokable in-process just as it is on the wire.
+        ``scopes`` populate the synthetic token so a tool registered with
+        ``scopes=`` is invokable in-process just as it is on the wire.
         """
         params = {"name": name, "arguments": arguments or {}}
         return await handle_tools_call_async(
@@ -1160,7 +1161,8 @@ class MCPServer:
         icons: tuple[Icon, ...] = (),
         ui: UIResourceMeta | None = None,
         mime_type: str = UI_RESOURCE_MIME_TYPE,
-        permissions: list[Any] | None = None,
+        permissions: Sequence[PermissionCheck] | None = None,
+        scopes: str | Sequence[str] | None = None,
         rate_limits: list[Any] | None = None,
         annotations: dict[str, Any] | None = None,
         meta: dict[str, Any] | None = None,
@@ -1213,8 +1215,15 @@ class MCPServer:
         [`ResourceBinding`][django_spec_mcp.registry.types.resource_binding.ResourceBinding],
         so it shares one URI namespace with data resources (a collision raises as
         always), appears in ``resources/list``, and honours ``permissions`` /
-        ``always_listed``. Views default to **unguarded** — the MCP session is already
-        authenticated and a view is a static asset, not tenant data."""
+        ``scopes`` / ``always_listed``. Views default to **unguarded** — the MCP
+        session is already authenticated and a view is a static asset, not tenant
+        data.
+
+        ``permissions`` are kernel ``PermissionCheck``s, the instances a spec
+        carries, each asked ``has_permission(principal, binding)`` with the view's
+        ``ResourceBinding`` as the spec; ``scopes`` are the OAuth scopes the
+        caller's token must carry, every one, asked first. Both gate the listing,
+        the read and a subscription alike."""
         binding = ui_view_to_resource(
             name=name,
             uri=uri,
@@ -1228,7 +1237,8 @@ class MCPServer:
             icons=icons,
             ui=ui,
             mime_type=mime_type,
-            permissions=check_permissions_shape(f"MCP binding {name!r}", permissions),
+            permissions=binding_checks(f"Resource {name!r}", permissions or ()),
+            scopes=scopes,
             rate_limits=tuple(rate_limits or ()),
             annotations=annotations,
             meta=meta,
@@ -1265,7 +1275,8 @@ class MCPServer:
         icons: tuple[Icon, ...] = (),
         arguments: list[PromptArgument] | None = None,
         completions: dict[str, Callable[..., Any]] | None = None,
-        permissions: list[Any] | None = None,
+        permissions: Sequence[PermissionCheck] | None = None,
+        scopes: str | Sequence[str] | None = None,
         rate_limits: list[Any] | None = None,
         annotations: dict[str, Any] | None = None,
         meta: dict[str, Any] | None = None,
@@ -1283,8 +1294,17 @@ class MCPServer:
         ``prompts/get``, so an argument named after one of them never reaches
         ``render`` in the seed's place.
 
-        A prompt with no permissions at all is refused like a tool — see
-        ``REQUIRE_TOOL_PERMISSIONS``. A ``render`` callable reads whatever its
+        ``permissions`` are kernel ``PermissionCheck``s, the instances a spec
+        carries: a prompt is not a spec, so each is asked
+        ``has_permission(principal, binding)`` with the prompt's
+        ``PromptBinding`` as the spec, and a check on the principal alone answers
+        a prompt as it answers a spec. ``scopes`` are the OAuth scopes the
+        caller's token must carry, every one, asked first; a bare string is one
+        scope. Both gate ``prompts/list``, ``prompts/get`` and a completion alike.
+
+        A prompt with neither is refused like a tool — see
+        ``REQUIRE_TOOL_PERMISSIONS``; ``permissions=[Unrestricted()]`` is the
+        way to say it is open. A ``render`` callable reads whatever its
         author gave it access to, so nothing about a prompt makes it safe by
         construction.
 
@@ -1298,7 +1318,8 @@ class MCPServer:
             icons=icons,
             render=render,
             arguments=tuple(arguments or ()),
-            permissions=check_permissions_shape(f"MCP binding {name!r}", permissions),
+            permissions=binding_checks(f"Prompt {name!r}", permissions or ()),
+            scopes=scope_names(f"Prompt {name!r}", scopes),
             rate_limits=tuple(rate_limits or ()),
             annotations=annotations or {},
             meta=merge_meta(meta),
@@ -1310,7 +1331,7 @@ class MCPServer:
         )
         check_tool_permissions_declared(
             binding.name,
-            binding.permissions,
+            guarded=bool(binding.permissions or binding.scopes),
             require=self._config.require_tool_permissions,
             kind="prompt",
         )
@@ -1328,7 +1349,8 @@ class MCPServer:
         icons: tuple[Icon, ...] = (),
         arguments: list[PromptArgument] | None = None,
         completions: dict[str, Callable[..., Any]] | None = None,
-        permissions: list[Any] | None = None,
+        permissions: Sequence[PermissionCheck] | None = None,
+        scopes: str | Sequence[str] | None = None,
         rate_limits: list[Any] | None = None,
         annotations: dict[str, Any] | None = None,
         meta: dict[str, Any] | None = None,
@@ -1346,6 +1368,7 @@ class MCPServer:
                 arguments=arguments,
                 completions=completions,
                 permissions=permissions,
+                scopes=scopes,
                 rate_limits=rate_limits,
                 annotations=annotations,
                 meta=meta,

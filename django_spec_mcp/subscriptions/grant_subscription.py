@@ -4,6 +4,7 @@ from typing import Any
 
 from django_service_specs import DispatchError, check_call, coerce_flat
 
+from django_spec_mcp.handlers.judge_binding import judge_binding
 from django_spec_mcp.handlers.kernel_utils import (
     call_context,
     carry_token,
@@ -12,7 +13,6 @@ from django_spec_mcp.handlers.kernel_utils import (
 )
 from django_spec_mcp.handlers.runs_on_kernel import runs_on_kernel
 from django_spec_mcp.handlers.types.context import MCPCallContext
-from django_spec_mcp.handlers.utils import check_permissions
 from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
 from django_spec_mcp.subscriptions.types.subscription_filter import SubscriptionFilter
 from django_spec_mcp.subscriptions.utils import (
@@ -108,13 +108,15 @@ def _may_watch_resource(uri: str, context: MCPCallContext) -> bool:
     if resolved is None:
         return False
     binding, vars_ = resolved
-    # The binding's scope gate first, as the read asks it.
-    allowed, _ = check_permissions(binding.permissions, context.http_request, context.token)
+    # The binding's own judgement first, as the read asks it: a view's scope
+    # gate and checks, a kernel resource's scope gate alone
+    # (``test_a_ui_resource_check_gates_its_listing_read_and_subscription``).
+    allowed, _ = judge_binding(binding, context.token)
     if not allowed:
         return False
-    # A kernel binding's ``permissions`` are only its scope gate: the spec's own
-    # permissions answer the read inside ``dispatch``, so they answer the watch
-    # here too, or a caller the read refuses would still hear every change
+    # A kernel binding holds only its scope gate: the spec's own permissions
+    # answer the read inside ``dispatch``, so they answer the watch here too,
+    # or a caller the read refuses would still hear every change
     # (``test_a_resource_the_caller_cannot_read_is_not_watchable``).
     if runs_on_kernel(binding):
         return _kernel_read_admits(binding, vars_, context)

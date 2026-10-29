@@ -344,7 +344,7 @@ def test_unknown_arguments_reaches_the_schema_and_the_call(
 
 def test_required_scopes_lists_every_declared_scope(client: Client) -> None:
     """``requiredScopes`` is the gate's whole declaration, not what the token
-    lacks, as on a ``ScopeRequired`` permission: a token carrying one of two
+    lacks, as on a prompt's or a view's scope gate: a token carrying one of two
     scopes is told both."""
     server = MCPServer(name="t", auth_backend=HeaderAuthBackend())
     server.register_tool(

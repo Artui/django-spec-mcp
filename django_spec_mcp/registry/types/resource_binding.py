@@ -4,9 +4,10 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Generic, TypeVar
 
-from django_service_specs import UNSET, UnsetType
+from django_service_specs import UNSET, PermissionCheck, UnsetType
 
 from django_spec_mcp.protocol.types.icon import Icon
+from django_spec_mcp.registry.types.utils import binding_checks, scope_names
 from django_spec_mcp.types.resource_encoding import ResourceEncoding
 
 ResultT = TypeVar("ResultT")
@@ -29,7 +30,8 @@ class ResourceBinding(Generic[ResultT]):
     registered unchecked: the registrars' refusals (an undeclared permission
     under ``REQUIRE_TOOL_PERMISSIONS``, a template variable naming a seed, a
     completer for no variable) are not asked, and no kernel spec stands behind
-    it to refuse an unguarded call, so it carries its own ``permissions``. A
+    it to refuse an unguarded call, so it carries its own ``permissions`` and
+    ``scopes``. A
     bare callable meant to be served with those checks is a ``RETRIEVE``
     ``SelectorSpec`` registered with ``register_resource``.
 
@@ -48,7 +50,18 @@ class ResourceBinding(Generic[ResultT]):
     changes the encoding. See
     [`ResourceEncoding`][django_spec_mcp.types.ResourceEncoding]."""
 
-    permissions: tuple[Any, ...] = ()
+    permissions: tuple[PermissionCheck, ...] = ()
+    """The kernel ``PermissionCheck``s a caller must pass, every one of them.
+
+    A view is not a spec, so nothing dispatches it: each check is asked
+    ``has_permission(principal, binding)`` with this binding as the spec
+    (``handlers.judge_binding``), at ``resources/list``, ``resources/read``, a
+    completion and a subscription's grant alike. Refused when built if any
+    entry is not a check instance (``registry.types.utils.binding_checks``)."""
+    scopes: tuple[str, ...] | None = None
+    """The OAuth scopes a caller's token must carry, every one of them, asked
+    before ``permissions``. ``None`` is no scope gate; a bare string is one scope,
+    and ``()`` is refused, as on ``KernelToolBinding.scopes``."""
     rate_limits: tuple[Any, ...] = ()
     annotations: dict[str, Any] = field(default_factory=dict)
     # Free-form for the reason given on ``KernelToolBinding.meta``.
@@ -79,6 +92,11 @@ class ResourceBinding(Generic[ResultT]):
     """Keep this resource in ``resources/list`` (or ``resources/templates/list``) even
     when ``FILTER_LISTINGS_BY_PERMISSIONS`` would drop it, as a tool's
     ``always_listed`` keeps it in ``tools/list``."""
+
+    def __post_init__(self) -> None:
+        label = f"Resource {self.name!r}"
+        object.__setattr__(self, "scopes", scope_names(label, self.scopes))
+        object.__setattr__(self, "permissions", binding_checks(label, self.permissions))
 
     @property
     def is_template(self) -> bool:

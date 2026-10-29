@@ -26,12 +26,13 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.permissions.scope_required import ScopeRequired
+from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.handlers.handle_resources_list import handle_resources_list
 from django_spec_mcp.handlers.handle_resources_templates_list import (
     handle_resources_templates_list,
 )
+from django_spec_mcp.handlers.utils import scope_verdict
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from django_spec_mcp.types.output_format import OutputFormat
 from django_spec_mcp.types.resource_encoding import ResourceEncoding
@@ -133,10 +134,13 @@ def test_an_empty_scope_tuple_is_refused() -> None:
 
 def test_scopes_become_the_scope_gate_and_none_is_no_gate() -> None:
     gated = _server().register_tool(_service(), name="t", scopes=("invoices:write", "ledger"))
-    (gate,) = gated.permissions
-    assert isinstance(gate, ScopeRequired)
-    assert gate.required_scopes() == ["invoices:write", "ledger"]
-    assert _server().register_tool(_service(), name="t").permissions == ()
+    assert gated.scopes == ("invoices:write", "ledger")
+    one_short = TokenInfo(user=None, scopes=("ledger",))
+    assert scope_verdict(gated.scopes, one_short) == (False, ["invoices:write", "ledger"])
+    both = TokenInfo(user=None, scopes=("ledger", "invoices:write"))
+    assert scope_verdict(gated.scopes, both) == (True, [])
+    assert _server().register_tool(_service(), name="t").scopes is None
+    assert scope_verdict(None, TokenInfo(user=None)) == (True, [])
 
 
 def test_passthrough_is_refused() -> None:
@@ -395,8 +399,8 @@ def test_a_kernel_resource_carries_its_scope_gate() -> None:
     binding = _server().register_resource(
         _selector(SelectorKind.RETRIEVE), name="r", uri_template="r://{pk}", scopes=("read",)
     )
-    (gate,) = binding.permissions
-    assert gate.required_scopes() == ["read"]
+    assert binding.scopes == ("read",)
+    assert binding.permissions == ()
 
 
 def test_a_bare_string_scope_is_one_scope() -> None:
@@ -406,10 +410,6 @@ def test_a_bare_string_scope_is_one_scope() -> None:
         _selector(SelectorKind.RETRIEVE), name="r", uri_template="r://{pk}", scopes="billing"
     )
     assert tool.scopes == resource.scopes == ("billing",)
-    assert [p.required_scopes() for p in (*tool.permissions, *resource.permissions)] == [
-        ["billing"],
-        ["billing"],
-    ]
 
 
 def test_a_guarded_kernel_spec_registers_under_require_tool_permissions() -> None:
@@ -511,4 +511,3 @@ def test_the_kernel_bindings_are_exported_beside_the_others() -> None:
 def test_a_binding_built_by_hand_reads_a_bare_string_scope_as_one() -> None:
     binding = KernelToolBinding(name="t", description="d", spec=_service(), scopes="billing")
     assert binding.scopes == ("billing",)
-    assert [p.required_scopes() for p in binding.permissions] == [["billing"]]

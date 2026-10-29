@@ -15,6 +15,7 @@ from typing import Any
 import pytest
 from asgiref.sync import async_to_sync
 from django.http import HttpRequest
+from django_service_specs import PermissionCheck
 
 from django_spec_mcp import SubscriptionFilter
 from django_spec_mcp.auth.types.token_info import TokenInfo
@@ -34,17 +35,14 @@ from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 _READS = pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
 
 
-class _Listable:
-    """Refuses every call and answers the listing by ``listed``."""
+class _Answers(PermissionCheck):
+    """Answers every ask by ``allowed``."""
 
-    def __init__(self, *, listed: bool) -> None:
-        self.listed = listed
+    def __init__(self, *, allowed: bool) -> None:
+        self.allowed = allowed
 
-    def has_permission(self, request: HttpRequest, token: TokenInfo) -> bool:  # noqa: ARG002
-        return False
-
-    def is_listable(self, token: TokenInfo) -> bool:  # noqa: ARG002
-        return self.listed
+    def has_permission(self, principal: Any, spec: Any) -> bool:  # noqa: ARG002
+        return self.allowed
 
 
 def _view(selector: Any, *, permissions: tuple[Any, ...] = ()) -> ResourceBinding:
@@ -100,12 +98,10 @@ def test_an_async_view_selector_is_awaited_on_the_async_read() -> None:
 
 
 @pytest.mark.parametrize("listed", [True, False])
-def test_a_views_is_listable_answers_the_listing_in_place_of_has_permission(
-    listed: bool,
-) -> None:
-    # ``has_permission`` refuses, so a listed view is listed by ``is_listable``
-    # alone, and an unlisted one is hidden by it rather than by the call check.
-    binding = _view(lambda: {}, permissions=(_Listable(listed=listed),))
+def test_a_views_listing_asks_the_check_its_read_asks(listed: bool) -> None:
+    # A kernel check has no list-time hook, so the listing and the read
+    # cannot disagree: ``has_permission`` answers both.
+    binding = _view(lambda: {}, permissions=(_Answers(allowed=listed),))
     assert is_binding_listable(binding, HttpRequest(), TokenInfo(user=None)) is listed
 
 

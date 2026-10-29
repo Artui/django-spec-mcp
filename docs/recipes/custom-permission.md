@@ -88,34 +88,41 @@ too rather than treating the coroutine as an answer.
 
 ## Gating a prompt or a view
 
-A prompt and an interactive view are not specs, so their gate is the
-`permissions=[...]` of `register_prompt` and `register_ui_resource`: objects
-implementing the [`MCPPermission`](../reference/auth.md) Protocol, anything with
-`has_permission(request, token)` and, optionally, `required_scopes()`. They are
-AND-combined per binding and evaluated after authentication, and any
-`required_scopes()` from a denying object are surfaced in the
-`WWW-Authenticate` header.
+A prompt and an interactive view are not specs, but they take the same kind of
+check: `permissions=[...]` on `register_prompt` and `register_ui_resource` is a
+list of kernel `PermissionCheck`s. Each is asked
+`has_permission(principal, binding)`, with the prompt's or view's binding
+standing where a spec would, so one check class can guard a spec and a prompt
+alike, and can tell them apart by what it is handed.
 
 ```python
-from django.http import HttpRequest
-
-from django_spec_mcp import TokenInfo
+from django_service_specs import PermissionCheck
 
 
-class PromptTenantMatches:
+class TenantMatches(PermissionCheck):
+    message = "This belongs to another tenant."
+
     def __init__(self, tenant_id: int) -> None:
         self._tenant_id = tenant_id
 
-    def has_permission(self, request: HttpRequest, token: TokenInfo) -> bool:
-        return getattr(token.user, "tenant_id", None) == self._tenant_id
+    def has_permission(self, principal, spec, **kwargs) -> bool:
+        return getattr(principal, "tenant_id", None) == self._tenant_id
 
-    def required_scopes(self) -> list[str]:
-        return []
+
+server.register_prompt(
+    name="tenant-report",
+    render=render_report,
+    permissions=[TenantMatches(tenant_id=7)],
+)
 ```
 
-`has_permission` — and the optional `is_listable(token)` — must be a plain
-`def` here too: writing either `async def` raises `ImproperlyConfigured` at
-evaluation time, for the reason above.
+Only the principal and the binding are passed: a check that requires
+`arguments` or `call_context` cannot gate a prompt. `has_permission` must be a
+plain `def`, as on a spec: an `async def` one is refused at registration,
+because its answer would be a truthy coroutine nothing awaits. For OAuth
+scopes, pass `scopes=` beside the checks rather than writing a check that reads
+the token; a scope refusal is the one that names the scopes in
+`WWW-Authenticate`.
 
 ## Tips
 

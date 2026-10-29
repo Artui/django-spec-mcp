@@ -1,24 +1,21 @@
 """Shared per-binding visibility check for the four list handlers.
 
 Centralised so the four list handlers agree on what "listable" means: a binding
-is hidden when any of its ``permissions`` denies the caller, unless
-``always_listed=True`` opts it back in.
+is hidden from a caller its call would refuse, unless ``always_listed=True``
+opts it back in.
 
-A permission may declare an ``is_listable(token)`` method for a list-time
-specific decision — useful when its ``has_permission(request, token)`` reads
-``request.arguments`` and would otherwise deny unfairly against the empty
-list-time arguments. Without one, ``has_permission`` runs against a data-less
-synthesised request, the right semantic for binding-level permissions such as
-``ScopeRequired``.
+A prompt or a view is judged by ``judge_binding``, the judgement its get or read
+asks: its scope gate, then each of its kernel ``PermissionCheck``s asked
+``has_permission(principal, binding)``. A check has no list-time hook of its
+own, so the listing and the call cannot disagree.
 
-A kernel binding's ``permissions`` hold only its scope gate: its spec's own
-``PermissionCheck``s are the kernel's, so they are asked as well, through the
-kernel's ``authorize``, the class-level question dispatch asks before it
-resolves anything, and, for a create-shaped service spec, through
-``authorize_scope`` of ``None``, the one scope question dispatch asks of it that
-reads no row. A kernel check has no ``is_listable``; a check that decides by the
-call's arguments is handed none at list time and so cannot answer, which hides
-its binding, and ``always_listed`` is the way back.
+A kernel binding is judged by its scope gate (``scope_verdict``) and then its
+spec's own ``PermissionCheck``s, which are the kernel's, through the kernel's
+``authorize``, the class-level question dispatch asks before it resolves
+anything, and, for a create-shaped service spec, through ``authorize_scope`` of
+``None``, the one scope question dispatch asks of it that reads no row. A check
+that decides by the call's arguments is handed none at list time and so cannot
+answer, which hides its binding, and ``always_listed`` is the way back.
 """
 
 from __future__ import annotations
@@ -31,6 +28,7 @@ from django_service_specs import DEFAULT_POOL_SEEDS, PoolSeeds
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.config.types.mcp_config import MCPConfig
+from django_spec_mcp.handlers.judge_binding import judge_binding
 from django_spec_mcp.handlers.kernel_utils import (
     admits_without_arguments,
     call_context,
@@ -38,7 +36,7 @@ from django_spec_mcp.handlers.kernel_utils import (
     principal_of,
 )
 from django_spec_mcp.handlers.runs_on_kernel import runs_on_kernel
-from django_spec_mcp.handlers.utils import permission_verdict
+from django_spec_mcp.handlers.utils import scope_verdict
 
 
 def is_binding_listable(
@@ -51,9 +49,9 @@ def is_binding_listable(
 ) -> bool:
     """Return ``True`` if the binding should appear in a list response.
 
-    ``binding`` is duck-typed: all four binding dataclasses carry the same shape
-    — a ``permissions`` tuple and an ``always_listed`` bool — without sharing a
-    base class, and ``Any`` saves importing all four to spell a union.
+    ``binding`` is any of the four binding dataclasses, which share no base
+    class; ``Any`` saves importing all four to spell a union, and
+    ``runs_on_kernel`` is what tells them apart.
 
     ``config`` and ``pool_seeds`` are the answering server's, and only a kernel
     binding reads them: the setting decides whether an unguarded spec's call is
@@ -62,34 +60,15 @@ def is_binding_listable(
     """
     if getattr(binding, "always_listed", False):
         return True
-    for perm in binding.permissions:
-        listable: Any = getattr(perm, "is_listable", None)
-        if listable is not None:
-            verdict = permission_verdict(
-                perm,
-                listable(token),
-                method="is_listable",
-                effect="every binding would be listed regardless of the caller.",
-            )
-            if not verdict:
-                return False
-            continue
-        # List-time visibility equals call-time permission against a data-less
-        # request: the pool seeds are still meaningful, only the caller-supplied
-        # ``arguments`` payload is absent.
-        allowed = permission_verdict(
-            perm,
-            perm.has_permission(http_request, token),
-            method="has_permission",
-            effect="every binding would be listed regardless of the caller.",
-        )
-        if not allowed:
-            return False
-    if runs_on_kernel(binding):
-        return _kernel_spec_admits(
-            binding, http_request, token, config or build_mcp_config(), pool_seeds
-        )
-    return True
+    if not runs_on_kernel(binding):
+        allowed, _ = judge_binding(binding, token)
+        return allowed
+    allowed, _ = scope_verdict(binding.scopes, token)
+    if not allowed:
+        return False
+    return _kernel_spec_admits(
+        binding, http_request, token, config or build_mcp_config(), pool_seeds
+    )
 
 
 def _kernel_spec_admits(

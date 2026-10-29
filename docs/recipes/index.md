@@ -8,7 +8,7 @@ that solves a single concrete problem. Browse the list:
   isn't what you want.
 - [Ship TOON for large lists](toon-output.md) — token-efficient tool output.
 - [Add a custom permission](custom-permission.md) — a kernel `PermissionCheck`
-  on the spec, and a permission object for a prompt or a view.
+  on a spec, a prompt or a view.
 - [Write an async-native auth backend](async-auth-backend.md) — `httpx`
   introspection against a remote IDP without blocking the event loop.
 - [Add rate limiting](rate-limiting.md) — per-binding `MCPRateLimit` with

@@ -11,7 +11,8 @@ there and refuses, whether it guards against ``None`` or raises on it, so a
 template whose check is scoped to a route completes for nobody; a ``ServiceError`` it raises refuses the completion as it hides the template,
 and a configuration error fails the completion as it fails the read.
 
-An ``MCPPermission`` on a prompt is handed the request and token alone.
+A prompt's kernel checks are handed the principal and the prompt's binding,
+as its ``prompts/get`` hands them.
 """
 
 from __future__ import annotations
@@ -36,7 +37,6 @@ from django_service_specs import (
 
 from django_spec_mcp import MCPServer, PromptArgument
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.auth.permissions.types.mcp_permission import MCPPermission
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_completion_complete import handle_completion_complete
 from django_spec_mcp.handlers.handle_initialize import handle_initialize
@@ -279,12 +279,9 @@ def test_a_lone_string_is_one_suggestion_not_its_characters() -> None:
 # ----- guards -----
 
 
-class _DenyAll(MCPPermission):
-    def has_permission(self, request: Any, token: Any) -> bool:
+class _DenyAll(PermissionCheck):
+    def has_permission(self, principal: Any, spec: Any) -> bool:
         return False
-
-    def required_scopes(self) -> tuple[str, ...]:
-        return ()
 
 
 def test_completion_runs_the_bindings_permissions() -> None:

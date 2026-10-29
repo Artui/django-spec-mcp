@@ -1,16 +1,17 @@
 from __future__ import annotations
 
 import inspect
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any
 
 from django.template.loader import render_to_string
-from django_service_specs import UNSET, UnsetType
+from django_service_specs import UNSET, PermissionCheck, UnsetType
 
 from django_spec_mcp.adapters.utils import merge_meta
 from django_spec_mcp.protocol.types.icon import Icon
 from django_spec_mcp.registry.types.resource_binding import ResourceBinding
 from django_spec_mcp.registry.types.ui_resource_meta import UIResourceMeta
+from django_spec_mcp.registry.types.utils import scope_names
 from django_spec_mcp.types.resource_encoding import ResourceEncoding
 from django_spec_mcp.types.ui_meta_key import UI_META_KEY
 from django_spec_mcp.types.ui_resource_mime_type import UI_RESOURCE_MIME_TYPE
@@ -32,7 +33,8 @@ def ui_view_to_resource(
     cache_ttl_ms: int | UnsetType = UNSET,
     ui: UIResourceMeta | None = None,
     mime_type: str = UI_RESOURCE_MIME_TYPE,
-    permissions: tuple[Any, ...] = (),
+    permissions: tuple[PermissionCheck, ...] = (),
+    scopes: str | Sequence[str] | None = None,
     rate_limits: tuple[Any, ...] = (),
     annotations: dict[str, Any] | None = None,
     meta: dict[str, Any] | None = None,
@@ -48,7 +50,9 @@ def ui_view_to_resource(
 
     Being an ordinary resource is the point: URI-collision checking, the listing
     handlers, permission filtering and ``always_listed`` all work with no
-    special case, and a view can still be guarded with ``permissions=``.
+    special case, and a view can still be guarded with ``permissions=`` (kernel
+    ``PermissionCheck``s, each handed the binding as the spec) and ``scopes=``,
+    both held to their rules by ``ResourceBinding`` itself.
 
     Exactly one content source:
 
@@ -134,6 +138,7 @@ def ui_view_to_resource(
         mime_type=mime_type,
         encoding=ResourceEncoding.TEXT,
         permissions=permissions,
+        scopes=scope_names(f"Resource {name!r}", scopes),
         rate_limits=rate_limits,
         annotations=annotations or {},
         meta=merge_meta(ui_meta, meta),

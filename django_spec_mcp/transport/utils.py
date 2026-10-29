@@ -87,8 +87,8 @@ def carry_principal(request: HttpRequest, token: TokenInfo) -> None:
     """Put the token on ``request`` as ``mcp_token``, and its principal as the user.
 
     Called the moment a request authenticates, so everything judged on this
-    request afterwards (an ``MCPPermission`` gating a prompt, a streamed
-    call's pre-flight, a handler) judges the bearer token's principal, never
+    request afterwards (a check gating a prompt, a streamed call's
+    pre-flight, a handler) judges the bearer token's principal, never
     the user ``AuthenticationMiddleware`` read off a session cookie
     (``test_a_permission_sees_the_tokens_principal_not_the_sessions``), and an
     ``AnonymousUser`` when the token names no one
@@ -170,8 +170,8 @@ def insufficient_scope_challenge(result: JsonRpcError, backend: MCPAuthBackend) 
     listing what would satisfy the request, which is how a client knows what to
     ask for on the next authorization round.
 
-    A denial with no scopes attached — a non-scope permission such as
-    ``DjangoPermRequired`` — still gets a 403, but no ``error=`` / ``scope=``:
+    A denial with no scopes attached — a ``PermissionCheck`` refusing, on a
+    prompt or a view or a spec — still gets a 403, but no ``error=`` / ``scope=``:
     RFC 6750 defines neither for that case, and inventing a scope the client
     cannot obtain would send it round a pointless loop.
     """

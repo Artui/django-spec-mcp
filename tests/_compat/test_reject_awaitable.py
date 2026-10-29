@@ -21,11 +21,14 @@ from typing import Any
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest
+from django_service_specs import PermissionCheck
 
 from django_spec_mcp._compat.reject_awaitable import reject_awaitable
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.is_binding_listable import is_binding_listable
-from django_spec_mcp.handlers.utils import check_permissions, consume_rate_limits
+from django_spec_mcp.handlers.judge_binding import judge_binding
+from django_spec_mcp.handlers.utils import consume_rate_limits
+from django_spec_mcp.registry.types.prompt_binding import PromptBinding
 
 _TOKEN = TokenInfo(user=None, scopes=())
 
@@ -92,20 +95,14 @@ def test_the_message_carries_all_three_parts() -> None:
 # ----- the family -----
 
 
-class _AsyncHasPermission:
-    async def has_permission(self, request: HttpRequest, token: TokenInfo) -> bool:  # noqa: ARG002
-        return False  # pragma: no cover — never awaited, which is the defect
+class _HandsBackACoroutine(PermissionCheck):
+    """A plain ``def`` handing back a coroutine, which no binding can refuse when built."""
 
-    def required_scopes(self) -> list[str]:
-        return []  # pragma: no cover
+    def has_permission(self, principal: Any, spec: Any) -> Any:  # noqa: ARG002
+        async def later() -> bool:
+            return False  # pragma: no cover — never awaited, which is the defect
 
-
-class _AsyncIsListable:
-    def has_permission(self, request: HttpRequest, token: TokenInfo) -> bool:  # noqa: ARG002
-        return True  # pragma: no cover — ``is_listable`` short-circuits first
-
-    async def is_listable(self, token: TokenInfo) -> bool:  # noqa: ARG002
-        return False  # pragma: no cover — never awaited, which is the defect
+        return later()
 
 
 class _AsyncRateLimit:
@@ -113,25 +110,18 @@ class _AsyncRateLimit:
         return None  # pragma: no cover — never awaited, which is the defect
 
 
-class _Binding:
-    """The duck-typed shape all four binding dataclasses share."""
-
-    always_listed = False
-
-    def __init__(self, permissions: tuple[Any, ...]) -> None:
-        self.permissions = permissions
+def _prompt() -> PromptBinding:
+    return PromptBinding(
+        name="p", description=None, render=lambda: "", permissions=(_HandsBackACoroutine(),)
+    )
 
 
-def _call_check_permissions() -> None:
-    check_permissions((_AsyncHasPermission(),), _request(), _TOKEN)
-
-
-def _call_is_listable() -> None:
-    is_binding_listable(_Binding((_AsyncIsListable(),)), _request(), _TOKEN)
+def _call_judge_binding() -> None:
+    judge_binding(_prompt(), _TOKEN)
 
 
 def _call_listable_has_permission() -> None:
-    is_binding_listable(_Binding((_AsyncHasPermission(),)), _request(), _TOKEN)
+    is_binding_listable(_prompt(), _request(), _TOKEN)
 
 
 def _call_consume_rate_limits() -> None:
@@ -141,12 +131,11 @@ def _call_consume_rate_limits() -> None:
 @pytest.mark.parametrize(
     ("call", "named"),
     [
-        (_call_check_permissions, "_AsyncHasPermission.has_permission()"),
-        (_call_is_listable, "_AsyncIsListable.is_listable()"),
-        (_call_listable_has_permission, "_AsyncHasPermission.has_permission()"),
+        (_call_judge_binding, "_HandsBackACoroutine.has_permission()"),
+        (_call_listable_has_permission, "_HandsBackACoroutine.has_permission()"),
         (_call_consume_rate_limits, "_AsyncRateLimit.consume()"),
     ],
-    ids=["tools/call permission", "list is_listable", "list has_permission", "rate limit"],
+    ids=["prompt or view permission", "list has_permission", "rate limit"],
 )
 def test_an_async_hook_is_refused_and_named(call: Any, named: str) -> None:
     with pytest.raises(ImproperlyConfigured) as excinfo:

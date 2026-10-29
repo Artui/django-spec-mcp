@@ -26,15 +26,19 @@ class UnguardedToolWarning(UserWarning):
 
 
 def check_tool_permissions_declared(
-    name: str, permissions: tuple[Any, ...], *, require: bool, kind: str = "tool"
+    name: str, *, guarded: bool, require: bool, kind: str = "tool"
 ) -> None:
-    """Warn (or raise) when a registered binding carries no permissions.
+    """Warn (or raise) when a registered binding carries neither permissions nor scopes.
 
-    Asked of a prompt, the one registration whose ``permissions=`` is its whole
-    gate: a kernel tool or resource is guarded by its spec's own
-    ``PermissionCheck``s, which ``check_kernel_spec_guarded`` asks about, and a
-    view reads nothing of the caller's (``register_ui_resource``). An empty tuple
-    means nothing gates the render beyond transport authentication.
+    Asked of a prompt, the one registration whose ``permissions=`` and
+    ``scopes=`` are its whole gate: a kernel tool or resource is guarded by its
+    spec's own ``PermissionCheck``s, which ``check_kernel_spec_guarded`` asks
+    about, and a view reads nothing of the caller's (``register_ui_resource``).
+    ``guarded`` is whether either is declared, and ``register_prompt`` holds
+    each half: ``test_a_prompt_with_checks_alone_counts_as_guarded`` fails
+    without the checks, ``test_a_prompt_takes_a_scope_gate_and_counts_as_guarded``
+    without the scopes. Neither means nothing gates the render beyond transport
+    authentication.
 
     ``kind`` names the registration in the message. It is governed by the
     ``REQUIRE_TOOL_PERMISSIONS`` setting, the one every unguarded registration
@@ -43,12 +47,12 @@ def check_tool_permissions_declared(
     Emits on every unguarded registration — no warn-once module state, per the
     repo's no-module-level-mutable-state rule.
     """
-    if permissions:
+    if guarded:
         return
     problem = (
-        f"MCP {kind} {name!r} is registered with no permissions, so it "
+        f"MCP {kind} {name!r} is registered with no permissions and no scopes, so it "
         "answers any principal the transport authenticates. Pass "
-        "permissions=[...] at registration."
+        "permissions=[...] or scopes=[...] at registration."
     )
     if require:
         # The remedy on this branch is the opposite of the warning's: the check
@@ -211,40 +215,6 @@ def build_ui_tool_meta(
     return {UI_META_KEY: ui.to_dict()}
 
 
-def check_permissions_shape(label: str, permissions: Any) -> tuple[Any, ...]:
-    """Normalise a registration's ``permissions=`` and refuse a shape that lies.
-
-    **Security-relevant.** ``permissions="Scope"`` normalises to ``tuple("Scope")`` —
-    five one-character entries. The tuple is non-empty, so
-    ``check_tool_permissions_declared`` sees a guarded tool and stays quiet; at
-    dispatch, ``check_permissions`` skips every entry that is not an
-    [`MCPPermission`][django_spec_mcp.auth.permissions.types.mcp_permission.MCPPermission],
-    and the call is **allowed**. A bare string is the likely way in, being what
-    ``ScopeRequired`` itself takes, so it gets its own message.
-
-    Only ``has_permission`` is required, deliberately: ``required_scopes`` has
-    an implied ``[]`` default, so a permission implementing the gate and
-    nothing else is legitimate, while an ``isinstance`` against the
-    runtime-checkable Protocol would reject it for the missing member.
-    """
-    if isinstance(permissions, str):
-        raise ImproperlyConfigured(
-            f"{label}: permissions= was given the string {permissions!r}, which "
-            "spreads into one entry per character — none of them a permission, "
-            "leaving the binding ungated while reading as guarded. Pass "
-            "permission objects: permissions=[ScopeRequired('...')]."
-        )
-    resolved: tuple[Any, ...] = tuple(permissions or ())
-    invalid: list[Any] = [p for p in resolved if not callable(getattr(p, "has_permission", None))]
-    if invalid:
-        raise ImproperlyConfigured(
-            f"{label}: permissions= contains {invalid!r}, which cannot answer "
-            "has_permission(request, token). Every entry must be an MCPPermission "
-            "— ScopeRequired / DjangoPermRequired, or your own."
-        )
-    return resolved
-
-
 def check_completions_declared(
     label: str,
     completions: dict[str, Any],
@@ -273,7 +243,6 @@ __all__ = [
     "build_ui_tool_meta",
     "check_completions_declared",
     "check_list_pagination_declared",
-    "check_permissions_shape",
     "check_tool_description_present",
     "check_tool_permissions_declared",
 ]

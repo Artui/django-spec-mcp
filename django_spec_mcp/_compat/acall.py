@@ -16,11 +16,11 @@ async def acall(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
     the session store) that are not required to be async-native.
 
     **This bridges the callable it is handed, not the callables that one goes on
-    to invoke.** Permissions and rate limits are reached through the aggregate
-    helpers ``check_permissions`` / ``consume_rate_limits``, which are ordinary
-    sync functions — so ``acall(check_permissions, …)`` takes the thread hop and
-    a consumer's ``async def has_permission`` inside it is still never awaited,
-    which fails open. Those hooks are **synchronous by contract on both
+    to invoke.** A prompt's or a view's checks and every rate limit are reached
+    through the aggregate helpers ``judge_binding`` / ``consume_rate_limits``,
+    which are ordinary sync functions — so ``acall(judge_binding, …)`` takes the
+    thread hop and an awaitable a ``has_permission`` hands back inside it is
+    still never awaited, which would fail open. Those hooks are **synchronous by contract on both
     transports** and are guarded by
     ``django_spec_mcp._compat.reject_awaitable.reject_awaitable`` rather
     than bridged here.

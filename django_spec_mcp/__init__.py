@@ -6,9 +6,6 @@ them. Nothing here re-exports a kernel name, so this package's public surface
 never pins a module path that is the kernel's to move.
 """
 
-from django_spec_mcp.auth.permissions.django_perm_required import DjangoPermRequired
-from django_spec_mcp.auth.permissions.scope_required import ScopeRequired
-from django_spec_mcp.auth.permissions.types.mcp_permission import MCPPermission
 from django_spec_mcp.auth.types.auth_backend import MCPAuthBackend
 from django_spec_mcp.auth.types.self_checking import SelfChecking
 from django_spec_mcp.auth.types.token_info import TokenInfo
@@ -63,7 +60,6 @@ __all__ = [
     "UI_RESOURCE_MIME_TYPE",
     "AgentConventions",
     "DjangoCacheSessionStore",
-    "DjangoPermRequired",
     "InMemorySSEBroker",
     "InMemorySSEReplayBuffer",
     "Icon",
@@ -72,7 +68,6 @@ __all__ = [
     "JsonRpcError",
     "JsonRpcErrorCode",
     "MCPAuthBackend",
-    "MCPPermission",
     "MCPServer",
     "OutputFormat",
     "PromptArgument",
@@ -83,7 +78,6 @@ __all__ = [
     "ResourceRegistry",
     "SSEBroker",
     "SSEReplayBuffer",
-    "ScopeRequired",
     "SessionStore",
     "DjangoCacheTaskStore",
     "InMemoryTaskStore",

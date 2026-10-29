@@ -79,18 +79,21 @@ the keyword arguments rather than the request: there is no `request.data`, and
 
 ## Permissions and rate limits
 
-Prompts use the same `MCPPermission` and `MCPRateLimit` machinery as tools and
-resources:
+A prompt is not a spec, so it is guarded where it is registered: `scopes=` is
+the same scope gate a tool takes, and `permissions=` takes the kernel's
+`PermissionCheck`s, each asked `has_permission(principal, binding)` with the
+prompt's binding standing where a spec would. A prompt with neither is refused
+at registration. Rate limits are the same `MCPRateLimit`s a tool takes; see
+[Prompts and interactive views](auth.md#prompts-and-interactive-views):
 
 ```python
-from django_spec_mcp import ScopeRequired
 from django_spec_mcp.auth.rate_limits.fixed_window_rate_limit import (
     FixedWindowRateLimit,
 )
 
 
 @server.prompt(
-    permissions=[ScopeRequired(["assistant:prompt"])],
+    scopes="assistant:prompt",
     rate_limits=[FixedWindowRateLimit(max_calls=120, per_seconds=60)],
 )
 def assistant(*, draft: str) -> str:

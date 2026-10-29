@@ -6,12 +6,12 @@ from django_service_specs import base_pool, resolve_callable_kwargs, run_selecto
 
 from django_spec_mcp._compat.tracing import span
 from django_spec_mcp.handlers.handle_tools_call import _span_attrs
+from django_spec_mcp.handlers.judge_binding import judge_binding
 from django_spec_mcp.handlers.kernel_utils import KernelAdmission, admit_kernel_read, carry_token
 from django_spec_mcp.handlers.read_kernel_resource import read_kernel_resource
 from django_spec_mcp.handlers.runs_on_kernel import runs_on_kernel
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import (
-    check_permissions,
     consume_rate_limits,
     forbidden,
     resolve_bound,
@@ -66,13 +66,11 @@ def handle_resources_read(
         "mcp.resources.read",
         attributes={**_span_attrs(binding.name, context), "mcp.resource.uri": uri},
     ):
-        allowed, required_scopes = check_permissions(
-            binding.permissions, context.http_request, context.token
-        )
+        allowed, required_scopes = judge_binding(binding, context.token)
         if not allowed:
             return forbidden(required_scopes)
 
-        # A kernel resource's binding ``permissions`` hold only its scope gate,
+        # A kernel resource's binding holds only its scope gate,
         # and its spec's own checks run inside ``dispatch``, after the charge
         # below, so they are asked here first: a reader they refuse is not
         # charged

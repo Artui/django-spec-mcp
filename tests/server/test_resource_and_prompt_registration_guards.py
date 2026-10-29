@@ -32,7 +32,6 @@ from django_service_specs import (
 
 from django_spec_mcp import PromptArgument
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.auth.permissions.scope_required import ScopeRequired
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
 from django_spec_mcp.handlers.types.context import MCPCallContext
@@ -85,11 +84,16 @@ def test_unguarded_prompt_warns() -> None:
         server.register_prompt(name="p", render=lambda **_: "x")
 
 
-def test_prompt_binding_permissions_silence_the_warning(recwarn: pytest.WarningsRecorder) -> None:
+@pytest.mark.parametrize(
+    "guard",
+    [{"permissions": [Unrestricted()]}, {"scopes": "prompts:read"}],
+    ids=["permissions", "scopes"],
+)
+def test_either_guard_silences_the_warning(
+    guard: dict[str, Any], recwarn: pytest.WarningsRecorder
+) -> None:
     server = _server()
-    server.register_prompt(
-        name="p", render=lambda **_: "x", permissions=[ScopeRequired("prompts:read")]
-    )
+    server.register_prompt(name="p", render=lambda **_: "x", **guard)
     assert not [w for w in recwarn if issubclass(w.category, UnguardedToolWarning)]
 
 
@@ -120,7 +124,7 @@ def test_a_prompt_argument_list_is_unaffected() -> None:
         name="p",
         render=lambda **_: "x",
         arguments=[PromptArgument(name="topic")],
-        permissions=[ScopeRequired("prompts:read")],
+        scopes="prompts:read",
     )
     assert binding.arguments[0].name == "topic"
 

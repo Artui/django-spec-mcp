@@ -1235,7 +1235,7 @@ the logs.
 
     Completion runs the binding's gate and `rate_limits` before the completer:
     for a resource, the spec's own checks, asked with no arguments, and its
-    `scopes=`; for a prompt, its `permissions=`. Without that, a resource a
+    `scopes=`; for a prompt, its `scopes=` and its `permissions=`. Without that, a resource a
     caller may not read would still answer "which ids exist?" one keystroke at
     a time.
 
@@ -1887,7 +1887,7 @@ shell and bridge. The other three sources — `template_name=`, `html=`,
 `selector=` — hand you a whole document to fill, bridge included.
 
 A view is an ordinary resource — one URI namespace with your data resources,
-listed in `resources/list`, and guardable with `permissions=` — with three
+listed in `resources/list`, and guardable with `permissions=` and `scopes=` — with three
 things fixed for you: the `text/html;profile=mcp-app` mime type, `TEXT` body
 encoding, and a `_meta` bundle under the extension's key. Give it exactly one
 content source: `template_name=` (a Django template, the idiomatic choice),
@@ -1899,7 +1899,7 @@ exemption below assumes cannot exist).
 
 Views are **unguarded by default**. The MCP session is already authenticated,
 a view is a static asset rather than tenant data, and hosts may prefetch one
-before any tool call. Pass `permissions=` if your project wants otherwise.
+before any tool call. Pass `permissions=` or `scopes=` if your project wants otherwise.
 
 !!! warning "Keep tenant data out of the view"
 
@@ -2292,21 +2292,21 @@ own authorization server behind.
   kernel spec's `PermissionCheck`s, asked of the token's principal
   ([How a tool is called](#how-a-tool-is-called)). A refusal is
   `-32006` "Insufficient permission".
-- **The scope gate** (`scopes=` on `register_tool` and `register_resource`). A
+- **The scope gate** (`scopes=` on every `register_*`). A
   transport check against the token's scopes: a token missing one is `-32006`,
   and over HTTP a `403` whose challenge carries every declared scope, so a
-  client can step up. It does not count as the tool's guard for
-  `REQUIRE_TOOL_PERMISSIONS`.
+  client can step up. It does not count as a tool's guard for
+  `REQUIRE_TOOL_PERMISSIONS`, though it does count as a prompt's.
 - **Per-binding `permissions=` on `register_prompt` and
-  `register_ui_resource`**: `MCPPermission` objects, each asked
-  `has_permission(request, token)` after authentication, AND-combined; required
-  scopes from any denying one are surfaced in `WWW-Authenticate`. A prompt and a
-  view are not specs, so this is their gate.
+  `register_ui_resource`**: kernel `PermissionCheck`s, each asked
+  `has_permission(principal, binding)` after the scope gate, the first refusal
+  ending it, and a deactivated principal refused before any. A prompt and a
+  view are not specs, so the binding stands where a spec would.
 
 **From authentication on, `request.user` is the token's principal.** The
 transport sets it, and what `request.auser()` returns, the moment a request
-authenticates, so everything judged on that request afterwards (an
-`MCPPermission` gating a prompt, a streamed call's pre-flight, a handler, a
+authenticates, so everything judged on that request afterwards (a
+prompt's or view's check, a streamed call's pre-flight, a handler, a
 spec's check reading `call_context["request"]`) sees the bearer token's
 principal: never a user `AuthenticationMiddleware` read off a session cookie,
 and an `AnonymousUser` when the token names no one. The backend itself sees an

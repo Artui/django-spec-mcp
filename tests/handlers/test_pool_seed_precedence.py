@@ -52,13 +52,6 @@ from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 _CALLER = "alice"
 
 
-class _AlwaysAllow:
-    """Minimal MCP permission: a prompt registration must declare one."""
-
-    def has_permission(self, *_args: object, **_kwargs: object) -> bool:
-        return True
-
-
 def _server() -> MCPServer:
     return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
 
@@ -83,7 +76,7 @@ def _server_with_scoped_prompt() -> MCPServer:
         name="scoped",
         render=lambda *, user, topic: f"{user}:{topic}",
         arguments=[PromptArgument(name="topic", required=True)],
-        permissions=[_AlwaysAllow()],
+        permissions=[Unrestricted()],
     )
     return server
 
@@ -121,7 +114,7 @@ def test_prompt_argument_named_request_cannot_replace_the_request() -> None:
         name="scoped",
         render=render,
         arguments=[PromptArgument(name="topic", required=True)],
-        permissions=[_AlwaysAllow()],
+        permissions=[Unrestricted()],
     )
     context = _ctx(server)
 
@@ -269,7 +262,7 @@ def _server_with_completer(completer: Any) -> MCPServer:
         render=lambda **_: "x",
         arguments=[PromptArgument(name="id"), PromptArgument(name="other")],
         completions={"id": completer},
-        permissions=[_AlwaysAllow()],
+        permissions=[Unrestricted()],
     )
     return server
 

@@ -85,7 +85,7 @@ def test_the_authorization_context_is_stored_not_just_the_principal(
     store: InMemoryTaskStore, executor: RecordingExecutor
 ) -> None:
     """Without the scopes, the worker rebuilds a token that proves nothing and
-    every ``ScopeRequired`` binding denies work it had already authorized."""
+    every binding with ``scopes=`` denies work it had already authorized."""
     task: Task = _create(
         store, executor, token=TokenInfo(user=None, scopes=("a", "b"), audience="aud")
     )

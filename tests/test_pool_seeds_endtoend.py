@@ -367,11 +367,6 @@ def test_a_uri_template_variable_named_after_a_seed_is_refused() -> None:
         )
 
 
-class _AlwaysAllow:
-    def has_permission(self, *_args: object, **_kwargs: object) -> bool:
-        return True
-
-
 def test_prompts_and_completion_do_not_receive_the_seeds_yet() -> None:
     # Pins what the docs state: a prompt's render and a completer are bare
     # callables, not specs, and are called with pools of their own. The day
@@ -388,7 +383,7 @@ def test_prompts_and_completion_do_not_receive_the_seeds_yet() -> None:
         render=lambda *, topic, tenant="unset": f"{tenant}:{topic}",
         arguments=[PromptArgument(name="topic", required=True)],
         completions={"topic": complete_topic},
-        permissions=[_AlwaysAllow()],
+        permissions=[Unrestricted()],
     )
     context = MCPCallContext(
         http_request=HttpRequest(),

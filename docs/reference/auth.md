@@ -1,20 +1,21 @@
 # Auth
 
-Backends, permissions, response builders, rate limits, and the RFC 9728
+Backends, response builders, rate limits, and the RFC 9728
 protected-resource metadata view.
 
 A tool or resource is guarded by its spec's own `permissions`, the kernel's
 [`PermissionCheck`][django_service_specs.PermissionCheck], and by the
 `scopes=` gate at registration; see
-[Who may call a tool](../auth.md#who-may-call-a-tool). The `MCPPermission`
-objects below gate a prompt or an interactive view.
+[Who may call a tool](../auth.md#who-may-call-a-tool). A prompt or an
+interactive view takes the same kernel checks through `permissions=`, each
+handed the prompt's or view's binding as the spec, and the same `scopes=`; see
+[Prompts and views](../auth.md#prompts-and-interactive-views).
 
 ## Protocols
 
 ::: django_spec_mcp.auth.types.auth_backend.MCPAuthBackend
 ::: django_spec_mcp.auth.types.token_info.TokenInfo
 ::: django_spec_mcp.auth.types.self_checking.SelfChecking
-::: django_spec_mcp.auth.permissions.types.mcp_permission.MCPPermission
 
 ## Backends
 
@@ -25,11 +26,6 @@ A backend of your own compares the token's audience with
 `audience_matches`, the exact comparison RFC 8707 asks for.
 
 ::: django_spec_mcp.auth.audience.audience_matches
-
-## Permissions
-
-::: django_spec_mcp.auth.permissions.scope_required.ScopeRequired
-::: django_spec_mcp.auth.permissions.django_perm_required.DjangoPermRequired
 
 ## Rate limits
 

@@ -201,8 +201,8 @@ def carry_token(request: Any, token: Any) -> Any:
     Every call on one request carries the one token the transport resolved for
     it, a batch's and a stream's included, so a second write sets what the
     first did. The transport makes that first write the moment the request
-    authenticates (``carry_principal``), so an ``MCPPermission`` judged before
-    any handler runs sees the same principal. An in-process call's is a copy
+    authenticates (``carry_principal``), so anything judged before any
+    handler runs sees the same principal. An in-process call's is a copy
     already, made where its context is (``copy_request``).
     """
     request.mcp_token = token
