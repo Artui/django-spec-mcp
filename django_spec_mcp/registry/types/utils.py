@@ -95,9 +95,12 @@ def binding_checks(
     string or any other non-sequence, a class where an instance belongs, an
     entry that is not a ``PermissionCheck``, an ``async def`` on any of the
     three check methods, and an empty sequence, which reads as a gate and
-    admits everyone (``test_a_prompt_refuses_what_is_not_a_check``). Run at
-    registration and by each binding's ``__post_init__``, so a binding built by
-    hand is held to it too.
+    admits everyone (``test_a_prompt_refuses_what_is_not_a_check``).
+
+    Run at registration on the ``permissions=`` passed, so an explicit ``[]``
+    is refused there, and by each binding's ``__post_init__`` on
+    ``permissions or None``, so a binding built by hand is held to every other
+    rule while its empty sequence, the field's default ``()``, is no checks.
 
     ``None`` is no checks and comes back as ``()``: unlike a spec's, these
     ``permissions`` are optional, and a prompt with neither them nor ``scopes``

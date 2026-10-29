@@ -56,8 +56,10 @@ class ResourceBinding(Generic[ResultT]):
     A view is not a spec, so nothing dispatches it: each check is asked
     ``has_permission(principal, binding)`` with this binding as the spec
     (``handlers.judge_binding``), at ``resources/list``, ``resources/read``, a
-    completion and a subscription's grant alike. Refused when built by the
-    kernel's rule for a spec's (``registry.types.utils.binding_checks``)."""
+    completion and a subscription's grant alike. Held to the kernel's rule for
+    a spec's (``registry.types.utils.binding_checks``), but for one case: an
+    empty sequence here is no checks, the field's default, and only
+    ``register_ui_resource`` refuses an explicit ``[]``."""
     scopes: tuple[str, ...] | None = None
     """The OAuth scopes a caller's token must carry, every one of them, asked
     before ``permissions``. ``None`` is no scope gate; a bare string is one scope,
