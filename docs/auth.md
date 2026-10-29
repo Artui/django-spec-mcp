@@ -211,7 +211,7 @@ from django_service_specs import PermissionCheck
 class IsStaff(PermissionCheck):
     message = "Staff only."
 
-    def has_permission(self, principal, spec, **kwargs):
+    def has_permission(self, principal, spec) -> bool:
         return bool(principal.is_staff)
 
 
@@ -292,7 +292,7 @@ checks refuse is not shown the binding, and neither is a deactivated caller. A
 spec declaring `permissions=None` is listed only where its call is granted, as
 `register_tool` grants it with `REQUIRE_TOOL_PERMISSIONS` off.
 
-A check whose decision depends on the call arguments cannot answer at list time
+A spec's check whose decision depends on the call arguments cannot answer at list time
 and will conservatively deny: when asking it raises, that binding alone is
 hidden and the rest of the listing is unaffected. Mark such a binding with
 `always_listed=True` to keep it visible as a discovery aid; the check still

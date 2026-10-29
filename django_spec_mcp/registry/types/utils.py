@@ -114,6 +114,8 @@ def binding_checks(
     ``permissions`` are optional, and a prompt with neither them nor ``scopes``
     is what ``REQUIRE_TOOL_PERMISSIONS`` refuses.
     """
+    # One branch arc for two types: the str and the bytes cases of
+    # test_a_prompt_refuses_what_is_not_a_check each hold one of them.
     if isinstance(permissions, (str, bytes)):
         raise ImproperlyConfigured(
             f"{label}: permissions= must be a sequence of PermissionCheck, not the string "

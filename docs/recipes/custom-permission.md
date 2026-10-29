@@ -105,7 +105,7 @@ class TenantMatches(PermissionCheck):
     def __init__(self, tenant_id: int) -> None:
         self._tenant_id = tenant_id
 
-    def has_permission(self, principal, spec, **kwargs) -> bool:
+    def has_permission(self, principal, spec) -> bool:
         return getattr(principal, "tenant_id", None) == self._tenant_id
 
 

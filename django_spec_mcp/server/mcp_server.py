@@ -1329,6 +1329,9 @@ class MCPServer:
         check_completions_declared(
             f"Prompt {name!r}", binding.completions, (arg.name for arg in binding.arguments)
         )
+        # Either guard counts. Each arm is held by its own test:
+        # test_a_prompt_with_checks_alone_counts_as_guarded and
+        # test_a_prompt_takes_a_scope_gate_and_counts_as_guarded.
         check_tool_permissions_declared(
             binding.name,
             guarded=bool(binding.permissions or binding.scopes),

@@ -338,6 +338,11 @@ class _HandsBackACoroutine(PermissionCheck):
             "is handed the prompt's or resource's binding as spec.",
         ),
         (
+            b"Unrestricted",
+            "Prompt 'p': permissions= must be a sequence of PermissionCheck, not the string "
+            "b'Unrestricted'.",
+        ),
+        (
             [IsUser],
             "Prompt 'p': permissions= holds the class IsUser; pass an instance, IsUser().",
         ),
@@ -353,6 +358,20 @@ def test_a_prompt_refuses_what_is_not_a_check(permissions: Any, message: str) ->
     with pytest.raises(ImproperlyConfigured) as raised:
         server.register_prompt(name="p", render=lambda: "hi", permissions=permissions)
     assert str(raised.value) == message
+
+
+class _NeedsCallContext(PermissionCheck):
+    """A spec's check opting into ``call_context``, which only the kernel offers."""
+
+    def has_permission(self, principal: Any, spec: Any, *, call_context: Any) -> bool:
+        return True
+
+
+def test_a_check_requiring_a_kernel_keyword_cannot_gate_a_prompt() -> None:
+    server = _server()
+    server.register_prompt(name="p", render=lambda: "hi", permissions=[_NeedsCallContext()])
+    with pytest.raises(TypeError, match="call_context"):
+        handle_prompts_get({"name": "p"}, _ctx(server, ALICE))
 
 
 def test_a_ui_resource_refuses_what_is_not_a_check() -> None:

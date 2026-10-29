@@ -124,9 +124,12 @@ def scope_verdict(scopes: tuple[str, ...] | None, token: TokenInfo) -> tuple[boo
     ``required_scopes`` is every declared scope, not only the missing ones, so
     the ``WWW-Authenticate`` challenge names the whole set a fresh token needs.
     """
-    if scopes is None or token.has_all_scopes(scopes):
+    # No gate is the empty set, which every token carries; registration
+    # refuses ``scopes=()``, so the two never need telling apart here.
+    declared = scopes or ()
+    if token.has_all_scopes(declared):
         return True, []
-    return False, list(scopes)
+    return False, list(declared)
 
 
 def judge_tool_permissions(
