@@ -103,9 +103,11 @@ def test_initialize_still_mints_by_default() -> None:
 # ---------- POST: the gate the incident tripped over ----------
 
 
-def test_a_call_with_no_session_id_succeeds_when_disabled() -> None:
+@pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
+async def test_a_call_with_no_session_id_succeeds_when_disabled(is_async: bool) -> None:
     """The whole point: no id, no expiry, no eviction, no post-deploy outage."""
-    response = _view(sessions=False)(_post_request("ping"))
+    view = _view(sessions=False, is_async=is_async)
+    response = await view(_post_request("ping")) if is_async else view(_post_request("ping"))
     assert response.status_code == 200
 
 
@@ -117,14 +119,6 @@ def test_a_stale_session_id_is_ignored_rather_than_rejected() -> None:
     """
     response = _view(sessions=False)(_post_request("ping", session_id="from-a-past-life"))
     assert response.status_code == 200
-
-
-async def test_the_async_path_agrees() -> None:
-    response = await _view(sessions=False, is_async=True)(_post_request("ping"))
-    assert response.status_code == 200
-
-
-# ---------- GET / DELETE: 405, the status the spec defines ----------
 
 
 async def test_sse_get_is_405_when_disabled() -> None:
