@@ -37,6 +37,7 @@ from django_spec_mcp.transport.in_memory_session_store import InMemorySessionSto
 
 PNG = b"\x89PNG\r\n\x1a\n"
 PNG_B64 = base64.b64encode(PNG).decode("ascii")
+IMAGE_BLOCK = {"type": "image", "data": PNG_B64, "mimeType": "image/png"}
 
 
 def _server() -> MCPServer:
@@ -125,16 +126,39 @@ def test_prompt_message_accepts_any_block() -> None:
 # ----- tool results -----
 
 
-def test_image_tool_emits_one_image_block_and_no_structured_content() -> None:
-    server = _server()
-    server.register_tool(
-        _spec(lambda: PNG),
-        name="chart.render",
-        content_kind=ToolContentKind.IMAGE,
-        content_mime_type="image/png",
+def _selector(payload: Any) -> SelectorSpec:
+    return SelectorSpec(
+        kind=SelectorKind.RETRIEVE, selector=lambda: payload, permissions=[Unrestricted()]
     )
-    result = handle_tools_call({"name": "chart.render", "arguments": {}}, _ctx(server))
-    assert result["content"] == [{"type": "image", "data": PNG_B64, "mimeType": "image/png"}]
+
+
+@pytest.mark.parametrize(
+    ("spec", "kind", "mime_type", "block"),
+    [
+        (_spec(lambda: PNG), ToolContentKind.IMAGE, "image/png", IMAGE_BLOCK),
+        # Django's file/image handling hands back buffers, not always ``bytes``.
+        (_spec(lambda: bytearray(PNG)), ToolContentKind.IMAGE, "image/png", IMAGE_BLOCK),
+        (
+            _spec(lambda: b"RIFF"),
+            ToolContentKind.AUDIO,
+            "audio/wav",
+            {
+                "type": "audio",
+                "data": base64.b64encode(b"RIFF").decode("ascii"),
+                "mimeType": "audio/wav",
+            },
+        ),
+        (_selector(PNG), ToolContentKind.IMAGE, "image/png", IMAGE_BLOCK),
+    ],
+    ids=["image", "bytearray", "audio", "selector"],
+)
+def test_a_media_tool_emits_one_block_and_no_structured_content(
+    spec: Any, kind: ToolContentKind, mime_type: str, block: dict[str, Any]
+) -> None:
+    server = _server()
+    server.register_tool(spec, name="media.get", content_kind=kind, content_mime_type=mime_type)
+    result = handle_tools_call({"name": "media.get", "arguments": {}}, _ctx(server))
+    assert result["content"] == [block]
     assert "structuredContent" not in result
 
 
@@ -147,50 +171,6 @@ def test_image_tool_does_not_advertise_an_output_schema() -> None:
         content_mime_type="image/png",
     )
     assert "outputSchema" not in handle_tools_list(None, _ctx(server))["tools"][0]
-
-
-def test_a_bytearray_payload_is_accepted() -> None:
-    """Django's file/image handling hands back buffers, not always ``bytes``."""
-    server = _server()
-    server.register_tool(
-        _spec(lambda: bytearray(PNG)),
-        name="chart.render",
-        content_kind=ToolContentKind.IMAGE,
-        content_mime_type="image/png",
-    )
-    result = handle_tools_call({"name": "chart.render", "arguments": {}}, _ctx(server))
-    assert result["content"][0]["data"] == PNG_B64
-
-
-def test_audio_tool() -> None:
-    server = _server()
-    server.register_tool(
-        _spec(lambda: b"RIFF"),
-        name="tts.say",
-        content_kind=ToolContentKind.AUDIO,
-        content_mime_type="audio/wav",
-    )
-    result = handle_tools_call({"name": "tts.say", "arguments": {}}, _ctx(server))
-    assert result["content"][0]["type"] == "audio"
-
-
-def test_media_tool_returning_json_is_a_tool_level_error() -> None:
-    """A binding declaring IMAGE whose service returns a dict is a server bug.
-
-    It surfaces as ``isError`` rather than an exception so the client still
-    gets a well-formed response, and the message names the declaration.
-    """
-    server = _server()
-    server.register_tool(
-        _spec(lambda: {"not": "bytes"}),
-        name="chart.render",
-        content_kind=ToolContentKind.IMAGE,
-        content_mime_type="image/png",
-    )
-    result = handle_tools_call({"name": "chart.render", "arguments": {}}, _ctx(server))
-    assert result["isError"] is True
-    assert "content_kind=IMAGE but produced dict" in result["content"][0]["text"]
-    assert "'chart.render'" in result["content"][0]["text"]
 
 
 def test_resource_link_tool_emits_links_and_keeps_structured_content() -> None:
@@ -221,42 +201,36 @@ def test_a_single_mapping_is_accepted_as_one_link() -> None:
     assert len(result["content"]) == 1
 
 
-def test_resource_link_tool_returning_the_wrong_shape_errors() -> None:
-    server = _server()
-    server.register_tool(
-        _spec(lambda: "just a string"),
-        name="invoices.find",
-        content_kind=ToolContentKind.RESOURCE_LINK,
-    )
-    result = handle_tools_call({"name": "invoices.find", "arguments": {}}, _ctx(server))
-    assert result["isError"] is True
-    assert "content_kind=RESOURCE_LINK but produced str" in result["content"][0]["text"]
-
-
-def test_resource_link_entry_missing_uri_errors() -> None:
-    server = _server()
-    server.register_tool(
-        _spec(lambda: [{"name": "Invoice 1"}]),
-        name="invoices.find",
-        content_kind=ToolContentKind.RESOURCE_LINK,
-    )
-    result = handle_tools_call({"name": "invoices.find", "arguments": {}}, _ctx(server))
-    assert result["isError"] is True
-    assert "missing 'uri' and/or 'name'" in result["content"][0]["text"]
-
-
-def test_selector_tool_honours_the_content_kind() -> None:
-    server = _server()
-    server.register_tool(
-        SelectorSpec(
-            kind=SelectorKind.RETRIEVE, selector=lambda: PNG, permissions=[Unrestricted()]
+@pytest.mark.parametrize(
+    ("kind", "payload", "says"),
+    [
+        # A binding declaring IMAGE whose service returns a dict is a server bug.
+        (ToolContentKind.IMAGE, {"not": "bytes"}, "content_kind=IMAGE but produced dict"),
+        (
+            ToolContentKind.RESOURCE_LINK,
+            "just a string",
+            "content_kind=RESOURCE_LINK but produced str",
         ),
-        name="thumb.get",
-        content_kind=ToolContentKind.IMAGE,
-        content_mime_type="image/png",
+        (ToolContentKind.RESOURCE_LINK, [{"name": "Invoice 1"}], "missing 'uri' and/or 'name'"),
+    ],
+    ids=["media-given-json", "link-given-a-string", "link-without-a-uri"],
+)
+def test_a_payload_the_declared_kind_cannot_carry_is_a_tool_level_error(
+    kind: ToolContentKind, payload: Any, says: str
+) -> None:
+    """It surfaces as ``isError`` rather than an exception so the client still
+    gets a well-formed response, and the message names the declaration."""
+    server = _server()
+    server.register_tool(
+        _spec(lambda: payload),
+        name="media.get",
+        content_kind=kind,
+        content_mime_type="image/png" if kind is ToolContentKind.IMAGE else None,
     )
-    result = handle_tools_call({"name": "thumb.get", "arguments": {}}, _ctx(server))
-    assert result["content"][0]["mimeType"] == "image/png"
+    result = handle_tools_call({"name": "media.get", "arguments": {}}, _ctx(server))
+    assert result["isError"] is True
+    assert says in result["content"][0]["text"]
+    assert "'media.get'" in result["content"][0]["text"]
 
 
 # ----- registration-time refusals -----
@@ -331,23 +305,22 @@ def test_a_script_bearing_resource_link_scheme_is_refused(uri: str) -> None:
     assert "content_kind=RESOURCE_LINK" in result["content"][0]["text"]
 
 
-def test_a_relative_resource_link_uri_is_refused() -> None:
-    result = _link_result("/invoices/1")
+# Each case holds one arc of ``_refuse_link_uri``: the type check, the ``urlsplit``
+# failure and the missing scheme.
+@pytest.mark.parametrize(
+    ("uri", "says"),
+    [
+        ("/invoices/1", "absolute URI"),
+        # ``urlsplit`` raises on an unclosed IPv6 literal; unparseable is unlinkable.
+        ("http://[::1", "absolute URI"),
+        (42, "not a string"),
+    ],
+    ids=["relative", "unparseable", "non-string"],
+)
+def test_a_resource_link_uri_that_is_not_an_absolute_uri_is_refused(uri: Any, says: str) -> None:
+    result = _link_result(uri)
     assert result["isError"] is True
-    assert "absolute URI" in result["content"][0]["text"]
-
-
-def test_an_unparseable_resource_link_uri_is_refused() -> None:
-    # ``urlsplit`` raises on an unclosed IPv6 literal; unparseable is unlinkable.
-    result = _link_result("http://[::1")
-    assert result["isError"] is True
-    assert "absolute URI" in result["content"][0]["text"]
-
-
-def test_a_non_string_resource_link_uri_is_refused() -> None:
-    result = _link_result(42)
-    assert result["isError"] is True
-    assert "not a string" in result["content"][0]["text"]
+    assert says in result["content"][0]["text"]
 
 
 @pytest.mark.parametrize(

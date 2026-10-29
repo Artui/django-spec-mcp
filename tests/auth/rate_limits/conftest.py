@@ -1,0 +1,13 @@
+from __future__ import annotations
+
+from collections.abc import Iterator
+
+import pytest
+from django.core.cache import cache
+
+
+@pytest.fixture(autouse=True)
+def _clear_cache() -> Iterator[None]:
+    cache.clear()
+    yield
+    cache.clear()

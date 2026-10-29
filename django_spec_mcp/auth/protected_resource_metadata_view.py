@@ -10,7 +10,9 @@ from django.views.decorators.cache import never_cache
 
 from django_spec_mcp.auth.types.auth_backend import MCPAuthBackend
 
-# Worded as the endpoint has always answered an ``Accept`` it cannot serve.
+# The wording the MCP endpoint answers an ``Accept`` it cannot serve with. It is
+# restated here rather than imported from ``transport.utils`` because
+# ``transport/__init__`` eagerly imports the views, which import ``auth``.
 _NOT_ACCEPTABLE_DETAIL: str = "Could not satisfy the request Accept header."
 
 

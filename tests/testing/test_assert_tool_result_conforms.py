@@ -18,18 +18,16 @@ from decimal import Decimal
 from typing import Any
 
 import pytest
-from django.http import HttpRequest
 from django_service_specs import DataclassPresenter, SelectorKind, SelectorSpec, Unrestricted
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
-from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.testing import assert_tool_result_conforms
 from tests.testapp.kernel_shapes import InvoiceOutput
 from tests.testapp.models import Invoice
+from tests.utils import plain_context
 
 
 class _LedgerPresenter(DataclassPresenter):
@@ -62,21 +60,10 @@ def _server(presenter: DataclassPresenter) -> MCPServer:
     return server
 
 
-def _ctx(server: MCPServer) -> MCPCallContext:
-    return MCPCallContext(
-        http_request=HttpRequest(),
-        token=TokenInfo(user=None),
-        tools=server.tools,
-        resources=server.resources,
-        prompts=server.prompts,
-        protocol_version="2025-11-25",
-    )
-
-
 def _call(presenter: DataclassPresenter) -> tuple[Any, Any]:
     """The advertised entry and the returned result for one registered tool."""
     server = _server(presenter)
-    ctx = _ctx(server)
+    ctx = plain_context(server)
     tool: Any = handle_tools_list(None, ctx)["tools"][0]
     result: Any = handle_tools_call({"name": "list_invoices", "arguments": {}}, ctx)
     return tool, result

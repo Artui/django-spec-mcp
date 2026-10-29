@@ -89,11 +89,6 @@ def _contents(client: Client, server: MCPServer, *, is_async: bool) -> dict[str,
     return block
 
 
-@pytest.fixture(params=[False, True], ids=["sync", "async"])
-def is_async(request: pytest.FixtureRequest) -> bool:
-    return request.param
-
-
 class TestEncoding:
     def test_the_presented_row_is_pretty_printed_json(self, client: Client, is_async: bool) -> None:
         block = _contents(client, _server(), is_async=is_async)

@@ -2,24 +2,16 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
-from typing import Any
 
 from django.core.cache import cache
 from django.http import HttpRequest
 
+from django_spec_mcp.auth.rate_limits.utils import default_key, require_positive
 from django_spec_mcp.auth.types.token_info import TokenInfo
 
 # Distinct from the other limiters' prefixes so an operator can tell which
 # scheme produced a counter from the cache key alone.
 _DEFAULT_KEY_PREFIX: str = "spec-mcp:rl-sw"
-
-
-def _default_key(request: HttpRequest, token: TokenInfo) -> str:
-    """Per-user when authenticated, ``REMOTE_ADDR`` otherwise."""
-    user_id: Any = getattr(token.user, "id", None)
-    if user_id is not None:
-        return f"u:{user_id}"
-    return f"ip:{request.META.get('REMOTE_ADDR', 'unknown')}"
 
 
 class SlidingWindowRateLimit:
@@ -53,14 +45,12 @@ class SlidingWindowRateLimit:
         namespace: str = "default",
         key: Callable[[HttpRequest, TokenInfo], str] | None = None,
     ) -> None:
-        if max_calls <= 0:
-            raise ValueError("max_calls must be positive")
-        if per_seconds <= 0:
-            raise ValueError("per_seconds must be positive")
+        require_positive("max_calls", max_calls)
+        require_positive("per_seconds", per_seconds)
         self._max: int = max_calls
         self._window: int = per_seconds
         self._namespace: str = namespace
-        self._key_fn: Callable[[HttpRequest, TokenInfo], str] = key or _default_key
+        self._key_fn: Callable[[HttpRequest, TokenInfo], str] = key or default_key
 
     def consume(self, request: HttpRequest, token: TokenInfo) -> int | None:
         now: float = time.time()

@@ -29,57 +29,45 @@ def _resolve(
     )
 
 
-# ---------- structured_content resolution ----------
+# ---------- the collapse rule ----------
 
 
-def test_structured_content_explicit_true_wins_over_default_off() -> None:
-    _, content = _resolve(schema=False, content=True, default_content=False)
-    assert content is True
+# ``None`` inherits the server-level default; ``True`` / ``False`` win over it. Each
+# override is held in each state against a default that disagrees with it, so
+# neither the override branch nor the inherit branch can be dropped unseen.
+@pytest.mark.parametrize(
+    ("schema", "content", "default_schema", "default_content", "resolved"),
+    [
+        (False, True, True, False, (False, True)),  # content True wins over default off
+        (False, False, True, True, (False, False)),  # content False wins over default on
+        (False, None, True, True, (False, True)),  # content inherits default on
+        (None, None, False, False, (False, False)),  # content inherits default off
+        (False, True, True, True, (False, True)),  # schema False wins over default on
+        (None, True, True, True, (True, True)),  # schema inherits default on
+        (None, True, False, True, (False, True)),  # schema inherits default off
+        (None, None, True, True, (True, True)),  # the package defaults: both on
+        (None, None, False, True, (False, True)),  # content without a schema is spec-allowed
+    ],
+)
+def test_overrides_win_and_none_inherits_the_default(
+    schema: bool | None,
+    content: bool | None,
+    default_schema: bool,
+    default_content: bool,
+    resolved: tuple[bool, bool],
+) -> None:
+    assert (
+        _resolve(
+            schema=schema,
+            content=content,
+            default_schema=default_schema,
+            default_content=default_content,
+        )
+        == resolved
+    )
 
 
-def test_structured_content_explicit_false_wins_over_default_on() -> None:
-    _, content = _resolve(schema=False, content=False, default_content=True)
-    assert content is False
-
-
-def test_structured_content_none_inherits_default_true() -> None:
-    _, content = _resolve(schema=False, content=None, default_content=True)
-    assert content is True
-
-
-def test_structured_content_none_inherits_default_false() -> None:
-    _, content = _resolve(schema=None, content=None, default_schema=False, default_content=False)
-    assert content is False
-
-
-# ---------- output_schema resolution ----------
-
-
-def test_output_schema_explicit_false_wins_over_default_on() -> None:
-    schema, _ = _resolve(schema=False, content=True, default_schema=True)
-    assert schema is False
-
-
-def test_output_schema_none_inherits_default_true() -> None:
-    schema, _ = _resolve(schema=None, content=True, default_schema=True)
-    assert schema is True
-
-
-def test_output_schema_none_inherits_default_false() -> None:
-    schema, _ = _resolve(schema=None, content=True, default_schema=False)
-    assert schema is False
-
-
-# ---------- defaults ----------
-
-
-def test_package_defaults_are_both_on() -> None:
-    schema, content = _resolve(schema=None, content=None)
-    assert schema is True
-    assert content is True
-
-
-# ---------- spec invariant ----------
+# ---------- spec invariant: a schema is never advertised without the content ----------
 
 
 def test_raises_when_schema_advertised_but_content_suppressed() -> None:
@@ -101,20 +89,3 @@ def test_raises_when_per_binding_schema_forced_on_with_content_off() -> None:
     """Per-binding overrides clash with each other even when the defaults agree."""
     with pytest.raises(ImproperlyConfigured):
         _resolve(schema=True, content=False)
-
-
-def test_allows_structured_content_without_schema() -> None:
-    """SEP-1624: structuredContent without outputSchema is spec-allowed."""
-    schema, content = _resolve(
-        schema=None, content=None, default_schema=False, default_content=True
-    )
-    assert schema is False
-    assert content is True
-
-
-def test_allows_both_disabled() -> None:
-    schema, content = _resolve(
-        schema=None, content=None, default_schema=False, default_content=False
-    )
-    assert schema is False
-    assert content is False
