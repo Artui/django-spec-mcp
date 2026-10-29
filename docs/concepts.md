@@ -1614,7 +1614,11 @@ taken in this order, and the first step that answers ends it:
 2. The client declared the extension on this request, or the call runs inline
    (`OPTIONAL`) or is `-32021` (`REQUIRED`). This comes before any permission
    check, so a client that did not declare it is told `-32021` even when the
-   tool's checks would refuse it.
+   tool's checks would refuse it. One exception: on the async endpoint, a
+   `tools/call` carrying a `progressToken` has its scope gate and permissions
+   asked before the response stream opens, while an HTTP status can still be
+   chosen, so a caller they refuse is answered `403` with `-32006` before this
+   step is reached.
 3. The tool's `scopes=` gate, then the spec's own `permissions`, each asked as
    an inline call asks them: a caller either refuses is answered `-32006`, and
    no task is created.
