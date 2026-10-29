@@ -9,7 +9,6 @@ from django.http import HttpRequest
 from django_service_specs import PermissionCheck, PoolSeeds
 
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_resources_list import handle_resources_list
 from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
 from django_spec_mcp.handlers.handle_resources_read_async import handle_resources_read_async
@@ -181,14 +180,8 @@ async def test_a_pool_seed_resolved_on_a_view_read_is_handed_the_transports_requ
 
     server = _server()
     http_request = HttpRequest()
-    ctx = MCPCallContext(
-        http_request=http_request,
-        token=TokenInfo(user=None),
-        tools=server.tools,
-        resources=server.resources,
-        prompts=server.prompts,
-        protocol_version="2025-11-25",
-        pool_seeds=PoolSeeds().extend(tenant=tenant),
+    ctx = call_context(
+        server, http_request=http_request, pool_seeds=PoolSeeds().extend(tenant=tenant)
     )
 
     out = await _read(reader, ctx)

@@ -29,7 +29,6 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
 from django.core.exceptions import ImproperlyConfigured
-from django.http import HttpRequest
 from django.test import Client, override_settings
 from django_service_specs import (
     DataclassValidator,
@@ -43,7 +42,6 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.handlers.handle_prompts_list import handle_prompts_list
 from django_spec_mcp.handlers.handle_resources_list import handle_resources_list
@@ -56,6 +54,7 @@ from django_spec_mcp.registry.types.prompt_binding import PromptBinding
 from tests.kernel_client import KernelClient
 from tests.testapp.auth_backend import HeaderAuthBackend
 from tests.testapp.urlconf_for import urlconf_for
+from tests.utils import call_context
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -160,15 +159,7 @@ def _server(*, filtered: bool = True, page_size: int | None = None) -> MCPServer
 
 
 def _ctx(server: MCPServer) -> MCPCallContext:
-    return MCPCallContext(
-        http_request=HttpRequest(),
-        token=TokenInfo(user=None),
-        tools=server.tools,
-        resources=server.resources,
-        prompts=server.prompts,
-        protocol_version="2025-11-25",
-        config=server.config,
-    )
+    return call_context(server)
 
 
 def _tool(server: MCPServer, name: str, *checks: PermissionCheck, **kwargs: Any) -> None:

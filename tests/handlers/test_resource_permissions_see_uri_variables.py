@@ -31,7 +31,6 @@ from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
 from django_spec_mcp.handlers.handle_resources_read_async import handle_resources_read_async
-from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.subscriptions.grant_subscription import grant_subscription
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
@@ -121,14 +120,7 @@ async def test_a_resource_permission_reads_the_request_the_read_arrived_on(
 ) -> None:
     request, token = HttpRequest(), TokenInfo(user=None)
     server = _server(_ReadsTheRequest(request, token))
-    context = MCPCallContext(
-        http_request=request,
-        token=token,
-        tools=server.tools,
-        resources=server.resources,
-        prompts=server.prompts,
-        protocol_version="2025-11-25",
-    )
+    context = call_context(server, http_request=request, token=token)
     params: dict[str, Any] = {"uri": "projects://7"}
 
     if is_async:
