@@ -109,38 +109,46 @@ async def test_the_served_payload_conforms_to_the_advertised_schema(
     assert tool["outputSchema"]["type"] == ("array" if kind is SelectorKind.LIST else "object")
 
 
-async def test_a_service_returning_many_renders_and_advertises_a_list() -> None:
-    spec = ServiceSpec(
-        service=lambda: [_Order(**_ROW)],
-        atomic=False,
-        returns_many=True,
-        presenter=DataclassPresenter(_Order),
-        permissions=OPEN,
-    )
-
-    tool, result = await _listed_and_served(_server(spec))
-
-    assert result["structuredContent"] == [_ROW]
-    assert tool["outputSchema"]["type"] == "array"
-
-
 def _placed(*, data: list[_Order]) -> list[_Order]:
     return list(data)
 
 
-async def test_a_many_service_serves_its_rows_as_an_array() -> None:
-    spec = ServiceSpec(
-        service=_placed,
-        atomic=False,
-        many=True,
-        validator=DataclassValidator(_Order),
-        presenter=DataclassPresenter(_Order),
-        permissions=OPEN,
-    )
+@pytest.mark.parametrize(
+    ("spec", "arguments", "served"),
+    [
+        pytest.param(
+            ServiceSpec(
+                service=lambda: [_Order(**_ROW)],
+                atomic=False,
+                returns_many=True,
+                presenter=DataclassPresenter(_Order),
+                permissions=OPEN,
+            ),
+            None,
+            [_ROW],
+            id="returns-many",
+        ),
+        pytest.param(
+            ServiceSpec(
+                service=_placed,
+                atomic=False,
+                many=True,
+                validator=DataclassValidator(_Order),
+                presenter=DataclassPresenter(_Order),
+                permissions=OPEN,
+            ),
+            {"items": [_ROW, _ROW]},
+            [_ROW, _ROW],
+            id="many",
+        ),
+    ],
+)
+async def test_a_service_over_many_rows_serves_and_advertises_an_array(
+    spec: ServiceSpec, arguments: dict[str, Any] | None, served: list[Any]
+) -> None:
+    tool, result = await _listed_and_served(_server(spec), arguments)
 
-    tool, result = await _listed_and_served(_server(spec), {"items": [_ROW, _ROW]})
-
-    assert result["structuredContent"] == [_ROW, _ROW]
+    assert result["structuredContent"] == served
     assert tool["outputSchema"]["type"] == "array"
 
 

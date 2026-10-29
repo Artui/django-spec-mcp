@@ -25,10 +25,10 @@ from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
 from django_spec_mcp.handlers.handle_resources_read_async import handle_resources_read_async
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
-from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import consume_rate_limits
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.registry.types.prompt_binding import PromptBinding
+from tests.utils import call_context
 
 OPEN = [Unrestricted()]
 
@@ -46,17 +46,6 @@ class _AlwaysDeny:
 class _AlwaysAllow:
     def consume(self, request: HttpRequest, token: TokenInfo) -> int | None:
         return None
-
-
-def _ctx(server: MCPServer) -> MCPCallContext:
-    return MCPCallContext(
-        http_request=HttpRequest(),
-        token=TokenInfo(user=None),
-        tools=server.tools,
-        resources=server.resources,
-        prompts=server.prompts,
-        protocol_version="2025-11-25",
-    )
 
 
 def _server() -> MCPServer:
@@ -98,7 +87,7 @@ def test_a_kernel_tool_answers_rate_limited_before_it_runs(handle: Callable[...,
         name="t",
         rate_limits=[_AlwaysDeny(retry=42)],
     )
-    out = handle({"name": "t", "arguments": {}}, _ctx(server))
+    out = handle({"name": "t", "arguments": {}}, call_context(server))
     assert isinstance(out, JsonRpcError)
     assert (out.code, out.data) == (-32005, {"retryAfter": 42})
     assert ran == []
@@ -118,7 +107,7 @@ def test_a_kernel_resource_answers_rate_limited_before_it_reads(
         uri_template="r://",
         rate_limits=[_AlwaysDeny(retry=7)],
     )
-    out = handle({"uri": "r://"}, _ctx(server))
+    out = handle({"uri": "r://"}, call_context(server))
     assert isinstance(out, JsonRpcError)
     assert (out.code, out.data) == (-32005, {"retryAfter": 7})
     assert ran == []
@@ -132,6 +121,6 @@ def test_a_prompt_answers_rate_limited(handle: Callable[..., Any]) -> None:
             name="p", description=None, render=lambda **_: "x", rate_limits=(_AlwaysDeny(retry=3),)
         )
     )
-    out = handle({"name": "p", "arguments": {}}, _ctx(server))
+    out = handle({"name": "p", "arguments": {}}, call_context(server))
     assert isinstance(out, JsonRpcError)
     assert out.code == -32005

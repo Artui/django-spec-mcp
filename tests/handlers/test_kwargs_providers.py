@@ -25,7 +25,6 @@ from typing import Any
 
 import pytest
 from asgiref.sync import async_to_sync, sync_to_async
-from django.http import HttpRequest
 from django_service_specs import (
     UNSET,
     DataclassPresenter,
@@ -48,6 +47,7 @@ from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
 from tests.testapp.kernel_shapes import InvoiceOutput
 from tests.testapp.models import Invoice
+from tests.utils import call_context
 
 OPEN = [Unrestricted()]
 
@@ -63,14 +63,7 @@ _ALICE = _IdentifiedUser("alice")
 
 
 def _ctx(server: MCPServer) -> MCPCallContext:
-    return MCPCallContext(
-        http_request=HttpRequest(),
-        token=TokenInfo(user=_ALICE),
-        tools=server.tools,
-        resources=server.resources,
-        prompts=server.prompts,
-        protocol_version="2025-11-25",
-    )
+    return call_context(server, token=TokenInfo(user=_ALICE))
 
 
 def _server() -> MCPServer:

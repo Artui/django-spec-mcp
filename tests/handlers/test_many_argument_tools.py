@@ -24,7 +24,6 @@ from typing import Any
 import jsonschema
 import pytest
 from asgiref.sync import sync_to_async
-from django.http import HttpRequest
 from django.test import Client, override_settings
 from django_service_specs import (
     DataclassPresenter,
@@ -37,14 +36,12 @@ from django_service_specs import (
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
-from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.testing import assert_tool_result_conforms
 from tests.testapp.urlconf_for import urlconf_for
-from tests.utils import tool_error
+from tests.utils import call_context, tool_error
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -83,18 +80,6 @@ def _server(spec: ServiceSpec | None = None, **registration: Any) -> MCPServer:
     server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None, config=config)
     server.register_tool(spec or _spec(), name="bulk", **registration)
     return server
-
-
-def _ctx(server: MCPServer) -> MCPCallContext:
-    return MCPCallContext(
-        http_request=HttpRequest(),
-        token=TokenInfo(user=None),
-        tools=server.tools,
-        resources=server.resources,
-        prompts=server.prompts,
-        protocol_version="2025-11-25",
-        config=server.config,
-    )
 
 
 def _schema(server: MCPServer) -> dict[str, Any]:
@@ -148,9 +133,9 @@ async def test_every_route_hands_the_service_the_list(route: str) -> None:
     if route == "call_tool":
         out = (await sync_to_async(server.call_tool)("bulk", arguments, user=None)).to_dict()
     elif route == "async_handler":
-        out = await handle_tools_call_async(params, _ctx(server))
+        out = await handle_tools_call_async(params, call_context(server))
     else:
-        out = await sync_to_async(handle_tools_call)(params, _ctx(server))
+        out = await sync_to_async(handle_tools_call)(params, call_context(server))
 
     assert out["structuredContent"] == [_ROW, _OTHER]
 

@@ -16,15 +16,12 @@ out fails a named test even where the map stays total:
   ``test_a_bare_dispatch_error_is_a_validation_result`` and the totality test;
 - ``AdditionalInputRequired`` (falls to ``ServiceError``):
   ``test_additional_input_required_asks_for_input``;
-- ``ServiceValidationError`` (falls to ``ServiceError``):
-  ``test_a_service_validation_error_is_a_validation_result``;
-- ``ServiceError`` (unanswered without it): ``test_a_service_error_is_a_service_result``
-  and the totality test.
+- ``ServiceValidationError`` (falls to ``ServiceError``) and ``ServiceError``
+  (unanswered without it, with the totality test):
+  ``test_a_service_refusal_is_answered_with_its_wire_body``.
 
-The wire body a client reads for a denial, a missing field and a service refusal
-is also written out here as a literal:
-``test_a_denial_is_answered_with_insufficient_permission``,
-``test_a_missing_field_carries_the_validators_detail_in_the_servers_own_wording`` and
+The wire body a client reads for a denial and for a service refusal is written
+out as a literal in ``test_a_denied_principal_is_insufficient_permission`` and
 ``test_a_service_refusal_is_answered_with_its_wire_body``.
 """
 
@@ -37,6 +34,7 @@ from typing import Any
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.http import Http404
 from django.test import Client, override_settings
 from django_service_specs import (
     NON_FIELD_ERRORS,
@@ -151,17 +149,13 @@ def _build() -> MCPServer:
     )
     server.register_tool(
         SelectorSpec(
-            kind=SelectorKind.LIST, selector=_raising(_http404()), permissions=[Unrestricted()]
+            kind=SelectorKind.LIST,
+            selector=_raising(Http404("no parent")),
+            permissions=[Unrestricted()],
         ),
         name="gone",
     )
     return server
-
-
-def _http404() -> BaseException:
-    from django.http import Http404
-
-    return Http404("no parent")
 
 
 @pytest.fixture(params=[False, True], ids=["sync", "async"])
@@ -183,9 +177,11 @@ def test_the_map_answers_every_kernel_refusal() -> None:
 
 
 def test_a_denied_principal_is_insufficient_permission(kernel: KernelClient) -> None:
-    body = kernel.call("denied")
-    assert body["error"] == {"code": -32006, "message": "Insufficient permission"}
-    assert "result" not in body
+    assert kernel.call("denied") == {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "error": {"code": -32006, "message": "Insufficient permission"},
+    }
 
 
 def test_a_deactivated_principal_is_insufficient_permission(client: Client) -> None:
@@ -202,7 +198,7 @@ def test_invalid_arguments_carry_their_per_field_detail(kernel: KernelClient) ->
     assert error["type"] == "validation_error"
     assert error["message"] == "Missing required argument(s): `number`."
     # The refusal's own map, not the non-field sentence a bare DispatchError gets.
-    assert set(error["detail"]) == {"number"}
+    assert error["detail"] == {"number": ["This field is required."]}
 
 
 def test_a_many_call_refused_by_row_and_as_a_whole_is_a_validation_result(
@@ -254,27 +250,6 @@ def test_additional_input_required_asks_for_input(kernel: KernelClient) -> None:
         "type": "input_required",
         "message": "Which account?",
         "requestedInput": _ACCOUNT,
-    }
-
-
-def test_a_service_validation_error_is_a_validation_result(kernel: KernelClient) -> None:
-    error = _error(kernel.call("late"))
-    assert error["type"] == "validation_error"
-    assert error["message"] == "Too late to amend"
-
-
-def test_a_service_error_is_a_service_result(kernel: KernelClient) -> None:
-    assert _error(kernel.call("closed")) == {
-        "type": "service_error",
-        "message": "The ledger is closed",
-    }
-
-
-def test_an_action_unavailable_carries_its_code(kernel: KernelClient) -> None:
-    assert _error(kernel.call("sent")) == {
-        "type": "service_error",
-        "message": "Already sent",
-        "code": "already_sent",
     }
 
 
@@ -337,37 +312,7 @@ def _refused(error: dict[str, Any]) -> dict[str, Any]:
     ],
 )
 def test_a_service_refusal_is_answered_with_its_wire_body(
-    client: Client, exc: ServiceError, name: str, expected: dict[str, Any]
+    kernel: KernelClient, exc: ServiceError, name: str, expected: dict[str, Any]
 ) -> None:
     """``expected`` is what a tool whose service raises ``exc`` serves."""
-    assert _served(client, _build(), name) == expected
-
-
-def test_a_denial_is_answered_with_insufficient_permission(client: Client) -> None:
-    """A tool whose permission check denies serves this body."""
-    assert _served(client, _build(), "denied") == {
-        "jsonrpc": "2.0",
-        "id": 1,
-        "error": {"code": -32006, "message": "Insufficient permission"},
-    }
-
-
-def test_a_missing_field_carries_the_validators_detail_in_the_servers_own_wording(
-    client: Client,
-) -> None:
-    """A field the call left out is refused by the kernel's validator with its
-    per-field detail. The kernel reads the field as left out, so the message names
-    it in the server's ``missing_arguments`` wording rather than ``Invalid arguments``."""
-    by_kernel = _error(_served(client, _build(), "validated", {}))
-    assert by_kernel["detail"] == {"number": ["This field is required."]}
-    assert by_kernel["type"] == "validation_error"
-    assert by_kernel["message"] == "Missing required argument(s): `number`."
-
-
-def _served(
-    client: Client, server: MCPServer, name: str, arguments: dict[str, Any] | None = None
-) -> dict[str, Any]:
-    with override_settings(ROOT_URLCONF=urlconf_for(server)):
-        caller = KernelClient(client)
-        caller.initialize()
-        return caller.call(name, arguments or {})
+    assert kernel.call(name) == expected

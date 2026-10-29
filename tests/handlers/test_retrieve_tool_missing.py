@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 from asgiref.sync import sync_to_async
 from django.db.models import QuerySet
-from django.http import Http404, HttpRequest
+from django.http import Http404
 from django_service_specs import (
     DataclassPresenter,
     Parameter,
@@ -30,13 +30,11 @@ from django_service_specs import (
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
-from django_spec_mcp.handlers.types.context import MCPCallContext
 from tests.testapp.kernel_shapes import InvoiceOutput
 from tests.testapp.models import Invoice
-from tests.utils import tool_error
+from tests.utils import call_context, tool_error
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -80,14 +78,7 @@ def _server(
 
 async def _call(server: MCPServer, arguments: dict[str, Any], *, is_async: bool) -> Any:
     params: dict[str, Any] = {"name": "invoices.get", "arguments": arguments}
-    context = MCPCallContext(
-        http_request=HttpRequest(),
-        token=TokenInfo(user=None),
-        tools=server.tools,
-        resources=server.resources,
-        prompts=server.prompts,
-        protocol_version="2025-11-25",
-    )
+    context = call_context(server)
     if is_async:
         return await handle_tools_call_async(params, context)
     return await sync_to_async(handle_tools_call)(params, context)

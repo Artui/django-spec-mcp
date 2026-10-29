@@ -21,7 +21,6 @@ from typing import Any
 
 import pytest
 from asgiref.sync import async_to_sync, sync_to_async
-from django.http import HttpRequest
 from django_service_specs import (
     UNSET,
     DataclassPresenter,
@@ -34,7 +33,6 @@ from django_service_specs import (
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.config.types.mcp_config import MCPConfig
 from django_spec_mcp.handlers.async_dispatch import adispatch
@@ -52,7 +50,7 @@ from django_spec_mcp.registry.types.prompt_binding import PromptBinding
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from tests.testapp.kernel_shapes import InvoiceOutput
 from tests.testapp.models import Invoice
-from tests.utils import tool_error
+from tests.utils import call_context, tool_error
 
 OPEN = [Unrestricted()]
 
@@ -64,15 +62,7 @@ def _server() -> MCPServer:
 
 
 def _ctx(server: MCPServer, config: MCPConfig | None = None) -> MCPCallContext:
-    return MCPCallContext(
-        http_request=HttpRequest(),
-        token=TokenInfo(user=None),
-        tools=server.tools,
-        resources=server.resources,
-        prompts=server.prompts,
-        protocol_version="2025-11-25",
-        config=config if config is not None else build_mcp_config(),
-    )
+    return call_context(server) if config is None else call_context(server, config=config)
 
 
 def _list_spec(selector: Any = Invoice.objects.all, **fields: Any) -> SelectorSpec:
@@ -296,17 +286,6 @@ def test_a_service_tool_returning_rows_is_not_row_bounded() -> None:
     assert len(out["structuredContent"]) == 5
 
 
-@pytest.mark.django_db(transaction=True)
-async def test_the_async_path_enforces_the_same_row_ceiling() -> None:
-    await sync_to_async(_seed)(5)
-    server = _server()
-    _register(server)
-    out = await handle_tools_call_async(
-        {"name": "invoices.list", "arguments": {}}, _ctx(server, build_mcp_config(max_page_size=2))
-    )
-    assert "2 row ceiling" in tool_error(out)["message"]
-
-
 @pytest.mark.django_db
 def test_call_tool_enforces_the_same_row_ceiling() -> None:
     _seed(5)
@@ -422,15 +401,25 @@ def test_a_protocol_error_passes_through_the_ceiling_untouched() -> None:
 
 
 @pytest.mark.django_db(transaction=True)
-async def test_the_async_path_enforces_the_same_byte_ceiling() -> None:
-    await sync_to_async(_seed)(20)
+@pytest.mark.parametrize(
+    ("rows", "paginated", "arguments", "config", "ceiling"),
+    [
+        (5, False, {}, {"max_page_size": 2}, "2 row ceiling"),
+        (20, True, {"limit": 20}, {"max_result_bytes": 200}, "byte ceiling"),
+    ],
+    ids=["row", "byte"],
+)
+async def test_the_async_path_enforces_the_same_ceilings(
+    rows: int, paginated: bool, arguments: dict[str, Any], config: dict[str, Any], ceiling: str
+) -> None:
+    await sync_to_async(_seed)(rows)
     server = _server()
-    _register_list(server)
+    _register(server, paginate=paginated)
     out = await handle_tools_call_async(
-        {"name": "invoices.list", "arguments": {"limit": 20}},
-        _ctx(server, build_mcp_config(max_result_bytes=200)),
+        {"name": "invoices.list", "arguments": arguments},
+        _ctx(server, build_mcp_config(**config)),
     )
-    assert "byte ceiling" in tool_error(out)["message"]
+    assert ceiling in tool_error(out)["message"]
 
 
 # ---------- result-size ceiling: resources/read ----------

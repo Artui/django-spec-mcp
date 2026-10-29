@@ -58,11 +58,12 @@ def _server(*, require: bool) -> MCPServer:
     )
 
 
-def _tool(permissions: Any) -> KernelToolBinding:
+def _tool(permissions: Any, *, scopes: Any = None) -> KernelToolBinding:
     return KernelToolBinding(
         name="hand.write",
         description="Write.",
         spec=ServiceSpec(service=_write, permissions=permissions),
+        scopes=scopes,
     )
 
 
@@ -171,15 +172,5 @@ def test_a_handbuilt_kernel_resource_without_scopes_has_no_gate() -> None:
 
 @pytest.mark.parametrize("build", [_tool, _resource], ids=["tool", "resource"])
 def test_a_handbuilt_kernel_binding_refuses_an_empty_scope_tuple(build: Any) -> None:
-    def build_with_no_scopes() -> Any:
-        if build is _tool:
-            return KernelToolBinding(
-                name="hand.write",
-                description="Write.",
-                spec=ServiceSpec(service=_write, permissions=[Unrestricted()]),
-                scopes=(),
-            )
-        return _resource([Unrestricted()], scopes=())
-
     with pytest.raises(ImproperlyConfigured, match=r"scopes=\(\) permits every caller"):
-        build_with_no_scopes()
+        build([Unrestricted()], scopes=())
