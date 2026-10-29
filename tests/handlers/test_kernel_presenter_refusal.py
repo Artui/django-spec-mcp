@@ -101,7 +101,7 @@ def _server(**register: Any) -> MCPServer:
 def _wire(server: MCPServer, arguments: dict[str, Any], *, is_async: bool) -> Any:
     params = {"name": "rows", "arguments": arguments}
     # The server's own context, so its conventions word the refusal as they
-    # would on the wire (``test_the_servers_conventions_word_the_sentence``).
+    # would on the wire (``test_on_a_paged_tool_the_servers_conventions_word_the_sentence``).
     context = server._call_context(user=None)
     if is_async:
         return async_to_sync(handle_tools_call_async)(params, context)
@@ -151,35 +151,25 @@ def test_a_structured_refusal_is_worded_as_sentences(path: str, detail: Any, rea
 
 
 @_PATHS
-def test_on_a_paged_tool_the_refusal_says_what_the_shape_applies_to(path: str) -> None:
-    server = _server(paginate=True)
-    error = tool_error(_call(server, {"fields": ["total"]}, path))
-    scope = AgentConventions().query_param_on_pages
-    assert scope is not None
-    assert error == {
-        "type": "validation_error",
-        "message": f"`fields` was rejected while rendering the result: {REFUSAL} {scope}",
-        "detail": {"fields": [REFUSAL]},
-    }
-
-
-@_PATHS
-def test_the_servers_conventions_word_the_sentence(path: str) -> None:
-    custom = AgentConventions(query_param_on_pages="Per row.")
-    server = _server(paginate=True, conventions=custom)
+@pytest.mark.parametrize(
+    ("conventions", "suffix"),
+    [
+        (None, f" {AgentConventions().query_param_on_pages}"),
+        (AgentConventions(query_param_on_pages="Per row."), " Per row."),
+        (AgentConventions(query_param_on_pages=None), ""),
+    ],
+    ids=["default", "custom", "none-drops-it"],
+)
+def test_on_a_paged_tool_the_servers_conventions_word_the_sentence(
+    path: str, conventions: AgentConventions | None, suffix: str
+) -> None:
+    server = _server(paginate=True, conventions=conventions)
     error = tool_error(_call(server, {"fields": ["total"]}, path))
     assert error == {
         "type": "validation_error",
-        "message": f"`fields` was rejected while rendering the result: {REFUSAL} Per row.",
+        "message": f"`fields` was rejected while rendering the result: {REFUSAL}{suffix}",
         "detail": {"fields": [REFUSAL]},
     }
-
-
-@_PATHS
-def test_none_drops_the_sentence(path: str) -> None:
-    server = _server(paginate=True, conventions=AgentConventions(query_param_on_pages=None))
-    error = tool_error(_call(server, {"fields": ["total"]}, path))
-    assert error["message"] == f"`fields` was rejected while rendering the result: {REFUSAL}"
 
 
 @_PATHS
