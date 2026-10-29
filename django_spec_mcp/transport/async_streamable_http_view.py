@@ -62,20 +62,21 @@ from django_spec_mcp.transport.types.sse_replay_buffer import SSEReplayBuffer
 from django_spec_mcp.transport.utils import (
     allowed_methods,
     carry_principal,
+    error_response,
     exempt_endpoint,
     insufficient_scope_challenge,
+    internal_error_response,
     is_permission_denial,
     is_raised_denial,
     modern_error_status,
     not_acceptable,
+    params_dict,
     raised_denial_error,
     seat_anonymous,
     session_gate_failure,
 )
 from django_spec_mcp.transport.validate_modern_request import validate_modern_request
-from django_spec_mcp.types.internal_error_message import INTERNAL_ERROR_MESSAGE
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
-from django_spec_mcp.types.mcp_error_header import MCP_ERROR_HEADER
 from django_spec_mcp.types.modern_protocol_versions import MODERN_PROTOCOL_VERSIONS
 from django_spec_mcp.types.sessionless_methods import SESSIONLESS_METHODS
 from django_spec_mcp.types.subscriptions_listen_method import SUBSCRIPTIONS_LISTEN_METHOD
@@ -89,44 +90,6 @@ _VERSION_HEADER: str = "Mcp-Protocol-Version"
 _ANSWERS_WITH: tuple[str, ...] = ("application/json", "text/event-stream")
 
 logger = get_logger(__name__)
-
-
-def _error_response(
-    *,
-    code: int,
-    message: str,
-    data: Any = None,
-    status: int = 400,
-    request_id: Any = None,
-    error_hint: str | None = None,
-) -> JsonResponse:
-    body: dict[str, Any] = JsonRpcResponse(
-        id=request_id, error=JsonRpcError(code=code, message=message, data=data)
-    ).to_dict()
-    response = JsonResponse(body, status=status)
-    if error_hint is not None:
-        # Summarises the body for clients that surface only the status line.
-        response[MCP_ERROR_HEADER] = error_hint
-    return response
-
-
-def _internal_error_response(message: JsonRpcRequest) -> JsonResponse:
-    """Answer a dispatch that raised with a JSON-RPC ``-32603``, and log why.
-
-    The same backstop as the sync sibling's, where the reasoning lives: a
-    ``500`` so monitoring still counts a server fault, a generic message, and
-    the exception in the log. Must be called from inside the ``except`` block,
-    because ``logger.exception`` reads the exception being handled.
-    """
-    logger.exception(
-        "Unhandled exception dispatching %s (request id %r)", message.method, message.id
-    )
-    return _error_response(
-        code=JsonRpcErrorCode.INTERNAL_ERROR,
-        message=INTERNAL_ERROR_MESSAGE,
-        status=500,
-        request_id=message.id,
-    )
 
 
 class AsyncStreamableHttpView(View):
@@ -204,7 +167,7 @@ class AsyncStreamableHttpView(View):
 
         max_bytes: int = self._require_config().max_request_bytes
         if len(http_request.body) > max_bytes:
-            return _error_response(
+            return error_response(
                 code=JsonRpcErrorCode.INVALID_REQUEST,
                 message="Request body too large",
                 status=413,
@@ -225,14 +188,14 @@ class AsyncStreamableHttpView(View):
             detail: str = (
                 exc.msg if isinstance(exc, json.JSONDecodeError) else "body could not be decoded"
             )
-            return _error_response(
+            return error_response(
                 code=JsonRpcErrorCode.PARSE_ERROR, message=f"Invalid JSON: {detail}"
             )
 
         try:
             message = parse_message(payload)
         except ValueError as exc:
-            return _error_response(code=JsonRpcErrorCode.INVALID_REQUEST, message=str(exc))
+            return error_response(code=JsonRpcErrorCode.INVALID_REQUEST, message=str(exc))
 
         is_initialize: bool = isinstance(message, JsonRpcRequest) and message.method == "initialize"
         # Answerable without a session, but does *not* mint one — hence a
@@ -243,7 +206,7 @@ class AsyncStreamableHttpView(View):
 
         # **The era fork** — see the sync sibling for the reasoning.
         metadata: RequestMetadata | None = RequestMetadata.from_params(
-            _params_dict(getattr(message, "params", None))
+            params_dict(getattr(message, "params", None))
         )
         if metadata is not None:
             return await self._handle_modern(http_request, message, metadata)
@@ -253,7 +216,7 @@ class AsyncStreamableHttpView(View):
             version_header, is_sessionless=is_sessionless, config=self._require_config()
         )
         if negotiated is None:
-            return _error_response(
+            return error_response(
                 code=JsonRpcErrorCode.INVALID_REQUEST,
                 message="Missing or unsupported MCP-Protocol-Version",
                 request_id=getattr(message, "id", None),
@@ -286,7 +249,7 @@ class AsyncStreamableHttpView(View):
                     getattr(message, "method", "?"),
                     status,
                 )
-                return _error_response(
+                return error_response(
                     code=JsonRpcErrorCode.INVALID_REQUEST,
                     message=message_text,
                     status=status,
@@ -316,7 +279,7 @@ class AsyncStreamableHttpView(View):
             return HttpResponse(status=202)
 
         if not isinstance(message, JsonRpcRequest):
-            return _error_response(
+            return error_response(
                 code=JsonRpcErrorCode.INVALID_REQUEST, message="Expected a JSON-RPC request"
             )
 
@@ -328,10 +291,10 @@ class AsyncStreamableHttpView(View):
             streamed: HttpResponseBase | None = await self._maybe_stream(message, context)
             if streamed is not None:
                 return streamed
-            result: Any = await adispatch(message.method, _params_dict(message.params), context)
-        except Exception as exc:  # noqa: BLE001 — the backstop; see ``_internal_error_response``
+            result: Any = await adispatch(message.method, params_dict(message.params), context)
+        except Exception as exc:  # noqa: BLE001 — the backstop; see ``internal_error_response``
             if not is_raised_denial(exc):
-                return _internal_error_response(message)
+                return internal_error_response(message, logger)
             # A denial raised rather than returned; see ``raised_denial_error``.
             result = raised_denial_error()
 
@@ -370,13 +333,13 @@ class AsyncStreamableHttpView(View):
         if isinstance(message, JsonRpcRequest):
             invalid: JsonRpcError | None = validate_modern_request(
                 method=message.method,
-                params=_params_dict(message.params),
+                params=params_dict(message.params),
                 metadata=metadata,
                 headers=http_request.headers,
                 supported_versions=config.modern_protocol_versions,
             )
             if invalid is not None:
-                return _error_response(
+                return error_response(
                     code=invalid.code,
                     message=invalid.message,
                     data=invalid.data,
@@ -431,10 +394,10 @@ class AsyncStreamableHttpView(View):
             streamed: HttpResponseBase | None = await self._maybe_stream(message, context)
             if streamed is not None:
                 return streamed
-            result: Any = await adispatch(message.method, _params_dict(message.params), context)
-        except Exception as exc:  # noqa: BLE001 — the backstop; see ``_internal_error_response``
+            result: Any = await adispatch(message.method, params_dict(message.params), context)
+        except Exception as exc:  # noqa: BLE001 — the backstop; see ``internal_error_response``
             if not is_raised_denial(exc):
-                return _internal_error_response(message)
+                return internal_error_response(message, logger)
             # A denial raised rather than returned; see ``raised_denial_error``.
             result = raised_denial_error()
         if isinstance(result, JsonRpcError):
@@ -504,7 +467,7 @@ class AsyncStreamableHttpView(View):
             )
             is None
         ):
-            return _error_response(
+            return error_response(
                 code=JsonRpcErrorCode.INVALID_REQUEST,
                 message="Missing or unsupported MCP-Protocol-Version",
             )
@@ -512,7 +475,7 @@ class AsyncStreamableHttpView(View):
         session_id: str | None = http_request.headers.get(_SESSION_HEADER)
         store = self._require_session_store()
         if not session_id or await acall(store.owner, session_id) != principal_for_token(token):
-            return _error_response(
+            return error_response(
                 code=JsonRpcErrorCode.INVALID_REQUEST,
                 message="Unknown or missing MCP-Session-Id",
                 status=404,
@@ -524,7 +487,7 @@ class AsyncStreamableHttpView(View):
             # Refused rather than queued, as a subscription past its own cap
             # is: accepting trades a clear error for a worker that stops
             # answering anything at all.
-            return _error_response(
+            return error_response(
                 code=JsonRpcErrorCode.INTERNAL_ERROR,
                 message=(
                     f"This server is already serving its maximum of {cap} concurrent "
@@ -570,7 +533,7 @@ class AsyncStreamableHttpView(View):
         if session_id:
             store = self._require_session_store()
             if await acall(store.owner, session_id) != principal_for_token(token):
-                return _error_response(
+                return error_response(
                     code=JsonRpcErrorCode.INVALID_REQUEST,
                     message="Unknown or missing MCP-Session-Id",
                     status=404,
@@ -614,7 +577,7 @@ class AsyncStreamableHttpView(View):
             # Refused rather than queued. Each subscription parks a worker for
             # its lifetime, so accepting past the cap trades a clear error for a
             # server that stops answering anything.
-            return _error_response(
+            return error_response(
                 code=JsonRpcErrorCode.INTERNAL_ERROR,
                 message=(
                     f"This server is already serving its maximum of {cap} concurrent "
@@ -625,7 +588,7 @@ class AsyncStreamableHttpView(View):
                 request_id=message.id,
             )
 
-        params: dict[str, Any] | None = _params_dict(message.params)
+        params: dict[str, Any] | None = params_dict(message.params)
         requested = SubscriptionFilter.from_params(
             params.get("notifications") if params is not None else None
         )
@@ -635,7 +598,7 @@ class AsyncStreamableHttpView(View):
         # the grant because it produces an error response instead of a stream.
         if requested.task_ids and not declares_tasks_extension(context):
             denied = missing_capability_error()
-            return _error_response(
+            return error_response(
                 code=denied.code,
                 message=denied.message,
                 data=denied.data,
@@ -661,7 +624,7 @@ class AsyncStreamableHttpView(View):
 
         Era-independent: the token sits at ``_meta.progressToken`` in both.
         """
-        params: dict[str, Any] | None = _params_dict(message.params)
+        params: dict[str, Any] | None = params_dict(message.params)
         token: str | int | None = progress_token(params)
         if token is None:
             return None
@@ -677,7 +640,7 @@ class AsyncStreamableHttpView(View):
             preflight_permissions, message.method, params, context
         )
         if denied is not None:
-            response = _error_response(
+            response = error_response(
                 code=denied.code,
                 message=denied.message,
                 data=denied.data,
@@ -743,7 +706,7 @@ class AsyncStreamableHttpView(View):
     def _check_origin(self, request: Any) -> HttpResponse | None:
         origin: str | None = request.headers.get("Origin")
         if not is_origin_allowed(origin, self._require_config().allowed_origins):
-            return _error_response(
+            return error_response(
                 code=JsonRpcErrorCode.INVALID_REQUEST,
                 message=f"Origin not allowed: {origin!r}",
                 status=403,
@@ -783,14 +746,6 @@ class AsyncStreamableHttpView(View):
         if self.session_store is None:  # pragma: no cover - guarded by MCPServer
             raise RuntimeError("AsyncStreamableHttpView is missing a SessionStore")
         return self.session_store
-
-
-def _params_dict(params: Any) -> dict[str, Any] | None:
-    if params is None:
-        return None
-    if isinstance(params, dict):
-        return params
-    return None  # JSON-RPC list params are not used by MCP today.
 
 
 __all__ = ["AsyncStreamableHttpView"]

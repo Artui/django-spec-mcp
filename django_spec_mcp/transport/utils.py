@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from typing import Any
 
@@ -14,7 +15,11 @@ from django_spec_mcp.auth.types.auth_backend import MCPAuthBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.kernel_utils import carry_token, seat
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.protocol.types.json_rpc_request import JsonRpcRequest
+from django_spec_mcp.protocol.types.json_rpc_response import JsonRpcResponse
+from django_spec_mcp.types.internal_error_message import INTERNAL_ERROR_MESSAGE
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
+from django_spec_mcp.types.mcp_error_header import MCP_ERROR_HEADER
 from django_spec_mcp.types.session_missing_hint import SESSION_MISSING_HINT
 from django_spec_mcp.types.session_unknown_hint import SESSION_UNKNOWN_HINT
 
@@ -227,16 +232,89 @@ def session_gate_failure(
     return None
 
 
+def error_response(
+    *,
+    code: int,
+    message: str,
+    data: Any = None,
+    status: int = 400,
+    request_id: Any = None,
+    error_hint: str | None = None,
+) -> JsonResponse:
+    """A JSON-RPC error envelope under ``status``, the shape every refusal takes."""
+    body: dict[str, Any] = JsonRpcResponse(
+        id=request_id, error=JsonRpcError(code=code, message=message, data=data)
+    ).to_dict()
+    response = JsonResponse(body, status=status)
+    if error_hint is not None:
+        # Summarises the body for clients that surface only the status line.
+        response[MCP_ERROR_HEADER] = error_hint
+    return response
+
+
+def internal_error_response(message: JsonRpcRequest, logger: logging.Logger) -> JsonResponse:
+    """Answer a dispatch that raised with a JSON-RPC ``-32603``, and log why.
+
+    **The backstop, not a classifier.** Every failure a caller can act on is
+    already *returned* by the handlers, as an ``isError`` tool result or a
+    JSON-RPC error, and the permission denial, unknown method and rate limit
+    responses are all built from those return values. What reaches this is
+    what nothing mapped, which makes it a server fault whatever its type.
+
+    Without it the exception would leave the view as Django's ``500`` page,
+    which is not a JSON-RPC reply at all: a spec-following client could not
+    even match it to the request it sent.
+
+    **Nothing is meant to escape.** The ``406`` for an ``Accept`` header the
+    view cannot answer is decided in the view's ``dispatch``, before any
+    action is called, so the backstop cannot reach it.
+    tests/transport/test_dispatch_backstop.py pins the denial, rate-limit and
+    unknown-method answers the handlers return rather than raise.
+
+    **The status stays a ``500``** so proxies, load balancers and error-rate
+    monitoring still count a server fault, which a ``200`` carrying the error
+    would hide from all three. **The message is generic** and the exception
+    goes to the log with its traceback: see ``INTERNAL_ERROR_MESSAGE``.
+
+    ``logger`` is the calling view's own, so an operator's ``LOGGING`` keeps
+    telling the two transports apart. Must be called from inside the
+    ``except`` block: ``logger.exception`` reads the exception being handled.
+    """
+    logger.exception(
+        "Unhandled exception dispatching %s (request id %r)", message.method, message.id
+    )
+    return error_response(
+        code=JsonRpcErrorCode.INTERNAL_ERROR,
+        message=INTERNAL_ERROR_MESSAGE,
+        status=500,
+        request_id=message.id,
+    )
+
+
+def params_dict(params: Any) -> dict[str, Any] | None:
+    """A message's ``params`` when it is an object, else ``None``.
+
+    JSON-RPC also allows positional (list) params, which MCP does not use, so
+    they read as no params at all.
+    """
+    if isinstance(params, dict):
+        return params
+    return None
+
+
 __all__ = [
     "NOT_ACCEPTABLE_DETAIL",
     "allowed_methods",
     "carry_principal",
+    "error_response",
     "exempt_endpoint",
     "insufficient_scope_challenge",
+    "internal_error_response",
     "is_permission_denial",
     "is_raised_denial",
     "modern_error_status",
     "not_acceptable",
+    "params_dict",
     "raised_denial_error",
     "seat_anonymous",
     "session_gate_failure",

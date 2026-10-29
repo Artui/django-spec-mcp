@@ -42,20 +42,21 @@ from django_spec_mcp.transport.types.session_store import SessionStore
 from django_spec_mcp.transport.utils import (
     allowed_methods,
     carry_principal,
+    error_response,
     exempt_endpoint,
     insufficient_scope_challenge,
+    internal_error_response,
     is_permission_denial,
     is_raised_denial,
     modern_error_status,
     not_acceptable,
+    params_dict,
     raised_denial_error,
     seat_anonymous,
     session_gate_failure,
 )
 from django_spec_mcp.transport.validate_modern_request import validate_modern_request
-from django_spec_mcp.types.internal_error_message import INTERNAL_ERROR_MESSAGE
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
-from django_spec_mcp.types.mcp_error_header import MCP_ERROR_HEADER
 from django_spec_mcp.types.modern_protocol_versions import MODERN_PROTOCOL_VERSIONS
 from django_spec_mcp.types.sessionless_methods import SESSIONLESS_METHODS
 
@@ -73,63 +74,6 @@ _ANSWERS_WITH: tuple[str, ...] = ("application/json",)
 _UNNEGOTIATED: frozenset[str] = frozenset({"GET", "HEAD"})
 
 logger = get_logger(__name__)
-
-
-def _error_response(
-    *,
-    code: int,
-    message: str,
-    data: Any = None,
-    status: int = 400,
-    request_id: Any = None,
-    error_hint: str | None = None,
-) -> JsonResponse:
-    body: dict[str, Any] = JsonRpcResponse(
-        id=request_id, error=JsonRpcError(code=code, message=message, data=data)
-    ).to_dict()
-    response = JsonResponse(body, status=status)
-    if error_hint is not None:
-        # Summarises the body for clients that surface only the status line.
-        response[MCP_ERROR_HEADER] = error_hint
-    return response
-
-
-def _internal_error_response(message: JsonRpcRequest) -> JsonResponse:
-    """Answer a dispatch that raised with a JSON-RPC ``-32603``, and log why.
-
-    **The backstop, not a classifier.** Every failure a caller can act on is
-    already *returned* by the handlers, as an ``isError`` tool result or a
-    JSON-RPC error, and the permission denial, unknown method and rate limit
-    responses are all built from those return values. What reaches this is
-    what nothing mapped, which makes it a server fault whatever its type.
-
-    Without it the exception would leave the view as Django's ``500`` page,
-    which is not a JSON-RPC reply at all: a spec-following client could not
-    even match it to the request it sent.
-
-    **Nothing is meant to escape.** The ``406`` for an ``Accept`` header the
-    view cannot answer is decided in ``dispatch``, before this action is
-    called, so the backstop cannot reach it.
-    tests/transport/test_dispatch_backstop.py pins the denial, rate-limit and
-    unknown-method answers the handlers return rather than raise.
-
-    **The status stays a ``500``** so proxies, load balancers and error-rate
-    monitoring still count a server fault, which a ``200`` carrying the error
-    would hide from all three. **The message is generic** and the exception
-    goes to the log with its traceback: see ``INTERNAL_ERROR_MESSAGE``.
-
-    Must be called from inside the ``except`` block: ``logger.exception``
-    reads the exception being handled.
-    """
-    logger.exception(
-        "Unhandled exception dispatching %s (request id %r)", message.method, message.id
-    )
-    return _error_response(
-        code=JsonRpcErrorCode.INTERNAL_ERROR,
-        message=INTERNAL_ERROR_MESSAGE,
-        status=500,
-        request_id=message.id,
-    )
 
 
 def _reject_awaitable_token(result: Any, *, backend: Any) -> Any:
@@ -263,7 +207,7 @@ class StreamableHttpView(View):
 
         max_bytes: int = self._require_config().max_request_bytes
         if len(http_request.body) > max_bytes:
-            return _error_response(
+            return error_response(
                 code=JsonRpcErrorCode.INVALID_REQUEST,
                 message="Request body too large",
                 status=413,
@@ -289,14 +233,14 @@ class StreamableHttpView(View):
             detail: str = (
                 exc.msg if isinstance(exc, json.JSONDecodeError) else "body could not be decoded"
             )
-            return _error_response(
+            return error_response(
                 code=JsonRpcErrorCode.PARSE_ERROR, message=f"Invalid JSON: {detail}"
             )
 
         try:
             message = parse_message(payload)
         except ValueError as exc:
-            return _error_response(code=JsonRpcErrorCode.INVALID_REQUEST, message=str(exc))
+            return error_response(code=JsonRpcErrorCode.INVALID_REQUEST, message=str(exc))
 
         is_initialize: bool = isinstance(message, JsonRpcRequest) and message.method == "initialize"
         # ``server/discover`` joins ``initialize`` in being answerable without a
@@ -311,7 +255,7 @@ class StreamableHttpView(View):
         # (``initialize`` handshake, sessions). One branch, here at the edge —
         # everything below the transport is era-agnostic by construction.
         metadata: RequestMetadata | None = RequestMetadata.from_params(
-            _params_dict(getattr(message, "params", None))
+            params_dict(getattr(message, "params", None))
         )
         if metadata is not None:
             return self._handle_modern(http_request, message, metadata)
@@ -321,7 +265,7 @@ class StreamableHttpView(View):
             version_header, is_sessionless=is_sessionless, config=self._require_config()
         )
         if negotiated is None:
-            return _error_response(
+            return error_response(
                 code=JsonRpcErrorCode.INVALID_REQUEST,
                 message="Missing or unsupported MCP-Protocol-Version",
                 request_id=getattr(message, "id", None),
@@ -363,7 +307,7 @@ class StreamableHttpView(View):
                     getattr(message, "method", "?"),
                     status,
                 )
-                return _error_response(
+                return error_response(
                     code=JsonRpcErrorCode.INVALID_REQUEST,
                     message=message_text,
                     status=status,
@@ -393,15 +337,15 @@ class StreamableHttpView(View):
             return HttpResponse(status=202)
 
         if not isinstance(message, JsonRpcRequest):
-            return _error_response(
+            return error_response(
                 code=JsonRpcErrorCode.INVALID_REQUEST, message="Expected a JSON-RPC request"
             )
 
         try:
-            result: Any = dispatch(message.method, _params_dict(message.params), context)
-        except Exception as exc:  # noqa: BLE001 — the backstop; see ``_internal_error_response``
+            result: Any = dispatch(message.method, params_dict(message.params), context)
+        except Exception as exc:  # noqa: BLE001 — the backstop; see ``internal_error_response``
             if not is_raised_denial(exc):
-                return _internal_error_response(message)
+                return internal_error_response(message, logger)
             # A denial raised rather than returned; see ``raised_denial_error``.
             result = raised_denial_error()
 
@@ -452,13 +396,13 @@ class StreamableHttpView(View):
         if isinstance(message, JsonRpcRequest):
             invalid: JsonRpcError | None = validate_modern_request(
                 method=message.method,
-                params=_params_dict(message.params),
+                params=params_dict(message.params),
                 metadata=metadata,
                 headers=http_request.headers,
                 supported_versions=config.modern_protocol_versions,
             )
             if invalid is not None:
-                return _error_response(
+                return error_response(
                     code=invalid.code,
                     message=invalid.message,
                     data=invalid.data,
@@ -500,10 +444,10 @@ class StreamableHttpView(View):
         # JSON-RPC *response* does not carry, so a response body is always
         # routed to the legacy path — and rejected there.
         try:
-            result: Any = dispatch(message.method, _params_dict(message.params), context)
-        except Exception as exc:  # noqa: BLE001 — the backstop; see ``_internal_error_response``
+            result: Any = dispatch(message.method, params_dict(message.params), context)
+        except Exception as exc:  # noqa: BLE001 — the backstop; see ``internal_error_response``
             if not is_raised_denial(exc):
-                return _internal_error_response(message)
+                return internal_error_response(message, logger)
             # A denial raised rather than returned; see ``raised_denial_error``.
             result = raised_denial_error()
         if isinstance(result, JsonRpcError):
@@ -560,7 +504,7 @@ class StreamableHttpView(View):
             store = self._require_session_store()
             owner = _reject_awaitable_session(store.owner(session_id), store=store, method="owner")
             if owner != principal_for_token(token):
-                return _error_response(
+                return error_response(
                     code=JsonRpcErrorCode.INVALID_REQUEST,
                     message="Unknown or missing MCP-Session-Id",
                     status=404,
@@ -615,7 +559,7 @@ class StreamableHttpView(View):
     def _check_origin(self, request: Any) -> HttpResponse | None:
         origin: str | None = request.headers.get("Origin")
         if not is_origin_allowed(origin, self._require_config().allowed_origins):
-            return _error_response(
+            return error_response(
                 code=JsonRpcErrorCode.INVALID_REQUEST,
                 message=f"Origin not allowed: {origin!r}",
                 status=403,
@@ -655,14 +599,6 @@ class StreamableHttpView(View):
         if self.session_store is None:  # pragma: no cover - guarded by MCPServer
             raise RuntimeError("StreamableHttpView is missing a SessionStore")
         return self.session_store
-
-
-def _params_dict(params: Any) -> dict[str, Any] | None:
-    if params is None:
-        return None
-    if isinstance(params, dict):
-        return params
-    return None  # JSON-RPC list params are not used by MCP today.
 
 
 __all__ = ["StreamableHttpView"]
