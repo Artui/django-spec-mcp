@@ -877,12 +877,8 @@ class MCPServer:
         enforce_rate_limits: bool = True,
         in_task_worker: bool = False,
     ) -> MCPCallContext:
-        """The context an in-process call or a task runs under: this server's half, around a caller's.
-
-        Only the request, the token and the three knobs above differ between
-        ``_call_context`` and ``_worker_context``; everything else is this
-        server's, read the same way for both.
-        """
+        """A context around the caller's request and token, with this server's half read in one
+        place so an in-process call and a task worker cannot drift apart."""
         return MCPCallContext(
             http_request=http_request,
             token=token,
