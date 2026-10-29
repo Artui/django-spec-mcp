@@ -502,15 +502,16 @@ _INVOICING_AUTH = textwrap.dedent(
         "io.modelcontextprotocol/clientCapabilities": {},
     }
 
-    def prompt(**token):
-        params = {"name": "compose_invoice_email", "arguments": {"pk": str(pk)}, "_meta": META}
+    def send(method, name, params, **token):
         response = client.post(
             "/mcp/",
-            data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": "prompts/get", "params": params}),
+            data=json.dumps(
+                {"jsonrpc": "2.0", "id": 1, "method": method, "params": {**params, "_meta": META}}
+            ),
             content_type="application/json",
             HTTP_MCP_PROTOCOL_VERSION="2026-07-28",
-            HTTP_MCP_METHOD="prompts/get",
-            HTTP_MCP_NAME="compose_invoice_email",
+            HTTP_MCP_METHOD=method,
+            HTTP_MCP_NAME=name,
             **token,
         )
         return {
@@ -519,6 +520,12 @@ _INVOICING_AUTH = textwrap.dedent(
             "body": json.loads(response.content) if response.content else None,
         }
 
+    def prompt(**token):
+        params = {"name": "compose_invoice_email", "arguments": {"pk": str(pk)}}
+        return send("prompts/get", "compose_invoice_email", params, **token)
+
+    INTERN = {"HTTP_AUTHORIZATION": "Bearer demo-intern"}
+
     # The metadata is fetched where the challenge points, not where the test
     # expects it, so a pointer naming the wrong path fails here.
     anonymous = prompt()
@@ -526,9 +533,17 @@ _INVOICING_AUTH = textwrap.dedent(
     pointer = challenge.split('resource_metadata="')[1].split('"')[0]
     metadata = client.get(urlsplit(pointer).path)
     print(json.dumps({
+        "pk": pk,
         "anonymous": anonymous,
         "unknown": prompt(HTTP_AUTHORIZATION="Bearer not-a-demo-token"),
-        "intern": prompt(HTTP_AUTHORIZATION="Bearer demo-intern"),
+        "intern": prompt(**INTERN),
+        "intern_tool": send(
+            "tools/call", "invoices.outstanding",
+            {"name": "invoices.outstanding", "arguments": {}}, **INTERN,
+        ),
+        "intern_read": send(
+            "resources/read", f"invoices://{pk}", {"uri": f"invoices://{pk}"}, **INTERN
+        ),
         "clerk": prompt(HTTP_AUTHORIZATION="Bearer demo-clerk"),
         "metadata": {
             "status": metadata.status_code,
@@ -545,7 +560,8 @@ def test_invoicing_authenticates_bearer_tokens_and_gates_its_prompt_on_a_scope()
     A request with no token, or a token the backend does not know, is a ``401``
     whose challenge points at the metadata document, which is served where it
     points; a token without ``invoices:email`` is the ``403`` naming that scope;
-    the clerk's token renders the prompt.
+    that token still calls a tool and reads the resource, which the scope does
+    not gate; the clerk's token renders the prompt.
     """
     result = subprocess.run(
         [sys.executable, "-c", _INVOICING_AUTH],
@@ -591,6 +607,17 @@ def test_invoicing_authenticates_bearer_tokens_and_gates_its_prompt_on_a_scope()
             "data": {"requiredScopes": ["invoices:email"]},
         },
     }
+
+    # The scope gates the prompt alone: the same token is served a tool and the resource.
+    tool = replies["intern_tool"]
+    assert (tool["status"], tool["challenge"]) == (200, None)
+    assert "isError" not in tool["body"]["result"]
+    assert tool["body"]["result"]["structuredContent"] == {"amount_cents": 100, "currency": "EUR"}
+    read = replies["intern_read"]
+    assert (read["status"], read["challenge"]) == (200, None)
+    [contents] = read["body"]["result"]["contents"]
+    assert contents["uri"] == f"invoices://{replies['pk']}"
+    assert json.loads(contents["text"])["number"] == "INV-A"
 
     clerk = replies["clerk"]
     assert clerk["status"] == 200
