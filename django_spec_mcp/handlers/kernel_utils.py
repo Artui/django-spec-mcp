@@ -46,13 +46,12 @@ from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.types.kernel_refusal_scene import KernelRefusalScene
 from django_spec_mcp.handlers.utils import (
     resolve_bound,
-    resource_cache_hints,
     resource_not_found_code,
+    resource_read_answer,
     validation_error_data,
 )
 from django_spec_mcp.observability import get_logger
 from django_spec_mcp.output.encode_resource_contents import encode_resource_contents
-from django_spec_mcp.output.enforce_result_bytes import enforce_result_bytes
 from django_spec_mcp.output.error_tool_result import build_error_tool_result
 from django_spec_mcp.output.resolve_structured_output import resolve_structured_output
 from django_spec_mcp.output.tool_result import build_tool_result
@@ -913,18 +912,7 @@ def resource_read_result(
     contents = encode_resource_contents(payload, binding=binding, uri=uri, producer=_PRESENTED_BY)
     if isinstance(contents, JsonRpcError):
         return contents
-    answer: dict[str, Any] = {
-        "contents": [contents.to_dict()],
-        **resource_cache_hints(
-            resolve_bound(binding.cache_ttl_ms, context.config.resource_cache_ttl_ms)
-        ),
-    }
-    oversize: str | None = enforce_result_bytes(
-        answer, context.config.max_result_bytes, label=f"Resource {uri!r}"
-    )
-    if oversize is not None:
-        return JsonRpcError(JsonRpcErrorCode.SERVER_ERROR, oversize)
-    return answer
+    return resource_read_answer(contents, binding, uri, context)
 
 
 def resource_refusal(exc: DispatchError | ServiceError, scene: KernelRefusalScene) -> JsonRpcError:

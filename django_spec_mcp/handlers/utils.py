@@ -22,8 +22,10 @@ from django_spec_mcp.observability.get_logger import get_logger
 from django_spec_mcp.output.enforce_result_bytes import enforce_result_bytes
 from django_spec_mcp.output.error_tool_result import build_error_tool_result
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.protocol.types.resource_contents import ResourceContents
 from django_spec_mcp.protocol.types.tool_result import ToolResult
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
+from django_spec_mcp.registry.types.resource_binding import ResourceBinding
 from django_spec_mcp.schema.types.agent_conventions import AgentConventions
 from django_spec_mcp.schema.utils import end_sentence
 from django_spec_mcp.types.cache_scope import CacheScope
@@ -410,6 +412,28 @@ def resource_cache_hints(ttl_ms: int) -> dict[str, Any]:
     return {"ttlMs": ttl_ms, "cacheScope": CacheScope.PRIVATE.value}
 
 
+def resource_read_answer(
+    contents: ResourceContents, binding: ResourceBinding[Any], uri: str, context: MCPCallContext
+) -> dict[str, Any] | JsonRpcError:
+    """The ``resources/read`` answer around one encoded ``contents`` block, the
+    step a view's read and a kernel resource's read share: the binding's cache
+    hints, then the server's result ceiling. A resource read has no ``isError``
+    envelope to carry an over-ceiling explanation, so it is a protocol error
+    carrying the same remedy-naming message a tool result gets."""
+    answer: dict[str, Any] = {
+        "contents": [contents.to_dict()],
+        **resource_cache_hints(
+            resolve_bound(binding.cache_ttl_ms, context.config.resource_cache_ttl_ms)
+        ),
+    }
+    oversize: str | None = enforce_result_bytes(
+        answer, context.config.max_result_bytes, label=f"Resource {uri!r}"
+    )
+    if oversize is not None:
+        return JsonRpcError(JsonRpcErrorCode.SERVER_ERROR, oversize)
+    return answer
+
+
 def enforce_result_ceiling(result: Any, *, max_result_bytes: int | None, label: str) -> Any:
     """Replace an over-ceiling tool result with an ``isError`` result.
 
@@ -466,6 +490,7 @@ __all__ = [
     "render_convention",
     "rendering_refusal_result",
     "resolve_bound",
+    "resource_read_answer",
     "run_with_deadline",
     "scope_verdict",
     "span_attrs",

@@ -16,13 +16,11 @@ from django_spec_mcp.handlers.utils import (
     consume_rate_limits,
     forbidden,
     rate_limited,
-    resolve_bound,
-    resource_cache_hints,
     resource_not_found_code,
+    resource_read_answer,
     span_attrs,
 )
 from django_spec_mcp.output.build_resource_contents import build_resource_contents
-from django_spec_mcp.output.enforce_result_bytes import enforce_result_bytes
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.protocol.types.resource_contents import ResourceContents
 from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
@@ -108,20 +106,7 @@ async def handle_resources_read_async(
         )
         if isinstance(contents, JsonRpcError):
             return contents
-        result: dict[str, Any] = {
-            "contents": [contents.to_dict()],
-            **resource_cache_hints(
-                resolve_bound(binding.cache_ttl_ms, context.config.resource_cache_ttl_ms)
-            ),
-        }
-        # See the sync sibling: an over-ceiling read has no ``isError`` envelope
-        # to live in, so it is a protocol error carrying the same message.
-        oversize: str | None = enforce_result_bytes(
-            result, context.config.max_result_bytes, label=f"Resource {uri!r}"
-        )
-        if oversize is not None:
-            return JsonRpcError(JsonRpcErrorCode.SERVER_ERROR, oversize)
-        return result
+        return resource_read_answer(contents, binding, uri, context)
 
 
 __all__ = ["handle_resources_read_async"]
