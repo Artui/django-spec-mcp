@@ -8,17 +8,15 @@ from django_spec_mcp.elicitation.types.resolved_input import ResolvedInput
 from django_spec_mcp.handlers.answer_kernel_refusal import answer_kernel_refusal
 from django_spec_mcp.handlers.kernel_utils import (
     KernelAdmission,
-    admitted_arguments,
     bound_unpaginated_rows,
     not_found_result,
     on_the_wire,
     page_request,
+    tool_refusal_scene,
     tool_result,
 )
 from django_spec_mcp.handlers.present_kernel_result import present_kernel_result
 from django_spec_mcp.handlers.types.context import MCPCallContext
-from django_spec_mcp.handlers.types.kernel_input_round import KernelInputRound
-from django_spec_mcp.handlers.types.kernel_refusal_scene import KernelRefusalScene
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.protocol.types.tool_result import ToolResult
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
@@ -46,18 +44,7 @@ def run_kernel_tool(
     ``not_found_result``, and the presented value as the tool result.
     """
     dispatched, page = page_request(binding, arguments, context.config)
-    scene = KernelRefusalScene(
-        arguments=arguments,
-        config=context.config,
-        conventions=context.conventions,
-        # A selector asks for nothing: a request for input from one is a
-        # service error, not a round trip
-        # (``test_a_kernel_selector_ignores_a_round_trip``).
-        input_round=None
-        if binding.is_selector
-        else KernelInputRound(prior, context, admitted_arguments(binding, context.pool_seeds)),
-        span=otel_span,
-    )
+    scene = tool_refusal_scene(binding, arguments, prior, context, otel_span)
     try:
         result = dispatch(
             binding.spec,

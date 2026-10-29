@@ -41,8 +41,10 @@ from django_service_specs import (
 )
 
 from django_spec_mcp.config.types.mcp_config import MCPConfig
+from django_spec_mcp.elicitation.types.resolved_input import ResolvedInput
 from django_spec_mcp.handlers.answer_kernel_refusal import answer_kernel_refusal
 from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.handlers.types.kernel_input_round import KernelInputRound
 from django_spec_mcp.handlers.types.kernel_refusal_scene import KernelRefusalScene
 from django_spec_mcp.handlers.utils import (
     resolve_bound,
@@ -967,6 +969,30 @@ def invalid_arguments_error(
     )
 
 
+def tool_refusal_scene(
+    binding: KernelToolBinding,
+    arguments: dict[str, Any],
+    prior: ResolvedInput,
+    context: MCPCallContext,
+    otel_span: Any,
+) -> KernelRefusalScene:
+    """The scene a ``tools/call`` refusal is answered in, on either transport:
+    the call's arguments and wording, its span, and the round a request for
+    input continues in."""
+    return KernelRefusalScene(
+        arguments=arguments,
+        config=context.config,
+        conventions=context.conventions,
+        # A selector asks for nothing: a request for input from one is a
+        # service error, not a round trip
+        # (``test_a_kernel_selector_ignores_a_round_trip``).
+        input_round=None
+        if binding.is_selector
+        else KernelInputRound(prior, context, admitted_arguments(binding, context.pool_seeds)),
+        span=otel_span,
+    )
+
+
 def admitted_arguments(binding: KernelToolBinding, pool_seeds: PoolSeeds) -> frozenset[str]:
     """The argument names a client may answer an ``AdditionalInputRequired`` under.
 
@@ -1010,6 +1036,7 @@ def _coerce_int(value: Any, *, default: int) -> int:
 
 
 __all__ = [
+    "tool_refusal_scene",
     "KernelAdmission",
     "KernelPageRequest",
     "admit_kernel_call",
