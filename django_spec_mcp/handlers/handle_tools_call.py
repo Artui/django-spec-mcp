@@ -139,7 +139,7 @@ def _dispatch_tool_call(
         if retry_after is not None:
             return rate_limited(retry_after), arguments_raw
 
-        # Charged, as before: a declined answer is a call the client made
+        # After the charge: a declined answer is a call the client made
         # (``test_a_caller_declining_the_question_is_charged_once``).
         if prior.refused_with is not None:
             return refusal_result(prior.refused_with), arguments_raw

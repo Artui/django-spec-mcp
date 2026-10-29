@@ -385,11 +385,11 @@ def resolve_tool_call(
         # tool is a bad param, so ``-32602`` rather than an ``isError`` result.
         return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, f"Unknown tool: {tool_name!r}")
 
-    # Read once: only a missing key (or an explicit ``null``) means "no
-    # arguments". Collapsing every falsy value into ``{}`` — as ``or {}`` did —
-    # let ``[]``, ``0``, ``""`` and ``false`` past the guard on the next line,
-    # so a malformed ``arguments`` ran the tool with no arguments instead of
-    # being named as the fault.
+    # Only a missing key (or an explicit ``null``) means "no arguments". Not
+    # ``or {}``: folding every falsy value into ``{}`` would let ``[]``, ``0``,
+    # ``""`` and ``false`` past the guard on the next line, so a malformed
+    # ``arguments`` would run the tool with no arguments instead of being named
+    # as the fault.
     arguments_raw: Any = params.get("arguments")
     if arguments_raw is None:
         arguments_raw = {}

@@ -192,7 +192,6 @@ def carry_token(request: Any, token: Any) -> Any:
     (``test_every_path_sees_the_tokens_principal_not_the_sessions``); with no
     principal it is anonymous, not the session's user
     (``test_a_caller_the_token_names_no_one_is_anonymous_not_the_sessions_user``).
-    drf-mcp's DRF ``Request`` carried the token's user, and this keeps that.
 
     The wire's inbound request is written to rather than copied, because a spec
     reading ``call_context["request"]`` is handed the very request the
@@ -588,7 +587,7 @@ def admit_kernel_call(
 
     Raises a denial, ``NotPermitted`` or ``PrincipalUnavailable``, for the
     caller to answer as ``KERNEL_REFUSALS`` does. Any other refusal is left to
-    dispatch, which raises it again in its own order and is answered as before.
+    dispatch, which raises it again in its own order, where the call's arms answer it.
     What is no refusal, a configuration error
     (``test_a_handbuilt_unguarded_kernel_tool_is_never_called``) or a check
     that raises, is raised here, before the charge, as dispatch would have
@@ -620,7 +619,7 @@ def admit_kernel_call(
     except (DispatchError, ServiceError):
         # A refusal that is no denial, such as a ``ServiceError`` a check or a
         # seed's resolver raises: dispatch raises it again and the call's own
-        # arms answer it, after the charge, as before, and on a stream inside
+        # arms answer it, after the charge, and on a stream inside
         # it (``test_a_service_error_a_check_raises_streams_the_plain_calls_answer``).
         # One arc to coverage, each kind held by its case of
         # ``test_a_check_raising_a_refusal_that_is_no_denial_is_answered_as_before``.
