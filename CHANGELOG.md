@@ -338,7 +338,10 @@ carries; releases up to 0.54.0 are in
   `has_permission(principal, binding)`, and `scopes=`, the scope gate a tool
   takes, asked first. A deactivated principal is refused as a spec's dispatch
   refuses one, and the same judgement answers the listings, `prompts/get`,
-  `resources/read`, `completion/complete` and a subscription. A prompt
+  `resources/read`, `completion/complete` and a subscription. In a filtered
+  listing a check that raises hides only its own prompt or view, as a kernel
+  spec's check that raises hides only its tool, while an `ImproperlyConfigured`
+  fails the listing as it fails the call. A prompt
   registered with neither is refused, or warned about with
   `REQUIRE_TOOL_PERMISSIONS` off, in a message that names both and no DRF
   permission classes. Registration holds `permissions=` to the kernel's own rule
