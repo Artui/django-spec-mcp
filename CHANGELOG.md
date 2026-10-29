@@ -396,21 +396,16 @@ carries; releases up to 0.54.0 are in
   choose and no `argument_binding` to pass. Import `UnknownArguments` from
   `django_service_specs`, which defines it.
 
-- **`TOOL_EDGE_SEEDS` and `COMPLETION_EDGE_SEEDS`.** Both named what the DRF
-  edge filled itself (`request`, `view` and `serializer`). A kernel spec's
-  reads are checked against the kernel's `RESERVED_POOL_SEEDS` and the server's
-  `pool_seeds` instead, and the kernel refuses a read named `request` or `view`
-  when the spec is built.
-
-- **`RESOURCE_EDGE_SEEDS`.** It named the one key a resource read seeds beyond
-  the kernel's reserved set, `request`. `register_resource` reserves the
-  kernel's `CALL_SEEDS` (`request` and `view`, the call's own) in its place, so
-  a URI-template variable named `view` is now refused as a reserved transport
-  key, in the message a `{request}` or `{user}` variable gets. It was refused
-  before too, as a variable no read declares or, beside a `reflected` read of
-  that name, as one the server fills, so a test matching either of those
-  wordings for `{view}` matches neither now. Import `CALL_SEEDS` from
-  `django_service_specs`.
+- **`TOOL_EDGE_SEEDS`, `COMPLETION_EDGE_SEEDS` and `RESOURCE_EDGE_SEEDS`.** The
+  first two named what the DRF edge filled itself (`request`, `view` and
+  `serializer`), and the third the one key a resource read seeds beyond the
+  kernel's reserved set, `request`. A kernel spec's reads are checked against
+  the kernel's `RESERVED_POOL_SEEDS` and the server's `pool_seeds` instead, and
+  the kernel refuses a read named `request` or `view` when the spec is built.
+  `register_resource` reserves the kernel's `CALL_SEEDS` (`request` and `view`,
+  the call's own) beside them, so a URI-template variable named `request` or
+  `view` is refused as a reserved transport key, in the message a `{user}`
+  variable gets. Import `CALL_SEEDS` from `django_service_specs`.
 
 - **TOON output, `OutputFormat` and the `toon` extra.** A tool result's
   `content[0]` text is always the payload as JSON, beside the same payload in
