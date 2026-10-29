@@ -11,6 +11,7 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
+import pytest
 from django_service_specs import (
     DataclassPresenter,
     Parameter,
@@ -99,14 +100,10 @@ def test_a_paged_tools_reads_are_advertised_as_declared() -> None:
     assert schema["properties"]["query"]["description"] == "django-restql fieldset, e.g. {id, name}"
 
 
-def test_an_unpaginated_list_advertises_the_shape_as_declared() -> None:
-    schema = _schema(_selector(SelectorKind.LIST, shapes=Parameters([_QUERY])))
-
-    assert schema["properties"]["query"]["description"] == "django-restql fieldset, e.g. {id, name}"
-
-
-def test_a_retrieve_advertises_the_shape_as_declared() -> None:
-    schema = _schema(_selector(SelectorKind.RETRIEVE, shapes=Parameters([_QUERY])))
+@pytest.mark.parametrize("kind", [SelectorKind.LIST, SelectorKind.RETRIEVE])
+def test_an_unpaged_selector_advertises_the_shape_as_declared(kind: SelectorKind) -> None:
+    # An unpaginated LIST and a RETRIEVE both answer rows with no envelope.
+    schema = _schema(_selector(kind, shapes=Parameters([_QUERY])))
 
     assert schema["properties"]["query"]["description"] == "django-restql fieldset, e.g. {id, name}"
 
