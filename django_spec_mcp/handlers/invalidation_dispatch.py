@@ -54,7 +54,7 @@ def _uris(binding: Any, result: Any, arguments: Mapping[str, Any]) -> tuple[str,
     nothing, and the check is on ``isError`` rather than on the result being
     present: a ``ServiceError`` produces a well-formed result, so "did it come
     back" is not the question. Nor does a result asking the client for input,
-    which ran nothing and carries no ``isError`` to fail on; it once announced
+    which ran nothing and carries no ``isError`` to fail on, and would announce
     a change no call had made
     (``test_only_a_completed_result_announces[input-required-*]``). Completed
     is read as the envelope reads it: a ``resultType`` that is absent, which a

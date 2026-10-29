@@ -43,7 +43,7 @@ def apply_tool_server_arguments(binding: Any, arguments: dict[str, Any]) -> dict
     """``arguments`` with the binding's ``server_arguments`` in place, the caller's dropped.
 
     The first thing every ``tools/call`` route does with the arguments, once it
-    knows they are an object: ``handle_tools_call`` and its async sibling
+    knows they are an object: ``resolve_tool_call``, for both transports,
     before a task is created, the in-process ``MCPServer.call_tool`` before it
     runs the tool. So everything after reads the server's value - the kernel's
     admission and its required-argument check - and a bound value fills a
