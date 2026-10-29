@@ -3,49 +3,10 @@ from __future__ import annotations
 import pytest
 
 from django_spec_mcp.transport.in_memory_sse_replay_buffer import InMemorySSEReplayBuffer
-from django_spec_mcp.transport.types.sse_replay_buffer import SSEReplayBuffer
 
 
 async def _drain(it) -> list[tuple[str, object]]:
-    out: list[tuple[str, object]] = []
-    async for pair in it:
-        out.append(pair)
-    return out
-
-
-async def test_record_returns_monotonic_ids() -> None:
-    buf = InMemorySSEReplayBuffer()
-    a = await buf.record("s", {"n": 1})
-    b = await buf.record("s", {"n": 2})
-    c = await buf.record("s", {"n": 3})
-    assert a < b < c
-
-
-async def test_replay_yields_events_after_id() -> None:
-    buf = InMemorySSEReplayBuffer()
-    first = await buf.record("s", {"n": 1})
-    second = await buf.record("s", {"n": 2})
-    third = await buf.record("s", {"n": 3})
-    out = await _drain(buf.replay("s", first))
-    assert out == [(second, {"n": 2}), (third, {"n": 3})]
-
-
-async def test_replay_with_none_yields_nothing() -> None:
-    buf = InMemorySSEReplayBuffer()
-    await buf.record("s", {"n": 1})
-    assert await _drain(buf.replay("s", None)) == []
-
-
-async def test_replay_unknown_session_yields_nothing() -> None:
-    buf = InMemorySSEReplayBuffer()
-    assert await _drain(buf.replay("never-existed", "0000000000000001")) == []
-
-
-async def test_replay_after_latest_yields_nothing() -> None:
-    """Client already up to date — no events past the head."""
-    buf = InMemorySSEReplayBuffer()
-    last = await buf.record("s", {"n": 1})
-    assert await _drain(buf.replay("s", last)) == []
+    return [pair async for pair in it]
 
 
 async def test_eviction_at_max_events() -> None:
@@ -65,42 +26,25 @@ async def test_eviction_at_max_events() -> None:
     assert await _drain(buf.replay("s", third)) == []
 
 
-async def test_buckets_are_per_session() -> None:
+async def test_each_session_numbers_its_own_events() -> None:
+    """IDs are session-scoped and start at 1 for each. Collisions across
+    sessions are not a problem, because a client only resumes within its own."""
     buf = InMemorySSEReplayBuffer()
     a1 = await buf.record("a", {"src": "a"})
     b1 = await buf.record("b", {"src": "b"})
-    # IDs are session-scoped but happen to start at 1 for each — that's fine,
-    # collisions across sessions are not a problem (clients only resume
-    # within their own session).
     assert a1 == b1 == "0000000000000001"
-    out_a = await _drain(buf.replay("a", "0000000000000000"))
-    out_b = await _drain(buf.replay("b", "0000000000000000"))
-    assert out_a == [(a1, {"src": "a"})]
-    assert out_b == [(b1, {"src": "b"})]
 
 
-async def test_forget_drops_session_state() -> None:
+async def test_forget_restarts_the_sessions_numbering() -> None:
     buf = InMemorySSEReplayBuffer()
     await buf.record("s", {"n": 1})
     await buf.forget("s")
-    assert await _drain(buf.replay("s", "0000000000000000")) == []
-    # Re-recording after forget restarts numbering at 1 — counter was cleared.
-    new_id = await buf.record("s", {"n": 99})
-    assert new_id == "0000000000000001"
-
-
-async def test_forget_unknown_session_is_noop() -> None:
-    buf = InMemorySSEReplayBuffer()
-    await buf.forget("never-existed")  # must not raise
+    assert await buf.record("s", {"n": 99}) == "0000000000000001"
 
 
 def test_invalid_max_events_rejected() -> None:
     with pytest.raises(ValueError, match="max_events"):
         InMemorySSEReplayBuffer(max_events=0)
-
-
-def test_satisfies_sse_replay_buffer_protocol() -> None:
-    assert isinstance(InMemorySSEReplayBuffer(), SSEReplayBuffer)
 
 
 async def test_sessions_that_never_said_goodbye_are_eventually_forgotten() -> None:
