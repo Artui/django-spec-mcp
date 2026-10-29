@@ -29,8 +29,7 @@ async def adispatch(
     borrows the executor instead.
 
     **The rest go through the thread-sensitive executor rather than running
-    inline on the loop.** They were once described as CPU-only, and they are
-    not: ``tasks/*`` read the task store, whose default
+    inline on the loop.** None of them is CPU-only: ``tasks/*`` read the task store, whose default
     (``DjangoCacheTaskStore``) is the Django cache — a ``DatabaseCache``
     configuration reaches ``django.db`` and Django raises
     ``SynchronousOnlyOperation`` straight off the loop — and the four list

@@ -18,6 +18,7 @@ from django_service_specs import (
 from django_spec_mcp.handlers.input_dispatch import ask_for_input
 from django_spec_mcp.handlers.types.kernel_refusal_scene import KernelRefusalScene
 from django_spec_mcp.handlers.utils import (
+    forbidden,
     missing_arguments_message,
     service_error_result,
     validation_error_data,
@@ -26,7 +27,6 @@ from django_spec_mcp.handlers.utils import (
 from django_spec_mcp.output.error_tool_result import build_error_tool_result
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.protocol.types.tool_result import ToolResult
-from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 
 # What an answer returns: a tool result, the wire dict MRTR's ``input_required``
 # already is, or a JSON-RPC error. The wire serialises the first; the in-process
@@ -42,7 +42,7 @@ def _insufficient_permission(
     """``-32006`` with no ``data``: the scope gate's ``requiredScopes`` belong to
     the transport's own check, which answers before dispatch is reached, so a
     refusal from inside dispatch names no scope."""
-    return JsonRpcError(JsonRpcErrorCode.FORBIDDEN, "Insufficient permission")
+    return forbidden([])
 
 
 def _invalid_arguments(exc: InvalidArguments, scene: KernelRefusalScene) -> ToolResult:

@@ -20,7 +20,10 @@ from django_spec_mcp.handlers.utils import (
     enforce_result_ceiling,
     forbidden,
     judge_tool_permissions,
+    rate_limited,
     resolve_bound,
+    resolve_tool_call,
+    span_attrs,
 )
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
@@ -41,36 +44,10 @@ def handle_tools_call(
     """
     if not isinstance(params, dict):
         return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, "tools/call params must be an object")
-
-    tool_name: Any = params.get("name")
-    if not isinstance(tool_name, str):
-        return JsonRpcError(
-            JsonRpcErrorCode.INVALID_PARAMS, "'name' is required and must be a string"
-        )
-
-    binding = context.tools.get(tool_name)
-    if binding is None:
-        # The tools spec's own worked example of a protocol error: an unknown
-        # tool is a bad param, so ``-32602`` rather than an ``isError`` result.
-        return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, f"Unknown tool: {tool_name!r}")
-
-    # Read once: only a missing key (or an explicit ``null``) means "no
-    # arguments". Collapsing every falsy value into ``{}`` — as ``or {}`` did —
-    # let ``[]``, ``0``, ``""`` and ``false`` past the guard on the next line,
-    # so a malformed ``arguments`` ran the tool with no arguments instead of
-    # being named as the fault.
-    arguments_raw: Any = params.get("arguments")
-    if arguments_raw is None:
-        arguments_raw = {}
-    if not isinstance(arguments_raw, dict):
-        return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, "'arguments' must be an object")
-
-    # The binding's ``server_arguments`` in place before anything reads the
-    # arguments: a task records what the tool will run with, and the permission
-    # check at its creation, the stand-in below and the strict split and
-    # missing-argument checks all see the server's value, so a binding can fill
-    # a required read (``apply_tool_server_arguments``).
-    arguments_raw = apply_tool_server_arguments(binding, arguments_raw)
+    target = resolve_tool_call(params, context)
+    if isinstance(target, JsonRpcError):
+        return target
+    binding, arguments_raw = target
 
     # Ordering: after argument-shape validation so a malformed call is rejected
     # outright rather than queued, and before dispatch because a task exists
@@ -120,7 +97,7 @@ def _dispatch_tool_call(
     # ``opentelemetry-api``.
     with span(
         "mcp.tools.call",
-        attributes=_span_attrs(binding.name, context),
+        attributes=span_attrs(binding.name, context),
     ) as otel_span:
         # The binding's ``permissions``, its scope gate, before a retry's
         # answers are read, since a denied caller is told so first.
@@ -160,16 +137,9 @@ def _dispatch_tool_call(
             effective_rate_limits(binding, context), context.http_request, context.token
         )
         if retry_after is not None:
-            return (
-                JsonRpcError(
-                    JsonRpcErrorCode.RATE_LIMITED,
-                    "Rate limit exceeded",
-                    data={"retryAfter": retry_after},
-                ),
-                arguments_raw,
-            )
+            return rate_limited(retry_after), arguments_raw
 
-        # Charged, as before: a declined answer is a call the client made
+        # After the charge: a declined answer is a call the client made
         # (``test_a_caller_declining_the_question_is_charged_once``).
         if prior.refused_with is not None:
             return refusal_result(prior.refused_with), arguments_raw
@@ -178,17 +148,6 @@ def _dispatch_tool_call(
             run_kernel_tool(binding, params, arguments_raw, admission, prior, context, otel_span),
             arguments_raw,
         )
-
-
-def _span_attrs(binding_name: str, context: MCPCallContext) -> dict[str, Any]:
-    """Common span attributes — kept here so the six dispatch handlers stay in sync."""
-    attrs: dict[str, Any] = {
-        "mcp.binding.name": binding_name,
-        "mcp.protocol.version": context.protocol_version,
-    }
-    if context.session_id:
-        attrs["mcp.session.id"] = context.session_id
-    return attrs
 
 
 __all__ = ["handle_tools_call"]

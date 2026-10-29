@@ -8,7 +8,6 @@ from asgiref.sync import sync_to_async
 from django_spec_mcp._compat.acall import acall
 from django_spec_mcp._compat.tracing import span
 from django_spec_mcp.elicitation.types.resolved_input import ResolvedInput
-from django_spec_mcp.handlers.handle_tools_call import _span_attrs
 from django_spec_mcp.handlers.input_dispatch import (
     refusal_result,
 )
@@ -25,8 +24,11 @@ from django_spec_mcp.handlers.utils import (
     enforce_result_ceiling,
     forbidden,
     judge_tool_permissions,
+    rate_limited,
     resolve_bound,
+    resolve_tool_call,
     run_with_deadline,
+    span_attrs,
 )
 from django_spec_mcp.output.error_tool_result import build_error_tool_result
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
@@ -48,29 +50,10 @@ async def handle_tools_call_async(
     """
     if not isinstance(params, dict):
         return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, "tools/call params must be an object")
-
-    tool_name: Any = params.get("name")
-    if not isinstance(tool_name, str):
-        return JsonRpcError(
-            JsonRpcErrorCode.INVALID_PARAMS, "'name' is required and must be a string"
-        )
-
-    binding = context.tools.get(tool_name)
-    if binding is None:
-        # See the sync sibling: the tools spec answers an unknown tool with
-        # ``-32602``.
-        return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, f"Unknown tool: {tool_name!r}")
-
-    # See the sync sibling: only a missing key or an explicit ``null`` means
-    # "no arguments"; every other non-object is named as the fault.
-    arguments_raw: Any = params.get("arguments")
-    if arguments_raw is None:
-        arguments_raw = {}
-    if not isinstance(arguments_raw, dict):
-        return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, "'arguments' must be an object")
-
-    # See the sync sibling: before the task and the permission check read them.
-    arguments_raw = apply_tool_server_arguments(binding, arguments_raw)
+    target = resolve_tool_call(params, context)
+    if isinstance(target, JsonRpcError):
+        return target
+    binding, arguments_raw = target
 
     # Placed as in the sync sibling, and deliberately *outside* the deadline:
     # creating a task is a store write and a queue hand-off, not the work, and
@@ -124,7 +107,7 @@ async def _dispatch_tool_call_async(
     one size check sees the finished result. The arguments returned are the
     ones the tool ran with, as in the sync sibling.
     """
-    with span("mcp.tools.call", attributes=_span_attrs(binding.name, context)) as otel_span:
+    with span("mcp.tools.call", attributes=span_attrs(binding.name, context)) as otel_span:
         # See the sync sibling: the binding's scope gate, before a retry's
         # answers are read. Off the loop, since a permission may query.
         allowed, required_scopes = await acall(judge_tool_permissions, binding, context)
@@ -154,14 +137,7 @@ async def _dispatch_tool_call_async(
             context.token,
         )
         if retry_after is not None:
-            return (
-                JsonRpcError(
-                    JsonRpcErrorCode.RATE_LIMITED,
-                    "Rate limit exceeded",
-                    data={"retryAfter": retry_after},
-                ),
-                arguments_raw,
-            )
+            return rate_limited(retry_after), arguments_raw
 
         if prior.refused_with is not None:
             return refusal_result(prior.refused_with), arguments_raw

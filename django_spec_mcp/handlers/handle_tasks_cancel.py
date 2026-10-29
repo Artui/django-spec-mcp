@@ -5,14 +5,12 @@ from typing import Any
 from django_spec_mcp.handlers.tasks_utils import (
     declares_tasks_extension,
     missing_capability_error,
-    owned_by_caller,
+    owned_task,
     resolve_task_id,
-    unknown_task_error,
 )
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.tasks.transition_task import transition_task
-from django_spec_mcp.tasks.types.task_record import TaskRecord
 from django_spec_mcp.types.task_status import TaskStatus
 
 
@@ -43,12 +41,10 @@ def handle_tasks_cancel(
     if isinstance(task_id, JsonRpcError):
         return task_id
 
-    store = context.tasks
-    if store is None:
-        return unknown_task_error(task_id)
-    record: TaskRecord | None = store.get(task_id)
-    if record is None or not owned_by_caller(record, context):
-        return unknown_task_error(task_id)
+    owned = owned_task(task_id, context)
+    if isinstance(owned, JsonRpcError):
+        return owned
+    store, record = owned
 
     transition_task(
         store,

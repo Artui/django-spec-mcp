@@ -41,18 +41,19 @@ from django_service_specs import (
 )
 
 from django_spec_mcp.config.types.mcp_config import MCPConfig
+from django_spec_mcp.elicitation.types.resolved_input import ResolvedInput
 from django_spec_mcp.handlers.answer_kernel_refusal import answer_kernel_refusal
 from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.handlers.types.kernel_input_round import KernelInputRound
 from django_spec_mcp.handlers.types.kernel_refusal_scene import KernelRefusalScene
 from django_spec_mcp.handlers.utils import (
     resolve_bound,
-    resource_cache_hints,
     resource_not_found_code,
+    resource_read_answer,
     validation_error_data,
 )
 from django_spec_mcp.observability import get_logger
 from django_spec_mcp.output.encode_resource_contents import encode_resource_contents
-from django_spec_mcp.output.enforce_result_bytes import enforce_result_bytes
 from django_spec_mcp.output.error_tool_result import build_error_tool_result
 from django_spec_mcp.output.resolve_structured_output import resolve_structured_output
 from django_spec_mcp.output.tool_result import build_tool_result
@@ -191,7 +192,6 @@ def carry_token(request: Any, token: Any) -> Any:
     (``test_every_path_sees_the_tokens_principal_not_the_sessions``); with no
     principal it is anonymous, not the session's user
     (``test_a_caller_the_token_names_no_one_is_anonymous_not_the_sessions_user``).
-    drf-mcp's DRF ``Request`` carried the token's user, and this keeps that.
 
     The wire's inbound request is written to rather than copied, because a spec
     reading ``call_context["request"]`` is handed the very request the
@@ -587,7 +587,7 @@ def admit_kernel_call(
 
     Raises a denial, ``NotPermitted`` or ``PrincipalUnavailable``, for the
     caller to answer as ``KERNEL_REFUSALS`` does. Any other refusal is left to
-    dispatch, which raises it again in its own order and is answered as before.
+    dispatch, which raises it again in its own order, where the call's arms answer it.
     What is no refusal, a configuration error
     (``test_a_handbuilt_unguarded_kernel_tool_is_never_called``) or a check
     that raises, is raised here, before the charge, as dispatch would have
@@ -619,7 +619,7 @@ def admit_kernel_call(
     except (DispatchError, ServiceError):
         # A refusal that is no denial, such as a ``ServiceError`` a check or a
         # seed's resolver raises: dispatch raises it again and the call's own
-        # arms answer it, after the charge, as before, and on a stream inside
+        # arms answer it, after the charge, and on a stream inside
         # it (``test_a_service_error_a_check_raises_streams_the_plain_calls_answer``).
         # One arc to coverage, each kind held by its case of
         # ``test_a_check_raising_a_refusal_that_is_no_denial_is_answered_as_before``.
@@ -913,18 +913,7 @@ def resource_read_result(
     contents = encode_resource_contents(payload, binding=binding, uri=uri, producer=_PRESENTED_BY)
     if isinstance(contents, JsonRpcError):
         return contents
-    answer: dict[str, Any] = {
-        "contents": [contents.to_dict()],
-        **resource_cache_hints(
-            resolve_bound(binding.cache_ttl_ms, context.config.resource_cache_ttl_ms)
-        ),
-    }
-    oversize: str | None = enforce_result_bytes(
-        answer, context.config.max_result_bytes, label=f"Resource {uri!r}"
-    )
-    if oversize is not None:
-        return JsonRpcError(JsonRpcErrorCode.SERVER_ERROR, oversize)
-    return answer
+    return resource_read_answer(contents, binding, uri, context)
 
 
 def resource_refusal(exc: DispatchError | ServiceError, scene: KernelRefusalScene) -> JsonRpcError:
@@ -979,6 +968,30 @@ def invalid_arguments_error(
     )
 
 
+def tool_refusal_scene(
+    binding: KernelToolBinding,
+    arguments: dict[str, Any],
+    prior: ResolvedInput,
+    context: MCPCallContext,
+    otel_span: Any,
+) -> KernelRefusalScene:
+    """The scene a ``tools/call`` refusal is answered in, on either transport:
+    the call's arguments and wording, its span, and the round a request for
+    input continues in."""
+    return KernelRefusalScene(
+        arguments=arguments,
+        config=context.config,
+        conventions=context.conventions,
+        # A selector asks for nothing: a request for input from one is a
+        # service error, not a round trip
+        # (``test_a_kernel_selector_ignores_a_round_trip``).
+        input_round=None
+        if binding.is_selector
+        else KernelInputRound(prior, context, admitted_arguments(binding, context.pool_seeds)),
+        span=otel_span,
+    )
+
+
 def admitted_arguments(binding: KernelToolBinding, pool_seeds: PoolSeeds) -> frozenset[str]:
     """The argument names a client may answer an ``AdditionalInputRequired`` under.
 
@@ -1022,6 +1035,7 @@ def _coerce_int(value: Any, *, default: int) -> int:
 
 
 __all__ = [
+    "tool_refusal_scene",
     "KernelAdmission",
     "KernelPageRequest",
     "admit_kernel_call",

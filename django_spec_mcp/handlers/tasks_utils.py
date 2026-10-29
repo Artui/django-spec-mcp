@@ -8,6 +8,7 @@ from django_spec_mcp.auth.principal_for_token import principal_for_token
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.tasks.types.task_record import TaskRecord
+from django_spec_mcp.tasks.types.task_store import TaskStore
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
 
@@ -83,10 +84,29 @@ def owned_by_caller(record: TaskRecord, context: MCPCallContext) -> bool:
     return record.principal_id == principal_for_token(context.token)
 
 
+def owned_task(
+    task_id: str, context: MCPCallContext
+) -> tuple[TaskStore, TaskRecord] | JsonRpcError:
+    """The store and the record ``task_id`` names, if the caller owns it.
+
+    A server running no tasks, an id the store does not hold and a task another
+    principal created all get the one ``unknown_task_error``, so no answer
+    tells them apart.
+    """
+    store = context.tasks
+    if store is None:
+        return unknown_task_error(task_id)
+    record: TaskRecord | None = store.get(task_id)
+    if record is None or not owned_by_caller(record, context):
+        return unknown_task_error(task_id)
+    return store, record
+
+
 __all__ = [
     "declares_tasks_extension",
     "missing_capability_error",
     "owned_by_caller",
+    "owned_task",
     "resolve_task_id",
     "unknown_task_error",
 ]

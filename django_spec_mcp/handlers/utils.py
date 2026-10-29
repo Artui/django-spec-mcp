@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Awaitable, Iterable, Mapping
+from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from typing import Any
 
 from django.http import HttpRequest
@@ -17,13 +17,19 @@ from django_spec_mcp._compat.reject_awaitable import reject_awaitable
 from django_spec_mcp.auth.rate_limits.types.mcp_rate_limit import MCPRateLimit
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.config.types.mcp_config import MCPConfig
+from django_spec_mcp.handlers.pagination import paginate
+from django_spec_mcp.handlers.render_prompt_messages import normalize_render_result
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.observability.get_logger import get_logger
 from django_spec_mcp.output.enforce_result_bytes import enforce_result_bytes
 from django_spec_mcp.output.error_tool_result import build_error_tool_result
+from django_spec_mcp.protocol.types.get_prompt_result import GetPromptResult
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.protocol.types.resource_contents import ResourceContents
 from django_spec_mcp.protocol.types.tool_result import ToolResult
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
+from django_spec_mcp.registry.types.prompt_binding import PromptBinding
+from django_spec_mcp.registry.types.resource_binding import ResourceBinding
 from django_spec_mcp.schema.types.agent_conventions import AgentConventions
 from django_spec_mcp.schema.utils import end_sentence
 from django_spec_mcp.types.cache_scope import CacheScope
@@ -37,7 +43,7 @@ def apply_tool_server_arguments(binding: Any, arguments: dict[str, Any]) -> dict
     """``arguments`` with the binding's ``server_arguments`` in place, the caller's dropped.
 
     The first thing every ``tools/call`` route does with the arguments, once it
-    knows they are an object: ``handle_tools_call`` and its async sibling
+    knows they are an object: ``resolve_tool_call``, for both transports,
     before a task is created, the in-process ``MCPServer.call_tool`` before it
     runs the tool. So everything after reads the server's value - the kernel's
     admission and its required-argument check - and a bound value fills a
@@ -116,8 +122,10 @@ def judge_tool_permissions(
 def forbidden(required_scopes: list[str]) -> JsonRpcError:
     """The ``-32006`` for a caller a binding's ``permissions`` deny.
 
-    Every route answers the scope gate this way: both ``tools/call`` handlers,
-    the streamed call's pre-flight and a task's creation.
+    Every route answers its scope gate this way, naming the scopes in
+    ``requiredScopes``. A denial from inside the kernel's dispatch is the same
+    error with no scopes (``forbidden([])``), since the scope gate answered
+    before dispatch was reached.
     """
     return JsonRpcError(
         JsonRpcErrorCode.FORBIDDEN,
@@ -160,6 +168,16 @@ def consume_rate_limits(
         if retry_after is not None:
             return retry_after
     return None
+
+
+def rate_limited(retry_after: int) -> JsonRpcError:
+    """The error every method answers when ``consume_rate_limits`` denied it,
+    with the seconds to wait as ``retryAfter``."""
+    return JsonRpcError(
+        JsonRpcErrorCode.RATE_LIMITED,
+        "Rate limit exceeded",
+        data={"retryAfter": retry_after},
+    )
 
 
 def effective_rate_limits(binding: Any, context: MCPCallContext) -> tuple[Any, ...]:
@@ -350,6 +368,146 @@ def _readable_detail(detail: Any) -> str:
     return end_sentence(str(detail))
 
 
+def resolve_tool_call(
+    params: dict[str, Any], context: MCPCallContext
+) -> tuple[KernelToolBinding, dict[str, Any]] | JsonRpcError:
+    """The ``tools/call`` request both transports start from: the binding it
+    names and its arguments with the binding's ``server_arguments`` applied, or
+    the protocol error a malformed request or an unknown tool gets. The caller
+    checks that ``params`` is an object, since it reads them again after."""
+    tool_name: Any = params.get("name")
+    if not isinstance(tool_name, str):
+        return JsonRpcError(
+            JsonRpcErrorCode.INVALID_PARAMS, "'name' is required and must be a string"
+        )
+
+    binding = context.tools.get(tool_name)
+    if binding is None:
+        # The tools spec's own worked example of a protocol error: an unknown
+        # tool is a bad param, so ``-32602`` rather than an ``isError`` result.
+        return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, f"Unknown tool: {tool_name!r}")
+
+    # Only a missing key (or an explicit ``null``) means "no arguments". Not
+    # ``or {}``: folding every falsy value into ``{}`` would let ``[]``, ``0``,
+    # ``""`` and ``false`` past the guard on the next line, so a malformed
+    # ``arguments`` would run the tool with no arguments instead of being named
+    # as the fault.
+    arguments_raw: Any = params.get("arguments")
+    if arguments_raw is None:
+        arguments_raw = {}
+    if not isinstance(arguments_raw, dict):
+        return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, "'arguments' must be an object")
+
+    # The binding's ``server_arguments`` in place before anything reads the
+    # arguments: a task records what the tool will run with, and the permission
+    # check at its creation, the dispatch and the strict split and
+    # missing-argument checks all see the server's value, so a binding can fill
+    # a required read (``apply_tool_server_arguments``).
+    return binding, apply_tool_server_arguments(binding, arguments_raw)
+
+
+def resolve_prompt_get(
+    params: dict[str, Any] | None, context: MCPCallContext
+) -> tuple[PromptBinding, dict[str, Any]] | JsonRpcError:
+    """The ``prompts/get`` request both transports start from: the binding it
+    names and the client's arguments, or the protocol error a malformed
+    request, an unknown prompt or a missing required argument gets."""
+    if not isinstance(params, dict):
+        return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, "prompts/get params must be an object")
+    name: Any = params.get("name")
+    if not isinstance(name, str):
+        return JsonRpcError(
+            JsonRpcErrorCode.INVALID_PARAMS, "'name' is required and must be a string"
+        )
+
+    binding = context.prompts.get(name)
+    if binding is None:
+        # The prompts spec is explicit: "Invalid prompt name: -32602". An
+        # unknown name is a fault in the *params*, and ``-32002`` is reserved
+        # for ``resources/read``.
+        return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, f"Unknown prompt: {name!r}")
+
+    arguments_raw: Any = params.get("arguments")
+    if arguments_raw is None:
+        arguments_raw = {}
+    # Not ``or {}``: that folds every falsy value into the default, so a ``[]``,
+    # ``""``, ``0`` or ``False`` would be accepted as "no arguments" by the very
+    # line below that exists to reject a non-object.
+    if not isinstance(arguments_raw, dict):
+        return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, "'arguments' must be an object")
+
+    missing: list[str] = [
+        arg.name for arg in binding.arguments if arg.required and arg.name not in arguments_raw
+    ]
+    if missing:
+        data: dict[str, Any] = {"missing": missing}
+        if context.config.include_validation_value:
+            data["value"] = arguments_raw
+        return JsonRpcError(
+            JsonRpcErrorCode.INVALID_PARAMS,
+            "Missing required prompt arguments",
+            data=data,
+        )
+    return binding, arguments_raw
+
+
+def prompt_get_answer(
+    binding: PromptBinding, raw: Any, context: MCPCallContext
+) -> dict[str, Any] | JsonRpcError:
+    """The ``prompts/get`` answer for what a prompt's ``render`` returned,
+    normalised into messages by ``normalize_render_result``."""
+    try:
+        messages = normalize_render_result(raw)
+    except TypeError as exc:
+        return JsonRpcError(JsonRpcErrorCode.INTERNAL_ERROR, str(exc))
+
+    result: dict[str, Any] = GetPromptResult(
+        messages=messages, description=binding.description
+    ).to_dict()
+    # The same outbound ceiling ``tools/call`` and ``resources/read``
+    # apply. A rendered prompt is a result surface like any other — its
+    # body is whatever a consumer's ``render`` interpolated — so an
+    # operator who set the ceiling gets it here too. No ``isError``
+    # envelope exists on this method, so an over-ceiling render is a
+    # protocol error carrying the same remedy-naming message.
+    oversize: str | None = enforce_result_bytes(
+        result, context.config.max_result_bytes, label=f"Prompt {binding.name!r}"
+    )
+    if oversize is not None:
+        return JsonRpcError(JsonRpcErrorCode.SERVER_ERROR, oversize)
+    return result
+
+
+def resolve_resource_read(
+    params: dict[str, Any] | None, context: MCPCallContext
+) -> tuple[ResourceBinding[Any], dict[str, str], str] | JsonRpcError:
+    """The ``resources/read`` request both transports start from: the binding
+    its URI resolves to, the URI-template variables and the URI, or the
+    protocol error a malformed request or an unknown URI gets."""
+    if not isinstance(params, dict):
+        return JsonRpcError(
+            JsonRpcErrorCode.INVALID_PARAMS, "resources/read params must be an object"
+        )
+    uri: Any = params.get("uri")
+    if not isinstance(uri, str):
+        return JsonRpcError(
+            JsonRpcErrorCode.INVALID_PARAMS, "'uri' is required and must be a string"
+        )
+
+    resolved = context.resources.resolve(uri)
+    if resolved is None:
+        # ``-32002`` with the URI echoed in ``data`` is the spec's own worked
+        # example, so a client special-casing resource not-found finds both
+        # halves where it expects them.
+        return JsonRpcError(
+            resource_not_found_code(context.protocol_version),
+            f"Unknown resource: {uri!r}",
+            data={"uri": uri},
+        )
+    binding, vars_ = resolved
+    return binding, vars_, uri
+
+
 def resolve_bound(override: Any, default: Any) -> Any:
     """Resolve a per-binding outbound bound against the server's default.
 
@@ -390,6 +548,42 @@ def catalog_cache_hints(*, ttl_ms: int, per_caller: bool) -> dict[str, Any]:
     return {"ttlMs": ttl_ms, "cacheScope": scope.value}
 
 
+def catalog_cursor(params: dict[str, Any] | None) -> str | None | JsonRpcError:
+    """The opaque ``cursor`` a list method was sent, ``None`` for the first
+    page, or the protocol error a cursor that is not a string gets."""
+    cursor: Any = (params or {}).get("cursor")
+    if cursor is not None and not isinstance(cursor, str):
+        return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, "'cursor' must be a string")
+    return cursor
+
+
+def catalog_page(
+    key: str,
+    bindings: Sequence[Any],
+    cursor: str | None,
+    entry: Callable[[Any], dict[str, Any]],
+    context: MCPCallContext,
+    *,
+    per_caller: bool,
+) -> dict[str, Any] | JsonRpcError:
+    """One page of a list method's ``bindings``, each rendered by ``entry``
+    under ``key``, with the catalog cache hints and a ``nextCursor`` when the
+    page does not reach the end. ``bindings`` arrive already filtered, so the
+    cursor walks the slice this caller sees. A malformed cursor is
+    ``-32602``."""
+    try:
+        page, next_cursor = paginate(bindings, cursor, page_size=context.config.page_size)
+    except ValueError as exc:
+        return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, str(exc))
+    response: dict[str, Any] = {
+        key: [entry(binding) for binding in page],
+        **catalog_cache_hints(ttl_ms=context.config.catalog_cache_ttl_ms, per_caller=per_caller),
+    }
+    if next_cursor is not None:
+        response["nextCursor"] = next_cursor
+    return response
+
+
 def resource_cache_hints(ttl_ms: int) -> dict[str, Any]:
     """``ttlMs`` / ``cacheScope`` for a ``resources/read`` result.
 
@@ -398,6 +592,28 @@ def resource_cache_hints(ttl_ms: int) -> dict[str, Any]:
     The TTL is the only knob.
     """
     return {"ttlMs": ttl_ms, "cacheScope": CacheScope.PRIVATE.value}
+
+
+def resource_read_answer(
+    contents: ResourceContents, binding: ResourceBinding[Any], uri: str, context: MCPCallContext
+) -> dict[str, Any] | JsonRpcError:
+    """The ``resources/read`` answer around one encoded ``contents`` block, the
+    step a view's read and a kernel resource's read share: the binding's cache
+    hints, then the server's result ceiling. A resource read has no ``isError``
+    envelope to carry an over-ceiling explanation, so it is a protocol error
+    carrying the same remedy-naming message a tool result gets."""
+    answer: dict[str, Any] = {
+        "contents": [contents.to_dict()],
+        **resource_cache_hints(
+            resolve_bound(binding.cache_ttl_ms, context.config.resource_cache_ttl_ms)
+        ),
+    }
+    oversize: str | None = enforce_result_bytes(
+        answer, context.config.max_result_bytes, label=f"Resource {uri!r}"
+    )
+    if oversize is not None:
+        return JsonRpcError(JsonRpcErrorCode.SERVER_ERROR, oversize)
+    return answer
 
 
 def enforce_result_ceiling(result: Any, *, max_result_bytes: int | None, label: str) -> Any:
@@ -432,18 +648,40 @@ async def run_with_deadline(coro: Awaitable[Any], seconds: float | None) -> Any:
     return await asyncio.wait_for(coro, timeout=seconds)
 
 
+def span_attrs(binding_name: str, context: MCPCallContext) -> dict[str, Any]:
+    """The span attributes every handler that opens a span sets, so they cannot
+    drift apart: the binding's name, the protocol version and, once a session
+    exists, its id."""
+    attrs: dict[str, Any] = {
+        "mcp.binding.name": binding_name,
+        "mcp.protocol.version": context.protocol_version,
+    }
+    if context.session_id:
+        attrs["mcp.session.id"] = context.session_id
+    return attrs
+
+
 __all__ = [
+    "catalog_cursor",
+    "catalog_page",
     "apply_tool_server_arguments",
     "consume_rate_limits",
     "effective_rate_limits",
     "enforce_result_ceiling",
     "judge_tool_permissions",
     "missing_arguments_message",
+    "prompt_get_answer",
+    "rate_limited",
     "render_convention",
     "rendering_refusal_result",
     "resolve_bound",
+    "resolve_prompt_get",
+    "resolve_resource_read",
+    "resolve_tool_call",
+    "resource_read_answer",
     "run_with_deadline",
     "scope_verdict",
+    "span_attrs",
     "validation_error_data",
     "validation_error_result",
 ]

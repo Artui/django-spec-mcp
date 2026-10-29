@@ -5,7 +5,6 @@ from typing import Any, cast
 from django_service_specs import base_pool, resolve_callable_kwargs, run_selector
 
 from django_spec_mcp._compat.tracing import span
-from django_spec_mcp.handlers.handle_tools_call import _span_attrs
 from django_spec_mcp.handlers.judge_binding import judge_binding
 from django_spec_mcp.handlers.kernel_utils import KernelAdmission, admit_kernel_read, carry_token
 from django_spec_mcp.handlers.read_kernel_resource import read_kernel_resource
@@ -14,16 +13,15 @@ from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import (
     consume_rate_limits,
     forbidden,
-    resolve_bound,
-    resource_cache_hints,
-    resource_not_found_code,
+    rate_limited,
+    resolve_resource_read,
+    resource_read_answer,
+    span_attrs,
 )
 from django_spec_mcp.output.build_resource_contents import build_resource_contents
-from django_spec_mcp.output.enforce_result_bytes import enforce_result_bytes
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.protocol.types.resource_contents import ResourceContents
 from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
-from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 
 
 def handle_resources_read(
@@ -40,31 +38,14 @@ def handle_resources_read(
     callable) by running its selector over the kernel's pool. The answer is
     one ``ResourceContents`` block, encoded by ``build_resource_contents``.
     """
-    if not isinstance(params, dict):
-        return JsonRpcError(
-            JsonRpcErrorCode.INVALID_PARAMS, "resources/read params must be an object"
-        )
-    uri: Any = params.get("uri")
-    if not isinstance(uri, str):
-        return JsonRpcError(
-            JsonRpcErrorCode.INVALID_PARAMS, "'uri' is required and must be a string"
-        )
-
-    resolved = context.resources.resolve(uri)
-    if resolved is None:
-        # ``-32002`` with the URI echoed in ``data`` is the spec's own worked
-        # example, so a client special-casing resource not-found finds both
-        # halves where it expects them.
-        return JsonRpcError(
-            resource_not_found_code(context.protocol_version),
-            f"Unknown resource: {uri!r}",
-            data={"uri": uri},
-        )
-    binding, vars_ = resolved
+    target = resolve_resource_read(params, context)
+    if isinstance(target, JsonRpcError):
+        return target
+    binding, vars_, uri = target
 
     with span(
         "mcp.resources.read",
-        attributes={**_span_attrs(binding.name, context), "mcp.resource.uri": uri},
+        attributes={**span_attrs(binding.name, context), "mcp.resource.uri": uri},
     ):
         allowed, required_scopes = judge_binding(binding, context.token)
         if not allowed:
@@ -88,11 +69,7 @@ def handle_resources_read(
             binding.rate_limits, context.http_request, context.token
         )
         if retry_after is not None:
-            return JsonRpcError(
-                JsonRpcErrorCode.RATE_LIMITED,
-                "Rate limit exceeded",
-                data={"retryAfter": retry_after},
-            )
+            return rate_limited(retry_after)
 
         # A kernel resource reads through the kernel from here, the scope gate,
         # its spec's checks and the rate limits above having answered for it.
@@ -118,21 +95,7 @@ def handle_resources_read(
         )
         if isinstance(contents, JsonRpcError):
             return contents
-        result: dict[str, Any] = {
-            "contents": [contents.to_dict()],
-            **resource_cache_hints(
-                resolve_bound(binding.cache_ttl_ms, context.config.resource_cache_ttl_ms)
-            ),
-        }
-        # Same outbound ceiling as a tool result, different envelope: a resource
-        # read has no ``isError`` shape to carry the explanation, so this is a
-        # protocol error carrying the same remedy-naming message.
-        oversize: str | None = enforce_result_bytes(
-            result, context.config.max_result_bytes, label=f"Resource {uri!r}"
-        )
-        if oversize is not None:
-            return JsonRpcError(JsonRpcErrorCode.SERVER_ERROR, oversize)
-        return result
+        return resource_read_answer(contents, binding, uri, context)
 
 
 __all__ = ["handle_resources_read"]
