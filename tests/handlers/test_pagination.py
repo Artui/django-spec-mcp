@@ -30,27 +30,23 @@ def test_cursor_at_end_returns_none() -> None:
     assert nxt is None
 
 
-def test_invalid_base64_cursor_raises() -> None:
-    with pytest.raises(ValueError, match="Invalid cursor"):
-        paginate([1, 2, 3], cursor="!!!not-base64!!!", page_size=2)
+def _cursor(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
 
 
-def test_invalid_prefix_cursor_raises() -> None:
-    bad = base64.urlsafe_b64encode(b"junk:42").decode().rstrip("=")
-    with pytest.raises(ValueError, match="Invalid cursor"):
-        paginate([1, 2, 3], cursor=bad, page_size=2)
-
-
-def test_non_numeric_offset_raises() -> None:
-    bad = base64.urlsafe_b64encode(b"offset:nope").decode().rstrip("=")
-    with pytest.raises(ValueError, match="Invalid cursor"):
-        paginate([1, 2, 3], cursor=bad, page_size=2)
-
-
-def test_negative_offset_rejected() -> None:
-    bad = base64.urlsafe_b64encode(b"offset:-1").decode().rstrip("=")
-    with pytest.raises(ValueError, match="non-negative"):
-        paginate([1, 2, 3], cursor=bad, page_size=2)
+@pytest.mark.parametrize(
+    ("cursor", "message"),
+    [
+        ("!!!not-base64!!!", "Invalid cursor"),
+        (_cursor(b"junk:42"), "Invalid cursor"),
+        (_cursor(b"offset:nope"), "Invalid cursor"),
+        (_cursor(b"offset:-1"), "non-negative"),
+    ],
+    ids=["not-base64", "wrong-prefix", "non-numeric-offset", "negative-offset"],
+)
+def test_a_bad_cursor_raises(cursor: str, message: str) -> None:
+    with pytest.raises(ValueError, match=message):
+        paginate([1, 2, 3], cursor=cursor, page_size=2)
 
 
 def test_offset_past_end_returns_empty_page() -> None:
@@ -59,8 +55,7 @@ def test_offset_past_end_returns_empty_page() -> None:
     The helper itself never produces such a cursor, but a misbehaving client
     could echo back a stale one — the handler should still degrade gracefully.
     """
-    far_cursor = base64.urlsafe_b64encode(b"offset:99").decode().rstrip("=")
-    page, nxt = paginate([1, 2], far_cursor, page_size=2)
+    page, nxt = paginate([1, 2], _cursor(b"offset:99"), page_size=2)
     assert page == []
     assert nxt is None
 
