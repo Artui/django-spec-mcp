@@ -1,3 +1,4 @@
+from django_spec_mcp.auth.bearer_challenge import bearer_challenge
 from django_spec_mcp.auth.insufficient_scope_response import build_insufficient_scope_response
 from django_spec_mcp.auth.permissions.django_perm_required import DjangoPermRequired
 from django_spec_mcp.auth.permissions.scope_required import ScopeRequired
@@ -14,6 +15,7 @@ __all__ = [
     "ProtectedResourceMetadataViewSet",
     "ScopeRequired",
     "TokenInfo",
+    "bearer_challenge",
     "build_insufficient_scope_response",
     "build_unauthenticated_response",
 ]

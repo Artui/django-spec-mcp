@@ -70,7 +70,7 @@ Common gaps in DIY servers — each of which the package handles for you:
 - **Dispatch wiring** — argument validation, kwarg-pool resolution,
   presentation, error mapping (a validation failure, a refused
   permission, a `ServiceError` → JSON-RPC errors).
-- **Auth + rate limits + permissions** — DOT integration, scope-aware
+- **Auth + rate limits + permissions** — a backend of your own, scope-aware
   challenges, the spec's permission checks, per-binding `scopes=` and
   `MCPRateLimit`.
 - **Async + SSE + replay** — JSON dispatch in a sync stack, async
@@ -266,9 +266,9 @@ advertise, so registering the spec raises `ImproperlyConfigured` naming it.
 - `fastapi-mcp` mounts on a path of your choice; this package mounts
   via `path("mcp/", server.urls)`. Both are configurable.
 - Auth: `fastapi-mcp` typically piggybacks on FastAPI's dependency
-  graph for tokens. Replace with an `MCPAuthBackend` — the
-  `DjangoOAuthToolkitBackend` covers most BYO-AS scenarios, or
-  implement the Protocol with `httpx` against a remote IDP (see
+  graph for tokens. Replace with an `MCPAuthBackend`:
+  implement the Protocol, with `httpx` against a remote IDP if that is where
+  tokens are checked (see
   [`docs/recipes/async-auth-backend.md`](async-auth-backend.md)).
 
 ## Worked example to copy from

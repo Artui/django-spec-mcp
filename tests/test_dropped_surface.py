@@ -15,10 +15,13 @@ from __future__ import annotations
 
 import importlib.metadata
 import importlib.util
+import inspect
 
 import pytest
 
 import django_spec_mcp
+import django_spec_mcp.auth
+import django_spec_mcp.auth.backends
 from django_spec_mcp.conf import DEFAULTS
 from django_spec_mcp.server.mcp_server import MCPServer
 
@@ -27,6 +30,7 @@ from django_spec_mcp.server.mcp_server import MCPServer
     "module",
     [
         "django_spec_mcp.contrib",
+        "django_spec_mcp.auth.backends.django_oauth_toolkit_backend",
         "django_spec_mcp.check_removed_settings",
         "django_spec_mcp.adapters.chain_to_tool",
         "django_spec_mcp.handlers.chain_tool_dispatch",
@@ -46,12 +50,35 @@ def test_a_dropped_name_leaves_the_root(name: str) -> None:
     assert not hasattr(django_spec_mcp, name)
 
 
+@pytest.mark.parametrize(
+    "name",
+    ["DjangoOAuthToolkitBackend", "UnenforcedAudienceWarning", "MountedAuthorizationServerWarning"],
+)
+def test_a_dropped_backend_name_is_exported_nowhere(name: str) -> None:
+    """The bundled django-oauth-toolkit backend and its warnings are a project's to write."""
+    assert not hasattr(django_spec_mcp, name)
+    assert not hasattr(django_spec_mcp.auth, name)
+    assert not hasattr(django_spec_mcp.auth.backends, name)
+
+
+def test_the_server_takes_no_resource_url() -> None:
+    """It configured only the default backend, and there is none."""
+    assert "resource_url" not in inspect.signature(MCPServer).parameters
+
+
 def test_the_server_registers_no_chain_tool() -> None:
     assert not hasattr(MCPServer, "register_chain_tool")
 
 
 @pytest.mark.parametrize(
-    "key", ["DCR_ENABLED", "DCR_INITIAL_ACCESS_TOKEN", "SIMPLEJWT_ACCESS_COOKIE"]
+    "key",
+    [
+        "DCR_ENABLED",
+        "DCR_INITIAL_ACCESS_TOKEN",
+        "SIMPLEJWT_ACCESS_COOKIE",
+        "RESOURCE_URL",
+        "ENFORCE_AUDIENCE",
+    ],
 )
 def test_a_dropped_setting_has_no_default(key: str) -> None:
     assert key not in DEFAULTS
@@ -63,7 +90,7 @@ def test_a_settings_key_drf_mcp_once_removed_is_not_refused(settings) -> None:
     MCPServer(name="dropped-surface")
 
 
-@pytest.mark.parametrize("extra", ["jwt", "spectacular", "filter"])
+@pytest.mark.parametrize("extra", ["jwt", "spectacular", "filter", "oauth"])
 def test_a_dropped_extra_is_not_declared(extra: str) -> None:
     declared = importlib.metadata.metadata("django-spec-mcp").get_all("Provides-Extra") or []
     assert extra not in declared
