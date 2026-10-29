@@ -48,6 +48,7 @@ from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.registry.resource_registry import ResourceRegistry
 from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
+from tests.utils import call_context
 
 _CALLER = "alice"
 
@@ -57,13 +58,10 @@ def _server() -> MCPServer:
 
 
 def _ctx(server: MCPServer, *, resources: ResourceRegistry | None = None) -> MCPCallContext:
-    return MCPCallContext(
-        http_request=HttpRequest(),
+    return call_context(
+        server,
         token=TokenInfo(user=_CALLER),
-        tools=server.tools,
         resources=resources if resources is not None else server.resources,
-        prompts=server.prompts,
-        protocol_version="2025-11-25",
     )
 
 

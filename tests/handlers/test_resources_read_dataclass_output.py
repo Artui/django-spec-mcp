@@ -20,7 +20,6 @@ from typing import Any
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
-from django.http import HttpRequest
 from django_service_specs import (
     DEFAULT_POOL_SEEDS,
     DataclassPresenter,
@@ -35,10 +34,9 @@ from typing_extensions import TypedDict
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
 from django_spec_mcp.handlers.handle_resources_read_async import handle_resources_read_async
-from django_spec_mcp.handlers.types.context import MCPCallContext
+from tests.utils import call_context
 
 OPEN = [Unrestricted()]
 _PK = Parameters([Parameter("pk", "integer", required=True)])
@@ -70,17 +68,6 @@ def _server() -> MCPServer:
     return server
 
 
-def _ctx(server: MCPServer) -> MCPCallContext:
-    return MCPCallContext(
-        http_request=HttpRequest(),
-        token=TokenInfo(user=None),
-        tools=server.tools,
-        resources=server.resources,
-        prompts=server.prompts,
-        protocol_version="2025-11-25",
-    )
-
-
 def _body(out: Any) -> Any:
     assert isinstance(out, dict), out
     return json.loads(out["contents"][0]["text"])
@@ -88,13 +75,13 @@ def _body(out: Any) -> Any:
 
 @pytest.mark.django_db
 def test_sync_read_renders_a_dataclass_retrieve() -> None:
-    out = handle_resources_read({"uri": "invoices://7"}, _ctx(_server()))
+    out = handle_resources_read({"uri": "invoices://7"}, call_context(_server()))
     assert _body(out) == {"number": "INV-7", "amount_cents": 100}
 
 
 @pytest.mark.django_db(transaction=True)
 async def test_async_read_renders_a_dataclass_retrieve() -> None:
-    out = await handle_resources_read_async({"uri": "invoices://7"}, _ctx(_server()))
+    out = await handle_resources_read_async({"uri": "invoices://7"}, call_context(_server()))
     assert _body(out) == {"number": "INV-7", "amount_cents": 100}
 
 
@@ -192,7 +179,7 @@ def test_an_optional_read_the_template_names_registers_and_is_read() -> None:
         name="invoice",
         uri_template="invoices://{pk}",
     )
-    out = handle_resources_read({"uri": "invoices://7"}, _ctx(server))
+    out = handle_resources_read({"uri": "invoices://7"}, call_context(server))
     assert _body(out) == {"number": "INV-7", "amount_cents": 100}
 
 
@@ -373,5 +360,5 @@ def test_a_template_variable_naming_a_shape_registers_and_is_read() -> None:
         name="invoice",
         uri_template="invoices://{pk}/{fields}",
     )
-    out = handle_resources_read({"uri": "invoices://7/number"}, _ctx(server))
+    out = handle_resources_read({"uri": "invoices://7/number"}, call_context(server))
     assert _body(out)["number"] == "INV-7"

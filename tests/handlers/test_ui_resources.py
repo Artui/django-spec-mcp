@@ -22,7 +22,7 @@ from django_spec_mcp.transport.in_memory_session_store import InMemorySessionSto
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from django_spec_mcp.types.ui_meta_key import UI_META_KEY
 from django_spec_mcp.types.ui_resource_mime_type import UI_RESOURCE_MIME_TYPE
-from tests.utils import RefusingRateLimit
+from tests.utils import RefusingRateLimit, call_context
 
 VIEW = "<!doctype html><h1>Invoices</h1>"
 URI = "ui://invoices/table.html"
@@ -47,41 +47,30 @@ def _server(**overrides: Any) -> MCPServer:
     return server
 
 
-def _ctx(server: MCPServer) -> MCPCallContext:
-    return MCPCallContext(
-        http_request=HttpRequest(),
-        token=TokenInfo(user=None),
-        tools=server.tools,
-        resources=server.resources,
-        prompts=server.prompts,
-        protocol_version="2025-11-25",
-    )
-
-
 def _contents(response: Any) -> dict[str, Any]:
     return response["contents"][0]
 
 
 class TestRead:
     def test_returns_the_document_not_a_json_string(self) -> None:
-        out = handle_resources_read({"uri": URI}, _ctx(_server()))
+        out = handle_resources_read({"uri": URI}, call_context(_server()))
         assert _contents(out)["text"] == VIEW
 
     async def test_the_async_transport_returns_the_same_body(self) -> None:
         """The two read handlers are parallel implementations, so the shared
         builder is the only thing keeping their wire shapes identical."""
-        sync = handle_resources_read({"uri": URI}, _ctx(_server()))
-        async_ = await handle_resources_read_async({"uri": URI}, _ctx(_server()))
+        sync = handle_resources_read({"uri": URI}, call_context(_server()))
+        async_ = await handle_resources_read_async({"uri": URI}, call_context(_server()))
 
         assert _contents(async_) == _contents(sync)
 
     def test_advertises_the_apps_mime_type(self) -> None:
-        out = handle_resources_read({"uri": URI}, _ctx(_server()))
+        out = handle_resources_read({"uri": URI}, call_context(_server()))
         assert _contents(out)["mimeType"] == UI_RESOURCE_MIME_TYPE
 
     def test_carries_the_ui_metadata_on_the_contents_block(self) -> None:
         server = _server(ui=UIResourceMeta(csp=UICsp(connect_domains=("https://api.x",))))
-        out = handle_resources_read({"uri": URI}, _ctx(server))
+        out = handle_resources_read({"uri": URI}, call_context(server))
 
         assert _contents(out)["_meta"] == {
             UI_META_KEY: {"csp": {"connectDomains": ["https://api.x"]}}
@@ -90,27 +79,27 @@ class TestRead:
     def test_a_view_whose_source_returns_a_non_string_is_a_clean_error(self) -> None:
         """Not a transport-level 500 — the client gets a JSON-RPC error."""
         server = _server(html=None, render=lambda: {"oops": True})
-        out = handle_resources_read({"uri": URI}, _ctx(server))
+        out = handle_resources_read({"uri": URI}, call_context(server))
 
         assert out.code == JsonRpcErrorCode.INTERNAL_ERROR
 
     async def test_the_async_transport_reports_that_error_too(self) -> None:
         server = _server(html=None, render=lambda: {"oops": True})
-        out = await handle_resources_read_async({"uri": URI}, _ctx(server))
+        out = await handle_resources_read_async({"uri": URI}, call_context(server))
 
         assert out.code == JsonRpcErrorCode.INTERNAL_ERROR
 
 
 class TestListing:
     def test_appears_in_resources_list_beside_data_resources(self) -> None:
-        out = handle_resources_list(None, _ctx(_server()))
+        out = handle_resources_list(None, call_context(_server()))
         assert [r["uri"] for r in out["resources"]] == [URI]
 
     def test_the_listing_entry_carries_the_ui_metadata(self) -> None:
         """A host may prefetch the view straight off the listing, before any
         tool call — so the CSP has to be there too, not only on the read."""
         server = _server(ui=UIResourceMeta(prefers_border=True))
-        out = handle_resources_list(None, _ctx(server))
+        out = handle_resources_list(None, call_context(server))
 
         assert out["resources"][0]["_meta"] == {UI_META_KEY: {"prefersBorder": True}}
 
@@ -131,7 +120,7 @@ class TestListing:
                 return False
 
         server = _server(permissions=[_Deny()])
-        out = handle_resources_list(None, _ctx(server))
+        out = handle_resources_list(None, call_context(server))
 
         assert out["resources"] == []
 
@@ -139,7 +128,7 @@ class TestListing:
 @pytest.mark.parametrize("reader", ["sync", "async"])
 async def test_a_template_backed_view_renders(reader: str) -> None:
     server = _server(html=None, template_name="mcp_ui/view.html")
-    ctx = _ctx(server)
+    ctx = call_context(server)
     out = (
         handle_resources_read({"uri": URI}, ctx)
         if reader == "sync"
@@ -155,7 +144,7 @@ async def test_a_body_template_backed_view_serves_a_whole_document(reader: str) 
     encoding and all — or the host receives a quoted string rather than a
     document, and renders nothing."""
     server = _server(html=None, body_template_name="mcp_ui/body.html")
-    ctx = _ctx(server)
+    ctx = call_context(server)
     out = (
         handle_resources_read({"uri": URI}, ctx)
         if reader == "sync"
@@ -233,7 +222,7 @@ async def test_every_view_source_serves_its_document_whole(reader: str, source: 
     assert resolved is not None
     document = resolved[0].selector()
 
-    out = await _read(reader, _ctx(server))
+    out = await _read(reader, call_context(server))
 
     assert out == {
         "contents": [
@@ -251,7 +240,7 @@ async def test_every_view_source_serves_its_document_whole(reader: str, source: 
 
 @pytest.mark.parametrize("reader", ["sync", "async"])
 async def test_a_view_its_scope_gate_refuses_is_refused_with_the_scopes(reader: str) -> None:
-    out = await _read(reader, _ctx(_server(scopes="views:read")))
+    out = await _read(reader, call_context(_server(scopes="views:read")))
 
     assert isinstance(out, JsonRpcError)
     assert out.code == JsonRpcErrorCode.FORBIDDEN
@@ -262,7 +251,7 @@ async def test_a_view_its_scope_gate_refuses_is_refused_with_the_scopes(reader: 
 async def test_a_view_over_its_rate_limit_is_refused_with_the_retry(reader: str) -> None:
     limit = RefusingRateLimit()
 
-    out = await _read(reader, _ctx(_server(rate_limits=[limit])))
+    out = await _read(reader, call_context(_server(rate_limits=[limit])))
 
     assert isinstance(out, JsonRpcError)
     assert out.code == JsonRpcErrorCode.RATE_LIMITED

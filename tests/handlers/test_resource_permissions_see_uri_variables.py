@@ -35,7 +35,7 @@ from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.subscriptions.grant_subscription import grant_subscription
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
-from tests.utils import RefusingRateLimit
+from tests.utils import RefusingRateLimit, call_context
 
 
 class _GrantsProjectSeven(PermissionCheck):
@@ -71,22 +71,11 @@ def _server(check: PermissionCheck, *rate_limits: Any) -> MCPServer:
     return server
 
 
-def _ctx(server: MCPServer) -> MCPCallContext:
-    return MCPCallContext(
-        http_request=HttpRequest(),
-        token=TokenInfo(user=None),
-        tools=server.tools,
-        resources=server.resources,
-        prompts=server.prompts,
-        protocol_version="2025-11-25",
-    )
-
-
 async def _read(server: MCPServer, uri: str, *, is_async: bool) -> Any:
     if is_async:
-        return await handle_resources_read_async({"uri": uri}, _ctx(server))
+        return await handle_resources_read_async({"uri": uri}, call_context(server))
     # Off the event loop, where the sync handler's ORM work is allowed.
-    return await sync_to_async(handle_resources_read)({"uri": uri}, _ctx(server))
+    return await sync_to_async(handle_resources_read)({"uri": uri}, call_context(server))
 
 
 @pytest.mark.django_db(transaction=True)
@@ -181,7 +170,7 @@ def test_a_subscription_is_granted_the_uris_the_read_would_admit() -> None:
     server = _server(check)
 
     granted, _ = grant_subscription(
-        SubscriptionFilter(resource_uris=("projects://7", "projects://8")), _ctx(server)
+        SubscriptionFilter(resource_uris=("projects://7", "projects://8")), call_context(server)
     )
 
     assert granted.resource_uris == ("projects://7",)

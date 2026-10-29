@@ -20,7 +20,6 @@ from typing import Any
 
 import pytest
 from asgiref.sync import async_to_sync
-from django.http import HttpRequest
 from django_service_specs import (
     ActionUnavailable,
     Affordance,
@@ -33,11 +32,9 @@ from django_service_specs import (
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
-from django_spec_mcp.handlers.types.context import MCPCallContext
-from tests.utils import tool_error
+from tests.utils import call_context, tool_error
 
 OPEN = [Unrestricted()]
 
@@ -88,17 +85,6 @@ def _server(kind: str, outcome: str) -> MCPServer:
     return server
 
 
-def _ctx(server: MCPServer) -> MCPCallContext:
-    return MCPCallContext(
-        http_request=HttpRequest(),
-        token=TokenInfo(user=None),
-        tools=server.tools,
-        resources=server.resources,
-        prompts=server.prompts,
-        protocol_version="2025-11-25",
-    )
-
-
 CASES = pytest.mark.parametrize(
     ("kind", "outcome", "served"),
     [
@@ -114,13 +100,18 @@ CASES = pytest.mark.parametrize(
 @CASES
 def test_the_sync_wire_serves_the_code(kind: str, outcome: str, served: dict[str, Any]) -> None:
     server = _server(kind, outcome)
-    assert tool_error(handle_tools_call({"name": "t", "arguments": {}}, _ctx(server))) == served
+    assert (
+        tool_error(handle_tools_call({"name": "t", "arguments": {}}, call_context(server)))
+        == served
+    )
 
 
 @CASES
 def test_the_async_wire_serves_the_code(kind: str, outcome: str, served: dict[str, Any]) -> None:
     server = _server(kind, outcome)
-    out = async_to_sync(handle_tools_call_async)({"name": "t", "arguments": {}}, _ctx(server))
+    out = async_to_sync(handle_tools_call_async)(
+        {"name": "t", "arguments": {}}, call_context(server)
+    )
     assert tool_error(out) == served
 
 
