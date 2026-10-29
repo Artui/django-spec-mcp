@@ -157,8 +157,12 @@ def _get(*checks: PermissionCheck) -> SelectorSpec:
     )
 
 
+def _bare_server(**kwargs: Any) -> MCPServer:
+    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None, **kwargs)
+
+
 def _server(*checks: PermissionCheck, limiter: Any = None, **kwargs: Any) -> MCPServer:
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None, **kwargs)
+    server = _bare_server(**kwargs)
     server.register_tool(
         _get(*checks), name="get", rate_limits=[limiter] if limiter is not None else ()
     )
@@ -268,7 +272,7 @@ async def test_a_paged_call_is_asked_once(is_async: bool) -> None:
     # ``page`` and ``limit`` as unknown, the call would be judged on no
     # arguments, and dispatch would ask again.
     check = _Counted(admits=True)
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server = _bare_server()
     server.register_tool(
         SelectorSpec(kind=SelectorKind.LIST, selector=_rows, permissions=[check]),
         name="get",
@@ -287,7 +291,7 @@ async def test_a_stray_argument_a_tool_ignores_is_asked_once(is_async: bool) -> 
     # would fail the shape check, the call would be judged on no arguments, and
     # dispatch, which drops it, would ask again.
     check = _Counted(admits=True)
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server = _bare_server()
     server.register_tool(_get(check), name="get", unknown_arguments=UnknownArguments.IGNORE)
 
     out = await _call(server, {"pk": 1, "stray": 1}, is_async=is_async)
@@ -440,7 +444,7 @@ async def test_a_call_missing_an_argument_is_refused_by_a_check_the_listing_hide
     # refuses in the other. ``.get`` on no arguments raises, so the listing
     # hides the tool, and the call is refused uncharged in both.
     limit = _CountingLimit()
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server = _bare_server()
     server.register_tool(
         SelectorSpec(
             kind=SelectorKind.RETRIEVE,
@@ -492,7 +496,7 @@ async def test_a_many_call_with_a_refused_row_is_asked_by_its_prelude_and_by_dis
     # second row's Validator refusal beside it, asks again. The answer is
     # dispatch's, both rows named. A stream's pre-flight asks once more.
     check = _Counted(admits=True)
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server = _bare_server()
     server.register_tool(
         ServiceSpec(
             service=_issue,
@@ -547,7 +551,7 @@ def test_a_streamed_call_with_no_arguments_object_is_judged_on_none_sent(
     # handing the check what no check can index, and leaves the handler to
     # name the fault.
     check = _Recording()
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server = _bare_server()
     server.register_tool(
         SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda: {}, permissions=[check]),
         name="get",
@@ -604,7 +608,7 @@ async def test_a_many_call_with_a_refused_row_is_answered_on_its_checked_top_lev
     # ``tenant`` unguarded, would refuse.
     check = _TenantOne()
     limit = _CountingLimit()
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server = _bare_server()
     server.register_tool(_tenant_bulk(check), name="get", rate_limits=[limit])
     arguments = {"tenant": tenant, "items": _BAD_ROW}
     if streamed:
@@ -634,7 +638,7 @@ async def test_a_refused_row_under_a_named_many_argument_keeps_its_admission(
     # would read this tree as a failed shape and judge the call on no arguments,
     # which this check, indexing ``tenant`` unguarded, refuses.
     limit = _CountingLimit()
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server = _bare_server()
     server.register_tool(
         ServiceSpec(
             service=lambda *, data, tenant: data,
@@ -669,7 +673,7 @@ async def test_a_check_raising_a_refusal_shaped_like_a_refused_row_keeps_no_admi
     # charged.
     limit = _CountingLimit()
     tree = InvalidArguments({"items": {0: {"amount_cents": ["Not this row."]}}})
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server = _bare_server()
     server.register_tool(_tenant_bulk(_Raises(tree)), name="get", rate_limits=[limit])
     rows = [{"number": "A-1", "amount_cents": 1}]
 
@@ -685,7 +689,7 @@ async def test_an_array_argument_failing_at_an_index_is_no_refused_row(is_async:
     # under the argument's name, ``items`` here: a failed shape all the same,
     # judged on no arguments, which this check refuses.
     limit = _CountingLimit()
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server = _bare_server()
     server.register_tool(
         SelectorSpec(
             kind=SelectorKind.RETRIEVE,
@@ -709,7 +713,7 @@ async def test_a_many_list_that_is_no_list_is_a_failed_shape(is_async: bool) -> 
     # rows by index, so it is judged on no arguments, which ``_TenantOne``
     # cannot answer.
     limit = _CountingLimit()
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server = _bare_server()
     server.register_tool(_tenant_bulk(_TenantOne()), name="get", rate_limits=[limit])
 
     out = await _call(server, {"tenant": 1, "items": "no"}, is_async=is_async)
@@ -732,12 +736,7 @@ def test_a_creates_scope_is_judged_on_the_servers_own_seeds() -> None:
     # The scope question of a create, asked on no arguments, is offered the
     # server's pool seeds, as the class-level one is: a check naming a seed
     # only this server registers is handed it, and admits.
-    server = MCPServer(
-        name="t",
-        auth_backend=AllowAnyBackend(),
-        session_store=None,
-        pool_seeds=DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme"),
-    )
+    server = _acme()
     server.register_tool(ServiceSpec(service=lambda: {}, permissions=[_ScopedToAcme()]), name="get")
 
     assert _listed(server) is True
@@ -758,13 +757,7 @@ class _NamesTheAction(PermissionCheck):
 
 
 def _acme(**kwargs: Any) -> MCPServer:
-    return MCPServer(
-        name="t",
-        auth_backend=AllowAnyBackend(),
-        session_store=None,
-        pool_seeds=DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme"),
-        **kwargs,
-    )
+    return _bare_server(pool_seeds=DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme"), **kwargs)
 
 
 def _strict() -> MCPServer:
@@ -919,7 +912,7 @@ async def test_an_always_listed_tool_still_refuses_a_call_failing_its_shape(is_a
     # ``always_listed`` decides the listing, not who may call: the check still
     # cannot answer on no arguments, so the call is refused uncharged.
     limit = _CountingLimit()
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server = _bare_server()
     server.register_tool(
         _get(_Reads(lambda a: a["pk"] == 1)),
         name="get",
@@ -944,13 +937,7 @@ def test_call_tool_refuses_a_malformed_call_a_check_refuses_on_no_arguments() ->
 
 def _task_server(check: PermissionCheck, limiter: Any) -> tuple[MCPServer, _Recorder]:
     executor = _Recorder()
-    server = MCPServer(
-        name="t",
-        auth_backend=AllowAnyBackend(),
-        session_store=None,
-        task_store=InMemoryTaskStore(),
-        task_executor=executor,
-    )
+    server = _bare_server(task_store=InMemoryTaskStore(), task_executor=executor)
     server.tools.register(
         KernelToolBinding(
             name="get",
@@ -1003,7 +990,7 @@ async def test_a_caller_the_spec_admits_gets_a_task_its_worker_asks_again(is_asy
 
 
 def _resource_server(check: PermissionCheck, limiter: Any) -> MCPServer:
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server = _bare_server()
     server.register_resource(
         _get(check), name="row", uri_template="rows://{pk}", rate_limits=[limiter]
     )
@@ -1183,7 +1170,7 @@ async def test_a_reader_is_judged_on_the_variables_the_read_dispatches(is_async:
     # own dispatch would then refuse ``True``: the check is asked on the
     # variables the read dispatches, so it refuses before the charge.
     limit = RefusingRateLimit()
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server = _bare_server()
     server.register_resource(
         SelectorSpec(
             kind=SelectorKind.RETRIEVE,
