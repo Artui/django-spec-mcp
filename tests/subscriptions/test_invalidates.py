@@ -396,7 +396,7 @@ def test_the_wsgi_transport_hands_the_handler_a_broker() -> None:
 
     Every sync ``MCPCallContext`` the server builds itself — ``call_tool``, the
     task worker — carries ``subscriptions``, so the sync handler chain is
-    expected to publish. The sync viewset built its context without one, and
+    expected to publish. The sync view built its context without one, and
     ``publish_invalidations(None, uris)`` returns without touching the broker:
     a tool declaring ``invalidates=`` committed its write and told nobody, in a
     way indistinguishable from the resource never having changed. The natural
@@ -407,17 +407,15 @@ def test_the_wsgi_transport_hands_the_handler_a_broker() -> None:
     from asgiref.sync import async_to_sync
     from django.test import RequestFactory
 
-    from django_spec_mcp.transport.streamable_http_viewset import (
-        STREAMABLE_HTTP_ACTION_MAP,
-        StreamableHttpViewSet,
+    from django_spec_mcp.transport.streamable_http_view import (
+        StreamableHttpView,
     )
 
     broker = InMemorySubscriptionBroker()
     server = _server(broker)
     queue = async_to_sync(broker.subscribe)(frozenset({topic_for_resource("invoices://")}))
 
-    view = StreamableHttpViewSet.as_view(
-        STREAMABLE_HTTP_ACTION_MAP,
+    view = StreamableHttpView.as_view(
         tools=server._tools,
         resources=server._resources,
         prompts=server._prompts,
@@ -449,8 +447,8 @@ def test_the_wsgi_transport_hands_the_handler_a_broker() -> None:
 def test_the_mounted_wsgi_urls_hand_the_handler_a_broker() -> None:
     """The same guarantee, reached the way a project actually mounts the server.
 
-    The sibling test above builds the viewset by hand, so it passes as soon as
-    ``StreamableHttpViewSet`` accepts the broker -- and stays passing while
+    The sibling test above builds the view by hand, so it passes as soon as
+    ``StreamableHttpView`` accepts the broker -- and stays passing while
     ``MCPServer.urls`` forgets to pass it, which is the only path a project
     takes. ``async_urls`` always passed it, so the gap was visible on ASGI and
     invisible on WSGI: the announcement was dropped for every mounted sync

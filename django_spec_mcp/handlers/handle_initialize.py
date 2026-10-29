@@ -50,7 +50,7 @@ def handle_initialize(
 
     # The owning server's identity wins, so two servers in one project answer
     # with their own names. The settings read below is the degenerate path: a
-    # context built without a server, e.g. a hand-wired viewset.
+    # context built without a server, e.g. a hand-wired view.
     server_info: Implementation | None = context.server_info
     if server_info is None:
         server_info = build_server_info()

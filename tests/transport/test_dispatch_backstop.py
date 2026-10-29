@@ -69,9 +69,9 @@ RESTQL_TEXT = "`items` field is not found"
 # Stands in for whatever a real exception carries that a client must not read.
 SECRET = "could not connect to db-primary.internal:5432"
 
-_VIEWSET_LOGGERS: dict[bool, str] = {
-    False: "django_spec_mcp.transport.streamable_http_viewset",
-    True: "django_spec_mcp.transport.async_streamable_http_viewset",
+_VIEW_LOGGERS: dict[bool, str] = {
+    False: "django_spec_mcp.transport.streamable_http_view",
+    True: "django_spec_mcp.transport.async_streamable_http_view",
 }
 _STREAM_LOGGER = "django_spec_mcp.transport.response_stream"
 
@@ -405,7 +405,7 @@ async def test_a_presenter_that_raises_is_a_json_rpc_internal_error(
         is_async, _server(), "tools/call", {"name": "boom.render", "arguments": {}}, modern=modern
     )
     _assert_internal_error(response)
-    _assert_logged(caplog, _VIEWSET_LOGGERS[is_async], ValueError)
+    _assert_logged(caplog, _VIEW_LOGGERS[is_async], ValueError)
     assert RESTQL_TEXT in caplog.text
 
 
@@ -424,7 +424,7 @@ async def test_a_list_selectors_does_not_exist_stays_a_server_fault(
         modern=modern,
     )
     _assert_internal_error(response)
-    _assert_logged(caplog, _VIEWSET_LOGGERS[is_async], Invoice.DoesNotExist)
+    _assert_logged(caplog, _VIEW_LOGGERS[is_async], Invoice.DoesNotExist)
 
 
 @_PATHS
@@ -437,7 +437,7 @@ async def test_any_other_escaping_exception_is_a_json_rpc_internal_error(
         is_async, _server(), "tools/call", {"name": "boom.runtime", "arguments": {}}, modern=modern
     )
     _assert_internal_error(response)
-    _assert_logged(caplog, _VIEWSET_LOGGERS[is_async], RuntimeError)
+    _assert_logged(caplog, _VIEW_LOGGERS[is_async], RuntimeError)
     assert "db-primary" in caplog.text
 
 
@@ -473,7 +473,7 @@ async def test_an_exception_declaring_a_403_is_still_a_server_fault(
     )
     _assert_internal_error(response)
     assert "WWW-Authenticate" not in response
-    _assert_logged(caplog, _VIEWSET_LOGGERS[is_async], raised)
+    _assert_logged(caplog, _VIEW_LOGGERS[is_async], raised)
 
 
 @_PATHS
@@ -490,7 +490,7 @@ async def test_a_permission_class_that_raises_is_a_json_rpc_internal_error(
         modern=modern,
     )
     _assert_internal_error(response)
-    _assert_logged(caplog, _VIEWSET_LOGGERS[is_async], RuntimeError)
+    _assert_logged(caplog, _VIEW_LOGGERS[is_async], RuntimeError)
 
 
 @pytest.mark.parametrize("modern", [False, True], ids=["legacy", "modern"])
@@ -512,7 +512,7 @@ async def test_a_permission_preflight_that_raises_before_a_stream_is_a_json_rpc_
     )
     assert not response.streaming
     _assert_internal_error(response)
-    _assert_logged(caplog, _VIEWSET_LOGGERS[True], RuntimeError)
+    _assert_logged(caplog, _VIEW_LOGGERS[True], RuntimeError)
 
 
 async def test_a_subscription_grant_that_raises_is_a_json_rpc_internal_error(
@@ -528,7 +528,7 @@ async def test_a_subscription_grant_that_raises_is_a_json_rpc_internal_error(
     )
     assert not response.streaming
     _assert_internal_error(response)
-    _assert_logged(caplog, _VIEWSET_LOGGERS[True], RuntimeError)
+    _assert_logged(caplog, _VIEW_LOGGERS[True], RuntimeError)
 
 
 @pytest.mark.parametrize("modern", [False, True], ids=["legacy", "modern"])

@@ -43,7 +43,7 @@ def build_response_stream(
     keep-alive without waiting the production period out.
 
     **Async transport only** — a sync WSGI view cannot yield while the dispatch
-    runs, so the sync viewset keeps answering ``application/json``, which the
+    runs, so the sync view keeps answering ``application/json``, which the
     spec always permits.
 
     **The HTTP status is committed before the dispatch runs**, which costs the
@@ -124,7 +124,7 @@ async def _run(coro: Awaitable[Any], queue: asyncio.Queue[Any], *, request_id: A
     which the client can at least read.
 
     **The frame says ``Internal error`` and nothing else**, as the JSON-mode
-    backstop in both viewsets does: the exception's text used to ride in the
+    backstop in both views does: the exception's text used to ride in the
     message, and it is written for an operator, not a client (a DRF
     ``ValidationError`` arrived as ``ValidationError: [ErrorDetail(...)]``).
     The traceback goes to the log instead, under the request id the frame

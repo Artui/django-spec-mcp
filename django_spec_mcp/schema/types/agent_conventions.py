@@ -146,7 +146,7 @@ def _validate(name: str, value: object) -> None:
     # ``test_every_other_field_takes_none_or_an_empty_string[empty-*]``, and
     # ``not value.strip()`` by every test there is, since without it the
     # default ``missing_arguments`` is refused and the default instance a
-    # viewset holds fails at import.
+    # view holds fails at import.
     if name in _NEVER_NONE and not value.strip():
         raise ImproperlyConfigured(
             f"AgentConventions.{name} cannot be empty or only whitespace: it is the whole "

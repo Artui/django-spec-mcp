@@ -57,20 +57,20 @@ Rules are non-negotiable unless flagged as a heuristic.
     than a few lines deep should be converted to a dataclass, or explained at
     the site with a one-line comment justifying why it isn't.
 12. **Endpoints are plain Django views, never DRF views or viewsets.** The MCP
-    endpoint (`StreamableHttpViewSet`, `AsyncStreamableHttpViewSet`) and the
+    endpoint (`StreamableHttpView`, `AsyncStreamableHttpView`) and the
     protected-resource metadata view subclass `django.views.View`, and nothing
     in the package imports DRF: it serves kernel specs, has no DRF in its
     dependencies, and a DRF view would let a project's
     `REST_FRAMEWORK` settings (throttles, authentication classes, renderers,
     the exception handler) decide what the endpoint answers, where the package's
     own auth backend, rate limits and JSON-RPC backstop are what must. Each
-    keeps its `as_view(actions, **initkwargs)` routing map, which is what
-    `MCPServer` passes, and does for itself what a DRF view would: the `406` for
-    an `Accept` it cannot answer, `Allow` on every `405`, the CSRF and
-    login-required opt-outs, and the token's principal on `request.user` from
-    the moment the request authenticates (`transport/utils.py`). The class
-    names keep their `ViewSet` suffix only because the server and the API
-    reference name them.
+    answers by the method named for the HTTP verb (`post`, `get`, `delete`;
+    `get` alone on the metadata view), with no routing map, and `MCPServer`
+    passes only the collaborators to `as_view(**initkwargs)`. Each does for
+    itself what a DRF view would: the `406` for an `Accept` it cannot answer,
+    `Allow` on every `405`, the CSRF and login-required opt-outs, and the
+    token's principal on `request.user` from the moment the request
+    authenticates (`transport/utils.py`).
 
 ## No view-layer coupling
 
@@ -248,8 +248,8 @@ upstream rather than growing a second copy here.
   clean before push — never `--no-verify`.
 - `ty` is scoped to `django_spec_mcp/` only (not tests). An attribute ty cannot see
   takes `# ty: ignore[<rule>]` at the site, with the rule named: the flags Django
-  reads off the function `as_view` returns (`csrf_exempt`, `login_required`, and
-  the `actions` and `cls` the endpoints keep) are `unresolved-attribute`, and the
+  reads off the function `as_view` returns (`csrf_exempt` and `login_required`)
+  are `unresolved-attribute`, and the
   async endpoint's `async def dispatch` over `View.dispatch` is
   `invalid-method-override`. Say why beside one that is not one of these.
 

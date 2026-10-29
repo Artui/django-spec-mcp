@@ -1,10 +1,10 @@
-"""A server's ``conventions=`` reaches the wire through both viewsets, in both eras.
+"""A server's ``conventions=`` reaches the wire through both views, in both eras.
 
-Over HTTP the handlers never see the server: each viewset builds the request's
+Over HTTP the handlers never see the server: each view builds the request's
 context from what ``MCPServer`` handed ``as_view``, in two places, one per
 protocol era. A convention dropped at any of those four sites leaves that route
 speaking the defaults while ``call_tool`` and ``list_tools`` speak the server's,
-which is why each viewset is driven here in both eras rather than once.
+which is why each view is driven here in both eras rather than once.
 """
 
 from __future__ import annotations
@@ -90,7 +90,7 @@ def _assert_served_with_the_conventions(listed: Any, called: Any) -> None:
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("era", [LEGACY, MODERN])
-def test_the_sync_viewset_serves_the_servers_conventions(client: Client, era: str) -> None:
+def test_the_sync_view_serves_the_servers_conventions(client: Client, era: str) -> None:
     with override_settings(ROOT_URLCONF=urlconf_for(conventions_server(CONVENTIONS))):
         session_id: str | None = None
         if era == LEGACY:
@@ -104,7 +104,7 @@ def test_the_sync_viewset_serves_the_servers_conventions(client: Client, era: st
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("era", [LEGACY, MODERN])
-async def test_the_async_viewset_serves_the_servers_conventions(era: str) -> None:
+async def test_the_async_view_serves_the_servers_conventions(era: str) -> None:
     client = AsyncClient()
     server = conventions_server(CONVENTIONS)
     with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=True)):

@@ -26,9 +26,8 @@ from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.registry.resource_registry import ResourceRegistry
 from django_spec_mcp.registry.tool_registry import ToolRegistry
-from django_spec_mcp.transport.async_streamable_http_viewset import (
-    ASYNC_STREAMABLE_HTTP_ACTION_MAP,
-    AsyncStreamableHttpViewSet,
+from django_spec_mcp.transport.async_streamable_http_view import (
+    AsyncStreamableHttpView,
 )
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.testapp.mcp import build_kernel_server
@@ -166,8 +165,7 @@ async def test_async_get_without_broker_returns_405() -> None:
     request = factory.get("/mcp/")
     from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 
-    view = AsyncStreamableHttpViewSet.as_view(
-        ASYNC_STREAMABLE_HTTP_ACTION_MAP,
+    view = AsyncStreamableHttpView.as_view(
         tools=ToolRegistry(),
         resources=ResourceRegistry(),
         auth_backend=AllowAnyBackend(),
@@ -435,8 +433,7 @@ async def test_async_unauthenticated_returns_401() -> None:
         ),
         content_type="application/json",
     )
-    view = AsyncStreamableHttpViewSet.as_view(
-        ASYNC_STREAMABLE_HTTP_ACTION_MAP,
+    view = AsyncStreamableHttpView.as_view(
         tools=ToolRegistry(),
         resources=ResourceRegistry(),
         auth_backend=_Deny(),
@@ -587,8 +584,7 @@ _CSRF_MIDDLEWARE = ["django.middleware.csrf.CsrfViewMiddleware"]
 
 
 def _async_view():
-    return AsyncStreamableHttpViewSet.as_view(
-        ASYNC_STREAMABLE_HTTP_ACTION_MAP,
+    return AsyncStreamableHttpView.as_view(
         tools=ToolRegistry(),
         resources=ResourceRegistry(),
         session_store=InMemorySessionStore(),
@@ -604,12 +600,12 @@ def test_async_view_opts_out_of_login_required() -> None:
     assert _async_view().login_required is False
 
 
-def test_async_view_names_its_class_and_the_map_it_routes() -> None:
-    """``view.cls`` and ``view.actions`` keep the names they were always read by."""
+def test_async_view_names_its_class() -> None:
+    """Django's ``view_class`` names the class; the DRF-style ``cls`` and ``actions`` are gone."""
     view = _async_view()
-    assert view.cls is AsyncStreamableHttpViewSet
-    assert view.view_class is AsyncStreamableHttpViewSet
-    assert view.actions == ASYNC_STREAMABLE_HTTP_ACTION_MAP
+    assert view.view_class is AsyncStreamableHttpView
+    assert not hasattr(view, "cls")
+    assert not hasattr(view, "actions")
     # No wrapper sits between Django and the view any more, so there is
     # nothing for ``__wrapped__`` to point introspection at.
     assert not hasattr(view, "__wrapped__")

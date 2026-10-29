@@ -4,7 +4,7 @@ Covers the 0.7.0 security hardening:
 
 - POST authenticates *before* the session lookup (no 404-vs-401 oracle).
 - GET (SSE) and DELETE require authentication wherever a credential can
-  change the answer — which on GET means the async viewset with a broker
+  change the answer — which on GET means the async view with a broker
   wired and sessions on. Where the answer is 405 whatever the caller
   presents, that is settled first; see
   ``test_unauthenticated_method_support.py``.
@@ -26,15 +26,13 @@ from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.registry.prompt_registry import PromptRegistry
 from django_spec_mcp.registry.resource_registry import ResourceRegistry
 from django_spec_mcp.registry.tool_registry import ToolRegistry
-from django_spec_mcp.transport.async_streamable_http_viewset import (
-    ASYNC_STREAMABLE_HTTP_ACTION_MAP,
-    AsyncStreamableHttpViewSet,
+from django_spec_mcp.transport.async_streamable_http_view import (
+    AsyncStreamableHttpView,
 )
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from django_spec_mcp.transport.in_memory_sse_broker import InMemorySSEBroker
-from django_spec_mcp.transport.streamable_http_viewset import (
-    STREAMABLE_HTTP_ACTION_MAP,
-    StreamableHttpViewSet,
+from django_spec_mcp.transport.streamable_http_view import (
+    StreamableHttpView,
 )
 
 factory = RequestFactory()
@@ -58,8 +56,7 @@ class _HeaderPrincipalBackend:
 
 
 def _sync_view(store: InMemorySessionStore) -> Any:
-    return StreamableHttpViewSet.as_view(
-        STREAMABLE_HTTP_ACTION_MAP,
+    return StreamableHttpView.as_view(
         tools=ToolRegistry(),
         resources=ResourceRegistry(),
         prompts=PromptRegistry(),
@@ -70,8 +67,7 @@ def _sync_view(store: InMemorySessionStore) -> Any:
 
 
 def _async_view(store: InMemorySessionStore, *, broker: InMemorySSEBroker | None = None) -> Any:
-    return AsyncStreamableHttpViewSet.as_view(
-        ASYNC_STREAMABLE_HTTP_ACTION_MAP,
+    return AsyncStreamableHttpView.as_view(
         tools=ToolRegistry(),
         resources=ResourceRegistry(),
         prompts=PromptRegistry(),

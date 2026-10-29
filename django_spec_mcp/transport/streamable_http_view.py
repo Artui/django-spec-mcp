@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from typing import Any
 
 from django.http import (
@@ -49,7 +49,6 @@ from django_spec_mcp.transport.utils import (
     modern_error_status,
     not_acceptable,
     raised_denial_error,
-    route_actions,
     seat_anonymous,
     session_gate_failure,
 )
@@ -72,15 +71,6 @@ _ANSWERS_WITH: tuple[str, ...] = ("application/json",)
 # (``test_a_sync_get_naming_only_a_stream_is_the_405_not_a_406``). ``head``
 # because Django routes it to the ``get`` handler.
 _UNNEGOTIATED: frozenset[str] = frozenset({"GET", "HEAD"})
-
-# Passed to ``as_view`` by ``MCPServer``, so the canonical routing lives next to
-# the view rather than in the URL conf.
-STREAMABLE_HTTP_ACTION_MAP: dict[str, str] = {
-    "post": "handle_jsonrpc",
-    "get": "handle_get",
-    "delete": "terminate_session",
-}
-
 
 logger = get_logger(__name__)
 
@@ -193,13 +183,11 @@ def _reject_awaitable_session(result: Any, *, store: Any, method: str) -> Any:
     )
 
 
-class StreamableHttpViewSet(View):
+class StreamableHttpView(View):
     """The single ``/mcp`` endpoint per MCP 2025-11-25 (Streamable HTTP).
 
-    A plain Django view routing three HTTP methods to one URL through the
-    action map ``as_view`` is given (``StreamableHttpViewSet.as_view({"post":
-    "handle_jsonrpc", "get": "handle_get", "delete": "terminate_session"},
-    ...)``, which is ``STREAMABLE_HTTP_ACTION_MAP``):
+    A plain Django view answering three HTTP methods on one URL, each by the
+    method of that name (``StreamableHttpView.as_view(...)``):
 
     - **POST** → exactly one JSON-RPC message, returns ``application/json``
       (or HTTP 202 for notifications).
@@ -222,7 +210,6 @@ class StreamableHttpViewSet(View):
 
     # Django's ``as_view`` requires kwargs to be existing class attributes, so
     # these are declared with defaults for the server to populate.
-    actions: Mapping[str, str] = STREAMABLE_HTTP_ACTION_MAP
     tools: ToolRegistry | None = None
     resources: ResourceRegistry | None = None
     prompts: PromptRegistry | None = None
@@ -255,17 +242,9 @@ class StreamableHttpViewSet(View):
     conventions: AgentConventions = AgentConventions()
 
     @classonlymethod
-    def as_view(
-        cls, actions: Mapping[str, str] | None = None, **initkwargs: Any
-    ) -> Callable[..., Any]:
-        """Build the view function routing ``actions``, the canonical map if ``None``."""
-        routed: Mapping[str, str] = cls.actions if actions is None else actions
-        view = super().as_view(actions=routed, **initkwargs)
-        return exempt_endpoint(view, routed, cls)
-
-    def setup(self, request: HttpRequest, *args: Any, **kwargs: Any) -> None:
-        route_actions(self, self.actions)
-        super().setup(request, *args, **kwargs)
+    def as_view(cls, **initkwargs: Any) -> Callable[..., Any]:
+        """Build the view function, opted out of CSRF and of the login redirect."""
+        return exempt_endpoint(super().as_view(**initkwargs))
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
         if request.method not in _UNNEGOTIATED:
@@ -274,9 +253,9 @@ class StreamableHttpViewSet(View):
                 return refused
         return super().dispatch(request, *args, **kwargs)
 
-    # ----- actions (routed by ``as_view``'s map) -----
+    # ----- the methods the endpoint serves -----
 
-    def handle_jsonrpc(self, http_request: HttpRequest) -> HttpResponse:
+    def post(self, http_request: HttpRequest) -> HttpResponse:
         """POST action: parse a single JSON-RPC message and dispatch."""
         guard: HttpResponse | None = self._check_origin(http_request)
         if guard is not None:
@@ -538,13 +517,13 @@ class StreamableHttpViewSet(View):
             return response
         return JsonResponse(JsonRpcResponse(id=message.id, result=result).to_dict())
 
-    def handle_get(self, http_request: HttpRequest) -> HttpResponse:
+    def get(self, http_request: HttpRequest) -> HttpResponse:
         """GET action: SSE-from-server isn't implemented in v1; 405 per spec.
 
         Unconditional, and so decided without authenticating. This once
         challenged unauthenticated callers first, to keep the endpoint from
         revealing even its 405 — but that confidentiality never existed:
-        ``terminate_session`` answers 405 to an anonymous DELETE whenever
+        ``delete`` answers 405 to an anonymous DELETE whenever
         sessions are off, and POST answers 401 with a challenge naming the
         publicly fetchable protected-resource metadata. What the challenge did
         buy was an OAuth flow, browser window and all, ending at the 405 the
@@ -559,7 +538,7 @@ class StreamableHttpViewSet(View):
             return guard
         return self._method_not_allowed()
 
-    def terminate_session(self, http_request: HttpRequest) -> HttpResponse:
+    def delete(self, http_request: HttpRequest) -> HttpResponse:
         """DELETE action: end the session named by ``MCP-Session-Id``.
 
         Requires authentication, and only the principal a session was
@@ -645,27 +624,27 @@ class StreamableHttpViewSet(View):
 
     def _require_tools(self) -> ToolRegistry:
         if self.tools is None:  # pragma: no cover - guarded by MCPServer
-            raise RuntimeError("StreamableHttpViewSet is missing a ToolRegistry")
+            raise RuntimeError("StreamableHttpView is missing a ToolRegistry")
         return self.tools
 
     def _require_resources(self) -> ResourceRegistry:
         if self.resources is None:  # pragma: no cover - guarded by MCPServer
-            raise RuntimeError("StreamableHttpViewSet is missing a ResourceRegistry")
+            raise RuntimeError("StreamableHttpView is missing a ResourceRegistry")
         return self.resources
 
     def _require_prompts(self) -> PromptRegistry:
         if self.prompts is None:  # pragma: no cover - guarded by MCPServer
-            raise RuntimeError("StreamableHttpViewSet is missing a PromptRegistry")
+            raise RuntimeError("StreamableHttpView is missing a PromptRegistry")
         return self.prompts
 
     def _require_auth_backend(self) -> MCPAuthBackend:
         if self.auth_backend is None:  # pragma: no cover - guarded by MCPServer
-            raise RuntimeError("StreamableHttpViewSet is missing an MCPAuthBackend")
+            raise RuntimeError("StreamableHttpView is missing an MCPAuthBackend")
         return self.auth_backend
 
     def _require_config(self) -> MCPConfig:
         if self.config is None:  # pragma: no cover - guarded by MCPServer
-            raise RuntimeError("StreamableHttpViewSet is missing an MCPConfig")
+            raise RuntimeError("StreamableHttpView is missing an MCPConfig")
         return self.config
 
     def _sessions_enabled(self) -> bool:
@@ -674,7 +653,7 @@ class StreamableHttpViewSet(View):
 
     def _require_session_store(self) -> SessionStore:
         if self.session_store is None:  # pragma: no cover - guarded by MCPServer
-            raise RuntimeError("StreamableHttpViewSet is missing a SessionStore")
+            raise RuntimeError("StreamableHttpView is missing a SessionStore")
         return self.session_store
 
 
@@ -686,4 +665,4 @@ def _params_dict(params: Any) -> dict[str, Any] | None:
     return None  # JSON-RPC list params are not used by MCP today.
 
 
-__all__ = ["STREAMABLE_HTTP_ACTION_MAP", "StreamableHttpViewSet"]
+__all__ = ["StreamableHttpView"]
