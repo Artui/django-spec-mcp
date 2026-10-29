@@ -7,12 +7,10 @@ type surface.
 
 from __future__ import annotations
 
-import inspect
-from collections.abc import Iterable, Sequence
-from typing import Any
+from collections.abc import Sequence
 
 from django.core.exceptions import ImproperlyConfigured
-from django_service_specs import PermissionCheck
+from django_service_specs import PermissionCheck, check_permissions
 
 from django_spec_mcp.types.tool_content_kind import ToolContentKind
 
@@ -88,59 +86,24 @@ def scope_names(label: str, scopes: str | Sequence[str] | None) -> tuple[str, ..
 
 
 def binding_checks(
-    label: str, permissions: Iterable[PermissionCheck]
+    label: str, permissions: Sequence[PermissionCheck] | None
 ) -> tuple[PermissionCheck, ...]:
-    """A prompt's or a view's ``permissions`` as it holds them, refusing what is not a check.
+    """A prompt's or a view's ``permissions`` as it holds them, by the kernel's rule for a spec's.
 
-    The kernel's own rule for a spec's ``permissions`` (its ``check_permissions``
-    in ``specs/utils.py``, which the kernel's root does not export), restated for
-    the two bindings that are not specs and ask their checks themselves
-    (``handlers.judge_binding``). Run by each one's ``__post_init__``, so a
-    binding built by hand is held to it too. Refused, each with its own message
-    (``test_a_prompt_refuses_what_is_not_a_check``):
+    The kernel's ``check_permissions`` decides, so a prompt's or a view's
+    checks are refused by exactly the rules a spec's ``permissions=`` gets: a
+    string or any other non-sequence, a class where an instance belongs, an
+    entry that is not a ``PermissionCheck``, an ``async def`` on any of the
+    three check methods, and an empty sequence, which reads as a gate and
+    admits everyone (``test_a_prompt_refuses_what_is_not_a_check``). Run at
+    registration and by each binding's ``__post_init__``, so a binding built by
+    hand is held to it too.
 
-    - **A string**, which would spread into one entry per character.
-    - **Anything that is not a ``PermissionCheck`` instance**, above all an
-      object judging ``has_permission(request, token)``, the shape this package
-      once took: it would be handed a principal and a binding, and read them as
-      something else.
-    - **A class**, the likely slip, named apart because ``PermissionCheck`` is
-      what it subclasses.
-    - **An ``async def has_permission``**, whose answer is a truthy coroutine
-      nothing awaits. A plain ``def`` handing one back is refused where the
-      answer is read.
-
-    An empty sequence is no checks, as ``None`` is: unlike a spec's, these
+    ``None`` is no checks and comes back as ``()``: unlike a spec's, these
     ``permissions`` are optional, and a prompt with neither them nor ``scopes``
     is what ``REQUIRE_TOOL_PERMISSIONS`` refuses.
     """
-    # One branch arc for two types: the str and the bytes cases of
-    # test_a_prompt_refuses_what_is_not_a_check each hold one of them.
-    if isinstance(permissions, (str, bytes)):
-        raise ImproperlyConfigured(
-            f"{label}: permissions= must be a sequence of PermissionCheck, not the string "
-            f"{permissions!r}."
-        )
-    checks: tuple[Any, ...] = tuple(permissions)
-    for index, check in enumerate(checks):
-        if isinstance(check, type):
-            raise ImproperlyConfigured(
-                f"{label}: permissions= holds the class {check.__name__}; pass an instance, "
-                f"{check.__name__}()."
-            )
-        if not isinstance(check, PermissionCheck):
-            raise ImproperlyConfigured(
-                f"{label}: permissions= holds {type(check).__name__}, which is not a "
-                "PermissionCheck. Subclass django_service_specs.PermissionCheck; its "
-                "has_permission(principal, spec) is handed the prompt's or resource's "
-                "binding as spec."
-            )
-        if inspect.iscoroutinefunction(check.has_permission):
-            raise ImproperlyConfigured(
-                f"{label}: permissions[{index}].has_permission is async, and its answer "
-                "would be a truthy coroutine nothing awaits. Make it a plain def."
-            )
-    return checks
+    return check_permissions(permissions, label=label) or ()
 
 
 __all__ = ["binding_checks", "scope_names", "validate_content_kind"]

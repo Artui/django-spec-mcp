@@ -338,10 +338,15 @@ carries; releases up to 0.54.0 are in
   `resources/read`, `completion/complete` and a subscription. A prompt
   registered with neither is refused, or warned about with
   `REQUIRE_TOOL_PERMISSIONS` off, in a message that names both and no DRF
-  permission classes. Registration refuses a `permissions=` entry that is a
-  string, a class, not a `PermissionCheck`, or one whose `has_permission` is
-  `async def`. A warnings filter or a test matching the old refusals' wording
-  matches none of these.
+  permission classes. Registration holds `permissions=` to the kernel's own rule
+  for a spec's, through its `check_permissions`: a string or other non-sequence,
+  a class, an entry that is not a `PermissionCheck`, an `async def` on any of the
+  three check methods, and an empty list, which admits everyone, are each
+  refused; leave `permissions` out for no checks, or declare
+  `[Unrestricted()]`. Each answer is read through the kernel's `sync_answer`, so
+  a plain `def` handing back a coroutine is refused in the kernel's words. A
+  warnings filter or a test matching the old refusals' wording matches none of
+  these.
 - **A view's callable source is `render=`.** `register_ui_resource(render=...)`
   takes the zero-argument callable returning the document, where it took
   `selector=`, a name every other registration here uses for a kernel

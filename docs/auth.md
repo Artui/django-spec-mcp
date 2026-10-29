@@ -16,7 +16,7 @@ to discover your authorization server, and `AllowAnyBackend` for development.
 | `MCPAuthBackend` | Authenticate request → `TokenInfo`, build `WWW-Authenticate`, supply PRM payload | **none**: `auth_backend=` is required to mount, and `urls` / `async_urls` refuse without one |
 | The spec's `permissions` | Kernel `PermissionCheck`s guarding a tool or resource | required: a spec with none is refused at registration |
 | `scopes=` | OAuth scopes a binding's caller must carry | `None` (no scope gate) |
-| `permissions=` on a prompt or view | Kernel `PermissionCheck`s, each handed the binding as the spec | `[]`; a prompt with neither these nor `scopes=` is refused |
+| `permissions=` on a prompt or view | Kernel `PermissionCheck`s, each handed the binding as the spec | `None` (no checks; `[]` is refused, as on a spec); a prompt with neither these nor `scopes=` is refused |
 | `/.well-known/oauth-protected-resource` | RFC 9728 metadata | served from backend's `protected_resource_metadata()` |
 
 The transport flow on every request:
@@ -293,11 +293,14 @@ The same judgement answers `prompts/list`, `prompts/get`, `resources/list`,
 `resources/read`, `completion/complete` and a subscription, so a caller is
 never shown a prompt or view it would then be refused.
 
-Registration refuses a list that cannot be judged: a bare string (it would
-spread into one entry per character), a check class rather than an instance,
-an object that is not a `PermissionCheck`, and a check whose `has_permission`
-is `async def`, whose answer would be a truthy coroutine nothing awaits. A
-check that answers one anyway at call time is refused there too. Only the
+Registration holds the list to the kernel's rule for a spec's `permissions`,
+through the kernel's own `check_permissions`: a bare string or anything else
+that is not a sequence, a check class rather than an instance, an object that
+is not a `PermissionCheck`, a check with an `async def` method, whose answer
+would be a truthy coroutine nothing awaits, and an empty list, which reads as a
+gate and admits everyone, are each refused. Leave `permissions=` out for no
+checks, or declare `[Unrestricted()]`. A check that answers a coroutine anyway
+at call time is refused there by the kernel's `sync_answer`. Only the
 principal and the binding are passed: the keywords a spec's check may opt into,
 such as `arguments` or `call_context`, are the kernel's to offer at dispatch,
 so a check that requires one cannot gate a prompt.

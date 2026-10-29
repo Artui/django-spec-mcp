@@ -323,33 +323,51 @@ class _HandsBackACoroutine(PermissionCheck):
         return later()
 
 
+class _AwaitingObjectCheck(PermissionCheck):
+    """A check whose ``has_object_permission`` is ``async def``: the kernel reads all three."""
+
+    def has_permission(self, principal: Any, spec: Any) -> bool:
+        return True
+
+    async def has_object_permission(self, principal: Any, spec: Any, obj: Any) -> bool:
+        return True
+
+
+_NOT_A_SEQUENCE = "Prompt 'p'.permissions must be a sequence of PermissionCheck."
+
+
 @pytest.mark.parametrize(
     ("permissions", "message"),
     [
+        ("Unrestricted", _NOT_A_SEQUENCE),
+        (b"Unrestricted", _NOT_A_SEQUENCE),
+        ((check for check in [Unrestricted()]), _NOT_A_SEQUENCE),
         (
-            "Unrestricted",
-            "Prompt 'p': permissions= must be a sequence of PermissionCheck, not the string "
-            "'Unrestricted'.",
+            [],
+            "Prompt 'p'.permissions is empty, which would let anyone run it. Declare "
+            "permissions=[Unrestricted()] to mean that.",
         ),
         (
             [_OldStyle()],
-            "Prompt 'p': permissions= holds _OldStyle, which is not a PermissionCheck. "
-            "Subclass django_service_specs.PermissionCheck; its has_permission(principal, spec) "
-            "is handed the prompt's or resource's binding as spec.",
-        ),
-        (
-            b"Unrestricted",
-            "Prompt 'p': permissions= must be a sequence of PermissionCheck, not the string "
-            "b'Unrestricted'.",
+            "Prompt 'p'.permissions holds _OldStyle, which is not a PermissionCheck. "
+            "Subclass PermissionCheck, or adapt it.",
         ),
         (
             [IsUser],
-            "Prompt 'p': permissions= holds the class IsUser; pass an instance, IsUser().",
+            "Prompt 'p'.permissions holds the class IsUser; pass an instance, IsUser().",
         ),
         (
             [_Awaiting()],
-            "Prompt 'p': permissions[0].has_permission is async, and its answer would be a "
-            "truthy coroutine nothing awaits. Make it a plain def.",
+            "Prompt 'p'.permissions[0].has_permission is _Awaiting.has_permission, an async "
+            "callable. It is called from sync code and never awaited, on both entry points; "
+            "declare it with def, since adispatch already runs it off the event loop.",
+        ),
+        (
+            [Unrestricted(), _AwaitingObjectCheck()],
+            "Prompt 'p'.permissions[1].has_object_permission is "
+            "_AwaitingObjectCheck.has_object_permission, an async callable. It is called from "
+            "sync code and never awaited, on both entry points; declare it with def, since "
+            "adispatch already runs it off the event loop.",
         ),
     ],
 )
@@ -380,8 +398,9 @@ def test_a_ui_resource_refuses_what_is_not_a_check() -> None:
         server.register_ui_resource(
             name="v", uri="ui://v", html="<html></html>", permissions=[_OldStyle()]
         )
-    assert str(raised.value).startswith(
-        "Resource 'v': permissions= holds _OldStyle, which is not a PermissionCheck."
+    assert str(raised.value) == (
+        "Resource 'v'.permissions holds _OldStyle, which is not a PermissionCheck. "
+        "Subclass PermissionCheck, or adapt it."
     )
 
 
@@ -392,9 +411,7 @@ def test_an_answer_still_to_be_awaited_is_refused_not_read_as_a_pass() -> None:
     with pytest.raises(ImproperlyConfigured) as raised:
         handle_prompts_get({"name": "p"}, _ctx(server, ALICE))
     assert str(raised.value) == (
-        "_HandsBackACoroutine.has_permission() returned an awaitable, but nothing on this path "
-        "awaits it. A PermissionCheck is synchronous by contract: has_permission must answer a "
-        "bool. Wrap any awaiting it needs in asgiref.sync.async_to_sync inside the method body. "
-        "Refusing the request: an un-awaited coroutine is truthy, so every caller would be "
-        "granted access."
+        "_HandsBackACoroutine.has_permission answered with an awaitable (coroutine) where a "
+        "bool was asked for. A permission check is sync-only and is never awaited, so the "
+        "call is refused rather than allowed; declare the method with def."
     )
