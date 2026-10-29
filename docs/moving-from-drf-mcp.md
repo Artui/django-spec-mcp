@@ -133,7 +133,10 @@ bearer_challenge(
 ```
 
 **A backend refuses a caller by returning `None`.** `None` from `authenticate`
-is the `401` carrying the backend's challenge. An exception a backend raises is
+is the `401` carrying the backend's challenge. Under drf-mcp every `401` asked
+for that challenge with `error="invalid_token"`; a request with no
+`Authorization` header now asks with `error=None`, so its challenge carries no
+error code, as RFC 6750 3.1 says it should not. An exception a backend raises is
 no longer rendered by DRF, and nothing renders it in DRF's place: Django's
 `PermissionDenied` and `Http404` are Django's own HTML `403` and `404` pages,
 with no challenge, and any other exception is a `500`. That includes DRF's

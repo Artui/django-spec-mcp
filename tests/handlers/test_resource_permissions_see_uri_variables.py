@@ -31,11 +31,10 @@ from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
 from django_spec_mcp.handlers.handle_resources_read_async import handle_resources_read_async
-from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.subscriptions.grant_subscription import grant_subscription
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
-from tests.utils import RefusingRateLimit
+from tests.utils import RefusingRateLimit, call_context
 
 
 class _GrantsProjectSeven(PermissionCheck):
@@ -71,46 +70,30 @@ def _server(check: PermissionCheck, *rate_limits: Any) -> MCPServer:
     return server
 
 
-def _ctx(server: MCPServer) -> MCPCallContext:
-    return MCPCallContext(
-        http_request=HttpRequest(),
-        token=TokenInfo(user=None),
-        tools=server.tools,
-        resources=server.resources,
-        prompts=server.prompts,
-        protocol_version="2025-11-25",
-    )
-
-
 async def _read(server: MCPServer, uri: str, *, is_async: bool) -> Any:
     if is_async:
-        return await handle_resources_read_async({"uri": uri}, _ctx(server))
+        return await handle_resources_read_async({"uri": uri}, call_context(server))
     # Off the event loop, where the sync handler's ORM work is allowed.
-    return await sync_to_async(handle_resources_read)({"uri": uri}, _ctx(server))
+    return await sync_to_async(handle_resources_read)({"uri": uri}, call_context(server))
 
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
-async def test_a_resource_permission_sees_the_uri_variables_of_the_read(is_async: bool) -> None:
+@pytest.mark.parametrize(("pk", "granted"), [(7, True), (8, False)], ids=["granted", "denied"])
+async def test_a_resource_permission_judges_the_uri_variables_of_the_read(
+    is_async: bool, pk: int, granted: bool
+) -> None:
     check = _GrantsProjectSeven()
 
-    out = await _read(_server(check), "projects://7", is_async=is_async)
+    out = await _read(_server(check), f"projects://{pk}", is_async=is_async)
 
-    assert not isinstance(out, JsonRpcError), f"refused: {out!r}"
-    assert out["contents"]
-    assert check.seen == [({"project_pk": 7}, "project")]
-
-
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
-async def test_a_resource_permission_still_denies_a_uri_it_does_not_grant(is_async: bool) -> None:
-    check = _GrantsProjectSeven()
-
-    out = await _read(_server(check), "projects://8", is_async=is_async)
-
-    assert isinstance(out, JsonRpcError)
-    assert out.code == JsonRpcErrorCode.FORBIDDEN
-    assert check.seen == [({"project_pk": 8}, "project")]
+    if granted:
+        assert not isinstance(out, JsonRpcError), f"refused: {out!r}"
+        assert out["contents"]
+    else:
+        assert isinstance(out, JsonRpcError)
+        assert out.code == JsonRpcErrorCode.FORBIDDEN
+    assert check.seen == [({"project_pk": pk}, "project")]
 
 
 class _ReadsTheRequest(PermissionCheck):
@@ -132,14 +115,7 @@ async def test_a_resource_permission_reads_the_request_the_read_arrived_on(
 ) -> None:
     request, token = HttpRequest(), TokenInfo(user=None)
     server = _server(_ReadsTheRequest(request, token))
-    context = MCPCallContext(
-        http_request=request,
-        token=token,
-        tools=server.tools,
-        resources=server.resources,
-        prompts=server.prompts,
-        protocol_version="2025-11-25",
-    )
+    context = call_context(server, http_request=request, token=token)
     params: dict[str, Any] = {"uri": "projects://7"}
 
     if is_async:
@@ -181,7 +157,7 @@ def test_a_subscription_is_granted_the_uris_the_read_would_admit() -> None:
     server = _server(check)
 
     granted, _ = grant_subscription(
-        SubscriptionFilter(resource_uris=("projects://7", "projects://8")), _ctx(server)
+        SubscriptionFilter(resource_uris=("projects://7", "projects://8")), call_context(server)
     )
 
     assert granted.resource_uris == ("projects://7",)

@@ -326,10 +326,10 @@ def _wire(response: Any, body: dict[str, Any]) -> tuple[Any, ...]:
 async def test_a_spec_check_denying_a_streamed_call_keeps_its_403_and_challenge() -> None:
     """The spec's own ``PermissionCheck`` is pre-flighted, not only the scope gate.
 
-    It used to run only inside ``adispatch``, so asking for progress turned a
-    ``403`` with a challenge into a ``200`` stream carrying ``-32006``: the
-    status a client is told to act on depended on whether it wanted a
-    progress bar.
+    Asked only inside ``adispatch``, it would turn a ``403`` with a challenge
+    into a ``200`` stream carrying ``-32006`` whenever the caller asked for
+    progress: the status a client is told to act on would depend on whether
+    it wanted a progress bar.
     """
     streamed, plain = await _both(_server(), name="p.denied")
     assert streamed.status_code == 403

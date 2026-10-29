@@ -34,9 +34,9 @@ from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
-from django_spec_mcp.handlers.types.context import MCPCallContext
 from tests.testapp.kernel_shapes import InvoiceOutput
 from tests.testapp.models import Invoice
+from tests.utils import call_context
 
 pytestmark = pytest.mark.django_db
 
@@ -57,14 +57,7 @@ def _server() -> MCPServer:
 def _call(spec: SelectorSpec, arguments: dict[str, Any] | None = None, **knobs: Any) -> Any:
     server = _server()
     server.register_tool(spec, name="invoices.list", **knobs)
-    context = MCPCallContext(
-        http_request=HttpRequest(),
-        token=TokenInfo(user=None, scopes=("read",)),
-        tools=server.tools,
-        resources=server.resources,
-        prompts=server.prompts,
-        protocol_version="2025-11-25",
-    )
+    context = call_context(server, token=TokenInfo(user=None, scopes=("read",)))
     return handle_tools_call({"name": "invoices.list", "arguments": arguments or {}}, context)
 
 

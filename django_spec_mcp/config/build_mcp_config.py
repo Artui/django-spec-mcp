@@ -19,6 +19,11 @@ def _nullable_float(value: Any) -> float | None:
     return None if value is None else float(value)
 
 
+def _given(value: Any, setting: str) -> Any:
+    """``value`` when one was passed, else the setting: ``None`` is "not supplied"."""
+    return get_setting(setting) if value is None else value
+
+
 def _bound(value: int | float | None | UnsetType, setting: str) -> Any:
     """Resolve a nullable bound: ``UNSET`` → settings, ``None`` → disabled.
 
@@ -77,9 +82,7 @@ def build_mcp_config(
     Use this rather than constructing ``MCPConfig`` directly — it layers
     overrides *over* the project's settings instead of discarding them.
     """
-    resolved_versions: tuple[str, ...] = tuple(
-        protocol_versions if protocol_versions is not None else get_setting("PROTOCOL_VERSIONS")
-    )
+    resolved_versions: tuple[str, ...] = tuple(_given(protocol_versions, "PROTOCOL_VERSIONS"))
     if not resolved_versions:
         # Caught at construction rather than as an ``IndexError`` out of a view
         # on the first request: every version lookup downstream indexes this.
@@ -88,87 +91,43 @@ def build_mcp_config(
             "no MCP revision and cannot answer any request. List at least one."
         )
 
-    structured_content_resolved: bool = bool(
-        include_structured_content
-        if include_structured_content is not None
-        else get_setting("INCLUDE_STRUCTURED_CONTENT")
-    )
-    output_schema_resolved: bool = bool(
-        include_output_schema
-        if include_output_schema is not None
-        else get_setting("INCLUDE_OUTPUT_SCHEMA")
-    )
     return MCPConfig(
         protocol_versions=resolved_versions,
         require_protocol_version_header=bool(
-            require_protocol_version_header
-            if require_protocol_version_header is not None
-            else get_setting("REQUIRE_PROTOCOL_VERSION_HEADER")
+            _given(require_protocol_version_header, "REQUIRE_PROTOCOL_VERSION_HEADER")
         ),
-        sessions_enabled=bool(
-            sessions_enabled if sessions_enabled is not None else get_setting("SESSIONS_ENABLED")
+        sessions_enabled=bool(_given(sessions_enabled, "SESSIONS_ENABLED")),
+        include_structured_content=bool(
+            _given(include_structured_content, "INCLUDE_STRUCTURED_CONTENT")
         ),
-        include_structured_content=structured_content_resolved,
-        include_output_schema=output_schema_resolved,
-        allowed_origins=tuple(
-            allowed_origins if allowed_origins is not None else get_setting("ALLOWED_ORIGINS")
-        ),
-        max_request_bytes=int(
-            max_request_bytes if max_request_bytes is not None else get_setting("MAX_REQUEST_BYTES")
-        ),
+        include_output_schema=bool(_given(include_output_schema, "INCLUDE_OUTPUT_SCHEMA")),
+        allowed_origins=tuple(_given(allowed_origins, "ALLOWED_ORIGINS")),
+        max_request_bytes=int(_given(max_request_bytes, "MAX_REQUEST_BYTES")),
         max_result_bytes=_nullable_int(_bound(max_result_bytes, "MAX_RESULT_BYTES")),
         max_page_size=_nullable_int(_bound(max_page_size, "MAX_PAGE_SIZE")),
         dispatch_timeout=_nullable_float(_bound(dispatch_timeout, "DISPATCH_TIMEOUT")),
-        page_size=int(page_size if page_size is not None else get_setting("PAGE_SIZE")),
-        include_validation_value=bool(
-            include_validation_value
-            if include_validation_value is not None
-            else get_setting("INCLUDE_VALIDATION_VALUE")
-        ),
+        page_size=int(_given(page_size, "PAGE_SIZE")),
+        include_validation_value=bool(_given(include_validation_value, "INCLUDE_VALIDATION_VALUE")),
         record_service_exceptions=bool(
-            record_service_exceptions
-            if record_service_exceptions is not None
-            else get_setting("RECORD_SERVICE_EXCEPTIONS")
+            _given(record_service_exceptions, "RECORD_SERVICE_EXCEPTIONS")
         ),
         filter_listings_by_permissions=bool(
-            filter_listings_by_permissions
-            if filter_listings_by_permissions is not None
-            else get_setting("FILTER_LISTINGS_BY_PERMISSIONS")
+            _given(filter_listings_by_permissions, "FILTER_LISTINGS_BY_PERMISSIONS")
         ),
-        require_tool_permissions=bool(
-            require_tool_permissions
-            if require_tool_permissions is not None
-            else get_setting("REQUIRE_TOOL_PERMISSIONS")
-        ),
+        require_tool_permissions=bool(_given(require_tool_permissions, "REQUIRE_TOOL_PERMISSIONS")),
         require_tool_descriptions=bool(
-            require_tool_descriptions
-            if require_tool_descriptions is not None
-            else get_setting("REQUIRE_TOOL_DESCRIPTIONS")
+            _given(require_tool_descriptions, "REQUIRE_TOOL_DESCRIPTIONS")
         ),
-        require_list_pagination=bool(
-            require_list_pagination
-            if require_list_pagination is not None
-            else get_setting("REQUIRE_LIST_PAGINATION")
-        ),
+        require_list_pagination=bool(_given(require_list_pagination, "REQUIRE_LIST_PAGINATION")),
         max_progress_notifications=int(
-            max_progress_notifications
-            if max_progress_notifications is not None
-            else get_setting("MAX_PROGRESS_NOTIFICATIONS")
+            _given(max_progress_notifications, "MAX_PROGRESS_NOTIFICATIONS")
         ),
-        catalog_cache_ttl_ms=int(
-            catalog_cache_ttl_ms
-            if catalog_cache_ttl_ms is not None
-            else get_setting("CATALOG_CACHE_TTL_MS")
-        ),
-        resource_cache_ttl_ms=int(
-            resource_cache_ttl_ms
-            if resource_cache_ttl_ms is not None
-            else get_setting("RESOURCE_CACHE_TTL_MS")
-        ),
+        catalog_cache_ttl_ms=int(_given(catalog_cache_ttl_ms, "CATALOG_CACHE_TTL_MS")),
+        resource_cache_ttl_ms=int(_given(resource_cache_ttl_ms, "RESOURCE_CACHE_TTL_MS")),
         # ``None`` is meaningful for both — "no expiry" and "send no poll hint"
-        # — so neither can use the ``x if x is not None else setting`` shape the
-        # scalars above use, which would read an explicit ``None`` as "not
-        # supplied" and silently pick up the setting instead. ``_bound`` carries
+        # — so neither can use ``_given`` as the scalars above do, which would
+        # read an explicit ``None`` as "not supplied" and silently pick up the
+        # setting instead. ``_bound`` carries
         # that distinction on the sentinel, exactly as the outbound bounds do.
         task_ttl_ms=_nullable_int(_bound(task_ttl_ms, "TASK_TTL_MS")),
         task_poll_interval_ms=_nullable_int(_bound(task_poll_interval_ms, "TASK_POLL_INTERVAL_MS")),
@@ -185,13 +144,9 @@ def build_mcp_config(
             _bound(max_concurrent_sse_streams, "MAX_CONCURRENT_SSE_STREAMS")
         ),
         input_request_ttl_seconds=int(
-            input_request_ttl_seconds
-            if input_request_ttl_seconds is not None
-            else get_setting("INPUT_REQUEST_TTL_SECONDS")
+            _given(input_request_ttl_seconds, "INPUT_REQUEST_TTL_SECONDS")
         ),
-        max_input_rounds=int(
-            max_input_rounds if max_input_rounds is not None else get_setting("MAX_INPUT_ROUNDS")
-        ),
+        max_input_rounds=int(_given(max_input_rounds, "MAX_INPUT_ROUNDS")),
     )
 
 

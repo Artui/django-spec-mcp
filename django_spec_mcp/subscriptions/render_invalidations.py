@@ -49,13 +49,10 @@ def _render(template: str, values: Mapping[str, Any]) -> str | None:
     out: list[str] = []
     last: int = 0
     for match in _TEMPLATE_VAR.finditer(template):
-        name: str = match.group(1)
-        if name not in values:
-            return None
-        value: Any = values[name]
+        # A present-but-null key is as unusable as a missing one: rendering it
+        # as "None" would publish a topic nobody could subscribe to.
+        value: Any = values.get(match.group(1))
         if value is None:
-            # A present-but-null key is as unusable as a missing one: rendering
-            # it as "None" would publish a topic nobody could subscribe to.
             return None
         out.append(template[last : match.start()])
         out.append(str(value))

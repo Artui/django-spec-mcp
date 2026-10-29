@@ -3,24 +3,16 @@ from __future__ import annotations
 import math
 import time
 from collections.abc import Callable
-from typing import Any
 
 from django.core.cache import cache
 from django.http import HttpRequest
 
+from django_spec_mcp.auth.rate_limits.utils import default_key, require_positive
 from django_spec_mcp.auth.types.token_info import TokenInfo
 
 # Distinct from the other limiters' prefixes so an operator can tell which
 # scheme produced a counter from the cache key alone.
 _DEFAULT_KEY_PREFIX: str = "spec-mcp:rl-tb"
-
-
-def _default_key(request: HttpRequest, token: TokenInfo) -> str:
-    """Per-user when authenticated, ``REMOTE_ADDR`` otherwise."""
-    user_id: Any = getattr(token.user, "id", None)
-    if user_id is not None:
-        return f"u:{user_id}"
-    return f"ip:{request.META.get('REMOTE_ADDR', 'unknown')}"
 
 
 class TokenBucketRateLimit:
@@ -52,14 +44,12 @@ class TokenBucketRateLimit:
         namespace: str = "default",
         key: Callable[[HttpRequest, TokenInfo], str] | None = None,
     ) -> None:
-        if capacity <= 0:
-            raise ValueError("capacity must be positive")
-        if refill_per_second <= 0:
-            raise ValueError("refill_per_second must be positive")
+        require_positive("capacity", capacity)
+        require_positive("refill_per_second", refill_per_second)
         self._capacity: int = capacity
         self._refill: float = float(refill_per_second)
         self._namespace: str = namespace
-        self._key_fn: Callable[[HttpRequest, TokenInfo], str] = key or _default_key
+        self._key_fn: Callable[[HttpRequest, TokenInfo], str] = key or default_key
         # Entries expire after a couple of drain-times so dead buckets don't
         # accumulate; an expired bucket is re-created full, which errs towards
         # admitting rather than losing a legitimate caller.

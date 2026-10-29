@@ -5,13 +5,9 @@ from typing import Any
 from django_spec_mcp.handlers.kernel_tool_entry import kernel_tool_entry
 from django_spec_mcp.handlers.listable_tool_bindings import listable_tool_bindings
 from django_spec_mcp.handlers.offered_tools import offered_tools
-from django_spec_mcp.handlers.pagination import paginate
 from django_spec_mcp.handlers.types.context import MCPCallContext
-from django_spec_mcp.handlers.utils import (
-    catalog_cache_hints,
-)
+from django_spec_mcp.handlers.utils import catalog_cursor, catalog_page
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
-from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 
 
 def handle_tools_list(
@@ -44,9 +40,9 @@ def handle_tools_list(
     ``unavailable_tools`` each step, and so needs a definition for a tool that
     is unavailable when it lists and becomes available later.
     """
-    cursor: Any = (params or {}).get("cursor")
-    if cursor is not None and not isinstance(cursor, str):
-        return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, "'cursor' must be a string")
+    cursor = catalog_cursor(params)
+    if isinstance(cursor, JsonRpcError):
+        return cursor
 
     # Filtered before paginating, so ``nextCursor`` reflects the visible slice
     # rather than the full registry.
@@ -61,23 +57,14 @@ def handle_tools_list(
     if not include_unavailable:
         bindings, asked = offered_tools(bindings, context)
 
-    try:
-        page, next_cursor = paginate(bindings, cursor, page_size=context.config.page_size)
-    except ValueError as exc:
-        return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, str(exc))
-
-    # Each entry is built from the kernel's own schemas.
-    tools: list[dict[str, Any]] = [kernel_tool_entry(binding, context) for binding in page]
-    response: dict[str, Any] = {
-        "tools": tools,
-        **catalog_cache_hints(
-            ttl_ms=context.config.catalog_cache_ttl_ms,
-            per_caller=context.config.filter_listings_by_permissions or asked,
-        ),
-    }
-    if next_cursor is not None:
-        response["nextCursor"] = next_cursor
-    return response
+    return catalog_page(
+        "tools",
+        bindings,
+        cursor,
+        lambda binding: kernel_tool_entry(binding, context),
+        context,
+        per_caller=context.config.filter_listings_by_permissions or asked,
+    )
 
 
 __all__ = ["handle_tools_list"]

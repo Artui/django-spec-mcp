@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+from typing import Any
+
+import pytest
+
 from django_spec_mcp.protocol.parse_message import parse_message
 from django_spec_mcp.protocol.types.client_capabilities import ClientCapabilities
+from django_spec_mcp.protocol.types.completion import Completion
 from django_spec_mcp.protocol.types.implementation import Implementation
 from django_spec_mcp.protocol.types.initialize_params import InitializeParams
 from django_spec_mcp.protocol.types.initialize_result import InitializeResult
@@ -19,44 +24,257 @@ from django_spec_mcp.protocol.types.tool_result import ToolResult
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from django_spec_mcp.types.ui_extension_id import UI_EXTENSION_ID
 
-
-def test_implementation_to_dict() -> None:
-    assert Implementation(name="x", version="1").to_dict() == {"name": "x", "version": "1"}
+_SERVER_INFO = Implementation(name="s", version="1")
 
 
-def test_implementation_title_is_omitted_when_absent() -> None:
-    """``title`` is optional per the spec; clients fall back to ``name``."""
-    assert "title" not in Implementation(name="x", version="1").to_dict()
-
-
-def test_implementation_carries_title_when_given() -> None:
-    assert Implementation(name="x", version="1", title="Nice Name").to_dict() == {
-        "name": "x",
-        "version": "1",
-        "title": "Nice Name",
-    }
-
-
-def test_client_capabilities_empty() -> None:
-    assert ClientCapabilities().to_dict() == {}
-
-
-def test_client_capabilities_full() -> None:
-    caps = ClientCapabilities(
-        roots={"list": True},
-        sampling={},
-        elicitation={"x": 1},
-        experimental={"y": 2},
-        extensions={UI_EXTENSION_ID: {}},
-    )
-    out = caps.to_dict()
-    assert out == {
-        "roots": {"list": True},
-        "sampling": {},
-        "elicitation": {"x": 1},
-        "experimental": {"y": 2},
-        "extensions": {UI_EXTENSION_ID: {}},
-    }
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        pytest.param(
+            Implementation(name="x", version="1"),
+            {"name": "x", "version": "1"},
+            # ``title`` is optional per the spec; clients fall back to ``name``.
+            id="implementation-omits-an-absent-title",
+        ),
+        pytest.param(
+            Implementation(name="x", version="1", title="Nice Name"),
+            {"name": "x", "version": "1", "title": "Nice Name"},
+            id="implementation-carries-a-title",
+        ),
+        pytest.param(ClientCapabilities(), {}, id="client-capabilities-empty"),
+        pytest.param(
+            ClientCapabilities(
+                roots={"list": True},
+                sampling={},
+                elicitation={"x": 1},
+                experimental={"y": 2},
+                extensions={UI_EXTENSION_ID: {}},
+            ),
+            {
+                "roots": {"list": True},
+                "sampling": {},
+                "elicitation": {"x": 1},
+                "experimental": {"y": 2},
+                "extensions": {UI_EXTENSION_ID: {}},
+            },
+            id="client-capabilities-full",
+        ),
+        pytest.param(
+            ServerCapabilities(
+                tools={"list": {}},
+                resources={"r": True},
+                prompts={"p": True},
+                completions={"c": 1},
+                experimental={"e": 1},
+            ),
+            {
+                "tools": {"list": {}},
+                "resources": {"r": True},
+                "prompts": {"p": True},
+                "completions": {"c": 1},
+                "experimental": {"e": 1},
+            },
+            id="server-capabilities-full",
+        ),
+        pytest.param(
+            ServerCapabilities(tools={}, resources=None),
+            {"tools": {}},
+            id="server-capabilities-an-empty-capability-is-still-declared",
+        ),
+        pytest.param(
+            ServerCapabilities(tools=None, resources={}),
+            {"resources": {}},
+            id="server-capabilities-a-none-capability-is-omitted",
+        ),
+        pytest.param(
+            InitializeResult(
+                protocol_version="2025-11-25",
+                capabilities=ServerCapabilities(),
+                server_info=_SERVER_INFO,
+                instructions="hello",
+            ),
+            {
+                "protocolVersion": "2025-11-25",
+                "capabilities": {},
+                "serverInfo": {"name": "s", "version": "1"},
+                "instructions": "hello",
+            },
+            id="initialize-result-with-instructions",
+        ),
+        pytest.param(
+            InitializeResult(
+                protocol_version="2025-11-25",
+                capabilities=ServerCapabilities(),
+                server_info=_SERVER_INFO,
+            ),
+            {
+                "protocolVersion": "2025-11-25",
+                "capabilities": {},
+                "serverInfo": {"name": "s", "version": "1"},
+            },
+            id="initialize-result-without-instructions",
+        ),
+        pytest.param(
+            JsonRpcError(code=JsonRpcErrorCode.PARSE_ERROR, message="boom"),
+            {"code": -32700, "message": "boom"},
+            id="json-rpc-error-minimal",
+        ),
+        pytest.param(
+            JsonRpcError(code=-32000, message="boom", data={"hint": "x"}),
+            {"code": -32000, "message": "boom", "data": {"hint": "x"}},
+            id="json-rpc-error-with-data",
+        ),
+        pytest.param(
+            JsonRpcRequest(method="m", id=1, params={"a": 1}),
+            {"jsonrpc": "2.0", "method": "m", "id": 1, "params": {"a": 1}},
+            id="json-rpc-request-with-params",
+        ),
+        pytest.param(
+            JsonRpcRequest(method="m", id=1),
+            {"jsonrpc": "2.0", "method": "m", "id": 1},
+            id="json-rpc-request-without-params",
+        ),
+        pytest.param(
+            JsonRpcNotification(method="n", params={"x": 1}),
+            {"jsonrpc": "2.0", "method": "n", "params": {"x": 1}},
+            id="json-rpc-notification-with-params",
+        ),
+        pytest.param(
+            JsonRpcNotification(method="n"),
+            {"jsonrpc": "2.0", "method": "n"},
+            id="json-rpc-notification-without-params",
+        ),
+        pytest.param(
+            JsonRpcResponse(id=1, result={"ok": True}),
+            # Every result carries the 2026-07-28 discriminator, stamped once here.
+            {"jsonrpc": "2.0", "id": 1, "result": {"resultType": "complete", "ok": True}},
+            id="json-rpc-response-result",
+        ),
+        pytest.param(
+            JsonRpcResponse(id=1, error=JsonRpcError(code=-32600, message="bad")),
+            {"jsonrpc": "2.0", "id": 1, "error": {"code": -32600, "message": "bad"}},
+            id="json-rpc-response-error",
+        ),
+        pytest.param(
+            Tool(
+                name="t",
+                description="d",
+                title="T",
+                input_schema={"type": "object"},
+                output_schema={"type": "object"},
+                annotations={"readOnlyHint": True},
+            ),
+            {
+                "name": "t",
+                "inputSchema": {"type": "object"},
+                "title": "T",
+                "description": "d",
+                "outputSchema": {"type": "object"},
+                "annotations": {"readOnlyHint": True},
+            },
+            id="tool-full",
+        ),
+        pytest.param(
+            Tool(name="t"), {"name": "t", "inputSchema": {"type": "object"}}, id="tool-minimal"
+        ),
+        pytest.param(
+            ToolContentBlock(
+                type="image", text="t", data="d", mime_type="image/png", annotations={"k": 1}
+            ),
+            {
+                "type": "image",
+                "text": "t",
+                "data": "d",
+                "mimeType": "image/png",
+                "annotations": {"k": 1},
+            },
+            id="tool-content-block-full",
+        ),
+        pytest.param(
+            ToolContentBlock(type="text"), {"type": "text"}, id="tool-content-block-minimal"
+        ),
+        pytest.param(
+            ToolResult(content=[ToolContentBlock(type="text", text="oops")], is_error=True),
+            {"content": [{"type": "text", "text": "oops"}], "isError": True},
+            id="tool-result-with-error-flag",
+        ),
+        pytest.param(
+            ToolResult(
+                content=[ToolContentBlock(type="text", text="x")], structured_content={"a": 1}
+            ),
+            {"content": [{"type": "text", "text": "x"}], "structuredContent": {"a": 1}},
+            id="tool-result-with-structured-content",
+        ),
+        pytest.param(
+            Resource(
+                uri="u://1",
+                name="n",
+                title="T",
+                description="d",
+                mime_type="text/plain",
+                size=42,
+                annotations={"k": 1},
+            ),
+            {
+                "uri": "u://1",
+                "name": "n",
+                "title": "T",
+                "description": "d",
+                "mimeType": "text/plain",
+                "size": 42,
+                "annotations": {"k": 1},
+            },
+            id="resource-full",
+        ),
+        pytest.param(
+            Resource(uri="u://1", name="n"), {"uri": "u://1", "name": "n"}, id="resource-minimal"
+        ),
+        pytest.param(
+            ResourceTemplate(
+                uri_template="u://{x}",
+                name="n",
+                title="T",
+                description="d",
+                mime_type="application/json",
+                annotations={"k": 1},
+            ),
+            {
+                "uriTemplate": "u://{x}",
+                "name": "n",
+                "title": "T",
+                "description": "d",
+                "mimeType": "application/json",
+                "annotations": {"k": 1},
+            },
+            id="resource-template-full",
+        ),
+        pytest.param(
+            ResourceTemplate(uri_template="u://", name="n"),
+            {"uriTemplate": "u://", "name": "n"},
+            id="resource-template-minimal",
+        ),
+        pytest.param(
+            ResourceContents(uri="u", mime_type="text/plain", text="hi"),
+            {"uri": "u", "mimeType": "text/plain", "text": "hi"},
+            id="resource-contents-text",
+        ),
+        pytest.param(
+            ResourceContents(uri="u", blob="ZGF0YQ=="),
+            {"uri": "u", "blob": "ZGF0YQ=="},
+            id="resource-contents-blob",
+        ),
+        pytest.param(ResourceContents(uri="u"), {"uri": "u"}, id="resource-contents-minimal"),
+        pytest.param(
+            # ``total`` is optional on the wire; the handler leaves it unset, but
+            # a consumer building a ``Completion`` directly may know the count.
+            Completion(values=("a",), total=42, has_more=True),
+            {"values": ["a"], "total": 42, "hasMore": True},
+            id="completion-emits-a-known-total",
+        ),
+    ],
+)
+def test_to_dict(value: Any, expected: dict[str, Any]) -> None:
+    assert value.to_dict() == expected
 
 
 def test_client_extensions_are_parsed_from_initialize() -> None:
@@ -77,38 +295,6 @@ def test_client_extensions_are_parsed_from_initialize() -> None:
 def test_a_client_advertising_no_extensions_parses_to_none() -> None:
     params = InitializeParams.from_payload({"protocolVersion": "2025-11-25"})
     assert params.capabilities.extensions is None
-
-
-def test_server_capabilities_full() -> None:
-    caps = ServerCapabilities(
-        tools={"list": {}},
-        resources={"r": True},
-        prompts={"p": True},
-        completions={"c": 1},
-        experimental={"e": 1},
-    )
-    out = caps.to_dict()
-    assert set(out.keys()) == {
-        "tools",
-        "resources",
-        "prompts",
-        "completions",
-        "experimental",
-    }
-
-
-def test_server_capabilities_only_tools() -> None:
-    caps = ServerCapabilities(tools={}, resources=None)
-    out = caps.to_dict()
-    assert "tools" in out
-    assert "resources" not in out
-
-
-def test_server_capabilities_with_tools_none() -> None:
-    caps = ServerCapabilities(tools=None, resources={})
-    out = caps.to_dict()
-    assert "tools" not in out
-    assert "resources" in out
 
 
 def test_initialize_params_from_payload_minimal() -> None:
@@ -133,179 +319,6 @@ def test_initialize_params_from_payload_full() -> None:
     assert parsed.protocol_version == "2025-11-25"
     assert parsed.capabilities.roots == {"list": True}
     assert parsed.client_info == Implementation(name="c", version="1")
-
-
-def test_initialize_result_with_instructions() -> None:
-    res = InitializeResult(
-        protocol_version="2025-11-25",
-        capabilities=ServerCapabilities(),
-        server_info=Implementation(name="s", version="1"),
-        instructions="hello",
-    )
-    assert res.to_dict()["instructions"] == "hello"
-
-
-def test_initialize_result_no_instructions() -> None:
-    res = InitializeResult(
-        protocol_version="2025-11-25",
-        capabilities=ServerCapabilities(),
-        server_info=Implementation(name="s", version="1"),
-    )
-    assert "instructions" not in res.to_dict()
-
-
-def test_json_rpc_error_to_dict_min() -> None:
-    err = JsonRpcError(code=JsonRpcErrorCode.PARSE_ERROR, message="boom")
-    assert err.to_dict() == {"code": -32700, "message": "boom"}
-
-
-def test_json_rpc_error_to_dict_with_data() -> None:
-    err = JsonRpcError(code=-32000, message="boom", data={"hint": "x"})
-    assert err.to_dict()["data"] == {"hint": "x"}
-
-
-def test_json_rpc_request_to_dict_with_params() -> None:
-    req = JsonRpcRequest(method="m", id=1, params={"a": 1})
-    assert req.to_dict() == {"jsonrpc": "2.0", "method": "m", "id": 1, "params": {"a": 1}}
-
-
-def test_json_rpc_request_to_dict_without_params() -> None:
-    req = JsonRpcRequest(method="m", id=1)
-    assert "params" not in req.to_dict()
-
-
-def test_json_rpc_notification_to_dict_with_params() -> None:
-    note = JsonRpcNotification(method="n", params={"x": 1})
-    assert note.to_dict()["params"] == {"x": 1}
-
-
-def test_json_rpc_notification_to_dict_no_params() -> None:
-    note = JsonRpcNotification(method="n")
-    assert "params" not in note.to_dict()
-
-
-def test_json_rpc_response_to_dict_result() -> None:
-    res = JsonRpcResponse(id=1, result={"ok": True})
-    # Every result carries the 2026-07-28 discriminator, stamped once here.
-    assert res.to_dict()["result"] == {"resultType": "complete", "ok": True}
-
-
-def test_json_rpc_response_to_dict_error() -> None:
-    res = JsonRpcResponse(id=1, error=JsonRpcError(code=-32600, message="bad"))
-    assert "error" in res.to_dict()
-    assert "result" not in res.to_dict()
-
-
-def test_tool_to_dict_full() -> None:
-    tool = Tool(
-        name="t",
-        description="d",
-        title="T",
-        input_schema={"type": "object"},
-        output_schema={"type": "object"},
-        annotations={"readOnlyHint": True},
-    )
-    out = tool.to_dict()
-    assert out["title"] == "T"
-    assert out["description"] == "d"
-    assert out["outputSchema"] == {"type": "object"}
-    assert out["annotations"] == {"readOnlyHint": True}
-
-
-def test_tool_to_dict_minimal() -> None:
-    out = Tool(name="t").to_dict()
-    assert "title" not in out
-    assert "description" not in out
-    assert "outputSchema" not in out
-    assert "annotations" not in out
-    assert out["inputSchema"] == {"type": "object"}
-
-
-def test_tool_content_block_full() -> None:
-    block = ToolContentBlock(
-        type="image", text="t", data="d", mime_type="image/png", annotations={"k": 1}
-    )
-    out = block.to_dict()
-    assert out["text"] == "t"
-    assert out["data"] == "d"
-    assert out["mimeType"] == "image/png"
-    assert out["annotations"] == {"k": 1}
-
-
-def test_tool_content_block_minimal() -> None:
-    out = ToolContentBlock(type="text").to_dict()
-    assert out == {"type": "text"}
-
-
-def test_tool_result_with_error_flag() -> None:
-    res = ToolResult(content=[ToolContentBlock(type="text", text="oops")], is_error=True)
-    out = res.to_dict()
-    assert out["isError"] is True
-    assert out["content"][0]["text"] == "oops"
-    assert "structuredContent" not in out
-
-
-def test_tool_result_with_structured() -> None:
-    res = ToolResult(content=[ToolContentBlock(type="text", text="x")], structured_content={"a": 1})
-    assert res.to_dict()["structuredContent"] == {"a": 1}
-
-
-def test_resource_to_dict_full() -> None:
-    r = Resource(
-        uri="u://1",
-        name="n",
-        title="T",
-        description="d",
-        mime_type="text/plain",
-        size=42,
-        annotations={"k": 1},
-    )
-    out = r.to_dict()
-    assert out["title"] == "T"
-    assert out["description"] == "d"
-    assert out["mimeType"] == "text/plain"
-    assert out["size"] == 42
-    assert out["annotations"] == {"k": 1}
-
-
-def test_resource_to_dict_minimal() -> None:
-    out = Resource(uri="u://1", name="n").to_dict()
-    assert out == {"uri": "u://1", "name": "n"}
-
-
-def test_resource_template_full() -> None:
-    t = ResourceTemplate(
-        uri_template="u://{x}",
-        name="n",
-        title="T",
-        description="d",
-        mime_type="application/json",
-        annotations={"k": 1},
-    )
-    out = t.to_dict()
-    assert out["title"] == "T"
-    assert out["description"] == "d"
-    assert out["mimeType"] == "application/json"
-    assert out["annotations"] == {"k": 1}
-
-
-def test_resource_template_minimal() -> None:
-    out = ResourceTemplate(uri_template="u://", name="n").to_dict()
-    assert out == {"uriTemplate": "u://", "name": "n"}
-
-
-def test_resource_contents_text() -> None:
-    out = ResourceContents(uri="u", mime_type="text/plain", text="hi").to_dict()
-    assert out == {"uri": "u", "mimeType": "text/plain", "text": "hi"}
-
-
-def test_resource_contents_blob() -> None:
-    out = ResourceContents(uri="u", blob="ZGF0YQ==").to_dict()
-    assert out == {"uri": "u", "blob": "ZGF0YQ=="}
-
-
-def test_resource_contents_minimal() -> None:
-    assert ResourceContents(uri="u").to_dict() == {"uri": "u"}
 
 
 def test_parse_message_request() -> None:
@@ -337,48 +350,20 @@ def test_parse_message_response_with_null_error() -> None:
     assert msg.error is None
 
 
-def test_parse_message_rejects_non_dict() -> None:
-    import pytest
-
-    with pytest.raises(ValueError, match="JSON object"):
-        parse_message([])  # type: ignore[arg-type]
-
-
-def test_parse_message_rejects_wrong_version() -> None:
-    import pytest
-
-    with pytest.raises(ValueError, match="version"):
-        parse_message({"jsonrpc": "1.0", "method": "m"})
-
-
-def test_parse_message_rejects_non_string_method() -> None:
-    import pytest
-
-    with pytest.raises(ValueError, match="must be a string"):
-        parse_message({"jsonrpc": "2.0", "method": 7})
-
-
-def test_parse_message_rejects_non_dict_error() -> None:
-    import pytest
-
-    with pytest.raises(ValueError, match="object"):
-        parse_message({"jsonrpc": "2.0", "id": 1, "error": "boom"})
-
-
-def test_parse_message_rejects_unknown_shape() -> None:
-    import pytest
-
-    with pytest.raises(ValueError, match="must contain"):
-        parse_message({"jsonrpc": "2.0", "id": 1})
-
-
-def test_completion_emits_total_when_it_is_known() -> None:
-    """``total`` is optional on the wire; the handler leaves it unset, but a
-    consumer building a :class:`Completion` directly may know the count."""
-    from django_spec_mcp.protocol.types.completion import Completion
-
-    assert Completion(values=("a",), total=42, has_more=True).to_dict() == {
-        "values": ["a"],
-        "total": 42,
-        "hasMore": True,
-    }
+@pytest.mark.parametrize(
+    ("payload", "match"),
+    [
+        pytest.param([], "JSON object", id="not-a-dict"),
+        pytest.param({"jsonrpc": "1.0", "method": "m"}, "version", id="wrong-version"),
+        pytest.param({"jsonrpc": "2.0", "method": 7}, "must be a string", id="non-string-method"),
+        pytest.param(
+            {"jsonrpc": "2.0", "id": 1, "error": "boom"},
+            "'error' must be an object",
+            id="non-dict-error",
+        ),
+        pytest.param({"jsonrpc": "2.0", "id": 1}, "must contain", id="unknown-shape"),
+    ],
+)
+def test_parse_message_rejects(payload: Any, match: str) -> None:
+    with pytest.raises(ValueError, match=match):
+        parse_message(payload)

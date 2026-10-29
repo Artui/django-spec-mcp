@@ -3,12 +3,11 @@ from __future__ import annotations
 from typing import Any
 
 from django_spec_mcp.handlers.is_binding_listable import is_binding_listable
-from django_spec_mcp.handlers.pagination import paginate
 from django_spec_mcp.handlers.types.context import MCPCallContext
-from django_spec_mcp.handlers.utils import catalog_cache_hints
+from django_spec_mcp.handlers.utils import catalog_cursor, catalog_page
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.protocol.types.prompt import Prompt
-from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
+from django_spec_mcp.registry.types.prompt_binding import PromptBinding
 
 
 def handle_prompts_list(
@@ -20,9 +19,9 @@ def handle_prompts_list(
     Mirrors ``tools/list`` / ``resources/list`` — opaque cursor in,
     ``nextCursor`` out when the page doesn't reach the end.
     """
-    cursor: Any = (params or {}).get("cursor")
-    if cursor is not None and not isinstance(cursor, str):
-        return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, "'cursor' must be a string")
+    cursor = catalog_cursor(params)
+    if isinstance(cursor, JsonRpcError):
+        return cursor
 
     bindings = list(context.prompts.all())
     if context.config.filter_listings_by_permissions:
@@ -30,33 +29,26 @@ def handle_prompts_list(
             b for b in bindings if is_binding_listable(b, context.http_request, context.token)
         ]
 
-    try:
-        page, next_cursor = paginate(bindings, cursor, page_size=context.config.page_size)
-    except ValueError as exc:
-        return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, str(exc))
+    return catalog_page(
+        "prompts",
+        bindings,
+        cursor,
+        _prompt_entry,
+        context,
+        per_caller=context.config.filter_listings_by_permissions,
+    )
 
-    items: list[dict[str, Any]] = []
-    for binding in page:
-        prompt = Prompt(
-            name=binding.name,
-            description=binding.description,
-            title=binding.title,
-            icons=binding.icons,
-            arguments=list(binding.arguments),
-            annotations=dict(binding.annotations) or None,
-            meta=dict(binding.meta) or None,
-        )
-        items.append(prompt.to_dict())
-    response: dict[str, Any] = {
-        "prompts": items,
-        **catalog_cache_hints(
-            ttl_ms=context.config.catalog_cache_ttl_ms,
-            per_caller=context.config.filter_listings_by_permissions,
-        ),
-    }
-    if next_cursor is not None:
-        response["nextCursor"] = next_cursor
-    return response
+
+def _prompt_entry(binding: PromptBinding) -> dict[str, Any]:
+    return Prompt(
+        name=binding.name,
+        description=binding.description,
+        title=binding.title,
+        icons=binding.icons,
+        arguments=list(binding.arguments),
+        annotations=dict(binding.annotations) or None,
+        meta=dict(binding.meta) or None,
+    ).to_dict()
 
 
 __all__ = ["handle_prompts_list"]

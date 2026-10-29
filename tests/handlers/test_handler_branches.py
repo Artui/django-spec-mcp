@@ -263,27 +263,40 @@ def _a_spec() -> ServiceSpec:
     )
 
 
-def test_structured_content_is_omitted_when_the_server_disables_it(handle: Handle) -> None:
-    # Disabling structuredContent also requires disabling outputSchema:
-    # advertising the schema while suppressing the content is a spec
-    # violation that ``resolve_structured_output`` rejects.
-    config = build_mcp_config(include_structured_content=False, include_output_schema=False)
-    out = _call(handle, _one(_a_spec(), config))
-    assert "structuredContent" not in out
+# Disabling structuredContent also requires disabling outputSchema: advertising
+# the schema while suppressing the content is a spec violation that
+# ``resolve_structured_output`` rejects.
+@pytest.mark.parametrize(
+    ("server_config", "registration", "emitted"),
+    [
+        (
+            {"include_structured_content": False, "include_output_schema": False},
+            {},
+            False,
+        ),
+        (
+            {"include_structured_content": True},
+            {"include_structured_content": False, "include_output_schema": False},
+            False,
+        ),
+        (
+            {"include_structured_content": False, "include_output_schema": False},
+            {"include_structured_content": True},
+            True,
+        ),
+    ],
+    ids=["server-disables", "binding-forces-off", "binding-forces-on"],
+)
+def test_structured_content_follows_the_binding_over_the_server(
+    handle: Handle, server_config: dict[str, bool], registration: dict[str, bool], emitted: bool
+) -> None:
+    out = _call(handle, _one(_a_spec(), build_mcp_config(**server_config), **registration))
+
+    assert ("structuredContent" in out) is emitted
+    if emitted:
+        assert out["structuredContent"] == {"a": 1}
     # The text rendering still carries the payload.
     assert '"a": 1' in out["content"][0]["text"]
-
-
-def test_a_binding_forces_structured_content_off_with_the_server_on(handle: Handle) -> None:
-    config = build_mcp_config(include_structured_content=True)
-    server = _one(_a_spec(), config, include_structured_content=False, include_output_schema=False)
-    assert "structuredContent" not in _call(handle, server)
-
-
-def test_a_binding_forces_structured_content_on_with_the_server_off(handle: Handle) -> None:
-    config = build_mcp_config(include_structured_content=False, include_output_schema=False)
-    server = _one(_a_spec(), config, include_structured_content=True)
-    assert _call(handle, server)["structuredContent"] == {"a": 1}
 
 
 def _listed(server: MCPServer) -> dict[str, Any]:

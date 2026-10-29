@@ -13,6 +13,7 @@ from django_spec_mcp.handlers.utils import (
     effective_rate_limits,
     forbidden,
     judge_tool_permissions,
+    rate_limited,
 )
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.protocol.types.task import Task
@@ -117,11 +118,7 @@ def maybe_create_task(
         effective_rate_limits(binding, context), context.http_request, context.token
     )
     if retry_after is not None:
-        return JsonRpcError(
-            JsonRpcErrorCode.RATE_LIMITED,
-            "Rate limit exceeded",
-            data={"retryAfter": retry_after},
-        )
+        return rate_limited(retry_after)
 
     task: Task = create_task(
         store=store,

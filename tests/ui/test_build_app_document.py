@@ -111,22 +111,21 @@ class TestDiagnosticsFollowDebug:
     every call, for every user, in a shipped product.
     """
 
-    def test_off_by_default_outside_debug(self, settings: Any) -> None:
-        settings.DEBUG = False
-        assert _html_tag(build_app_document(BODY, title="t")) == '<html lang="en">'
-
-    def test_on_by_default_under_debug(self, settings: Any) -> None:
-        settings.DEBUG = True
-        assert _html_tag(build_app_document(BODY, title="t")) == (
-            '<html lang="en" data-mcp-diagnostics="1">'
+    @pytest.mark.parametrize(
+        ("debug", "diagnostics", "shown"),
+        [
+            (False, None, False),
+            (True, None, True),
+            (False, True, True),
+            (True, False, False),
+        ],
+        ids=["off-outside-debug", "on-under-debug", "explicit-true-wins", "explicit-false-wins"],
+    )
+    def test_the_default_follows_debug_and_an_explicit_value_wins(
+        self, settings: Any, debug: bool, diagnostics: bool | None, shown: bool
+    ) -> None:
+        settings.DEBUG = debug
+        document = build_app_document(BODY, title="t", diagnostics=diagnostics)
+        assert _html_tag(document) == (
+            '<html lang="en" data-mcp-diagnostics="1">' if shown else '<html lang="en">'
         )
-
-    def test_an_explicit_true_wins_outside_debug(self, settings: Any) -> None:
-        settings.DEBUG = False
-        document = build_app_document(BODY, title="t", diagnostics=True)
-        assert 'data-mcp-diagnostics="1"' in _html_tag(document)
-
-    def test_an_explicit_false_wins_under_debug(self, settings: Any) -> None:
-        settings.DEBUG = True
-        document = build_app_document(BODY, title="t", diagnostics=False)
-        assert _html_tag(document) == '<html lang="en">'

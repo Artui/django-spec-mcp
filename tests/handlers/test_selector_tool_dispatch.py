@@ -25,7 +25,6 @@ from typing import Any
 import django_filters
 import pytest
 from asgiref.sync import sync_to_async
-from django.http import HttpRequest
 from django.test import Client, override_settings
 from django_service_specs import (
     DataclassPresenter,
@@ -41,10 +40,8 @@ from django_service_specs import (
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
-from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
@@ -53,7 +50,7 @@ from tests.testapp.auth_backend import HeaderAuthBackend
 from tests.testapp.kernel_shapes import InvoiceOutput
 from tests.testapp.models import Invoice
 from tests.testapp.urlconf_for import urlconf_for
-from tests.utils import tool_error
+from tests.utils import call_context, tool_error
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -98,15 +95,7 @@ def _server(spec: SelectorSpec, **tool: Any) -> MCPServer:
 
 async def _call(server: MCPServer, arguments: dict[str, Any], *, is_async: bool) -> Any:
     params: dict[str, Any] = {"name": "invoices.list", "arguments": arguments}
-    context = MCPCallContext(
-        http_request=HttpRequest(),
-        token=TokenInfo(user=None),
-        tools=server.tools,
-        resources=server.resources,
-        prompts=server.prompts,
-        protocol_version="2025-11-25",
-        config=server.config,
-    )
+    context = call_context(server)
     if is_async:
         return await handle_tools_call_async(params, context)
     return await sync_to_async(handle_tools_call)(params, context)

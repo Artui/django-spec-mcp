@@ -159,13 +159,6 @@ async def test_a_raised_service_error_is_a_tool_error(raised: Exception, expecte
     assert error["type"] == expected
 
 
-async def test_a_scope_gate_denies_the_async_call() -> None:
-    server = _one(ServiceSpec(service=lambda: None, permissions=OPEN), scopes=("scope:x",))
-    out = await _call(server)
-    assert isinstance(out, JsonRpcError)
-    assert (out.code, out.data) == (-32006, {"requiredScopes": ["scope:x"]})
-
-
 # ---------- awaited on the loop ----------
 
 
@@ -244,9 +237,14 @@ async def test_a_malformed_or_unknown_read_is_refused(params: Any, code: int) ->
     assert out.code == code
 
 
-async def test_a_read_denied_by_its_scope_gate() -> None:
-    server = _resource_server(lambda *, pk: {"pk": pk}, scopes=("scope:x",))
-    out = await handle_resources_read_async({"uri": "r://1"}, _ctx(server))
+@pytest.mark.parametrize("route", ["tool", "resource"])
+async def test_a_scope_gate_denies_the_async_call(route: str) -> None:
+    if route == "tool":
+        server = _one(ServiceSpec(service=lambda: None, permissions=OPEN), scopes=("scope:x",))
+        out = await _call(server)
+    else:
+        server = _resource_server(lambda *, pk: {"pk": pk}, scopes=("scope:x",))
+        out = await handle_resources_read_async({"uri": "r://1"}, _ctx(server))
     assert isinstance(out, JsonRpcError)
     assert (out.code, out.data) == (-32006, {"requiredScopes": ["scope:x"]})
 

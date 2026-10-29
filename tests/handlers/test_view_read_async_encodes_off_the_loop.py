@@ -6,15 +6,13 @@ from typing import Any
 
 import pytest
 from django.contrib.auth import get_user_model
-from django.http import HttpRequest
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_resources_read_async import handle_resources_read_async
-from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.registry.types.resource_binding import ResourceBinding
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
+from tests.utils import call_context
 
 
 def _usernames(**_: Any) -> Any:
@@ -39,14 +37,7 @@ async def test_an_async_view_read_of_a_lazy_queryset_encodes_off_the_loop() -> N
             permissions=(),
         )
     )
-    context = MCPCallContext(
-        http_request=HttpRequest(),
-        token=TokenInfo(user=None),
-        tools=server.tools,
-        resources=server.resources,
-        prompts=server.prompts,
-        protocol_version="2025-11-25",
-    )
+    context = call_context(server)
 
     out: Any = await handle_resources_read_async({"uri": "r://users"}, context)
 

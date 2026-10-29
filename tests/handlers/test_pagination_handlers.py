@@ -8,6 +8,9 @@ listing pages over bindings, not over what they read.
 
 from __future__ import annotations
 
+from typing import Any
+
+import pytest
 from django_service_specs import (
     Parameter,
     Parameters,
@@ -24,9 +27,9 @@ from django_spec_mcp.handlers.handle_resources_templates_list import (
     handle_resources_templates_list,
 )
 from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
-from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
+from tests.utils import call_context
 
 
 def _row(pk: int) -> dict[str, int]:
@@ -63,88 +66,50 @@ def _build_server() -> MCPServer:
     return server
 
 
-def _ctx(server: MCPServer) -> MCPCallContext:
-    from django.http import HttpRequest
-
-    from django_spec_mcp.auth.types.token_info import TokenInfo
-
-    return MCPCallContext(
-        http_request=HttpRequest(),
-        token=TokenInfo(user=None),
-        tools=server.tools,
-        resources=server.resources,
-        prompts=server.prompts,
-        protocol_version="2025-11-25",
-    )
+_LISTINGS = pytest.mark.parametrize(
+    ("handler", "key"),
+    [
+        (handle_tools_list, "tools"),
+        (handle_resources_list, "resources"),
+        (handle_resources_templates_list, "resourceTemplates"),
+    ],
+    ids=["tools", "resources", "templates"],
+)
 
 
 def test_tools_list_paginates(settings) -> None:
     settings.SPEC_MCP = {"PAGE_SIZE": 2}
     server = _build_server()
-    out1 = handle_tools_list(None, _ctx(server))
+    out1 = handle_tools_list(None, call_context(server))
     assert isinstance(out1, dict)
     assert len(out1["tools"]) == 2
     assert "nextCursor" in out1
-    out2 = handle_tools_list({"cursor": out1["nextCursor"]}, _ctx(server))
+    out2 = handle_tools_list({"cursor": out1["nextCursor"]}, call_context(server))
     assert isinstance(out2, dict)
     assert len(out2["tools"]) == 2
     assert "nextCursor" in out2
-    out3 = handle_tools_list({"cursor": out2["nextCursor"]}, _ctx(server))
+    out3 = handle_tools_list({"cursor": out2["nextCursor"]}, call_context(server))
     assert isinstance(out3, dict)
     assert len(out3["tools"]) == 1
     assert "nextCursor" not in out3
 
 
-def test_resources_list_paginates(settings) -> None:
+@pytest.mark.parametrize(
+    ("handler", "key"),
+    [(handle_resources_list, "resources"), (handle_resources_templates_list, "resourceTemplates")],
+    ids=["resources", "templates"],
+)
+def test_a_resource_listing_paginates(settings, handler: Any, key: str) -> None:
     settings.SPEC_MCP = {"PAGE_SIZE": 2}
-    server = _build_server()
-    out = handle_resources_list(None, _ctx(server))
+    out = handler(None, call_context(_build_server()))
     assert isinstance(out, dict)
-    assert len(out["resources"]) == 2
+    assert len(out[key]) == 2
     assert "nextCursor" in out
 
 
-def test_resources_templates_list_paginates(settings) -> None:
-    settings.SPEC_MCP = {"PAGE_SIZE": 2}
-    server = _build_server()
-    out = handle_resources_templates_list(None, _ctx(server))
-    assert isinstance(out, dict)
-    assert len(out["resourceTemplates"]) == 2
-    assert "nextCursor" in out
-
-
-def test_tools_list_rejects_non_string_cursor() -> None:
-    server = _build_server()
-    out = handle_tools_list({"cursor": 42}, _ctx(server))
+@_LISTINGS
+@pytest.mark.parametrize("cursor", [42, "###"], ids=["non-string", "malformed"])
+def test_a_listing_rejects_a_bad_cursor(handler: Any, key: str, cursor: Any) -> None:
+    out = handler({"cursor": cursor}, call_context(_build_server()))
     assert isinstance(out, JsonRpcError)
     assert out.code == -32602
-
-
-def test_resources_list_rejects_non_string_cursor() -> None:
-    server = _build_server()
-    out = handle_resources_list({"cursor": 42}, _ctx(server))
-    assert isinstance(out, JsonRpcError) and out.code == -32602
-
-
-def test_resources_templates_list_rejects_non_string_cursor() -> None:
-    server = _build_server()
-    out = handle_resources_templates_list({"cursor": 42}, _ctx(server))
-    assert isinstance(out, JsonRpcError) and out.code == -32602
-
-
-def test_tools_list_rejects_malformed_cursor() -> None:
-    server = _build_server()
-    out = handle_tools_list({"cursor": "###"}, _ctx(server))
-    assert isinstance(out, JsonRpcError) and out.code == -32602
-
-
-def test_resources_list_rejects_malformed_cursor() -> None:
-    server = _build_server()
-    out = handle_resources_list({"cursor": "###"}, _ctx(server))
-    assert isinstance(out, JsonRpcError) and out.code == -32602
-
-
-def test_resources_templates_list_rejects_malformed_cursor() -> None:
-    server = _build_server()
-    out = handle_resources_templates_list({"cursor": "###"}, _ctx(server))
-    assert isinstance(out, JsonRpcError) and out.code == -32602

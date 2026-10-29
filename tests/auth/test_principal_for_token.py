@@ -2,7 +2,7 @@
 
 The happy paths are covered alongside the transport that consumes them; this
 file is about the boundary between *deliberately anonymous* and *authenticated
-but unnameable*, which used to be one case and is now two.
+but unnameable*, which are two cases.
 """
 
 from __future__ import annotations
@@ -62,12 +62,11 @@ def test_a_user_declaring_neither_is_refused_too() -> None:
 
 
 def test_a_deliberately_anonymous_caller_still_shares_the_principal() -> None:
-    """Not a regression — sharing is correct when nobody was identified.
+    """Sharing is correct when nobody was identified.
 
-    ``AllowAnyBackend`` mints exactly this, and the docstring has always said
-    ownership is only as strong as the backend behind it. The fix separates
-    "nobody was identified" from "somebody was, and we cannot name them"; only
-    the second is refused.
+    ``AllowAnyBackend`` mints exactly this, and ownership is only as strong as
+    the backend behind it. The principal separates "nobody was identified" from
+    "somebody was, and we cannot name them"; only the second is refused.
     """
     assert principal_for_token(TokenInfo(user=AnonymousUser(), scopes=())) == "anonymous"
 

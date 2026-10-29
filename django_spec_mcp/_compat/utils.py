@@ -7,7 +7,7 @@ from django_service_specs import arun_selector, is_async, run_selector
 
 from django_spec_mcp._compat.acall import acall
 
-# The sister repo's `arun_selector` runs sync callables inline, so any ORM call
+# The kernel's `arun_selector` runs sync callables inline, so any ORM call
 # inside them raises `SynchronousOnlyOperation` under an event loop. This routes
 # the sync branch through `sync_to_async` instead, keeping native async dispatch
 # for genuinely async selectors.

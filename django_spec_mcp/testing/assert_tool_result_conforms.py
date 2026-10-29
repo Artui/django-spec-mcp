@@ -1,13 +1,13 @@
 """Assert that a real tool result conforms to the schema the server advertised.
 
-What the package already checks is that the *settings* agree:
+The package checks that the *settings* agree:
 ``resolve_structured_output`` refuses a binding that would advertise an
 ``outputSchema`` while suppressing ``structuredContent``. That is coherence,
 not conformance -- it is answered at registration, from the configuration
 alone, and it says nothing about the bytes a call actually returns.
 
-Nothing checked the other half, and the shape a suite reaches for on its own is
-a key-set comparison:
+The other half is this assertion, and the shape a suite reaches for on its own
+is a key-set comparison:
 
 ```python
 assert set(tool["outputSchema"]["items"]["properties"]) == set(result["structuredContent"][0])
@@ -22,8 +22,8 @@ touching a single key.
 **Verification, not compulsion.** There is deliberately no setting that forces
 every tool to advertise a schema. For a service whose response shape is
 context-dependent, compelling advertisement is the wrong default, and the
-existing on/off knob plus per-binding overrides is the right shape. What was
-missing was a way to check the claim once it *is* made.
+on/off setting plus per-binding overrides is the right shape. What a suite
+needs is a way to check the claim once it *is* made.
 """
 
 from __future__ import annotations

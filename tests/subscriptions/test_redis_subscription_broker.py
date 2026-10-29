@@ -155,10 +155,10 @@ async def test_constructing_without_the_extra_is_a_clear_error(monkeypatch: Any)
 
 
 async def test_subscribe_returns_only_once_the_channels_are_live() -> None:
-    """The race this closes: ``subscribe`` used to register in a background
-    task, so the caller emitted "you are subscribed" while publishes were still
-    going nowhere — in exactly the multi-process deployment this class exists
-    for, where the publisher is another process and waits for nobody."""
+    """The race this closes: registering in a background task would let the
+    caller emit "you are subscribed" while publishes were still going nowhere
+    — in exactly the multi-process deployment this class exists for, where the
+    publisher is another process and waits for nobody."""
     shared = FakeServer()
     listener, publisher = FakeAsyncRedis(server=shared), FakeAsyncRedis(server=shared)
     broker = RedisSubscriptionBroker(listener)

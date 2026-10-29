@@ -92,15 +92,11 @@ def run_task(
             task_id,
             status=TaskStatus.FAILED,
             status_message=result.message,
-            error={"code": int(result.code), "message": result.message, **_data(result)},
+            error=result.to_dict(),
             broker=broker,
         )
         return
     transition_task(store, task_id, status=TaskStatus.COMPLETED, result=result, broker=broker)
-
-
-def _data(error: JsonRpcError) -> dict[str, Any]:
-    return {"data": error.data} if error.data is not None else {}
 
 
 __all__ = ["run_task"]

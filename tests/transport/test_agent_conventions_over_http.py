@@ -1,10 +1,11 @@
 """A server's ``conventions=`` reaches the wire through both views, in both eras.
 
 Over HTTP the handlers never see the server: each view builds the request's
-context from what ``MCPServer`` handed ``as_view``, in two places, one per
-protocol era. A convention dropped at any of those four sites leaves that route
-speaking the defaults while ``call_tool`` and ``list_tools`` speak the server's,
-which is why each view is driven here in both eras rather than once.
+context from what ``MCPServer`` handed ``as_view``, once per view, and each
+protocol era reaches that build by its own path. A convention dropped on any of
+those four routes leaves it speaking the defaults while ``call_tool`` and
+``list_tools`` speak the server's, which is why each view is driven here in both
+eras rather than once.
 """
 
 from __future__ import annotations
@@ -13,11 +14,10 @@ import json
 from typing import Any
 
 import pytest
-from django.test import AsyncClient, Client, override_settings
 
 from django_spec_mcp import AgentConventions
 from tests.testapp.conventions import conventions_server
-from tests.testapp.urlconf_for import urlconf_for
+from tests.transport.conftest import Endpoint
 from tests.utils import tool_error
 
 LEGACY = "2025-11-25"
@@ -29,21 +29,6 @@ CONVENTIONS = AgentConventions(
     query_param_on_pages="Wire scope.",
     missing_arguments="Wire missing: {names}.",
 )
-
-
-def _initialize_body() -> str:
-    return json.dumps(
-        {
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": LEGACY,
-                "capabilities": {},
-                "clientInfo": {"name": "pytest", "version": "0.0"},
-            },
-        }
-    )
 
 
 def _request(
@@ -90,31 +75,12 @@ def _assert_served_with_the_conventions(listed: Any, called: Any) -> None:
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("era", [LEGACY, MODERN])
-def test_the_sync_view_serves_the_servers_conventions(client: Client, era: str) -> None:
-    with override_settings(ROOT_URLCONF=urlconf_for(conventions_server(CONVENTIONS))):
+async def test_each_view_serves_the_servers_conventions(endpoint: Endpoint, era: str) -> None:
+    with endpoint.mount(conventions_server(CONVENTIONS)):
         session_id: str | None = None
         if era == LEGACY:
-            opened = client.post("/mcp/", data=_initialize_body(), content_type="application/json")
-            session_id = opened["Mcp-Session-Id"]
-        listed = client.post("/mcp/", **_request(era, "tools/list", {}, session_id))
-        called = client.post("/mcp/", **_request(era, "tools/call", _MISSING_PK, session_id))
-
-    _assert_served_with_the_conventions(listed, called)
-
-
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("era", [LEGACY, MODERN])
-async def test_the_async_view_serves_the_servers_conventions(era: str) -> None:
-    client = AsyncClient()
-    server = conventions_server(CONVENTIONS)
-    with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=True)):
-        session_id: str | None = None
-        if era == LEGACY:
-            opened = await client.post(
-                "/mcp/", data=_initialize_body(), content_type="application/json"
-            )
-            session_id = opened["Mcp-Session-Id"]
-        listed = await client.post("/mcp/", **_request(era, "tools/list", {}, session_id))
-        called = await client.post("/mcp/", **_request(era, "tools/call", _MISSING_PK, session_id))
+            session_id = await endpoint.initialize()
+        listed = await endpoint.send("post", **_request(era, "tools/list", {}, session_id))
+        called = await endpoint.send("post", **_request(era, "tools/call", _MISSING_PK, session_id))
 
     _assert_served_with_the_conventions(listed, called)

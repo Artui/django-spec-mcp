@@ -47,9 +47,9 @@ def _initialize(client: Client, path: str) -> Any:
 
 
 def test_each_server_reports_its_own_identity(multi_urlconf) -> None:
-    """The regression this wave exists for: ``name=`` reaches the wire.
+    """``name=`` reaches the wire.
 
-    Before, both mounts echoed the global ``SERVER_INFO`` name, so a client had
+    Were both mounts to echo the global ``SERVER_INFO`` name, a client would have
     no way to tell two servers apart.
     """
     internal = _initialize(Client(), INTERNAL).json()["result"]
@@ -82,8 +82,8 @@ def test_title_omitted_when_not_given(multi_urlconf) -> None:
 def test_server_name_is_not_shadowed_by_the_server_info_setting(multi_urlconf) -> None:
     """An explicit ``name=`` outranks ``SERVER_INFO``.
 
-    ``conftest_settings`` configures ``SERVER_INFO['name']``, which used to win
-    unconditionally — the mechanism of the bug, pinned here directly.
+    ``conftest_settings`` configures ``SERVER_INFO['name']``, which would win
+    unconditionally if it outranked the argument.
     """
     result = _initialize(Client(), INTERNAL).json()["result"]
     assert result["serverInfo"]["name"] == "internal-mcp"

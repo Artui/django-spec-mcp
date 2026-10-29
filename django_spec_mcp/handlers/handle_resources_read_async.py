@@ -7,7 +7,6 @@ from django_service_specs import base_pool, resolve_callable_kwargs
 from django_spec_mcp._compat.acall import acall
 from django_spec_mcp._compat.tracing import span
 from django_spec_mcp._compat.utils import arun_selector_sync_safe
-from django_spec_mcp.handlers.handle_tools_call import _span_attrs
 from django_spec_mcp.handlers.judge_binding import judge_binding
 from django_spec_mcp.handlers.kernel_utils import KernelAdmission, admit_kernel_read, carry_token
 from django_spec_mcp.handlers.read_kernel_resource_async import read_kernel_resource_async
@@ -16,16 +15,15 @@ from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import (
     consume_rate_limits,
     forbidden,
-    resolve_bound,
-    resource_cache_hints,
-    resource_not_found_code,
+    rate_limited,
+    resolve_resource_read,
+    resource_read_answer,
+    span_attrs,
 )
 from django_spec_mcp.output.build_resource_contents import build_resource_contents
-from django_spec_mcp.output.enforce_result_bytes import enforce_result_bytes
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.protocol.types.resource_contents import ResourceContents
 from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
-from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 
 
 async def handle_resources_read_async(
@@ -39,29 +37,14 @@ async def handle_resources_read_async(
     through ``acall``, and each read path keeps its selector and its
     rendering off the loop too.
     """
-    if not isinstance(params, dict):
-        return JsonRpcError(
-            JsonRpcErrorCode.INVALID_PARAMS, "resources/read params must be an object"
-        )
-    uri: Any = params.get("uri")
-    if not isinstance(uri, str):
-        return JsonRpcError(
-            JsonRpcErrorCode.INVALID_PARAMS, "'uri' is required and must be a string"
-        )
-
-    resolved = context.resources.resolve(uri)
-    if resolved is None:
-        # See the sync sibling: ``-32002`` + ``data.uri`` is the spec's shape.
-        return JsonRpcError(
-            resource_not_found_code(context.protocol_version),
-            f"Unknown resource: {uri!r}",
-            data={"uri": uri},
-        )
-    binding, vars_ = resolved
+    target = resolve_resource_read(params, context)
+    if isinstance(target, JsonRpcError):
+        return target
+    binding, vars_, uri = target
 
     with span(
         "mcp.resources.read",
-        attributes={**_span_attrs(binding.name, context), "mcp.resource.uri": uri},
+        attributes={**span_attrs(binding.name, context), "mcp.resource.uri": uri},
     ):
         allowed, required_scopes = await acall(judge_binding, binding, context.token)
         if not allowed:
@@ -82,11 +65,7 @@ async def handle_resources_read_async(
             consume_rate_limits, binding.rate_limits, context.http_request, context.token
         )
         if retry_after is not None:
-            return JsonRpcError(
-                JsonRpcErrorCode.RATE_LIMITED,
-                "Rate limit exceeded",
-                data={"retryAfter": retry_after},
-            )
+            return rate_limited(retry_after)
 
         # See the sync sibling: a kernel resource reads through the kernel from
         # here, under the admission its spec's checks gave.
@@ -111,20 +90,7 @@ async def handle_resources_read_async(
         )
         if isinstance(contents, JsonRpcError):
             return contents
-        result: dict[str, Any] = {
-            "contents": [contents.to_dict()],
-            **resource_cache_hints(
-                resolve_bound(binding.cache_ttl_ms, context.config.resource_cache_ttl_ms)
-            ),
-        }
-        # See the sync sibling: an over-ceiling read has no ``isError`` envelope
-        # to live in, so it is a protocol error carrying the same message.
-        oversize: str | None = enforce_result_bytes(
-            result, context.config.max_result_bytes, label=f"Resource {uri!r}"
-        )
-        if oversize is not None:
-            return JsonRpcError(JsonRpcErrorCode.SERVER_ERROR, oversize)
-        return result
+        return resource_read_answer(contents, binding, uri, context)
 
 
 __all__ = ["handle_resources_read_async"]

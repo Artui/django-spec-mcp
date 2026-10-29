@@ -104,8 +104,9 @@ def _kernel_refuses(binding: Any, arguments: dict[str, Any], context: MCPCallCon
     A kernel binding's ``permissions`` hold only its ``scopes=`` gate, which
     ``judge_tool_permissions`` has judged. The handler asks the spec's checks
     before it charges the call, but inside the stream, after it has committed
-    its ``200``, so a call they deny streamed ``-32006`` where the same call
-    without a progress token was a ``403`` with a challenge
+    its ``200``, so left to the handler a call they deny would stream
+    ``-32006`` where the same call without a progress token is a ``403`` with
+    a challenge
     (``test_a_spec_check_denying_a_streamed_call_keeps_its_403_and_challenge``).
 
     Asked through ``admit_kernel_tool_call``, the step the handler asks them

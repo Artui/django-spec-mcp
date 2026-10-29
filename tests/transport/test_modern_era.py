@@ -226,15 +226,6 @@ def test_a_legacy_version_claimed_by_a_modern_request_is_unsupported(client: Cli
 
 
 @pytest.mark.django_db(transaction=True)
-def test_an_unknown_method_is_404_with_a_jsonrpc_body(client: Client) -> None:
-    """The 404 is what lets a client tell this endpoint from a legacy HTTP+SSE
-    server; the JSON-RPC body is what stops it falling back anyway."""
-    response = _post(client, "nonsense/method")
-    assert response.status_code == 404, response.content
-    assert response.json()["error"]["code"] == -32601
-
-
-@pytest.mark.django_db(transaction=True)
 def test_a_permission_denial_is_still_403(client: Client) -> None:
     response = _post(
         client,
@@ -276,33 +267,6 @@ def test_resource_not_found_stays_32002_for_a_legacy_caller(
         headers={"Mcp-Protocol-Version": LEGACY, "Mcp-Session-Id": initialized_session},
     )
     assert response.json()["error"]["code"] == -32002
-
-
-@pytest.mark.django_db(transaction=True)
-def test_a_modern_notification_is_202(client: Client) -> None:
-    response = client.post(
-        "/mcp/",
-        data=json.dumps(
-            {
-                "jsonrpc": "2.0",
-                "method": "notifications/initialized",
-                "params": {"_meta": _meta()},
-            }
-        ),
-        content_type="application/json",
-        headers={"Mcp-Protocol-Version": MODERN},
-    )
-    assert response.status_code == 202
-
-
-# ----- retired mechanisms -----
-
-
-@pytest.mark.django_db(transaction=True)
-def test_delete_is_405_for_a_modern_caller(client: Client) -> None:
-    """Session termination does not exist in the revision the caller named."""
-    response = client.delete("/mcp/", headers={"Mcp-Protocol-Version": MODERN})
-    assert response.status_code == 405
 
 
 @pytest.mark.django_db(transaction=True)

@@ -7,10 +7,11 @@ the prompt's binding, never the arguments; the last test here holds that.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import pytest
-from asgiref.sync import sync_to_async
+from asgiref.sync import async_to_sync
 from django.contrib.auth.models import AnonymousUser
 from django.http import HttpRequest, QueryDict
 from django_service_specs import PermissionCheck
@@ -23,7 +24,9 @@ from django_spec_mcp.handlers.handle_prompts_get_async import handle_prompts_get
 from django_spec_mcp.handlers.handle_prompts_list import handle_prompts_list
 from django_spec_mcp.handlers.render_prompt_messages import normalize_render_result
 from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.protocol.types.get_prompt_result import GetPromptResult
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.protocol.types.prompt import Prompt
 from django_spec_mcp.protocol.types.prompt_argument import PromptArgument
 from django_spec_mcp.protocol.types.prompt_message import PromptMessage
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
@@ -74,14 +77,14 @@ def test_normalize_list_of_messages() -> None:
     assert normalize_render_result([msg]) == [msg]
 
 
-def test_normalize_unsupported_item_raises() -> None:
-    with pytest.raises(TypeError, match="Unsupported"):
-        normalize_render_result([123])
-
-
-def test_normalize_unsupported_root_raises() -> None:
-    with pytest.raises(TypeError, match="unsupported value"):
-        normalize_render_result(123)
+@pytest.mark.parametrize(
+    ("value", "message"),
+    [([123], "Unsupported"), (123, "unsupported value")],
+    ids=["item", "root"],
+)
+def test_normalize_unsupported_value_raises(value: Any, message: str) -> None:
+    with pytest.raises(TypeError, match=message):
+        normalize_render_result(value)
 
 
 # ---------- prompts/list ----------
@@ -116,82 +119,83 @@ def test_prompts_list_paginates(settings) -> None:
     assert "nextCursor" in out
 
 
-def test_prompts_list_rejects_bad_cursor() -> None:
-    server = _server()
-    out = handle_prompts_list({"cursor": "###"}, _ctx(server))
+@pytest.mark.parametrize("cursor", ["###", 1], ids=["undecodable", "non-string"])
+def test_prompts_list_rejects_a_bad_cursor(cursor: Any) -> None:
+    out = handle_prompts_list({"cursor": cursor}, _ctx(_server()))
     assert isinstance(out, JsonRpcError) and out.code == -32602
 
 
-def test_prompts_list_rejects_non_string_cursor() -> None:
-    server = _server()
-    out = handle_prompts_list({"cursor": 1}, _ctx(server))
-    assert isinstance(out, JsonRpcError) and out.code == -32602
+# ---------- prompts/get ----------
+
+Get = Callable[..., Any]
 
 
-# ---------- prompts/get sync ----------
+def _get_sync(server: MCPServer, params: Any, context: MCPCallContext | None = None) -> Any:
+    return handle_prompts_get(params, context or _ctx(server))
 
 
-def test_prompts_get_renders_string() -> None:
+def _get_async(server: MCPServer, params: Any, context: MCPCallContext | None = None) -> Any:
+    return async_to_sync(handle_prompts_get_async)(params, context or _ctx(server))
+
+
+@pytest.fixture(params=[_get_sync, _get_async], ids=["sync", "async"])
+def get(request: pytest.FixtureRequest) -> Get:
+    return request.param
+
+
+def test_prompts_get_renders_string(get: Get) -> None:
     server = _server()
     server.register_prompt(name="p", render=lambda **_: "rendered")
-    out = handle_prompts_get({"name": "p", "arguments": {}}, _ctx(server))
+    out = get(server, {"name": "p", "arguments": {}})
     assert isinstance(out, dict)
     assert out["messages"][0]["content"]["text"] == "rendered"
 
 
-def test_prompts_get_threads_arguments_to_render() -> None:
+def test_prompts_get_threads_arguments_to_render(get: Get) -> None:
     server = _server()
     server.register_prompt(
         name="echo",
         render=lambda *, who: f"hello {who}",
         arguments=[PromptArgument(name="who", required=True)],
     )
-    out = handle_prompts_get({"name": "echo", "arguments": {"who": "world"}}, _ctx(server))
+    out = get(server, {"name": "echo", "arguments": {"who": "world"}})
     assert isinstance(out, dict)
     assert "hello world" in out["messages"][0]["content"]["text"]
 
 
-def test_prompts_get_missing_required_arg() -> None:
+def test_prompts_get_missing_required_arg(get: Get) -> None:
     server = _server()
     server.register_prompt(
         name="p",
         render=lambda *, who: who,
         arguments=[PromptArgument(name="who", required=True)],
     )
-    out = handle_prompts_get({"name": "p", "arguments": {}}, _ctx(server))
+    out = get(server, {"name": "p", "arguments": {}})
     assert isinstance(out, JsonRpcError) and out.code == -32602
     assert out.data == {"missing": ["who"]}
 
 
-def test_prompts_get_unknown_returns_invalid_params() -> None:
-    server = _server()
-    out = handle_prompts_get({"name": "nope", "arguments": {}}, _ctx(server))
-    assert isinstance(out, JsonRpcError) and out.code == -32602
-
-
-def test_prompts_get_rejects_non_dict_params() -> None:
-    server = _server()
-    out = handle_prompts_get(None, _ctx(server))
-    assert isinstance(out, JsonRpcError) and out.code == -32602
-
-
-def test_prompts_get_rejects_missing_name() -> None:
-    server = _server()
-    out = handle_prompts_get({}, _ctx(server))
-    assert isinstance(out, JsonRpcError) and out.code == -32602
-
-
-def test_prompts_get_rejects_non_dict_arguments() -> None:
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"name": "nope", "arguments": {}},
+        None,
+        {},
+        {"name": "p", "arguments": [1]},
+    ],
+    ids=["unknown-prompt", "non-dict-params", "missing-name", "non-dict-arguments"],
+)
+def test_prompts_get_rejects_malformed_params(get: Get, params: Any) -> None:
     server = _server()
     server.register_prompt(name="p", render=lambda **_: "x")
-    out = handle_prompts_get({"name": "p", "arguments": [1]}, _ctx(server))
+    out = get(server, params)
     assert isinstance(out, JsonRpcError) and out.code == -32602
 
 
-def test_prompts_get_handles_unsupported_render_value() -> None:
+def test_prompts_get_handles_unsupported_render_value(get: Get) -> None:
     server = _server()
     server.register_prompt(name="bad", render=lambda **_: 123)
-    out = handle_prompts_get({"name": "bad", "arguments": {}}, _ctx(server))
+    out = get(server, {"name": "bad", "arguments": {}})
     assert isinstance(out, JsonRpcError) and out.code == -32603
 
 
@@ -200,10 +204,10 @@ class _DenyAll(PermissionCheck):
         return False
 
 
-def test_prompts_get_permission_denied() -> None:
+def test_prompts_get_permission_denied(get: Get) -> None:
     server = _server()
     server.register_prompt(name="p", render=lambda **_: "x", permissions=[_DenyAll()])
-    out = handle_prompts_get({"name": "p", "arguments": {}}, _ctx(server))
+    out = get(server, {"name": "p", "arguments": {}})
     assert isinstance(out, JsonRpcError) and out.code == -32006
 
 
@@ -220,9 +224,6 @@ def test_decorator_uses_function_name_and_docstring() -> None:
     assert binding.description == "Say hello."
 
 
-# ---------- prompts/get async ----------
-
-
 async def test_async_prompts_get_dispatches_async_render() -> None:
     server = _server()
 
@@ -235,77 +236,29 @@ async def test_async_prompts_get_dispatches_async_render() -> None:
     assert out["messages"][0]["content"]["text"] == "async-rendered"
 
 
-async def test_async_prompts_get_unknown_returns_invalid_params() -> None:
-    server = _server()
-    out = await handle_prompts_get_async({"name": "nope", "arguments": {}}, _ctx(server))
-    assert isinstance(out, JsonRpcError) and out.code == -32602
-
-
-async def test_async_prompts_get_rejects_non_dict_params() -> None:
-    server = _server()
-    out = await handle_prompts_get_async(None, _ctx(server))
-    assert isinstance(out, JsonRpcError) and out.code == -32602
-
-
-async def test_async_prompts_get_rejects_missing_name() -> None:
-    server = _server()
-    out = await handle_prompts_get_async({}, _ctx(server))
-    assert isinstance(out, JsonRpcError) and out.code == -32602
-
-
-async def test_async_prompts_get_rejects_non_dict_arguments() -> None:
-    server = _server()
-    server.register_prompt(name="p", render=lambda **_: "x")
-    out = await handle_prompts_get_async({"name": "p", "arguments": [1]}, _ctx(server))
-    assert isinstance(out, JsonRpcError) and out.code == -32602
-
-
-async def test_async_prompts_get_missing_required_arg() -> None:
-    server = _server()
-    server.register_prompt(
-        name="p",
-        render=lambda *, who: who,
-        arguments=[PromptArgument(name="who", required=True)],
-    )
-    out = await handle_prompts_get_async({"name": "p", "arguments": {}}, _ctx(server))
-    assert isinstance(out, JsonRpcError) and out.code == -32602
-
-
-async def test_async_prompts_get_permission_denied() -> None:
-    server = _server()
-    server.register_prompt(name="p", render=lambda **_: "x", permissions=[_DenyAll()])
-    out = await handle_prompts_get_async({"name": "p", "arguments": {}}, _ctx(server))
-    assert isinstance(out, JsonRpcError) and out.code == -32006
-
-
-async def test_async_prompts_get_handles_unsupported_render_value() -> None:
-    server = _server()
-    server.register_prompt(name="bad", render=lambda **_: 123)
-    out = await handle_prompts_get_async({"name": "bad", "arguments": {}}, _ctx(server))
-    assert isinstance(out, JsonRpcError) and out.code == -32603
-
-
 # ---------- Prompt + PromptArgument shapes ----------
 
 
-def test_prompt_argument_minimal_to_dict() -> None:
-    assert PromptArgument(name="x").to_dict() == {"name": "x"}
-
-
-def test_prompt_argument_full_to_dict() -> None:
-    out = PromptArgument(name="x", description="d", required=True).to_dict()
-    assert out == {"name": "x", "description": "d", "required": True}
+@pytest.mark.parametrize(
+    ("argument", "expected"),
+    [
+        (PromptArgument(name="x"), {"name": "x"}),
+        (
+            PromptArgument(name="x", description="d", required=True),
+            {"name": "x", "description": "d", "required": True},
+        ),
+    ],
+    ids=["minimal", "full"],
+)
+def test_prompt_argument_to_dict(argument: PromptArgument, expected: dict[str, Any]) -> None:
+    assert argument.to_dict() == expected
 
 
 def test_prompt_minimal_to_dict() -> None:
-    from django_spec_mcp.protocol.types.prompt import Prompt
-
     assert Prompt(name="p").to_dict() == {"name": "p"}
 
 
 def test_prompt_full_to_dict() -> None:
-    from django_spec_mcp.protocol.types.prompt import Prompt
-
     p = Prompt(
         name="p",
         title="T",
@@ -321,16 +274,12 @@ def test_prompt_full_to_dict() -> None:
 
 
 def test_get_prompt_result_to_dict_minimal() -> None:
-    from django_spec_mcp.protocol.types.get_prompt_result import GetPromptResult
-
     out = GetPromptResult(messages=[PromptMessage.text("user", "hi")]).to_dict()
     assert "description" not in out
     assert out["messages"][0]["role"] == "user"
 
 
 def test_get_prompt_result_to_dict_with_description() -> None:
-    from django_spec_mcp.protocol.types.get_prompt_result import GetPromptResult
-
     out = GetPromptResult(messages=[], description="d").to_dict()
     assert out["description"] == "d"
 
@@ -352,24 +301,14 @@ class _Recording(PermissionCheck):
         return False
 
 
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
-async def test_a_prompt_permission_is_judged_on_the_principal_and_the_binding_alone(
-    is_async: bool,
-) -> None:
+def test_a_prompt_permission_is_judged_on_the_principal_and_the_binding_alone(get: Get) -> None:
     # The whole of what a prompt's check sees: the token's principal, an
     # ``AnonymousUser`` for none, and the prompt's binding as the spec, once
     # per get, and nothing of the arguments, which reach ``render`` and no check.
     permission = _Recording()
     server = _server()
     binding = server.register_prompt(name="p", render=lambda **_: "hello", permissions=[permission])
-    context = _ctx(server)
-    params: dict[str, Any] = {"name": "p", "arguments": {"deny": "1"}}
-
-    if is_async:
-        out = await handle_prompts_get_async(params, context)
-    else:
-        out = await sync_to_async(handle_prompts_get)(params, context)
+    out = get(server, {"name": "p", "arguments": {"deny": "1"}})
 
     assert isinstance(out, JsonRpcError) and out.code == JsonRpcErrorCode.FORBIDDEN
     assert out.data is None
@@ -378,10 +317,7 @@ async def test_a_prompt_permission_is_judged_on_the_principal_and_the_binding_al
     assert spec is binding
 
 
-@pytest.mark.parametrize("is_async", [False, True])
-async def test_a_render_declaring_request_receives_the_transports_http_request(
-    is_async: bool,
-) -> None:
+def test_a_render_declaring_request_receives_the_transports_http_request(get: Get) -> None:
     # The plain ``HttpRequest`` the kernel tool path hands a spec, with the
     # resolved token on it as ``mcp_token``. Its
     # ``user`` is the token's principal, as the ``user`` seed is, and never the
@@ -406,11 +342,7 @@ async def test_a_render_declaring_request_receives_the_transports_http_request(
         protocol_version="2025-11-25",
     )
 
-    params: dict[str, Any] = {"name": "p"}
-    if is_async:
-        out = await handle_prompts_get_async(params, context)
-    else:
-        out = await sync_to_async(handle_prompts_get)(params, context)
+    out = get(server, {"name": "p"}, context)
 
     assert not isinstance(out, JsonRpcError), out
     assert seen["request"] is http_request

@@ -32,7 +32,7 @@ from asgiref.sync import async_to_sync
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest
-from django.test import AsyncClient, Client, override_settings
+from django.test import override_settings
 from django_service_specs import (
     DEFAULT_POOL_SEEDS,
     Affordance,
@@ -53,9 +53,8 @@ from django_spec_mcp.handlers.handle_prompts_get import handle_prompts_get
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.testapp.urlconf_for import urlconf_for
+from tests.utils import LEGACY, MODERN, post_in_era
 
-MODERN = "2026-07-28"
-LEGACY = "2025-11-25"
 OPEN = [Unrestricted()]
 
 SEEDS: PoolSeeds = DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme")
@@ -127,60 +126,6 @@ def _structured(result: Any) -> Any:
     return result["structuredContent"]
 
 
-# ----- the transports' contexts -----
-
-
-async def _awaited(response: Any) -> Any:
-    return await response
-
-
-def _post(era: str, is_async: bool, method: str, params: dict[str, Any]) -> Any:
-    """One request to the mounted endpoint, in ``era``, on the chosen view."""
-    client: Any = AsyncClient() if is_async else Client()
-    headers: dict[str, str] = {"Mcp-Protocol-Version": era}
-    body: dict[str, Any] = dict(params)
-    if era == MODERN:
-        headers["Mcp-Method"] = method
-        if method == "tools/call":
-            headers["Mcp-Name"] = params["name"]
-        elif method == "resources/read":
-            headers["Mcp-Name"] = params["uri"]
-        body["_meta"] = {
-            "io.modelcontextprotocol/protocolVersion": MODERN,
-            "io.modelcontextprotocol/clientInfo": {"name": "pytest", "version": "0"},
-            "io.modelcontextprotocol/clientCapabilities": {},
-        }
-    else:
-        opened = _send(
-            client,
-            is_async,
-            "initialize",
-            {
-                "protocolVersion": LEGACY,
-                "capabilities": {},
-                "clientInfo": {"name": "pytest", "version": "0"},
-            },
-            {},
-        )
-        assert opened.status_code == 200, opened.content
-        headers["Mcp-Session-Id"] = opened["Mcp-Session-Id"]
-    response = _send(client, is_async, method, body, headers)
-    assert response.status_code == 200, response.content
-    return json.loads(response.content)["result"]
-
-
-def _send(
-    client: Any, is_async: bool, method: str, params: dict[str, Any], headers: dict[str, str]
-) -> Any:
-    response = client.post(
-        "/mcp/",
-        data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params}),
-        content_type="application/json",
-        headers=headers,
-    )
-    return async_to_sync(_awaited)(response) if is_async else response
-
-
 _TRANSPORTS = pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
 _ERAS = pytest.mark.parametrize("era", [LEGACY, MODERN], ids=["legacy", "modern"])
 
@@ -191,7 +136,9 @@ _ERAS = pytest.mark.parametrize("era", [LEGACY, MODERN], ids=["legacy", "modern"
 def test_a_service_tool_reads_a_seed_over_the_wire(era: str, is_async: bool) -> None:
     server = _server()
     with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=is_async)):
-        result = _post(era, is_async, "tools/call", {"name": "tenant.whoami", "arguments": {}})
+        result = post_in_era(
+            era, is_async, "tools/call", {"name": "tenant.whoami", "arguments": {}}
+        )
 
     assert _structured(result) == {"tenant": "acme"}
 
@@ -204,7 +151,7 @@ def test_the_listing_asks_a_condition_with_the_seeds_over_the_wire(
 ) -> None:
     server = _server()
     with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=is_async)):
-        result = _post(era, is_async, "tools/list", {})
+        result = post_in_era(era, is_async, "tools/list", {})
 
     names = [tool["name"] for tool in result["tools"]]
     assert "tenant.acme_only" in names
@@ -217,7 +164,7 @@ def test_the_listing_asks_a_condition_with_the_seeds_over_the_wire(
 def test_a_resource_selector_reads_a_seed_over_the_wire(era: str, is_async: bool) -> None:
     server = _server()
     with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=is_async)):
-        result = _post(era, is_async, "resources/read", {"uri": "tenants://north"})
+        result = post_in_era(era, is_async, "resources/read", {"uri": "tenants://north"})
 
     assert json.loads(result["contents"][0]["text"]) == {"slug": "north", "tenant": "acme"}
 
@@ -326,7 +273,7 @@ def test_the_listing_resolves_the_seeds_for_an_anonymous_caller(era: str, is_asy
     # gated tool is hidden because the resolver answered ``None``.
     server = _anonymous_listing_server(_tenant_of)
     with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=is_async)):
-        result = _post(era, is_async, "tools/list", {})
+        result = post_in_era(era, is_async, "tools/list", {})
 
     assert [tool["name"] for tool in result["tools"]] == ["tenant.plain"]
 
