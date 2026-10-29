@@ -1610,18 +1610,10 @@ def _as_called(
     one case per seat). Only for the check: the binding keeps the declared spec.
     """
     if isinstance(spec, KernelServiceSpec):
-        if spec.instance_selector_spec is not None:
-            spec = spec.derive(
-                instance_selector_spec=cast(
-                    KernelSelectorSpec, _demanding(spec.instance_selector_spec, bound)
-                )
-            )
-        if spec.collection_selector_spec is not None:
-            spec = spec.derive(
-                collection_selector_spec=cast(
-                    KernelSelectorSpec, _demanding(spec.collection_selector_spec, bound)
-                )
-            )
+        for seat in ("instance_selector_spec", "collection_selector_spec"):
+            target: KernelSelectorSpec | None = getattr(spec, seat)
+            if target is not None:
+                spec = spec.derive(**{seat: _demanding(target, bound)})
     return _demanding(spec, bound)
 
 
