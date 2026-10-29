@@ -5,7 +5,6 @@ from typing import Any, cast
 from django_service_specs import base_pool, resolve_callable_kwargs, run_selector
 
 from django_spec_mcp._compat.tracing import span
-from django_spec_mcp.handlers.handle_tools_call import _span_attrs
 from django_spec_mcp.handlers.judge_binding import judge_binding
 from django_spec_mcp.handlers.kernel_utils import KernelAdmission, admit_kernel_read, carry_token
 from django_spec_mcp.handlers.read_kernel_resource import read_kernel_resource
@@ -17,6 +16,7 @@ from django_spec_mcp.handlers.utils import (
     resolve_bound,
     resource_cache_hints,
     resource_not_found_code,
+    span_attrs,
 )
 from django_spec_mcp.output.build_resource_contents import build_resource_contents
 from django_spec_mcp.output.enforce_result_bytes import enforce_result_bytes
@@ -64,7 +64,7 @@ def handle_resources_read(
 
     with span(
         "mcp.resources.read",
-        attributes={**_span_attrs(binding.name, context), "mcp.resource.uri": uri},
+        attributes={**span_attrs(binding.name, context), "mcp.resource.uri": uri},
     ):
         allowed, required_scopes = judge_binding(binding, context.token)
         if not allowed:

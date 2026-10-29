@@ -8,7 +8,6 @@ from typing import Any
 from django_service_specs import RESERVED_POOL_SEEDS, NotPermitted, resolve_callable_kwargs
 
 from django_spec_mcp._compat.tracing import span
-from django_spec_mcp.handlers.handle_tools_call import _span_attrs
 from django_spec_mcp.handlers.judge_binding import judge_binding
 from django_spec_mcp.handlers.kernel_utils import (
     admits_without_arguments,
@@ -19,7 +18,7 @@ from django_spec_mcp.handlers.kernel_utils import (
 )
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.types.kernel_refusal_scene import KernelRefusalScene
-from django_spec_mcp.handlers.utils import consume_rate_limits
+from django_spec_mcp.handlers.utils import consume_rate_limits, span_attrs
 from django_spec_mcp.protocol.types.completion import Completion
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
@@ -92,7 +91,7 @@ def handle_completion_complete(
     resolved_siblings: dict[str, Any] = siblings if isinstance(siblings, dict) else {}
 
     attributes: dict[str, Any] = {
-        **_span_attrs(target.name, context),
+        **span_attrs(target.name, context),
         "mcp.completion.kind": target.kind,
         "mcp.completion.argument": argument_name,
     }

@@ -21,6 +21,7 @@ from django_spec_mcp.handlers.utils import (
     forbidden,
     judge_tool_permissions,
     resolve_bound,
+    span_attrs,
 )
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
@@ -120,7 +121,7 @@ def _dispatch_tool_call(
     # ``opentelemetry-api``.
     with span(
         "mcp.tools.call",
-        attributes=_span_attrs(binding.name, context),
+        attributes=span_attrs(binding.name, context),
     ) as otel_span:
         # The binding's ``permissions``, its scope gate, before a retry's
         # answers are read, since a denied caller is told so first.
@@ -178,17 +179,6 @@ def _dispatch_tool_call(
             run_kernel_tool(binding, params, arguments_raw, admission, prior, context, otel_span),
             arguments_raw,
         )
-
-
-def _span_attrs(binding_name: str, context: MCPCallContext) -> dict[str, Any]:
-    """Common span attributes — kept here so the six dispatch handlers stay in sync."""
-    attrs: dict[str, Any] = {
-        "mcp.binding.name": binding_name,
-        "mcp.protocol.version": context.protocol_version,
-    }
-    if context.session_id:
-        attrs["mcp.session.id"] = context.session_id
-    return attrs
 
 
 __all__ = ["handle_tools_call"]

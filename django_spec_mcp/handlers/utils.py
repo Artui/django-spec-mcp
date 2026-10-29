@@ -432,6 +432,19 @@ async def run_with_deadline(coro: Awaitable[Any], seconds: float | None) -> Any:
     return await asyncio.wait_for(coro, timeout=seconds)
 
 
+def span_attrs(binding_name: str, context: MCPCallContext) -> dict[str, Any]:
+    """The span attributes every handler that opens a span sets, so they cannot
+    drift apart: the binding's name, the protocol version and, once a session
+    exists, its id."""
+    attrs: dict[str, Any] = {
+        "mcp.binding.name": binding_name,
+        "mcp.protocol.version": context.protocol_version,
+    }
+    if context.session_id:
+        attrs["mcp.session.id"] = context.session_id
+    return attrs
+
+
 __all__ = [
     "apply_tool_server_arguments",
     "consume_rate_limits",
@@ -444,6 +457,7 @@ __all__ = [
     "resolve_bound",
     "run_with_deadline",
     "scope_verdict",
+    "span_attrs",
     "validation_error_data",
     "validation_error_result",
 ]

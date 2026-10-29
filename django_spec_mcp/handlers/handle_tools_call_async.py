@@ -8,7 +8,6 @@ from asgiref.sync import sync_to_async
 from django_spec_mcp._compat.acall import acall
 from django_spec_mcp._compat.tracing import span
 from django_spec_mcp.elicitation.types.resolved_input import ResolvedInput
-from django_spec_mcp.handlers.handle_tools_call import _span_attrs
 from django_spec_mcp.handlers.input_dispatch import (
     refusal_result,
 )
@@ -27,6 +26,7 @@ from django_spec_mcp.handlers.utils import (
     judge_tool_permissions,
     resolve_bound,
     run_with_deadline,
+    span_attrs,
 )
 from django_spec_mcp.output.error_tool_result import build_error_tool_result
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
@@ -124,7 +124,7 @@ async def _dispatch_tool_call_async(
     one size check sees the finished result. The arguments returned are the
     ones the tool ran with, as in the sync sibling.
     """
-    with span("mcp.tools.call", attributes=_span_attrs(binding.name, context)) as otel_span:
+    with span("mcp.tools.call", attributes=span_attrs(binding.name, context)) as otel_span:
         # See the sync sibling: the binding's scope gate, before a retry's
         # answers are read. Off the loop, since a permission may query.
         allowed, required_scopes = await acall(judge_tool_permissions, binding, context)

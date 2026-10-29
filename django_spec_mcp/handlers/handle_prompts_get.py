@@ -5,7 +5,6 @@ from typing import Any
 from django_service_specs import resolve_callable_kwargs
 
 from django_spec_mcp._compat.tracing import span
-from django_spec_mcp.handlers.handle_tools_call import _span_attrs
 from django_spec_mcp.handlers.judge_binding import judge_binding
 from django_spec_mcp.handlers.kernel_utils import carry_token
 from django_spec_mcp.handlers.render_prompt_messages import normalize_render_result
@@ -13,6 +12,7 @@ from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import (
     consume_rate_limits,
     forbidden,
+    span_attrs,
 )
 from django_spec_mcp.output.enforce_result_bytes import enforce_result_bytes
 from django_spec_mcp.protocol.types.get_prompt_result import GetPromptResult
@@ -74,7 +74,7 @@ def handle_prompts_get(
             data=data,
         )
 
-    with span("mcp.prompts.get", attributes=_span_attrs(binding.name, context)):
+    with span("mcp.prompts.get", attributes=span_attrs(binding.name, context)):
         # The prompt's scope gate and its kernel checks, asked of the principal
         # and this binding, as its listing asks them.
         allowed, required_scopes = judge_binding(binding, context.token)
