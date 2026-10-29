@@ -128,24 +128,32 @@ def _call_consume_rate_limits() -> None:
     consume_rate_limits((_AsyncRateLimit(),), _request(), _TOKEN)
 
 
-@pytest.mark.parametrize(
-    ("call", "named"),
-    [
-        (_call_judge_binding, "_HandsBackACoroutine.has_permission()"),
-        (_call_listable_has_permission, "_HandsBackACoroutine.has_permission()"),
-        (_call_consume_rate_limits, "_AsyncRateLimit.consume()"),
-    ],
-    ids=["prompt or view permission", "list has_permission", "rate limit"],
-)
-def test_an_async_hook_is_refused_and_named(call: Any, named: str) -> None:
+def test_an_async_rate_limit_is_refused_and_named() -> None:
     with pytest.raises(ImproperlyConfigured) as excinfo:
-        call()
+        _call_consume_rate_limits()
 
     message = str(excinfo.value)
     # Naming the offending class is the whole value: "returned an awaitable"
     # alone leaves an operator grepping a settings module.
-    assert named in message
+    assert "_AsyncRateLimit.consume()" in message
     assert "async_to_sync" in message
+
+
+@pytest.mark.parametrize(
+    "call",
+    [_call_judge_binding, _call_listable_has_permission],
+    ids=["prompt or view permission", "list has_permission"],
+)
+def test_a_prompt_check_answering_a_coroutine_is_refused_by_the_kernel_s_rule(call: Any) -> None:
+    """Both paths read the answer through the kernel's ``sync_answer``, not this helper."""
+    with pytest.raises(ImproperlyConfigured) as excinfo:
+        call()
+
+    assert str(excinfo.value) == (
+        "_HandsBackACoroutine.has_permission answered with an awaitable (coroutine) where a "
+        "bool was asked for. A permission check is sync-only and is never awaited, so the "
+        "call is refused rather than allowed; declare the method with def."
+    )
 
 
 def test_the_rate_limiter_refusal_explains_that_it_fails_closed() -> None:

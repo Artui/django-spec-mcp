@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from django_service_specs import is_deactivated
+from django_service_specs import is_deactivated, sync_answer
 
-from django_spec_mcp._compat.reject_awaitable import reject_awaitable
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.kernel_utils import principal_of
 from django_spec_mcp.handlers.utils import scope_verdict
@@ -40,9 +39,8 @@ def judge_binding(
        opt into (``arguments``, ``call_context``, a seed) are the kernel's to
        offer, so a check requiring one is a ``TypeError`` here.
 
-    An answer still to be awaited is refused rather than read, since a
-    coroutine is truthy and would admit every caller, as the kernel's
-    ``sync_answer`` refuses one
+    Each answer is read through the kernel's ``sync_answer``, so one still to
+    be awaited is refused rather than read as a pass, as dispatch refuses it
     (``test_an_answer_still_to_be_awaited_is_refused_not_read_as_a_pass``).
     """
     allowed, required = scope_verdict(binding.scopes, token)
@@ -52,16 +50,9 @@ def judge_binding(
     if is_deactivated(principal):
         return False, []
     for check in binding.permissions:
-        asked = f"{type(check).__name__}.has_permission()"
-        answer = reject_awaitable(
+        answer = sync_answer(
             check.has_permission(principal, binding),
-            call=asked,
-            remedy=(
-                "A PermissionCheck is synchronous by contract: has_permission must answer a "
-                "bool. Wrap any awaiting it needs in asgiref.sync.async_to_sync inside the "
-                "method body."
-            ),
-            hazard="an un-awaited coroutine is truthy, so every caller would be granted access.",
+            asked=f"{type(check).__name__}.has_permission",
         )
         if not answer:
             return False, []

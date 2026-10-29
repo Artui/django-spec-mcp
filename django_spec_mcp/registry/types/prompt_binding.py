@@ -38,8 +38,8 @@ class PromptBinding:
     ``has_permission(principal, binding)`` with this binding as the spec
     (``handlers.judge_binding``), at ``prompts/list``, ``prompts/get`` and a
     completion of one of its arguments alike. A check on the principal alone,
-    the usual case, is the same instance a spec carries. Refused when built if
-    any entry is not a check instance (``registry.types.utils.binding_checks``)."""
+    the usual case, is the same instance a spec carries. Refused when built by
+    the kernel's rule for a spec's (``registry.types.utils.binding_checks``)."""
     scopes: tuple[str, ...] | None = None
     """The OAuth scopes a caller's token must carry, every one of them, asked
     before ``permissions``. ``None`` is no scope gate; a bare string is one scope,
@@ -71,7 +71,7 @@ class PromptBinding:
     def __post_init__(self) -> None:
         label = f"Prompt {self.name!r}"
         object.__setattr__(self, "scopes", scope_names(label, self.scopes))
-        object.__setattr__(self, "permissions", binding_checks(label, self.permissions))
+        object.__setattr__(self, "permissions", binding_checks(label, self.permissions or None))
 
 
 __all__ = ["PromptBinding"]
