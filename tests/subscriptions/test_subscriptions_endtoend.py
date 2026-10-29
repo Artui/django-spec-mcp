@@ -194,8 +194,8 @@ async def test_an_ordinary_request_is_unaffected() -> None:
 
 
 async def test_a_grant_of_nothing_closes_instead_of_holding_a_worker() -> None:
-    """The fix for a stream that used to keep an ASGI worker parked forever
-    emitting keepalives it could never follow with anything."""
+    """Otherwise the stream keeps an ASGI worker parked forever, emitting
+    keepalives it can never follow with anything."""
     response = await _listen(
         AsyncClient(), {"notifications": {"resourceSubscriptions": ["gated://1"]}}
     )
