@@ -54,8 +54,9 @@ class Endpoint:
     async def send(self, method: str, path: str = "/mcp/", **kwargs: Any) -> Any:
         """Send one request on the mount's own client, the sync one off the event loop.
 
-        Request headers go through ``headers=``: the async client puts an
-        ``HTTP_*`` keyword in the ASGI scope rather than the request's headers.
+        Request headers go through ``headers=`` only: the async client puts an
+        ``HTTP_*`` keyword in the ASGI scope rather than the request's headers,
+        so a test written that way would pass without sending what it names.
         """
         if self.is_async:
             return await getattr(AsyncClient(), method)(path, **kwargs)
