@@ -1,9 +1,12 @@
-"""``MCPServer.call_tool`` — the transport-neutral, spec-backed invocation surface.
+"""``MCPServer.call_tool`` on kernel specs: the in-process, spec-core invocation surface.
 
-Drives service / selector tools through the sister repo's ``dispatch_spec`` core
-off the HTTP path and returns a :class:`ToolResult`, mapping business failures
-and missing instances to ``isError`` results while letting permission / input
-faults propagate.
+Asks of tools registered with ``register_tool``: a call through the
+kernel's ``dispatch`` off the HTTP path returns a :class:`ToolResult`, a
+business failure or a missing instance comes back as an ``isError`` result, and
+a permission fault or an unknown name propagates for the caller to map.
+
+A denied call raises the kernel's ``NotPermitted``. A kernel retrieve declares
+the read it takes, ``pk`` here.
 """
 
 from __future__ import annotations
@@ -13,37 +16,58 @@ from typing import Any
 
 import pytest
 from django.http import Http404
-from django_service_specs import UNSET, SelectorKind, ServiceError, ServiceValidationError
-from rest_framework.exceptions import PermissionDenied
-from rest_framework.permissions import BasePermission
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_service_specs import (
+    UNSET,
+    NotPermitted,
+    Parameter,
+    Parameters,
+    PermissionCheck,
+    SelectorKind,
+    SelectorSpec,
+    ServiceError,
+    ServiceSpec,
+    ServiceValidationError,
+    Unrestricted,
+)
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.protocol.types.tool_result import ToolResult
+from tests.testapp.models import Invoice
+
+OPEN = [Unrestricted()]
+PK = Parameters([Parameter("pk", "integer", required=True)])
 
 
 def _server() -> MCPServer:
     return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
 
 
-def _error_type(result: ToolResult) -> str:
-    return json.loads(result.content[0].text)["error"]["type"]
+def _error(result: ToolResult) -> dict[str, Any]:
+    return json.loads(result.content[0].text)["error"]
 
 
-def _error_message(result: ToolResult) -> str:
-    return json.loads(result.content[0].text)["error"]["message"]
+class _DenyAll(PermissionCheck):
+    def has_permission(self, principal: Any, spec: Any) -> bool:
+        return False
+
+
+class _DenyObject(PermissionCheck):
+    def has_permission(self, principal: Any, spec: Any) -> bool:
+        return True
+
+    def has_object_permission(self, principal: Any, spec: Any, target: Any) -> bool:
+        return False
 
 
 # ---------- success paths ----------
 
 
-def test_service_tool_returns_a_tool_result() -> None:
+def test_a_service_tool_returns_a_tool_result() -> None:
     server = _server()
-    server.register_service_tool(
+    server.register_tool(
+        ServiceSpec(service=lambda: {"ok": True}, permissions=OPEN, atomic=False),
         name="things.create",
-        spec=ServiceSpec(service=lambda **_: {"ok": True}, atomic=False),
     )
     # No argument: the spec declares none, so ``REJECT`` would refuse one.
     result = server.call_tool("things.create", {}, user=None)
@@ -52,31 +76,39 @@ def test_service_tool_returns_a_tool_result() -> None:
     assert result.structured_content == {"ok": True}
 
 
-def test_selector_list_renders_many() -> None:
+def test_a_list_selector_renders_many() -> None:
     server = _server()
-    server.register_selector_tool(
+    server.register_tool(
+        SelectorSpec(
+            kind=SelectorKind.LIST, selector=lambda: [{"a": 1}, {"a": 2}], permissions=OPEN
+        ),
         name="things.list",
-        spec=SelectorSpec(kind=SelectorKind.LIST, selector=lambda **_: [{"a": 1}, {"a": 2}]),
     )
-    result = server.call_tool("things.list", user=None)
-    assert result.structured_content == [{"a": 1}, {"a": 2}]
+    assert server.call_tool("things.list", user=None).structured_content == [{"a": 1}, {"a": 2}]
 
 
-def test_selector_retrieve_renders_single_instance() -> None:
+def test_a_retrieve_selector_renders_one_instance() -> None:
     server = _server()
-    server.register_selector_tool(
+    server.register_tool(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE, selector=lambda *, pk: {"a": pk}, reads=PK, permissions=OPEN
+        ),
         name="things.get",
-        spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda **_: {"a": 1}),
     )
-    result = server.call_tool("things.get", {"pk": 1}, user=None)
-    assert result.structured_content == {"a": 1}
+    assert server.call_tool("things.get", {"pk": 1}, user=None).structured_content == {"a": 1}
 
 
-def test_allow_none_retrieve_returns_an_empty_result_not_an_error() -> None:
+def test_an_allow_none_retrieve_returns_an_empty_result_not_an_error() -> None:
     server = _server()
-    server.register_selector_tool(
+    server.register_tool(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=lambda *, pk: None,
+            reads=PK,
+            allow_none=True,
+            permissions=OPEN,
+        ),
         name="things.maybe",
-        spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda **_: None, allow_none=True),
     )
     result = server.call_tool("things.maybe", {"pk": 9}, user=None)
     assert result.is_error is False
@@ -85,9 +117,9 @@ def test_allow_none_retrieve_returns_an_empty_result_not_an_error() -> None:
 
 def test_include_structured_content_false_omits_the_structured_field() -> None:
     server = _server()
-    server.register_service_tool(
+    server.register_tool(
+        ServiceSpec(service=lambda: {"ok": True}, permissions=OPEN, atomic=False),
         name="things.quiet",
-        spec=ServiceSpec(service=lambda **_: {"ok": True}, atomic=False),
         include_structured_content=False,
         # The MCP spec forbids advertising outputSchema while omitting
         # structuredContent, so drop the schema too.
@@ -96,170 +128,166 @@ def test_include_structured_content_false_omits_the_structured_field() -> None:
     result = server.call_tool("things.quiet", user=None)
     assert result.structured_content is UNSET
     assert "structuredContent" not in result.to_dict()
-    assert result.content  # the text projection still carries the payload
+    assert json.loads(result.content[0].text) == {"ok": True}
 
 
 # ---------- tool-level error paths (isError results) ----------
 
 
-def test_missing_required_instance_is_a_not_found_error() -> None:
+def test_a_missing_required_instance_is_a_not_found_error() -> None:
     server = _server()
-    server.register_selector_tool(
+    server.register_tool(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE, selector=lambda *, pk: None, reads=PK, permissions=OPEN
+        ),
         name="things.get",
-        spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda **_: None),
     )
     result = server.call_tool("things.get", {"pk": 404}, user=None)
     assert result.is_error is True
-    assert _error_type(result) == "not_found"
-    assert _error_message(result) == "things.get: no matching instance found"
+    assert _error(result) == {
+        "message": "things.get: no matching instance found",
+        "type": "not_found",
+    }
 
 
 @pytest.mark.parametrize("allow_none", [False, True], ids=["plain", "allow-none"])
 def test_a_list_selectors_http404_is_not_found_in_process(allow_none: bool) -> None:
     """The wire's wording for a ``LIST``, on the route django-ag-ui calls."""
 
-    def missing_parent(**_: Any) -> Any:
+    def missing_parent() -> Any:
         raise Http404("no parent")
 
     server = _server()
-    server.register_selector_tool(
+    server.register_tool(
+        SelectorSpec(
+            kind=SelectorKind.LIST,
+            selector=missing_parent,
+            allow_none=allow_none,
+            permissions=OPEN,
+        ),
         name="things.list",
-        spec=SelectorSpec(kind=SelectorKind.LIST, selector=missing_parent, allow_none=allow_none),
     )
     result = server.call_tool("things.list", {}, user=None)
     assert result.is_error is True
-    assert _error_type(result) == "not_found"
-    assert _error_message(result) == "things.list: not found"
+    assert _error(result) == {"message": "things.list: not found", "type": "not_found"}
 
 
 def test_a_write_whose_instance_selector_raises_http404_is_not_found_unrun() -> None:
-    """A service tool's ``not_found`` keeps the instance wording: it is a
-    ``ToolBinding``, with no ``kind`` for the ``LIST`` branch to ask."""
+    """A service tool's ``not_found`` keeps the instance wording: its binding's
+    ``kind`` is no ``LIST``, so ``not_found_result`` words a missed instance."""
     ran: list[Any] = []
 
-    def missing(**_: Any) -> Any:
+    def missing(*, pk: int) -> Any:
         raise Http404("gone")
 
     server = _server()
-    server.register_service_tool(
-        name="things.update",
-        spec=ServiceSpec(
+    server.register_tool(
+        ServiceSpec(
             service=lambda **kwargs: ran.append(kwargs),
             atomic=False,
-            instance_selector_spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=missing),
+            permissions=OPEN,
+            instance_selector_spec=SelectorSpec(
+                kind=SelectorKind.RETRIEVE, selector=missing, reads=PK, permissions=OPEN
+            ),
         ),
+        name="things.update",
     )
     result = server.call_tool("things.update", {"pk": 1}, user=None)
     assert result.is_error is True
-    assert _error_type(result) == "not_found"
-    assert _error_message(result) == "things.update: no matching instance found"
+    assert _error(result) == {
+        "message": "things.update: no matching instance found",
+        "type": "not_found",
+    }
     assert ran == []
 
 
-def test_service_validation_error_becomes_a_tool_error() -> None:
-    def svc(**_: Any) -> Any:
+def test_a_service_validation_error_becomes_a_tool_error() -> None:
+    def svc() -> Any:
         raise ServiceValidationError("bad input")
 
     server = _server()
-    server.register_service_tool(
-        name="things.create",
-        spec=ServiceSpec(service=svc, atomic=False),
-    )
-    result = server.call_tool("things.create", {"x": 1}, user=None)
+    server.register_tool(ServiceSpec(service=svc, permissions=OPEN, atomic=False), name="t.create")
+    result = server.call_tool("t.create", {}, user=None)
     assert result.is_error is True
-    assert _error_type(result) == "validation_error"
+    assert _error(result)["type"] == "validation_error"
 
 
-def test_service_error_becomes_a_tool_error() -> None:
-    def svc(**_: Any) -> Any:
+def test_an_undeclared_argument_is_a_validation_error_not_a_fault() -> None:
+    """A kernel spec declares its reads, so an argument it does not declare
+    (``{"x": 1}`` here) is refused under ``REJECT`` as the wire refuses it, in
+    the result rather than raised."""
+    server = _server()
+    server.register_tool(
+        ServiceSpec(service=lambda: None, permissions=OPEN, atomic=False), name="t.create"
+    )
+    result = server.call_tool("t.create", {"x": 1}, user=None)
+    assert result.is_error is True
+    assert _error(result)["detail"] == {"x": ["Unknown argument."]}
+
+
+def test_a_service_error_becomes_a_tool_error() -> None:
+    def svc() -> Any:
         raise ServiceError("boom")
 
     server = _server()
-    server.register_service_tool(
-        name="things.create",
-        spec=ServiceSpec(service=svc, atomic=False),
-    )
-    result = server.call_tool("things.create", user=None)
+    server.register_tool(ServiceSpec(service=svc, permissions=OPEN, atomic=False), name="t.create")
+    result = server.call_tool("t.create", user=None)
     assert result.is_error is True
-    assert _error_type(result) == "service_error"
+    assert _error(result) == {"message": "boom", "type": "service_error"}
 
 
 # ---------- protocol faults (propagate) ----------
 
 
-class _DenyAll(BasePermission):
-    def has_permission(self, request: Any, view: Any) -> bool:
-        return False
-
-
-class _DenyObject(BasePermission):
-    def has_permission(self, request: Any, view: Any) -> bool:
-        return True
-
-    def has_object_permission(self, request: Any, view: Any, obj: Any) -> bool:
-        return False
-
-
-def test_spec_permission_denial_propagates() -> None:
+def test_a_spec_permission_denial_propagates() -> None:
+    # A kernel check refuses with the kernel's ``NotPermitted``, which the wire
+    # maps to its own code. It is a fault the caller maps, not a tool result.
     server = _server()
-    server.register_service_tool(
-        name="things.create",
-        spec=ServiceSpec(service=lambda **_: {}, atomic=False, permission_classes=[_DenyAll]),
+    server.register_tool(
+        ServiceSpec(service=lambda: {}, permissions=[_DenyAll()], atomic=False), name="t.create"
     )
-    with pytest.raises(PermissionDenied):
-        server.call_tool("things.create", user=None)
+    with pytest.raises(NotPermitted):
+        server.call_tool("t.create", user=None)
 
 
-def test_selector_spec_permission_denial_propagates() -> None:
-    # Regression: a selector spec's class-level ``permission_classes``
-    # used to leak through this spec-core surface — the ``on_target_resolved``
-    # hook never fired on selector reads, and ``dispatch_spec`` never consults
-    # ``permission_classes`` itself. The upfront ``enforce_permissions`` call now
-    # denies before the selector runs.
-    ran = False
+def test_a_selector_spec_permission_denial_propagates_before_the_selector_runs() -> None:
+    ran: list[bool] = []
 
-    def _selector(**_: Any) -> Any:
-        nonlocal ran
-        ran = True
+    def _selector(*, pk: int) -> Any:
+        ran.append(True)
         return {"leaked": True}
 
     server = _server()
-    server.register_selector_tool(
-        name="things.secret",
-        spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE, selector=_selector, permission_classes=[_DenyAll]
+    server.register_tool(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE, selector=_selector, reads=PK, permissions=[_DenyAll()]
         ),
+        name="t.secret",
     )
-    with pytest.raises(PermissionDenied):
-        server.call_tool("things.secret", {"pk": 1}, user=None)
-    assert ran is False  # denied before the selector could produce a payload
+    with pytest.raises(NotPermitted):
+        server.call_tool("t.secret", {"pk": 1}, user=None)
+    assert ran == []
 
 
 @pytest.mark.django_db
-def test_selector_object_permission_denial_propagates() -> None:
-    # Object-level half (rides drf-services >= 0.21): the
-    # ``on_target_resolved=enforce_permissions`` hook now fires on selector
-    # RETRIEVE dispatch, so an object-level denial on the *resolved row*
-    # propagates through the spec-core surface — not just class-level denials.
-    from tests.testapp.models import Invoice
-
+def test_a_selector_object_permission_denial_propagates() -> None:
+    """The object-level half: the kernel asks ``has_object_permission`` of the
+    row the retrieve resolved, so a denial on it propagates too."""
     invoice = Invoice.objects.create(number="A", amount_cents=1)
-
-    def _by_pk(*, pk: int) -> Any:
-        return Invoice.objects.filter(pk=pk)
-
     server = _server()
-    server.register_selector_tool(
-        name="things.secret",
-        spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE, selector=_by_pk, permission_classes=[_DenyObject]
+    server.register_tool(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=lambda *, pk: Invoice.objects.filter(pk=pk),
+            reads=PK,
+            permissions=[_DenyObject()],
         ),
+        name="t.secret",
     )
-    with pytest.raises(PermissionDenied):
-        server.call_tool("things.secret", {"pk": invoice.pk}, user=None)
+    with pytest.raises(NotPermitted):
+        server.call_tool("t.secret", {"pk": invoice.pk}, user=None)
 
 
-def test_unknown_tool_name_raises_keyerror() -> None:
-    server = _server()
+def test_an_unknown_tool_name_raises_keyerror() -> None:
     with pytest.raises(KeyError, match="nope"):
-        server.call_tool("nope", user=None)
+        _server().call_tool("nope", user=None)

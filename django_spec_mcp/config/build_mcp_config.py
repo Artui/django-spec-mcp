@@ -7,7 +7,6 @@ from django_service_specs import UNSET, UnsetType
 
 from django_spec_mcp.conf import get_setting
 from django_spec_mcp.config.types.mcp_config import MCPConfig
-from django_spec_mcp.types.output_format import OutputFormat
 
 
 def _nullable_int(value: Any) -> int | None:
@@ -25,7 +24,7 @@ def _bound(value: int | float | None | UnsetType, setting: str) -> Any:
 
     ``None`` is a *meaningful value* for the outbound bounds ("no ceiling"), so
     it cannot double as the "not supplied" sentinel the other arguments use.
-    ``UNSET`` (drf-services' sentinel) carries that distinction:
+    ``UNSET`` (the kernel's sentinel) carries that distinction:
     ``build_mcp_config()`` takes the setting,
     ``build_mcp_config(dispatch_timeout=None)`` disables the deadline.
     """
@@ -40,7 +39,6 @@ def build_mcp_config(
     include_structured_content: bool | None = None,
     include_output_schema: bool | None = None,
     allowed_origins: tuple[str, ...] | list[str] | None = None,
-    default_output_format: OutputFormat | str | None = None,
     max_request_bytes: int | None = None,
     max_progress_notifications: int | None = None,
     max_result_bytes: int | None | UnsetType = UNSET,
@@ -114,11 +112,6 @@ def build_mcp_config(
         include_output_schema=output_schema_resolved,
         allowed_origins=tuple(
             allowed_origins if allowed_origins is not None else get_setting("ALLOWED_ORIGINS")
-        ),
-        default_output_format=OutputFormat.coerce(
-            default_output_format
-            if default_output_format is not None
-            else get_setting("DEFAULT_OUTPUT_FORMAT")
         ),
         max_request_bytes=int(
             max_request_bytes if max_request_bytes is not None else get_setting("MAX_REQUEST_BYTES")

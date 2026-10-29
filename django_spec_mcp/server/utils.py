@@ -26,36 +26,33 @@ class UnguardedToolWarning(UserWarning):
 
 
 def check_tool_permissions_declared(
-    name: str, permissions: tuple[Any, ...], *, require: bool, kind: str = "tool"
+    name: str, *, guarded: bool, require: bool, kind: str = "tool"
 ) -> None:
-    """Warn (or raise) when a registered binding carries no permissions.
+    """Warn (or raise) when a registered binding carries neither permissions nor scopes.
 
-    ``permissions`` is the binding's *effective* tuple — author-declared
-    ``spec.permission_classes`` (wrapped in ``DRFPermissionAdapter``) plus any
-    per-binding ``MCPPermission`` — so an empty tuple means nothing gates the
-    call beyond transport authentication. The trap: DRF viewset-level and
-    ``REST_FRAMEWORK`` default permission classes do **not** apply over MCP,
-    so a spec guarded the usual way, with passing HTTP tests, otherwise ships
-    as an unguarded binding with no signal.
+    Asked of a prompt, the one registration whose ``permissions=`` and
+    ``scopes=`` are its whole gate: a kernel tool or resource is guarded by its
+    spec's own ``PermissionCheck``s, which ``check_kernel_spec_guarded`` asks
+    about, and a view reads nothing of the caller's (``register_ui_resource``).
+    ``guarded`` is whether either is declared, and ``register_prompt`` holds
+    each half: ``test_a_prompt_with_checks_alone_counts_as_guarded`` fails
+    without the checks, ``test_a_prompt_takes_a_scope_gate_and_counts_as_guarded``
+    without the scopes. Neither means nothing gates the render beyond transport
+    authentication.
 
-    ``kind`` names the registration in the message — ``tool``, ``resource`` or
-    ``prompt``. All three reach data the same way and are governed by the one
-    ``REQUIRE_TOOL_PERMISSIONS`` setting, because the exposure is identical:
-    the same selector registered as a resource rather than a tool used to start
-    clean and answer any authenticated principal.
+    ``kind`` names the registration in the message. It is governed by the
+    ``REQUIRE_TOOL_PERMISSIONS`` setting, the one every unguarded registration
+    has answered to, because a prompt's render reaches data as a tool does.
 
     Emits on every unguarded registration — no warn-once module state, per the
     repo's no-module-level-mutable-state rule.
     """
-    if permissions:
+    if guarded:
         return
     problem = (
-        f"MCP {kind} {name!r} is registered with no permissions: neither "
-        "spec.permission_classes nor a per-binding permissions=[...] is set. "
-        "DRF viewset-level and REST_FRAMEWORK default permission classes do "
-        f"NOT apply over MCP, so this {kind} is callable by any principal the "
-        "transport authenticates. Set spec.permission_classes, or pass "
-        "permissions=[...] at registration."
+        f"MCP {kind} {name!r} is registered with no permissions and no scopes, so it "
+        "answers any principal the transport authenticates. Pass "
+        "permissions=[...] or scopes=[...] at registration."
     )
     if require:
         # The remedy on this branch is the opposite of the warning's: the check
@@ -81,8 +78,15 @@ class UndescribedToolWarning(UserWarning):
     """
 
 
-def check_tool_description_present(name: str, description: str | None, *, require: bool) -> None:
+def check_tool_description_present(
+    name: str, description: str | None, *, require: bool, stacklevel: int = 3
+) -> None:
     """Warn (or raise) when a tool binding carries no description.
+
+    ``stacklevel`` is counted from this function. The default is right for a
+    registrar that calls this directly and is itself called by the user's code;
+    a registrar that sits deeper passes its own count, as the kernel registrars
+    do (``test_the_warning_points_at_the_registering_line_not_this_package``).
 
     Deliberately **no docstring fallback.** A docstring is written for the next
     developer, not for a model choosing between tools, so promoting one would
@@ -102,7 +106,7 @@ def check_tool_description_present(name: str, description: str | None, *, requir
     )
     if require:
         raise ImproperlyConfigured(message)
-    warnings.warn(message, UndescribedToolWarning, stacklevel=3)
+    warnings.warn(message, UndescribedToolWarning, stacklevel=stacklevel)
 
 
 class UnboundedListWarning(UserWarning):
@@ -112,8 +116,14 @@ class UnboundedListWarning(UserWarning):
     """
 
 
-def check_list_pagination_declared(name: str, *, paginate: bool, require: bool) -> None:
+def check_list_pagination_declared(
+    name: str, *, paginate: bool, require: bool, stacklevel: int = 3
+) -> None:
     """Warn (or raise) when a LIST selector tool has no pagination.
+
+    ``stacklevel`` is counted from this function, as on
+    ``check_tool_description_present``
+    (``test_the_warning_points_at_the_registering_line_not_this_package``).
 
     **Why this warns rather than silently clamping.** A ``paginate=True`` tool
     clamps safely because ``totalPages`` / ``hasNext`` tell the model rows were
@@ -138,7 +148,7 @@ def check_list_pagination_declared(name: str, *, paginate: bool, require: bool) 
     )
     if require:
         raise ImproperlyConfigured(message)
-    warnings.warn(message, UnboundedListWarning, stacklevel=3)
+    warnings.warn(message, UnboundedListWarning, stacklevel=stacklevel)
 
 
 def build_ui_tool_meta(
@@ -205,41 +215,6 @@ def build_ui_tool_meta(
     return {UI_META_KEY: ui.to_dict()}
 
 
-def check_permissions_shape(label: str, permissions: Any) -> tuple[Any, ...]:
-    """Normalise a registration's ``permissions=`` and refuse a shape that lies.
-
-    **Security-relevant.** ``permissions="Scope"`` normalises to ``tuple("Scope")`` —
-    five one-character entries. The tuple is non-empty, so
-    ``check_tool_permissions_declared`` sees a guarded tool and stays quiet; at
-    dispatch, ``check_permissions`` skips every entry that is not an
-    [`MCPPermission`][django_spec_mcp.auth.permissions.types.mcp_permission.MCPPermission],
-    and the call is **allowed**. A bare string is the likely way in, being what the
-    permission classes themselves accept, so it gets its own message.
-
-    Only ``has_permission`` is required, deliberately: ``required_scopes`` has
-    an implied ``[]`` default, so a permission implementing the gate and
-    nothing else is legitimate, while an ``isinstance`` against the
-    runtime-checkable Protocol would reject it for the missing member.
-    """
-    if isinstance(permissions, str):
-        raise ImproperlyConfigured(
-            f"{label}: permissions= was given the string {permissions!r}, which "
-            "spreads into one entry per character — none of them a permission, "
-            "leaving the binding ungated while reading as guarded. Pass "
-            "permission objects: permissions=[ScopeRequired('...')]."
-        )
-    resolved: tuple[Any, ...] = tuple(permissions or ())
-    invalid: list[Any] = [p for p in resolved if not callable(getattr(p, "has_permission", None))]
-    if invalid:
-        raise ImproperlyConfigured(
-            f"{label}: permissions= contains {invalid!r}, which cannot answer "
-            "has_permission(request, token). Every entry must be an MCPPermission "
-            "— ScopeRequired / DjangoPermRequired, a DRFPermissionAdapter around a "
-            "DRF class, or your own."
-        )
-    return resolved
-
-
 def check_completions_declared(
     label: str,
     completions: dict[str, Any],
@@ -268,7 +243,6 @@ __all__ = [
     "build_ui_tool_meta",
     "check_completions_declared",
     "check_list_pagination_declared",
-    "check_permissions_shape",
     "check_tool_description_present",
     "check_tool_permissions_declared",
 ]

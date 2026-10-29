@@ -4,10 +4,11 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from django.http import StreamingHttpResponse
-from django_service_specs import ProgressReporter
+from django_service_specs import ProgressReporter, apply_server_arguments
 
+from django_spec_mcp.handlers.kernel_utils import admit_kernel_tool_call
 from django_spec_mcp.handlers.types.context import MCPCallContext
-from django_spec_mcp.handlers.utils import judge_tool_permissions
+from django_spec_mcp.handlers.utils import forbidden, judge_tool_permissions
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.transport.response_stream import build_response_stream
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
@@ -82,32 +83,74 @@ def preflight_permissions(method: str, params: Any, context: MCPCallContext) -> 
     binding = _tool_binding(params, context)
     if binding is None:
         return None
-    # The call as the handler's own check judges it, through the same helper:
-    # a spec permission scoping by ``view.kwargs["project_pk"]`` refused here
-    # with a ``403`` the call it was about to admit
-    # (``test_the_preflight_sees_the_url_kwargs_the_call_delivers``), and one
-    # reading ``request.data`` raised
-    # (``test_a_streamed_call_is_judged_on_its_arguments``). Not refusing a
-    # missing kwarg, which the handler still names after the permission has
-    # answered
-    # (``test_a_denied_caller_missing_a_url_kwarg_is_refused_by_the_preflight``).
-    # This runs before the handler validates ``arguments``, so one that is not
-    # an object delivers nothing here, as an absent one does there, and the
-    # handler is left to name the fault
-    # (``test_a_call_with_no_arguments_object_is_judged_on_the_route_defaults``).
-    # ``url_kwargs`` is read bare because only a service or a selector binding
-    # gets here.
+    # The binding's scope gate, through the helper the handler's own check
+    # uses, then the spec's checks. This runs before the handler validates
+    # ``arguments``, so one that is not an object delivers nothing here, as an
+    # absent one does there, and the handler is left to name the fault
+    # (``test_a_streamed_call_with_no_arguments_object_is_judged_on_none_sent``).
+    allowed, required_scopes = judge_tool_permissions(binding, context)
+    if not allowed:
+        return forbidden(required_scopes)
     arguments: Any = params.get("arguments")
-    allowed, required_scopes = judge_tool_permissions(
-        binding, arguments if isinstance(arguments, dict) else {}, context
-    )
-    if allowed:
-        return None
-    return JsonRpcError(
-        JsonRpcErrorCode.FORBIDDEN,
-        "Insufficient permission",
-        data={"requiredScopes": required_scopes} if required_scopes else None,
-    )
+    sent: dict[str, Any] = arguments if isinstance(arguments, dict) else {}
+    if _kernel_refuses(binding, sent, context):
+        return JsonRpcError(JsonRpcErrorCode.FORBIDDEN, "Insufficient permission")
+    return None
+
+
+def _kernel_refuses(binding: Any, arguments: dict[str, Any], context: MCPCallContext) -> bool:
+    """Whether the kernel spec's own checks deny this call.
+
+    A kernel binding's ``permissions`` hold only its ``scopes=`` gate, which
+    ``judge_tool_permissions`` has judged. The handler asks the spec's checks
+    before it charges the call, but inside the stream, after it has committed
+    its ``200``, so a call they deny streamed ``-32006`` where the same call
+    without a progress token was a ``403`` with a challenge
+    (``test_a_spec_check_denying_a_streamed_call_keeps_its_403_and_challenge``).
+
+    Asked through ``admit_kernel_tool_call``, the step the handler asks them
+    in, so the two paths ask them alike: a deactivated principal is refused
+    (``test_a_deactivated_principal_is_refused_before_the_stream``), and a
+    caller they deny is refused before its arguments are checked, so it is
+    not told about an unknown argument it sent on either path
+    (``test_a_caller_the_spec_denies_is_refused_before_its_unknown_argument``).
+    That step splits a paged tool's ``page`` and ``limit`` off, so an admitted
+    paged call is asked on its arguments rather than judged on none
+    (``test_a_paged_call_is_asked_once``); hands the checks the
+    call context carrying the token
+    (``test_a_check_reading_the_token_sees_the_calls_request``), the grant of
+    an unguarded spec
+    (``test_an_unguarded_spec_streams_under_the_grant_its_call_carries``) and
+    the server's own ``pool_seeds``
+    (``test_a_check_reading_a_servers_own_seed_is_judged_on_that_seed``); and
+    checks the arguments under the binding's own ``unknown_arguments`` policy,
+    since a tool that ignores strays shows its checks the arguments without
+    them (``test_a_stray_argument_a_tool_ignores_is_asked_once``).
+
+    Handed the server's arguments laid over the caller's, since the handler
+    lays them only after this runs
+    (``test_a_check_reading_arguments_is_judged_on_the_servers_value``),
+    through the kernel's rule rather than ``apply_tool_server_arguments``,
+    which would log the dropped value a second time
+    (``test_the_server_arguments_are_laid_without_a_second_warning``).
+
+    Only a denial, which ``KERNEL_REFUSALS`` answers ``-32006``, is answered
+    here. Any other refusal is left to the handler, which answers it in the
+    stream as it would without one
+    (``test_a_refusal_that_is_not_a_denial_is_left_to_the_handler``).
+    Arguments a retry's answers would merge in are not seen here: the handler
+    judges those again. So when the arguments pass the shape check the checks are
+    asked twice for a streamed call, here and in the handler, and once for a
+    plain one; ``adispatch`` runs under the handler's grant and asks them no
+    third time
+    (``test_a_streamed_call_asks_the_spec_once_more_than_a_plain_one``). A
+    call failing it is asked here as ``admit_kernel_call`` counts, so an
+    admitted ``many`` call with a refused row is asked three times streamed,
+    once here and twice in the handler
+    (``test_a_many_call_with_a_refused_row_is_asked_by_its_prelude_and_by_dispatch``).
+    """
+    laid: dict[str, Any] = apply_server_arguments(binding.spec, arguments, binding.server_arguments)
+    return isinstance(admit_kernel_tool_call(binding, laid, context), JsonRpcError)
 
 
 def _tool_binding(params: dict[str, Any], context: MCPCallContext) -> Any:

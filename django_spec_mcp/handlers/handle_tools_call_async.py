@@ -4,52 +4,34 @@ import asyncio
 from typing import Any
 
 from asgiref.sync import sync_to_async
-from django_service_specs import AdditionalInputRequired, ServiceError, ServiceValidationError
-from rest_framework import serializers as drf_serializers
-from rest_framework.exceptions import PermissionDenied
-from rest_framework_services import adispatch_spec, enforce_permissions
 
 from django_spec_mcp._compat.acall import acall
 from django_spec_mcp._compat.tracing import span
 from django_spec_mcp.elicitation.types.resolved_input import ResolvedInput
-from django_spec_mcp.handlers.handle_tools_call import _forbidden, _render, _span_attrs
+from django_spec_mcp.handlers.handle_tools_call import _span_attrs
 from django_spec_mcp.handlers.input_dispatch import (
-    ask_for_input,
     refusal_result,
-    resolve_prior_input,
 )
 from django_spec_mcp.handlers.invalidation_dispatch import announce_invalidations_async
-from django_spec_mcp.handlers.selector_tool_dispatch import (
-    dispatch_selector_tool_async,
-    enforce_object_permissions,
-)
+from django_spec_mcp.handlers.kernel_utils import admit_kernel_tool_call
+from django_spec_mcp.handlers.resolve_call_input import resolve_call_input
+from django_spec_mcp.handlers.run_kernel_tool_async import run_kernel_tool_async
 from django_spec_mcp.handlers.task_dispatch import maybe_create_task
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import (
     apply_tool_server_arguments,
     consume_rate_limits,
-    dispatch_shape,
     effective_rate_limits,
     enforce_result_ceiling,
+    forbidden,
     judge_tool_permissions,
-    read_shaping_error_result,
-    refuse_missing_arguments,
     resolve_bound,
     run_with_deadline,
-    same_arguments,
-    service_error_result,
-    services_dispatch_policies,
-    split_url_kwargs,
-    validate_output_format,
-    validation_error_result,
 )
 from django_spec_mcp.output.error_tool_result import build_error_tool_result
-from django_spec_mcp.output.resolve_structured_output import resolve_structured_output
-from django_spec_mcp.output.tool_result import build_tool_result
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
-from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
+from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
-from django_spec_mcp.types.output_format import OutputFormat
 
 
 async def handle_tools_call_async(
@@ -58,12 +40,11 @@ async def handle_tools_call_async(
 ) -> dict[str, Any] | JsonRpcError:
     """Async sibling of ``handle_tools_call``.
 
-    Service tools dispatch through ``adispatch_spec``,
-    which awaits async-native callables and bridges sync ones (validation,
-    instance resolution, the ``enforce_permissions`` guard) off the event loop.
-    The transport shell — MCP permissions / rate limits, output format,
-    ``structuredContent`` — stays here; output rendering runs through
-    ``acall`` so a lazy list result is materialised off-loop.
+    The tool runs through the kernel's ``adispatch`` (``run_kernel_tool_async``),
+    which awaits async-native callables and bridges sync ones off the event
+    loop. The transport shell — the binding's scope gate and rate limits,
+    ``structuredContent`` — stays here, its blocking parts
+    through ``acall``.
     """
     if not isinstance(params, dict):
         return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, "tools/call params must be an object")
@@ -88,12 +69,6 @@ async def handle_tools_call_async(
     if not isinstance(arguments_raw, dict):
         return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, "'arguments' must be an object")
 
-    # See the sync sibling: checked here so an unrenderable format cannot become
-    # a 500 after the tool has run.
-    bad_format: JsonRpcError | None = validate_output_format(params)
-    if bad_format is not None:
-        return bad_format
-
     # See the sync sibling: before the task and the permission check read them.
     arguments_raw = apply_tool_server_arguments(binding, arguments_raw)
 
@@ -101,8 +76,8 @@ async def handle_tools_call_async(
     # creating a task is a store write and a queue hand-off, not the work, and
     # timing it out would abandon a task already durably created. Taken through
     # the thread-sensitive executor because it reads the cache and runs the
-    # binding's permissions, both of which reach code Django marks async-unsafe
-    # (a database-backed cache raises; ``DjangoPermRequired`` runs a query).
+    # spec's permission checks, both of which reach code Django marks
+    # async-unsafe (a database-backed cache raises; a check may run a query).
     as_task: dict[str, Any] | JsonRpcError | None = await sync_to_async(
         maybe_create_task, thread_sensitive=True
     )(binding, arguments_raw, context)
@@ -137,61 +112,41 @@ async def handle_tools_call_async(
 
 
 async def _dispatch_tool_call_async(
-    binding: Any,
+    binding: KernelToolBinding,
     params: dict[str, Any],
     arguments_raw: dict[str, Any],
     context: MCPCallContext,
 ) -> tuple[dict[str, Any] | JsonRpcError, dict[str, Any]]:
-    """Route a resolved binding to its async dispatch path; return the result and its arguments.
+    """Dispatch a resolved binding; return the result and its arguments.
 
     Split out of ``handle_tools_call_async`` so one deadline covers the
     whole dispatch — permissions, rate limits, the spec run and rendering — and
-    one size check sees the finished result, whichever path produced it. The
-    arguments returned are the ones the tool ran with, as in the sync sibling.
+    one size check sees the finished result. The arguments returned are the
+    ones the tool ran with, as in the sync sibling.
     """
     with span("mcp.tools.call", attributes=_span_attrs(binding.name, context)) as otel_span:
-        # Selector tools have their own dispatch helpers; service tools fall
-        # through to the mutation-shaped path below. See the sync sibling: a
-        # selector merges no retry's answers.
-        if isinstance(binding, SelectorToolBinding):
-            return (
-                await dispatch_selector_tool_async(
-                    binding, params, arguments_raw, context, otel_span
-                ),
-                arguments_raw,
-            )
-
-        # See the sync sibling: the spec's permission classes judge the call as
-        # its dispatch view will carry it, from the arguments as sent and
-        # without refusing a missing URL kwarg, which the strict split in
-        # ``_run_service_tool_async`` still does after them.
-        allowed, required_scopes = await acall(
-            judge_tool_permissions, binding, arguments_raw, context
-        )
+        # See the sync sibling: the binding's scope gate, before a retry's
+        # answers are read. Off the loop, since a permission may query.
+        allowed, required_scopes = await acall(judge_tool_permissions, binding, context)
         if not allowed:
-            return _forbidden(required_scopes), arguments_raw
+            return forbidden(required_scopes), arguments_raw
 
         # See the sync sibling: a retry's answers become ordinary arguments
         # before anything else looks at them, and a declined one is answered
         # after the rate limit.
-        prior: ResolvedInput = resolve_prior_input(params, binding.name, arguments_raw, context)
+        prior: ResolvedInput = resolve_call_input(binding, params, arguments_raw, context)
         # See the sync sibling: applied again, since the merge takes any key.
-        answered = apply_tool_server_arguments(binding, prior.arguments)
+        arguments_raw = apply_tool_server_arguments(binding, prior.arguments)
 
-        # See the sync sibling: answers that changed the arguments, by
-        # ``same_arguments`` rather than ``==``, are judged again on the
-        # arguments they produced, before the target is looked up. The same
-        # tests hold the condition here, each parametrized over this handler.
-        if not same_arguments(answered, arguments_raw):
-            allowed, required_scopes = await acall(
-                judge_tool_permissions, binding, answered, context
-            )
-            if not allowed:
-                return _forbidden(required_scopes), answered
-        arguments_raw = answered
+        # See the sync sibling: the spec's own checks, on the arguments the
+        # tool will run with and before the charge, off the loop because a
+        # check may query.
+        admission = await acall(admit_kernel_tool_call, binding, arguments_raw, context)
+        if isinstance(admission, JsonRpcError):
+            return admission, arguments_raw
 
-        # See the sync sibling: after both checks, so a caller either one
-        # denies is never charged.
+        # See the sync sibling: after every check, so a caller one denies is
+        # never charged.
         retry_after: int | None = await acall(
             consume_rate_limits,
             effective_rate_limits(binding, context),
@@ -211,112 +166,12 @@ async def _dispatch_tool_call_async(
         if prior.refused_with is not None:
             return refusal_result(prior.refused_with), arguments_raw
 
-        result = await _run_service_tool_async(
-            binding, params, arguments_raw, prior, context, otel_span
+        return (
+            await run_kernel_tool_async(
+                binding, params, arguments_raw, admission, prior, context, otel_span
+            ),
+            arguments_raw,
         )
-        return result, arguments_raw
-
-
-async def _run_service_tool_async(
-    binding: Any,
-    params: dict[str, Any],
-    arguments_raw: dict[str, Any],
-    prior: ResolvedInput,
-    context: MCPCallContext,
-    otel_span: Any,
-) -> dict[str, Any] | JsonRpcError:
-    """Async sibling of ``handle_tools_call._run_service_tool``."""
-    # See the sync sibling: URL kwargs route through the view, not the params,
-    # and the split runs inside the ``try`` so a missing ``required=True``
-    # kwarg reaches the ``isError`` mapping instead of escaping.
-    argument_binding, unknown_arguments = services_dispatch_policies(binding)
-    try:
-        # See the sync sibling: built from the shape the stand-in was, and not
-        # refusing a missing kwarg until the spec has judged the route.
-        shape = dispatch_shape(binding, arguments_raw)
-        spec_params, url_kwarg_values = shape.data, shape.kwargs
-        offline = shape.build(
-            user=context.token.user, auth=context.token.raw, http_request=context.http_request
-        )
-        # See the sync sibling: the spec's class-level check, before the lookup
-        # and before a missing argument is named. Off the event loop, as the
-        # target guard is, since a ``has_permission`` may query.
-        await acall(enforce_permissions, binding.spec, offline)
-        split_url_kwargs(arguments_raw, binding.url_kwargs)
-        refuse_missing_arguments(
-            binding, (*spec_params, *url_kwarg_values), pool_seeds=context.pool_seeds
-        )
-        result = await adispatch_spec(
-            binding.spec,
-            user=context.token.user,
-            params=spec_params,
-            request=offline.request,
-            view=offline.view,
-            argument_binding=argument_binding,
-            unknown_arguments=unknown_arguments,
-            # Object-level only; see the sync sibling.
-            on_target_resolved=enforce_object_permissions,
-            # ``None`` unless the client asked for progress; drf-services
-            # substitutes its no-op, so the service body is unchanged.
-            progress=context.progress,
-            # The server's ``pool_seeds=``; see the sync sibling.
-            pool_seeds=context.pool_seeds,
-            # ``arguments`` is always an object, so a ``many=True`` spec's list
-            # travels under ``spec.many_argument``; a no-op for any other spec.
-            many_as_argument=True,
-        )
-    except PermissionDenied:
-        return JsonRpcError(JsonRpcErrorCode.FORBIDDEN, "Insufficient permission")
-    except (drf_serializers.ValidationError, ServiceValidationError) as exc:
-        # Refused input is an ``isError`` result; see the sync sibling.
-        return validation_error_result(
-            exc, arguments_raw, config=context.config, conventions=context.conventions
-        ).to_dict()
-    except AdditionalInputRequired as exc:
-        # Must precede the ``ServiceError`` arm — see the sync sibling.
-        return ask_for_input(exc, prior, context)
-    except ServiceError as exc:
-        if context.config.record_service_exceptions:
-            otel_span.record_exception(exc)
-        return service_error_result(exc).to_dict()
-
-    if result.kind == "not_found":
-        return build_error_tool_result(
-            f"{binding.name}: no matching instance found", error_type="not_found"
-        ).to_dict()
-
-    # Rendering may evaluate a lazy list queryset → run it off the event loop.
-    # Wrapped as in the sync handler, which says why it sits outside the
-    # dispatch ``try``.
-    try:
-        payload: Any = await acall(_render, binding, result, offline)
-    except (drf_serializers.ValidationError, ServiceValidationError) as exc:
-        return read_shaping_error_result(
-            exc,
-            query_params=binding.query_params,
-            arguments=arguments_raw,
-            paginated=False,
-            config=context.config,
-            conventions=context.conventions,
-        ).to_dict()
-    output_format: OutputFormat = OutputFormat.coerce(
-        params.get("outputFormat") or binding.output_format
-    )
-    _emit_output_schema, emit_structured_content = resolve_structured_output(
-        include_output_schema_override=binding.include_output_schema,
-        include_structured_content_override=binding.include_structured_content,
-        binding_name=binding.name,
-        default_output_schema=context.config.include_output_schema,
-        default_structured_content=context.config.include_structured_content,
-    )
-    return build_tool_result(
-        payload,
-        output_format=output_format,
-        include_structured_content=emit_structured_content,
-        content_kind=binding.content_kind,
-        content_mime_type=binding.content_mime_type,
-        binding_name=binding.name,
-    ).to_dict()
 
 
 __all__ = ["handle_tools_call_async"]

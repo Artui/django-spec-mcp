@@ -1,140 +1,87 @@
-"""MCP server factory for the conformance suite.
+"""MCP server factory for the conformance suite, on kernel specs.
 
-Exercises every binding feature in one server so the conformance tests
-can verify each binding contract end-to-end through the real Django
-URL conf + transport stack. Each tool is named for the feature it
-demonstrates so failing assertions point at the right binding.
+The tools the conformance and transport suites call through the real Django
+URL conf, each named for the contract it demonstrates so a failing assertion
+points at the right one:
+
+- ``conformance.bulk_listed`` and ``conformance.bulk_gated`` are registered in
+  bulk through ``MCPServer.register_tools`` from a ``SpecRegistry``, the second
+  refused by its spec's own permission;
+- ``conformance.gated`` is registered alone and refuses an anonymous caller,
+  which the wire answers with HTTP 403 and ``-32006``.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from dataclasses import dataclass
 
-from django_service_specs import RESERVED_POOL_SEEDS, SelectorKind
-from rest_framework import serializers as drf_serializers
-from rest_framework.permissions import IsAuthenticated
-from rest_framework_services.dispatch.utils import EDGE_SEEDS
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
-
-from django_spec_mcp import (
-    ArgumentBinding,
-    MCPServer,
-    SelectorDefaults,
-    ServiceDefaults,
-    ToolDefinition,
-    UnknownArguments,
-    register_tools,
+from django_service_specs import (
+    DataclassPresenter,
+    RegisteredSpec,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    SpecRegistry,
+    Unrestricted,
 )
+
+from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
-from tests.testapp.models import Invoice
+from tests.testapp.permissions import IsAuthenticated
 
 
-class _ProjectScopedArgs(drf_serializers.Serializer):
-    """One strictly-validated field, exercised by the unknown-args tests."""
-
-    project_id = drf_serializers.CharField()
-
-
-class _InvoiceOutSerializer(drf_serializers.ModelSerializer):
-    class Meta:
-        model = Invoice
-        fields = ["id", "number", "amount_cents"]
+@dataclass
+class _Sentinel:
+    sentinel: str
 
 
-# ---------- Tool callables ----------
-
-
-def _merge_service(*, number: str, amount_cents: int) -> dict[str, Any]:
-    """Declares its arguments as kwargs — proves ``MERGE`` binding wires them."""
-    return {"number": number, "amount_cents": amount_cents}
-
-
-def _project_scoped_selector(*, project_id: str, **rest: Any) -> Any:
-    """Echoes the validated argument and whatever else its ``**rest`` received.
-
-    ``**rest`` absorbs every pool kwarg the explicit ``project_id`` doesn't
-    take: the transport-controlled pool seeds, and never a key the spec does
-    not declare, since drf-services 0.58.0 hands a catch-all none. Filter those
-    out before returning so the response is JSON-serialisable (the seeds are
-    not: ``progress`` is a callable, ``request`` an object).
-
-    Filtered by the producer's own sets rather than a hand-written one, so a
-    seed added upstream doesn't break this fixture the way ``progress`` did:
-    :data:`RESERVED_POOL_SEEDS` is the kernel's, and since drf-services 0.58.0
-    it no longer lists ``request``, which the DRF edge seeds itself beside
-    ``view`` (``EDGE_SEEDS``). Reading the kernel's set alone handed the
-    ``Request`` back as a result and failed to encode.
-    """
-    seeds = RESERVED_POOL_SEEDS | frozenset(EDGE_SEEDS)
-    serialisable_rest = {k: v for k, v in rest.items() if k not in seeds}
-    return [{"project_id": project_id, "rest": serialisable_rest}]
+def _bulk_list() -> list[_Sentinel]:
+    return [_Sentinel(sentinel="bulk")]
 
 
 def _gated_service() -> dict[str, str]:
     return {"ok": "true"}
 
 
-def _bulk_list() -> list[dict[str, str]]:
-    return [{"sentinel": "bulk"}]
-
-
-# ---------- Server factory ----------
-
-
 def build_conformance_server() -> MCPServer:
-    """Build a server exercising every binding contract."""
+    """Build the conformance server, its caller anonymous unless a test signs one in."""
     server = MCPServer(
         name="conformance",
         auth_backend=AllowAnyBackend(),
         session_store=InMemorySessionStore(),
     )
-
-    # argument_binding=SPREAD_AUTHOR_WINS on a service tool.
-    server.register_service_tool(
-        name="conformance.merge",
-        spec=ServiceSpec(service=_merge_service, atomic=False),
-        argument_binding=ArgumentBinding.SPREAD_AUTHOR_WINS,
-    )
-
-    # unknown-args REJECT on a strict-known selector.
-    server.register_selector_tool(
-        name="conformance.reject_unknown",
-        spec=SelectorSpec(kind=SelectorKind.LIST, selector=_project_scoped_selector),
-        input_serializer=_ProjectScopedArgs,
-        unknown_arguments=UnknownArguments.REJECT,
-    )
-
-    # declarative bulk registration with mixed kinds + defaults.
-    register_tools(
-        server,
-        definitions=[
-            ToolDefinition.selector(
-                name="conformance.bulk_listed",
-                spec=SelectorSpec(kind=SelectorKind.LIST, selector=_bulk_list),
-                description="Registered via register_tools()",
-            ),
-            ToolDefinition.service(
-                name="conformance.bulk_gated",
-                spec=ServiceSpec(
-                    service=_gated_service,
-                    atomic=False,
-                    permission_classes=[IsAuthenticated],
+    server.register_tools(
+        SpecRegistry(
+            [
+                RegisteredSpec(
+                    name="conformance.bulk_listed",
+                    spec=SelectorSpec(
+                        kind=SelectorKind.LIST,
+                        selector=_bulk_list,
+                        presenter=DataclassPresenter(_Sentinel),
+                        permissions=[Unrestricted()],
+                    ),
                 ),
-                description="Bulk registration honors spec.permission_classes",
-            ),
-        ],
-        service_defaults=ServiceDefaults(unknown_arguments=UnknownArguments.IGNORE),
-        selector_defaults=SelectorDefaults(),
-    )
-
-    # 10-pre / 10g — spec.permission_classes wiring on a non-bulk binding.
-    server.register_service_tool(
-        name="conformance.gated",
-        spec=ServiceSpec(
-            service=_gated_service, atomic=False, permission_classes=[IsAuthenticated]
+                RegisteredSpec(
+                    name="conformance.bulk_gated",
+                    spec=ServiceSpec(service=_gated_service, permissions=[IsAuthenticated()]),
+                ),
+            ]
         ),
+        overrides={
+            "conformance.bulk_listed": {
+                "description": "Registered via register_tools()",
+                "paginate": True,
+            },
+            "conformance.bulk_gated": {
+                "description": "Bulk registration honors the spec's permissions",
+            },
+        },
     )
-
+    server.register_tool(
+        ServiceSpec(service=_gated_service, permissions=[IsAuthenticated()]),
+        name="conformance.gated",
+        description="Refuses an anonymous caller.",
+    )
     return server

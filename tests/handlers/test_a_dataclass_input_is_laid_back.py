@@ -1,232 +1,141 @@
-"""A dataclass-shaped ``input_serializer`` lays its validated values back too.
+"""What a kernel tool's input declaration validates is what its callable reads.
 
-A bare ``@dataclass`` and a ``DataclassSerializer`` validate into a dataclass
-instance rather than the ``dict`` a plain ``Serializer`` gives, and only the
-``dict`` was laid over the selector's arguments. So such an input coerced and
-defaulted for nothing: the selector read the caller's raw strings, and a name
-only the dataclass defaulted was missing.
-
-Dispatch was not the only reader to follow. Registration counted no field a
-``DataclassSerializer`` generates as a source, so a selector requiring one was
-refused although every call would fill it, and the schema counted no dataclass
-default as filling a name, so a name a call could leave out was advertised as
-required. All three now read what is laid back through one function,
-``schema.utils.laid_back_inputs``.
+A selector's arguments are its declared ``reads``, each with its own type, and
+a service's are its Validator's fields. So the question is asked of those two:
+the value the callable reads is the coerced one, or the default where the call
+left the argument out, and the schema requires exactly the names nothing
+defaults. A read's declared ``default`` is reported in the schema, not applied,
+so the default a selector reads is its own signature's, declared beside it.
+A read declared optional over a selector with no default of its own is where
+the two would come apart, the schema offering it as optional and the call
+leaving it out refused as missing, so registration refuses that declaration,
+naming the tool, and no client is shown the schema.
 """
 
 from __future__ import annotations
 
-import dataclasses
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
-from asgiref.sync import sync_to_async
-from django.http import HttpRequest
-from django_service_specs import SelectorKind
-from rest_framework import serializers
-from rest_framework_dataclasses.serializers import DataclassSerializer
-from rest_framework_services.types.selector_spec import SelectorSpec
+from django.core.exceptions import ImproperlyConfigured
+from django_service_specs import (
+    DataclassValidator,
+    Parameter,
+    Parameters,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+)
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.auth.types.token_info import TokenInfo
-from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
-from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
-from django_spec_mcp.handlers.types.context import MCPCallContext
-from tests.utils import tool_error
 
-# Every route that runs a selector tool's ``input_serializer``: ``call_tool``
-# runs none, so it has nothing to lay back.
-_ROUTES = ["handler", "async_handler", "acall_tool"]
+pytestmark = pytest.mark.django_db(transaction=True)
+
+OPEN = [Unrestricted()]
 
 
-@dataclasses.dataclass
-class _Counted:
-    count: int
-    status: str = "open"
+@dataclass
+class _Charge:
+    number: str
+    amount_cents: int = 250
 
 
-class _CountedIn(DataclassSerializer):
-    class Meta:
-        dataclass = _Counted
+def _read(*, number: str, limit: int = 5) -> dict[str, Any]:
+    # Its own default differs from the 10 the read declares, so a test sees which
+    # of the two a call applies.
+    return {"number": number, "limit": limit}
 
 
-# Requires both names, so registration has to count each as filled: ``count``
-# by a generated field, ``status`` by the dataclass's default.
-def _counted(*, count: int, status: str) -> dict[str, Any]:
-    return {"count": count, "status": status}
+def _charge(*, data: _Charge) -> dict[str, Any]:
+    # The validated instance, not the caller's mapping: its fields are typed.
+    return {"number": data.number, "amount_cents": data.amount_cents}
 
 
-def _ctx(server: MCPServer) -> MCPCallContext:
-    return MCPCallContext(
-        http_request=HttpRequest(),
-        token=TokenInfo(user=None),
-        tools=server.tools,
-        resources=server.resources,
-        prompts=server.prompts,
-        protocol_version="2025-11-25",
-        conventions=server.conventions,
-    )
-
-
-async def _via(server: MCPServer, route: str, name: str, arguments: dict[str, Any]) -> Any:
-    if route == "acall_tool":
-        return await server.acall_tool(name, arguments, user=None)
-    params: dict[str, Any] = {"name": name, "arguments": arguments}
-    if route == "async_handler":
-        return await handle_tools_call_async(params, _ctx(server))
-    return await sync_to_async(handle_tools_call)(params, _ctx(server))
-
-
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("route", _ROUTES)
-@pytest.mark.parametrize(
-    "input_serializer",
-    [
-        pytest.param(_Counted, id="bare-dataclass"),
-        pytest.param(_CountedIn, id="dataclass-serializer"),
-    ],
-)
-async def test_a_dataclass_inputs_validated_values_reach_the_selector(
-    route: str, input_serializer: type
-) -> None:
-    # The ``DataclassSerializer``'s ``count`` is a field it generates, which
-    # registration once counted as no source, so a selector requiring it was
-    # refused before any call although dispatch fills it on every one.
+def _server() -> MCPServer:
     server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
-    server.register_selector_tool(
-        name="counted",
-        description="Count.",
-        spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_counted),
-        input_serializer=input_serializer,
+    server.register_tool(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=_read,
+            reads=Parameters(
+                [
+                    Parameter("number", "string", required=True),
+                    Parameter("limit", "integer", default=10),
+                ]
+            ),
+            permissions=OPEN,
+        ),
+        name="read",
     )
-
-    out = await _via(server, route, "counted", {"count": "3"})
-
-    assert isinstance(out, dict), f"answered {out!r}"
-    assert out.get("isError") is not True, out
-    # Coerced to the dataclass's type, and the default the caller left to it.
-    assert out["structuredContent"] == {"count": 3, "status": "open"}
-
-
-# ----- registration, the schema and dispatch agree -----
-
-
-@dataclasses.dataclass
-class _BareOrder:
-    count: int
-    status: str = "open"
-    # Generated read-only, so it is laid back as this default whatever is sent.
-    kind: str = dataclasses.field(
-        default="order", metadata={"serializer_kwargs": {"read_only": True}}
+    server.register_tool(
+        ServiceSpec(service=_charge, validator=DataclassValidator(_Charge), permissions=OPEN),
+        name="charge",
     )
+    return server
 
 
-@dataclasses.dataclass
-class _Order:
-    count: int
-    number: int = 0
-    status: str = "open"
-    priority: int = 9
-    # Generated read-only, so only its default makes it a source.
-    kind: str = dataclasses.field(
-        default="order", metadata={"serializer_kwargs": {"read_only": True}}
-    )
-
-
-class _OrderIn(DataclassSerializer):
-    """Declared fields over dataclass defaults, beside the generated ``count``, ``status`` and ``kind``.
-
-    ``number`` is required although the dataclass defaults it, so the call is
-    refused without it. ``priority``'s own default outranks the dataclass's.
-    """
-
-    number = serializers.IntegerField()
-    priority = serializers.IntegerField(default=2)
-
-    class Meta:
-        dataclass = _Order
-
-
-class _OrderSerializer(serializers.Serializer):
-    """A plain ``Serializer``, whose ``dict`` leaves out a read-only field's default."""
-
-    count = serializers.IntegerField()
-    status = serializers.CharField(default="open")
-    kind = serializers.CharField(read_only=True, default="order")
-
-
-def _bare_order(*, count: int, status: str, kind: str) -> dict[str, Any]:
-    return {"count": count, "status": status, "kind": kind}
-
-
-def _order(*, count: int, number: int, status: str, priority: int, kind: str) -> dict[str, Any]:
-    return {"count": count, "number": number, "status": status, "priority": priority, "kind": kind}
-
-
-# What a call sends for each name it does send.
-_SENT: dict[str, Any] = {"count": "3", "number": "4", "kind": "sent"}
-
-
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("route", _ROUTES)
 @pytest.mark.parametrize(
-    ("input_serializer", "selector", "required", "received"),
+    ("name", "arguments", "read"),
     [
-        pytest.param(
-            _BareOrder,
-            _bare_order,
-            ["count"],
-            {"count": 3, "status": "open", "kind": "order"},
-            id="bare-dataclass",
-        ),
-        pytest.param(
-            _OrderIn,
-            _order,
-            ["count", "number"],
-            {"count": 3, "number": 4, "status": "open", "priority": 2, "kind": "order"},
-            id="dataclass-serializer",
-        ),
-        pytest.param(
-            _OrderSerializer,
-            _bare_order,
-            # The read-only field reaches the selector only as the caller sent it.
-            ["count", "kind"],
-            {"count": 3, "status": "open", "kind": "sent"},
-            id="plain-serializer",
-        ),
+        ("read", {"number": "A"}, {"number": "A", "limit": 5}),
+        ("read", {"number": "A", "limit": "3"}, {"number": "A", "limit": 3}),
+        ("charge", {"number": "A"}, {"number": "A", "amount_cents": 250}),
+        ("charge", {"number": "A", "amount_cents": "3"}, {"number": "A", "amount_cents": 3}),
     ],
+    ids=["read-selector-default", "read-coerced", "validator-default", "validator-coerced"],
 )
-async def test_registration_the_schema_and_dispatch_agree_on_what_an_input_lays_back(
-    route: str,
-    input_serializer: type,
-    selector: Any,
-    required: list[str],
-    received: dict[str, Any],
+async def test_the_callable_reads_the_declared_value(
+    name: str, arguments: dict[str, Any], read: dict[str, Any]
 ) -> None:
-    # The selector requires every name, so each one the call leaves out is
-    # one the input lays back. Registration admits the tool, the schema
-    # requires exactly the names no call may leave out, a call sending only
-    # those is served with what the input laid back, and a call leaving out
-    # any one of them is refused for it.
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
-    server.register_selector_tool(
-        name="order",
-        description="An order.",
-        spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=selector),
-        input_serializer=input_serializer,
-    )
+    out = await _server().acall_tool(name, arguments, user=None)
+
+    assert out["structuredContent"] == read
+
+
+async def test_a_reads_default_is_reported_and_not_applied() -> None:
+    # The read declares 10 over a selector defaulting to 5: the schema tells a
+    # client 10, and a call leaving the argument out reads the selector's 5.
+    server = _server()
     listed: Any = server.list_tools(user=None)
-    schema = next(tool for tool in listed["tools"] if tool["name"] == "order")["inputSchema"]
-    sent = {name: _SENT[name] for name in required}
+    schemas = {tool["name"]: tool["inputSchema"] for tool in listed["tools"]}
 
-    out = await _via(server, route, "order", sent)
+    out = await server.acall_tool("read", {"number": "A"}, user=None)
 
-    assert sorted(schema.get("required", [])) == required
-    assert out.get("isError") is not True, out
-    assert out["structuredContent"] == received
-    for name in required:
-        refused = await _via(
-            server, route, "order", {key: value for key, value in sent.items() if key != name}
-        )
-        assert set(tool_error(refused)["detail"]) == {name}
+    assert schemas["read"]["properties"]["limit"]["default"] == 10
+    assert out["structuredContent"]["limit"] == 5
+
+
+def test_the_schema_requires_exactly_the_names_nothing_defaults() -> None:
+    listed: Any = _server().list_tools(user=None)
+    schemas = {tool["name"]: tool["inputSchema"] for tool in listed["tools"]}
+
+    assert schemas["read"]["required"] == ["number"]
+    assert schemas["charge"]["required"] == ["number"]
+    assert schemas["read"]["properties"]["limit"]["default"] == 10
+    assert set(schemas["charge"]["properties"]) == {"number", "amount_cents"}
+    assert set(schemas["read"]["properties"]) == {"number", "limit"}
+
+
+def _read_without_a_default(*, number: str, limit: int) -> dict[str, Any]:
+    return {"number": number, "limit": limit}
+
+
+def test_a_read_the_schema_would_offer_as_optional_over_a_required_keyword_is_refused() -> None:
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    spec = SelectorSpec(
+        kind=SelectorKind.RETRIEVE,
+        selector=_read_without_a_default,
+        reads=Parameters(
+            [Parameter("number", "string", required=True), Parameter("limit", "integer")]
+        ),
+        permissions=OPEN,
+    )
+
+    with pytest.raises(
+        ImproperlyConfigured, match=r"MCP tool 'read': .*\['limit'\], declared as optional reads"
+    ):
+        server.register_tool(spec, name="read")
+    assert "read" not in server.tools

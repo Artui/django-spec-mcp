@@ -6,6 +6,9 @@ handle line, an unpaginated tool no scope sentence -- and the conventions decide
 ``acall_tool`` and ``call_tool`` and compare everything it answers, so a field
 reaching a place it should not, or failing to reach one it should, shows up as a
 difference.
+
+Asked of kernel specs (``tests/testapp/conventions.py``). The scope sentence
+lands once, on the param.
 """
 
 from __future__ import annotations
@@ -21,19 +24,19 @@ from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.tasks.create_task import create_task
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from tests.tasks.conftest import RecordingExecutor
-from tests.testapp.conventions import REFUSED_SELECTION, conventions_server
+from tests.testapp.conventions import conventions_server
 from tests.testapp.models import Invoice
 from tests.utils import tool_error
 
 DEFAULTS = AgentConventions()
 
 # How many times each line appears in ``_observe``: the handle wording once per
-# tool (both render a handle), the scope sentence on the param and in the render
-# refusal, the missing-argument message from ``acall_tool`` and ``call_tool``.
+# tool (both present a handle), the scope sentence on the param, the
+# missing-argument message from ``acall_tool`` and ``call_tool``.
 WHERE: dict[str, int] = {
     "handle_field_description": 2,
     "handle_line": 2,
-    "query_param_on_pages": 2,
+    "query_param_on_pages": 1,
     "missing_arguments": 2,
 }
 
@@ -43,9 +46,6 @@ async def _observe(server: MCPServer) -> dict[str, Any]:
     return {
         "listing": await sync_to_async(server.list_tools)(user=None),
         "page": await server.acall_tool("invoices.list", {}, user=None),
-        "refused_selection": await server.acall_tool(
-            "invoices.list", {"fields": REFUSED_SELECTION}, user=None
-        ),
         "missing": await server.acall_tool("invoices.rename", {"number": "X"}, user=None),
         "missing_in_process": (
             await sync_to_async(server.call_tool)("invoices.rename", {"number": "X"}, user=None)
@@ -96,9 +96,6 @@ async def test_none_drops_the_handle_wording_and_the_scope_sentence() -> None:
     assert "description" not in item["properties"]["id"]
     fields = tools["invoices.list"]["inputSchema"]["properties"]["fields"]
     assert fields["description"] == "Fields to return."
-    assert tool_error(seen["refused_selection"])["message"] == (
-        "`fields` was rejected while rendering the result: `items` field is not found."
-    )
 
 
 @pytest.mark.django_db(transaction=True)
@@ -129,12 +126,9 @@ async def test_a_doubled_brace_reaches_the_model_as_one_in_every_field() -> None
     # The handle line in each tool's description.
     assert rename["description"] == "Rename an invoice.\n\nLine {l}."
     assert listed["description"] == "List invoices.\n\nLine {l}."
-    # The scope sentence on the paged param, and in the render refusal.
+    # The scope sentence on the paged param.
     fields = listed["inputSchema"]["properties"]["fields"]
     assert fields["description"] == "Fields to return. Scope {s}."
-    assert tool_error(seen["refused_selection"])["message"] == (
-        "`fields` was rejected while rendering the result: `items` field is not found. Scope {s}."
-    )
     # The missing-argument message, from both in-process routes.
     assert tool_error(seen["missing"])["message"] == "Missing {m}: `pk`."
     assert tool_error(seen["missing_in_process"])["message"] == "Missing {m}: `pk`."
@@ -183,12 +177,14 @@ async def test_two_servers_in_one_process_keep_their_own_wording() -> None:
 def test_a_task_runs_under_its_servers_conventions() -> None:
     # A task runs off the request path, in a context the server rebuilds for
     # the worker from its own state, so that rebuild has to carry the wording
-    # too or every task-run call answers in the defaults.
+    # too or every task-run call answers in the defaults. Only
+    # ``missing_arguments`` is held here: the page-scope sentence reaches a
+    # kernel tool only in the listing, which a task run never produces.
     Invoice.objects.create(number="INV-1")
     store = InMemoryTaskStore()
     executor = RecordingExecutor(store)
     server = conventions_server(
-        AgentConventions(query_param_on_pages="Task scope.", missing_arguments="Task: {names}."),
+        AgentConventions(missing_arguments="Task: {names}."),
         task_store=store,
         task_executor=executor,
     )
@@ -206,9 +202,6 @@ def test_a_task_runs_under_its_servers_conventions() -> None:
         server.run_task(task.task_id)
         return tool_error(store.get(task.task_id).task.result)
 
-    assert run("invoices.list", {"fields": REFUSED_SELECTION})["message"] == (
-        "`fields` was rejected while rendering the result: `items` field is not found. Task scope."
-    )
     assert run("invoices.rename", {"number": "X"})["message"] == "Task: `pk`."
 
 

@@ -1,97 +1,98 @@
 """Mounting is where an auth backend becomes load-bearing, so it is checked there.
 
-The backend's ``oauth2_provider`` import is lazy on purpose and the smoke job
-pins that a bare server *constructs* without DOT -- an in-process server never
-authenticates anything, so requiring the extra to build one would break a
-supported mode. What is not supported is mounting a transport whose backend
-cannot run, and that used to be discovered by a 500 on the first request.
+A server built without ``auth_backend=`` is a supported mode -- an in-process
+server never authenticates anything -- so construction needs no backend. What is
+refused is mounting one: every request to a mounted endpoint reaches
+``authenticate``, and this package ships no backend that verifies tokens, so a
+mount with none would either answer every caller or fail on the first request.
 """
 
 from __future__ import annotations
 
-import sys
-
 import pytest
 from django.core.exceptions import ImproperlyConfigured
+from django.http import HttpRequest
 
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.server.mcp_server import MCPServer
 
-_DOT_MODULES = ("oauth2_provider", "oauth2_provider.oauth2_validators")
+
+def _refusal(name: str) -> str:
+    return (
+        f"MCPServer {name!r} is mounted with no auth_backend=. Every request to a "
+        "mounted endpoint is authenticated by the backend, and this package ships "
+        "none that verifies tokens, so there is nothing safe to fall back to. Pass "
+        "auth_backend= a backend of your own (the authorization page shows one), or "
+        "AllowAnyBackend() for local development."
+    )
 
 
-def _hide_dot(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Make ``import oauth2_provider...`` raise, as it does without the extra.
-
-    ``sys.modules[name] = None`` is the documented way to make an import fail
-    for an installed package: the submodule has to be hidden as well, or the
-    cached entry satisfies ``from oauth2_provider.oauth2_validators import X``
-    without the parent being consulted.
-    """
-    for name in _DOT_MODULES:
-        monkeypatch.setitem(sys.modules, name, None)
-
-
-def test_constructing_without_dot_still_works(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The invariant the smoke job pins, asserted here too so it cannot drift."""
-    _hide_dot(monkeypatch)
-
+def test_constructing_without_a_backend_still_works() -> None:
     server = MCPServer(name="in-process")
 
     assert server.tools is not None
+    assert server.auth_backend is None
 
 
-def test_mounting_without_dot_refuses_by_name(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_mounting_without_a_backend_refuses_by_name() -> None:
     server = MCPServer(name="mounted")
-    _hide_dot(monkeypatch)
 
-    with pytest.raises(ImproperlyConfigured, match="django-oauth-toolkit"):
+    with pytest.raises(ImproperlyConfigured) as caught:
         _ = server.urls
 
+    assert str(caught.value) == _refusal("mounted")
 
-def test_async_mounting_without_dot_refuses_by_name(monkeypatch: pytest.MonkeyPatch) -> None:
+
+def test_async_mounting_without_a_backend_refuses_by_name() -> None:
     server = MCPServer(name="mounted-async")
-    _hide_dot(monkeypatch)
 
-    with pytest.raises(ImproperlyConfigured, match="django-oauth-toolkit"):
+    with pytest.raises(ImproperlyConfigured) as caught:
         _ = server.async_urls
 
+    assert str(caught.value) == _refusal("mounted-async")
 
-def test_a_backend_needing_nothing_mounts_with_dot_absent(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The check is the backend's own, so a backend with no extra is unaffected."""
+
+def test_mounting_with_a_backend_serves_the_endpoint_and_its_metadata() -> None:
     server = MCPServer(name="allow-any", auth_backend=AllowAnyBackend())
-    _hide_dot(monkeypatch)
 
-    assert server.urls is not None
+    patterns, app_name, namespace = server.urls
 
-
-def test_mounting_without_the_app_installed_refuses_by_name(
-    settings: pytest.FixtureRequest,
-) -> None:
-    """The extra installed, the app not, which is the same gap one layer down.
-
-    `authenticate` imports a validator *and* resolves DOT's access-token model,
-    and the second needs the app registry rather than the module. Checking only
-    the import let a project that had installed the extra get past the mount and
-    then fail on the first request with a `RuntimeError` about `app_label` --
-    which names neither this package nor the setting that would fix it.
-    """
-    from django.test import override_settings
-
-    installed = [app for app in settings.INSTALLED_APPS if app != "oauth2_provider"]
-    server = MCPServer(name="mounted-without-the-app")
-
-    with (
-        override_settings(INSTALLED_APPS=installed),
-        pytest.raises(ImproperlyConfigured, match="INSTALLED_APPS"),
-    ):
-        _ = server.urls
+    assert [p.name for p in patterns] == ["endpoint", "protected-resource-metadata"]
+    assert (app_name, namespace) == ("mcp", "mcp")
 
 
-def test_mounting_with_the_app_installed_is_fine() -> None:
-    """The ordinary case: the extra is present and the app is declared."""
-    server = MCPServer(name="mounted-properly")
+class _SelfCheckingBackend(AllowAnyBackend):
+    """A backend that asks to be checked when mounted, as a project's own may."""
 
-    assert server.urls is not None
+    def __init__(self, *, fails: bool) -> None:
+        self.fails = fails
+        self.checked = 0
+
+    def check_configuration(self) -> None:
+        self.checked += 1
+        if self.fails:
+            raise ImproperlyConfigured("the backend cannot run")
+
+    def authenticate(self, request: HttpRequest) -> None:
+        return None
+
+
+@pytest.mark.parametrize("attr", ["urls", "async_urls"])
+def test_a_self_checking_backend_is_asked_once_at_the_mount(attr: str) -> None:
+    backend = _SelfCheckingBackend(fails=False)
+    server = MCPServer(name="checked", auth_backend=backend)
+
+    assert backend.checked == 0
+    _ = getattr(server, attr)
+
+    assert backend.checked == 1
+
+
+@pytest.mark.parametrize("attr", ["urls", "async_urls"])
+def test_a_self_checking_backend_that_fails_stops_the_mount(attr: str) -> None:
+    server = MCPServer(name="unchecked", auth_backend=_SelfCheckingBackend(fails=True))
+
+    with pytest.raises(ImproperlyConfigured) as caught:
+        _ = getattr(server, attr)
+
+    assert str(caught.value) == "the backend cannot run"

@@ -1,21 +1,36 @@
-"""Outbound bounds: page-size clamp, result-size ceiling, dispatch deadline.
+"""Outbound bounds on kernel tools and resources: page-size clamp, row and byte ceilings, deadline.
 
-The inbound side has been bounded since ``MAX_REQUEST_BYTES``; these are the
-mirrors on the way out. Registration-time coverage for the unpaginated-list
-warning lives in ``tests/server/test_unbounded_list_warning.py``.
+Asks of specs registered with ``register_tool`` / ``register_resource``.
+``max_page_size``, ``max_result_bytes`` and
+``dispatch_timeout`` are per-tool knobs on ``register_tool``, each deferring to
+the server's value when left ``UNSET`` and disabled by ``None``; the clamps and
+the page envelope are the kernel's ``paginate_output``, handed the bound the
+binding and the server resolve.
+
+The prompt cases, ``run_with_deadline``, ``resolve_bound`` and
+``build_mcp_config`` name no spec. Registration-time coverage for the unpaginated-list warning
+lives in ``tests/server/test_unbounded_list_warning.py``.
 """
 
 from __future__ import annotations
 
 import asyncio
+import time
 import warnings
 from typing import Any
 
 import pytest
+from asgiref.sync import async_to_sync, sync_to_async
 from django.http import HttpRequest
-from django_service_specs import SelectorKind
-from rest_framework.permissions import BasePermission
-from rest_framework_services.types.selector_spec import SelectorSpec
+from django_service_specs import (
+    UNSET,
+    DataclassPresenter,
+    PermissionCheck,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+)
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
@@ -33,17 +48,19 @@ from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import resolve_bound, run_with_deadline
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
-from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp.registry.types.prompt_binding import PromptBinding
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
+from tests.testapp.kernel_shapes import InvoiceOutput
 from tests.testapp.models import Invoice
-from tests.testapp.serializers import InvoiceOutputSerializer
 from tests.utils import tool_error
+
+OPEN = [Unrestricted()]
 
 # ---------- helpers ----------
 
 
 def _server() -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore())
+    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
 
 
 def _ctx(server: MCPServer, config: MCPConfig | None = None) -> MCPCallContext:
@@ -58,24 +75,27 @@ def _ctx(server: MCPServer, config: MCPConfig | None = None) -> MCPCallContext:
     )
 
 
-def _list_invoices(*, user: Any) -> Any:
-    return Invoice.objects.all()
+def _list_spec(selector: Any = Invoice.objects.all, **fields: Any) -> SelectorSpec:
+    return SelectorSpec(
+        kind=SelectorKind.LIST,
+        selector=selector,
+        presenter=DataclassPresenter(InvoiceOutput),
+        permissions=OPEN,
+        **fields,
+    )
 
 
-def _register_list(server: MCPServer, **kwargs: Any) -> Any:
-    """Register a paginated LIST selector, silencing the unrelated warnings."""
+def _register(
+    server: MCPServer, spec: Any = None, *, name: str = "invoices.list", **knobs: Any
+) -> None:
+    """Register a LIST tool, silencing the unrelated registration warnings."""
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        return server.register_selector_tool(
-            name="invoices.list",
-            spec=SelectorSpec(
-                kind=SelectorKind.LIST,
-                selector=_list_invoices,
-                output_serializer=InvoiceOutputSerializer,
-            ),
-            paginate=True,
-            **kwargs,
-        )
+        server.register_tool(spec if spec is not None else _list_spec(), name=name, **knobs)
+
+
+def _register_list(server: MCPServer, **knobs: Any) -> None:
+    _register(server, paginate=True, **knobs)
 
 
 def _seed(count: int) -> None:
@@ -89,18 +109,20 @@ def _call(server: MCPServer, arguments: dict[str, Any], config: MCPConfig | None
     )
 
 
+def _rows() -> list[dict[str, str]]:
+    return [{"number": f"N-{i}"} for i in range(5)]
+
+
 # ---------- page-size clamp ----------
 
 
 @pytest.mark.django_db
-def test_model_supplied_limit_is_clamped_to_the_server_ceiling() -> None:
+def test_a_model_supplied_limit_is_clamped_to_the_server_ceiling() -> None:
     """A model asking for more rows than the server allows gets the ceiling."""
     _seed(5)
     server = _server()
     _register_list(server)
-    out = _call(server, {"limit": 1000}, build_mcp_config(max_page_size=2))
-    assert isinstance(out, dict)
-    payload = out["structuredContent"]
+    payload = _call(server, {"limit": 1000}, build_mcp_config(max_page_size=2))["structuredContent"]
     assert len(payload["items"]) == 2
     # The clamp stays honest because the envelope says there is more: 5 rows
     # over a clamped limit of 2 is 3 pages, not 1.
@@ -108,124 +130,74 @@ def test_model_supplied_limit_is_clamped_to_the_server_ceiling() -> None:
 
 
 @pytest.mark.django_db
-def test_a_limit_under_the_ceiling_is_untouched() -> None:
+@pytest.mark.parametrize(
+    ("binding", "server_bound", "limit", "served"),
+    [
+        (UNSET, 100, 3, 3),
+        (1, 100, 50, 1),
+        # ``None`` is a deliberate answer, not "unset": this tool serves any limit.
+        (None, 2, 50, 5),
+        (UNSET, None, 50, 5),
+    ],
+    ids=["under-the-ceiling", "binding-overrides", "binding-none", "server-none"],
+)
+def test_the_effective_page_ceiling(
+    binding: Any, server_bound: int | None, limit: int, served: int
+) -> None:
     _seed(5)
     server = _server()
-    _register_list(server)
-    out = _call(server, {"limit": 3}, build_mcp_config(max_page_size=100))
-    assert isinstance(out, dict)
-    assert len(out["structuredContent"]["items"]) == 3
+    _register_list(server, max_page_size=binding)
+    out = _call(server, {"limit": limit}, build_mcp_config(max_page_size=server_bound))
+    assert len(out["structuredContent"]["items"]) == served
 
 
-@pytest.mark.django_db
-def test_per_binding_ceiling_overrides_the_server() -> None:
-    _seed(5)
-    server = _server()
-    _register_list(server, max_page_size=1)
-    out = _call(server, {"limit": 50}, build_mcp_config(max_page_size=100))
-    assert isinstance(out, dict)
-    assert len(out["structuredContent"]["items"]) == 1
-
-
-@pytest.mark.django_db
-def test_per_binding_none_disables_the_clamp_the_server_configured() -> None:
-    """``None`` is a deliberate answer, not "unset" — this tool serves any limit."""
-    _seed(5)
-    server = _server()
-    _register_list(server, max_page_size=None)
-    out = _call(server, {"limit": 50}, build_mcp_config(max_page_size=2))
-    assert isinstance(out, dict)
-    assert len(out["structuredContent"]["items"]) == 5
-
-
-@pytest.mark.django_db
-def test_server_ceiling_of_none_disables_the_clamp() -> None:
-    _seed(5)
-    server = _server()
-    _register_list(server)
-    out = _call(server, {"limit": 50}, build_mcp_config(max_page_size=None))
-    assert isinstance(out, dict)
-    assert len(out["structuredContent"]["items"]) == 5
-
-
-def test_tools_list_advertises_the_effective_ceiling() -> None:
+@pytest.mark.parametrize(("binding", "maximum"), [(25, 25), (None, None)], ids=["25", "none"])
+def test_tools_list_advertises_the_effective_ceiling(binding: Any, maximum: int | None) -> None:
     """The model is told the bound, so it can ask for something serveable."""
     server = _server()
-    _register_list(server, max_page_size=25)
+    _register_list(server, max_page_size=binding)
     out = handle_tools_list(None, _ctx(server, build_mcp_config(max_page_size=500)))
-    assert isinstance(out, dict)
-    assert out["tools"][0]["inputSchema"]["properties"]["limit"]["maximum"] == 25
+    assert out["tools"][0]["inputSchema"]["properties"]["limit"].get("maximum") == maximum
 
 
-def test_tools_list_omits_maximum_when_unbounded() -> None:
-    server = _server()
-    _register_list(server, max_page_size=None)
-    out = handle_tools_list(None, _ctx(server, build_mcp_config(max_page_size=500)))
-    assert isinstance(out, dict)
-    assert "maximum" not in out["tools"][0]["inputSchema"]["properties"]["limit"]
-
-
-# ---------- the page ceiling on an unpaginated list ----------
+# ---------- the row ceiling on an unpaginated list ----------
 #
-# The ceiling is the most rows one selector-tool result carries, paged or not.
-# Only the enforcement differs by arm: a page clamps and says so in its
-# envelope, while an unpaginated result — which carries nothing that could say
-# rows were dropped — refuses, exactly as the byte ceiling does.
-
-
-def _register_unpaginated(server: MCPServer, **kwargs: Any) -> Any:
-    """The same LIST tool, registered with the default ``paginate=False``."""
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        return server.register_selector_tool(
-            name="invoices.list",
-            spec=SelectorSpec(
-                kind=SelectorKind.LIST,
-                selector=_list_invoices,
-                output_serializer=InvoiceOutputSerializer,
-            ),
-            **kwargs,
-        )
+# The ceiling is the most rows one LIST tool result carries, paged or not. Only
+# the enforcement differs by arm: a page clamps and says so in its envelope,
+# while an unpaginated result, which carries nothing that could say rows were
+# dropped, refuses, as the byte ceiling does.
 
 
 @pytest.mark.django_db
-def test_unpaginated_list_over_the_ceiling_is_refused() -> None:
-    """Previously the whole table was fetched, serialised and returned."""
+def test_an_unpaginated_list_over_the_ceiling_is_refused() -> None:
     _seed(5)
     server = _server()
-    _register_unpaginated(server)
-    out = _call(server, {}, build_mcp_config(max_page_size=2))
-    assert isinstance(out, dict)
-    message = tool_error(out)["message"]
-    assert "2 row ceiling" in message
+    _register(server)
+    error = tool_error(_call(server, {}, build_mcp_config(max_page_size=2)))
+    assert "2 row ceiling" in error["message"]
     # Same contract as the byte ceiling: refuse, never truncate.
-    assert "not truncated" in message
-    assert tool_error(out)["type"] == "result_too_large"
+    assert "not truncated" in error["message"]
+    assert error["type"] == "result_too_large"
 
 
 @pytest.mark.django_db
 def test_a_result_exactly_at_the_ceiling_is_served_whole() -> None:
-    """The boundary is inclusive — the ceiling is a servable result."""
+    """The boundary is inclusive: the ceiling is a servable result."""
     _seed(2)
     server = _server()
-    _register_unpaginated(server)
-    out = _call(server, {}, build_mcp_config(max_page_size=2))
-    assert isinstance(out, dict)
-    assert len(out["structuredContent"]) == 2
+    _register(server)
+    assert len(_call(server, {}, build_mcp_config(max_page_size=2))["structuredContent"]) == 2
 
 
 @pytest.mark.django_db
 def test_the_ceiling_bounds_the_fetch_and_not_just_the_payload(
     django_assert_num_queries: Any,
 ) -> None:
-    """The rows are bounded in SQL, so the table is never in memory.
-
-    This is what the byte ceiling cannot do: ``MAX_RESULT_BYTES`` measures a
-    payload that has already been fetched and rendered in full.
-    """
+    """The rows are bounded in SQL, so the table is never in memory, which is
+    what ``MAX_RESULT_BYTES`` cannot do: it measures a payload already fetched."""
     _seed(5)
     server = _server()
-    _register_unpaginated(server)
+    _register(server)
     with django_assert_num_queries(1) as captured:
         _call(server, {}, build_mcp_config(max_page_size=2))
     # Ceiling + 1, the one extra row being how "over" is told from "exactly at".
@@ -233,86 +205,120 @@ def test_the_ceiling_bounds_the_fetch_and_not_just_the_payload(
 
 
 @pytest.mark.django_db
-def test_per_binding_none_serves_an_unpaginated_list_unbounded() -> None:
-    """The existing opt-out covers the new arm: a tool can still be unbounded."""
+def test_a_queryset_under_the_ceiling_is_read_once(django_assert_num_queries: Any) -> None:
+    """Under the ceiling the window read to tell "over" from "at" is what gets
+    presented: handing the QuerySet back instead would read the table a second time."""
+    _seed(2)
+    server = _server()
+    _register(server)
+    with django_assert_num_queries(1):
+        out = _call(server, {}, build_mcp_config(max_page_size=5))
+    assert [row["number"] for row in out["structuredContent"]] == ["INV-0", "INV-1"]
+
+
+def test_a_generator_under_the_ceiling_is_served_whole() -> None:
+    """A generator is spent by the window read, so the rows served must be the
+    window itself: handing the generator back would present an empty result."""
+    server = _server()
+    _register(
+        server,
+        SelectorSpec(
+            kind=SelectorKind.LIST, selector=lambda: (row for row in _rows()), permissions=OPEN
+        ),
+    )
+    out = _call(server, {}, build_mcp_config(max_page_size=10))
+    assert out["structuredContent"] == _rows()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("binding", "server_bound", "served"),
+    [(10, 2, 5), (2, 100, None)],
+    ids=["binding-raises-the-ceiling", "binding-lowers-the-ceiling"],
+)
+def test_the_binding_max_page_size_overrides_the_servers_on_an_unpaginated_list(
+    binding: int, server_bound: int, served: int | None
+) -> None:
+    """The row ceiling is the binding's ``max_page_size``, deferring to the server's."""
     _seed(5)
     server = _server()
-    _register_unpaginated(server, max_page_size=None)
-    out = _call(server, {}, build_mcp_config(max_page_size=2))
-    assert isinstance(out, dict)
+    _register(server, max_page_size=binding)
+    out = _call(server, {}, build_mcp_config(max_page_size=server_bound))
+    if served is None:
+        assert f"{binding} row ceiling" in tool_error(out)["message"]
+    else:
+        assert len(out["structuredContent"]) == served
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("binding", "server_bound"), [(None, 2), (UNSET, None)], ids=["binding-none", "server-none"]
+)
+def test_a_disabled_ceiling_serves_an_unpaginated_list_whole(
+    binding: Any, server_bound: int | None
+) -> None:
+    _seed(5)
+    server = _server()
+    _register(server, max_page_size=binding)
+    out = _call(server, {}, build_mcp_config(max_page_size=server_bound))
     assert len(out["structuredContent"]) == 5
 
 
 @pytest.mark.django_db
-def test_server_ceiling_of_none_serves_an_unpaginated_list_unbounded() -> None:
-    _seed(5)
-    server = _server()
-    _register_unpaginated(server)
-    out = _call(server, {}, build_mcp_config(max_page_size=None))
-    assert isinstance(out, dict)
-    assert len(out["structuredContent"]) == 5
-
-
-@pytest.mark.django_db
-def test_a_non_orm_list_result_is_bounded_by_the_same_ceiling() -> None:
-    """A selector returning a plain sequence is bounded without a queryset."""
-
-    def _rows(*, user: Any) -> Any:  # noqa: ARG001
-        return [{"number": f"N-{i}"} for i in range(5)]
-
-    server = _server()
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        server.register_selector_tool(
-            name="invoices.list",
-            spec=SelectorSpec(kind=SelectorKind.LIST, selector=_rows),
-        )
-    out = _call(server, {}, build_mcp_config(max_page_size=2))
-    assert isinstance(out, dict)
-    assert "2 row ceiling" in tool_error(out)["message"]
-
-
-@pytest.mark.django_db
-def test_a_manager_returned_by_a_list_selector_is_bounded_by_the_same_ceiling() -> None:
-    """A Manager has no ``__iter__``, so it once read as a single value and passed
-    the ceiling unbounded; drf-services hands it over as its ``.all()``, so it is
-    refused as the QuerySet it stands for."""
-
-    def _manager(*, user: Any) -> Any:  # noqa: ARG001
-        return Invoice.objects
-
+@pytest.mark.parametrize(
+    "selector",
+    [
+        _rows,
+        lambda: Invoice.objects,
+        lambda: (row for row in _rows()),
+        lambda: {"a": 1, "b": 2, "c": 3},
+        lambda: "abcdef",
+    ],
+    ids=["sequence", "manager", "generator", "mapping", "string"],
+)
+def test_any_list_result_is_bounded_by_the_same_ceiling(selector: Any) -> None:
+    """A plain sequence, a generator, a Manager, a mapping and a string are bounded
+    as a QuerySet is: the kernel presents a ``LIST`` by iterating whatever the
+    selector returned, so a mapping counts its keys and a string its characters."""
     _seed(3)
     server = _server()
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        server.register_selector_tool(
-            name="invoices.list",
-            spec=SelectorSpec(
-                kind=SelectorKind.LIST,
-                selector=_manager,
-                output_serializer=InvoiceOutputSerializer,
-            ),
-        )
-    out = _call(server, {}, build_mcp_config(max_page_size=2))
-    assert isinstance(out, dict)
-    error = tool_error(out)
+    _register(server, SelectorSpec(kind=SelectorKind.LIST, selector=selector, permissions=OPEN))
+    error = tool_error(_call(server, {}, build_mcp_config(max_page_size=2)))
     assert error["type"] == "result_too_large"
     assert "2 row ceiling" in error["message"]
 
 
-@pytest.mark.django_db(transaction=True)
-async def test_async_path_enforces_the_same_row_ceiling() -> None:
-    from asgiref.sync import sync_to_async
+def test_a_service_tool_returning_rows_is_not_row_bounded() -> None:
+    """The row ceiling is a ``LIST`` tool's: a service's result is bounded by bytes."""
+    server = _server()
+    _register(server, ServiceSpec(service=_rows, permissions=OPEN, atomic=False))
+    out = _call(server, {}, build_mcp_config(max_page_size=2))
+    assert len(out["structuredContent"]) == 5
 
+
+@pytest.mark.django_db(transaction=True)
+async def test_the_async_path_enforces_the_same_row_ceiling() -> None:
     await sync_to_async(_seed)(5)
     server = _server()
-    await sync_to_async(_register_unpaginated)(server)
+    _register(server)
     out = await handle_tools_call_async(
-        {"name": "invoices.list", "arguments": {}},
-        _ctx(server, build_mcp_config(max_page_size=2)),
+        {"name": "invoices.list", "arguments": {}}, _ctx(server, build_mcp_config(max_page_size=2))
     )
-    assert isinstance(out, dict)
     assert "2 row ceiling" in tool_error(out)["message"]
+
+
+@pytest.mark.django_db
+def test_call_tool_enforces_the_same_row_ceiling() -> None:
+    _seed(5)
+    server = MCPServer(
+        name="t",
+        auth_backend=AllowAnyBackend(),
+        session_store=None,
+        config=build_mcp_config(max_page_size=2),
+    )
+    _register(server)
+    result = server.call_tool("invoices.list", user=None)
+    assert "2 row ceiling" in tool_error(result.to_dict())["message"]
 
 
 # ---------- the page argument's upper clamp ----------
@@ -320,18 +326,12 @@ async def test_async_path_enforces_the_same_row_ceiling() -> None:
 
 @pytest.mark.django_db
 def test_a_page_past_the_end_clamps_to_the_last_page() -> None:
-    """An unclamped ``page`` becomes an arbitrarily large SQL OFFSET.
-
-    A backend either scans towards it or rejects it outright with a
-    ``DatabaseError`` that is neither of the two exceptions this path catches,
-    so it escaped as an unhandled 500. Clamping is the treatment the low end
-    already had, and the envelope reports the page actually served.
-    """
+    """An unclamped ``page`` becomes an arbitrarily large SQL OFFSET, which a
+    backend may reject with a ``DatabaseError`` that escapes as a 500."""
     _seed(5)
     server = _server()
     _register_list(server)
     out = _call(server, {"page": 10**20, "limit": 2}, build_mcp_config(max_page_size=100))
-    assert isinstance(out, dict)
     payload = out["structuredContent"]
     assert (payload["page"], payload["totalPages"], payload["hasNext"]) == (3, 3, False)
     assert [item["number"] for item in payload["items"]] == ["INV-4"]
@@ -342,9 +342,7 @@ def test_a_page_inside_the_range_is_untouched() -> None:
     _seed(5)
     server = _server()
     _register_list(server)
-    out = _call(server, {"page": 2, "limit": 2}, build_mcp_config(max_page_size=100))
-    assert isinstance(out, dict)
-    payload = out["structuredContent"]
+    payload = _call(server, {"page": 2, "limit": 2})["structuredContent"]
     assert (payload["page"], payload["hasNext"]) == (2, True)
     assert [item["number"] for item in payload["items"]] == ["INV-2", "INV-3"]
 
@@ -354,44 +352,31 @@ def test_a_page_past_the_end_of_an_empty_result_stays_at_one() -> None:
     """Nothing to clamp to: page 1 of 1, empty, rather than page 0."""
     server = _server()
     _register_list(server)
-    out = _call(server, {"page": 500}, build_mcp_config(max_page_size=100))
-    assert isinstance(out, dict)
-    payload = out["structuredContent"]
+    payload = _call(server, {"page": 500})["structuredContent"]
     assert (payload["page"], payload["totalPages"], payload["items"]) == (1, 1, [])
 
 
-@pytest.mark.django_db
 def test_an_in_memory_paginated_result_clamps_its_page_too() -> None:
-    """The sequence arm shares the clamp with the queryset arm."""
-
-    def _rows(*, user: Any) -> Any:  # noqa: ARG001
-        return [{"number": f"N-{i}"} for i in range(5)]
-
     server = _server()
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        server.register_selector_tool(
-            name="invoices.list",
-            spec=SelectorSpec(kind=SelectorKind.LIST, selector=_rows),
-            paginate=True,
-        )
-    out = _call(server, {"page": 99, "limit": 2}, build_mcp_config(max_page_size=100))
-    assert isinstance(out, dict)
-    payload = out["structuredContent"]
+    _register(
+        server,
+        SelectorSpec(kind=SelectorKind.LIST, selector=_rows, permissions=OPEN),
+        paginate=True,
+    )
+    payload = _call(server, {"page": 99, "limit": 2})["structuredContent"]
     assert (payload["page"], payload["items"]) == (3, [{"number": "N-4"}])
 
 
-# ---------- result-size ceiling ----------
+# ---------- result-size ceiling: tools/call ----------
 
 
 @pytest.mark.django_db
-def test_oversized_tool_result_becomes_an_actionable_error() -> None:
-    """Over the ceiling the call fails loudly — it is never truncated."""
+def test_an_oversized_tool_result_becomes_an_actionable_error() -> None:
+    """Over the ceiling the call fails loudly; it is never truncated."""
     _seed(20)
     server = _server()
     _register_list(server)
     out = _call(server, {"limit": 20}, build_mcp_config(max_result_bytes=200))
-    assert isinstance(out, dict)
     message = tool_error(out)["message"]
     assert "over this server's 200 byte ceiling" in message
     assert "not truncated" in message
@@ -400,46 +385,34 @@ def test_oversized_tool_result_becomes_an_actionable_error() -> None:
 
 
 @pytest.mark.django_db
-def test_result_under_the_ceiling_is_returned_whole() -> None:
-    _seed(3)
+@pytest.mark.parametrize(
+    ("binding", "server_bound", "seeded"),
+    [(UNSET, 1_000_000, 3), (None, 200, 20)],
+    ids=["under-the-ceiling", "binding-none-overrides"],
+)
+def test_a_result_the_ceiling_admits_is_returned_whole(
+    binding: Any, server_bound: int, seeded: int
+) -> None:
+    _seed(seeded)
     server = _server()
-    _register_list(server)
-    out = _call(server, {"limit": 10}, build_mcp_config(max_result_bytes=1_000_000))
-    assert isinstance(out, dict)
-    assert len(out["structuredContent"]["items"]) == 3
+    _register_list(server, max_result_bytes=binding)
+    out = _call(server, {"limit": 20}, build_mcp_config(max_result_bytes=server_bound))
+    assert len(out["structuredContent"]["items"]) == seeded
 
 
-@pytest.mark.django_db
-def test_per_binding_result_ceiling_overrides_the_server() -> None:
-    _seed(20)
-    server = _server()
-    _register_list(server, max_result_bytes=None)
-    out = _call(server, {"limit": 20}, build_mcp_config(max_result_bytes=200))
-    assert isinstance(out, dict)
-    assert len(out["structuredContent"]["items"]) == 20
-
-
-class _DenyAll(BasePermission):
-    def has_permission(self, request: Any, view: Any) -> bool:
+class _DenyAll(PermissionCheck):
+    def has_permission(self, principal: Any, spec: Any) -> bool:
         return False
 
 
-@pytest.mark.django_db
 def test_a_protocol_error_passes_through_the_ceiling_untouched() -> None:
-    """A JSON-RPC error keeps its envelope — it is not rewritten as a result."""
     server = _server()
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        server.register_selector_tool(
-            name="invoices.denied",
-            spec=SelectorSpec(
-                kind=SelectorKind.LIST,
-                selector=_list_invoices,
-                output_serializer=InvoiceOutputSerializer,
-                permission_classes=[_DenyAll],
-            ),
-            paginate=True,
-        )
+    _register(
+        server,
+        SelectorSpec(kind=SelectorKind.LIST, selector=list, permissions=[_DenyAll()]),
+        name="invoices.denied",
+        paginate=True,
+    )
     out = handle_tools_call(
         {"name": "invoices.denied", "arguments": {}},
         _ctx(server, build_mcp_config(max_result_bytes=1)),
@@ -449,18 +422,18 @@ def test_a_protocol_error_passes_through_the_ceiling_untouched() -> None:
 
 
 @pytest.mark.django_db(transaction=True)
-async def test_async_path_enforces_the_same_ceiling() -> None:
-    from asgiref.sync import sync_to_async
-
+async def test_the_async_path_enforces_the_same_byte_ceiling() -> None:
     await sync_to_async(_seed)(20)
     server = _server()
-    await sync_to_async(_register_list)(server)
+    _register_list(server)
     out = await handle_tools_call_async(
         {"name": "invoices.list", "arguments": {"limit": 20}},
         _ctx(server, build_mcp_config(max_result_bytes=200)),
     )
-    assert isinstance(out, dict)
     assert "byte ceiling" in tool_error(out)["message"]
+
+
+# ---------- result-size ceiling: resources/read ----------
 
 
 def _big_resource() -> dict[str, Any]:
@@ -471,161 +444,118 @@ def _register_big_resource(server: MCPServer) -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         server.register_resource(
+            SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_big_resource, permissions=OPEN),
             name="big",
             uri_template="big://all",
-            selector=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_big_resource),
         )
 
 
-def test_oversized_resource_read_is_a_protocol_error() -> None:
-    """A resource read has no ``isError`` envelope, so the ceiling errors out."""
+@pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
+def test_an_oversized_resource_read_is_a_protocol_error(is_async: bool) -> None:
     server = _server()
     _register_big_resource(server)
-    out = handle_resources_read(
-        {"uri": "big://all"}, _ctx(server, build_mcp_config(max_result_bytes=200))
-    )
+    read = async_to_sync(handle_resources_read_async) if is_async else handle_resources_read
+    out = read({"uri": "big://all"}, _ctx(server, build_mcp_config(max_result_bytes=200)))
     assert isinstance(out, JsonRpcError)
     assert out.code == JsonRpcErrorCode.SERVER_ERROR
     assert "byte ceiling" in out.message
     assert "Resource 'big://all'" in out.message
 
 
-def test_resource_read_under_the_ceiling_is_returned() -> None:
+def test_a_resource_read_under_the_ceiling_is_returned() -> None:
     server = _server()
     _register_big_resource(server)
     out = handle_resources_read(
         {"uri": "big://all"}, _ctx(server, build_mcp_config(max_result_bytes=1_000_000))
     )
-    assert isinstance(out, dict)
     assert out["contents"][0]["uri"] == "big://all"
-
-
-async def test_async_resource_read_enforces_the_same_ceiling() -> None:
-    server = _server()
-    _register_big_resource(server)
-    out = await handle_resources_read_async(
-        {"uri": "big://all"}, _ctx(server, build_mcp_config(max_result_bytes=200))
-    )
-    assert isinstance(out, JsonRpcError)
-    assert out.code == JsonRpcErrorCode.SERVER_ERROR
 
 
 # ---------- result-size ceiling: prompts/get ----------
 
 
-def _register_big_prompt(server: MCPServer) -> None:
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        server.register_prompt(name="big", render=lambda **_: "x" * 5_000)
-
-
-def test_oversized_prompt_render_is_a_protocol_error() -> None:
-    """A rendered prompt is a result surface like any other. It used to be the
-    one method the ceiling skipped, so an operator who set MAX_RESULT_BYTES
-    believed every surface was bounded while this one was not."""
+def _big_prompt_server() -> MCPServer:
     server = _server()
-    _register_big_prompt(server)
-    out = handle_prompts_get({"name": "big"}, _ctx(server, build_mcp_config(max_result_bytes=200)))
-    assert isinstance(out, JsonRpcError)
-    assert out.code == JsonRpcErrorCode.SERVER_ERROR
-    assert "byte ceiling" in out.message
-    assert "Prompt 'big'" in out.message
+    server.prompts.register(
+        PromptBinding(name="big", description=None, render=lambda **_: "x" * 5_000)
+    )
+    return server
 
 
-def test_prompt_render_under_the_ceiling_is_returned() -> None:
-    server = _server()
-    _register_big_prompt(server)
+async def test_an_oversized_prompt_render_is_a_protocol_error() -> None:
+    """``prompts/get`` was the one method the ceiling skipped."""
+    config = build_mcp_config(max_result_bytes=200)
+    for out in (
+        await sync_to_async(handle_prompts_get)(
+            {"name": "big"}, _ctx(_big_prompt_server(), config)
+        ),
+        await handle_prompts_get_async({"name": "big"}, _ctx(_big_prompt_server(), config)),
+    ):
+        assert isinstance(out, JsonRpcError)
+        assert out.code == JsonRpcErrorCode.SERVER_ERROR
+        assert "byte ceiling" in out.message
+        assert "Prompt 'big'" in out.message
+
+
+def test_a_prompt_render_under_the_ceiling_is_returned() -> None:
     out = handle_prompts_get(
-        {"name": "big"}, _ctx(server, build_mcp_config(max_result_bytes=1_000_000))
+        {"name": "big"}, _ctx(_big_prompt_server(), build_mcp_config(max_result_bytes=1_000_000))
     )
-    assert isinstance(out, dict)
     assert out["messages"][0]["content"]["text"].startswith("xxx")
-
-
-async def test_async_prompt_render_enforces_the_same_ceiling() -> None:
-    server = _server()
-    _register_big_prompt(server)
-    out = await handle_prompts_get_async(
-        {"name": "big"}, _ctx(server, build_mcp_config(max_result_bytes=200))
-    )
-    assert isinstance(out, JsonRpcError)
-    assert out.code == JsonRpcErrorCode.SERVER_ERROR
 
 
 # ---------- dispatch deadline ----------
 
 
-def _slow_selector(*, user: Any) -> Any:
-    """A selector that outlives any deadline a test would set."""
-    import time
-
+def _slow() -> list[Any]:
     time.sleep(0.5)
     return []
 
 
-def _register_slow(server: MCPServer, **kwargs: Any) -> Any:
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        return server.register_selector_tool(
-            name="invoices.slow",
-            spec=SelectorSpec(
-                kind=SelectorKind.LIST,
-                selector=_slow_selector,
-                output_serializer=InvoiceOutputSerializer,
-            ),
-            paginate=True,
-            **kwargs,
-        )
-
-
-@pytest.mark.django_db(transaction=True)
-async def test_overrunning_tool_call_returns_a_terminal_error() -> None:
-    """The client gets an answer instead of an open request that never resolves."""
+def _slow_server(**knobs: Any) -> MCPServer:
     server = _server()
-    _register_slow(server)
+    _register(
+        server,
+        SelectorSpec(kind=SelectorKind.LIST, selector=_slow, permissions=OPEN),
+        name="invoices.slow",
+        paginate=True,
+        **knobs,
+    )
+    return server
+
+
+async def test_an_overrunning_tool_call_returns_a_terminal_error() -> None:
     out = await handle_tools_call_async(
         {"name": "invoices.slow", "arguments": {}},
-        _ctx(server, build_mcp_config(dispatch_timeout=0.01)),
+        _ctx(_slow_server(), build_mcp_config(dispatch_timeout=0.01)),
     )
-    assert isinstance(out, dict)
     message = tool_error(out)["message"]
-    # The message is honest that the work may still be running: cancelling the
-    # task does not interrupt a thread parked in the DB driver.
+    # Honest that the work may still be running: cancelling the task does not
+    # interrupt a thread parked in the DB driver.
     assert "dispatch deadline" in message
     assert "may still be running" in message
 
 
-@pytest.mark.django_db(transaction=True)
-async def test_per_binding_deadline_overrides_the_server() -> None:
-    server = _server()
-    _register_slow(server, dispatch_timeout=None)
+async def test_a_per_binding_deadline_overrides_the_server() -> None:
     out = await handle_tools_call_async(
         {"name": "invoices.slow", "arguments": {}},
-        _ctx(server, build_mcp_config(dispatch_timeout=0.01)),
+        _ctx(_slow_server(dispatch_timeout=None), build_mcp_config(dispatch_timeout=0.01)),
     )
-    assert isinstance(out, dict)
     # No deadline for this tool: it ran to completion despite the server's.
     assert out["structuredContent"]["items"] == []
 
 
-@pytest.mark.django_db(transaction=True)
-async def test_resources_read_deadline_is_a_protocol_error() -> None:
-    """A resource has no ``isError`` envelope, so expiry is a JSON-RPC error."""
-
+async def test_a_resources_read_deadline_is_a_protocol_error() -> None:
     def _slow_resource() -> Any:
-        import time
-
         time.sleep(0.5)
         return {"ok": True}
 
     server = _server()
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        server.register_resource(
-            name="slow",
-            uri_template="slow://all",
-            selector=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_slow_resource),
-        )
+    server.register_resource(
+        SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_slow_resource, permissions=OPEN),
+        name="slow",
+        uri_template="slow://all",
+    )
     out = await adispatch(
         "resources/read",
         {"uri": "slow://all"},
@@ -636,19 +566,14 @@ async def test_resources_read_deadline_is_a_protocol_error() -> None:
     assert "dispatch deadline" in out.message
 
 
-@pytest.mark.django_db(transaction=True)
 async def test_tools_call_is_not_double_wrapped_by_the_dispatcher() -> None:
-    """``adispatch`` leaves tools/call alone — it resolves its own deadline."""
-    server = _server()
-    _register_slow(server, dispatch_timeout=None)
     out = await adispatch(
         "tools/call",
         {"name": "invoices.slow", "arguments": {}},
-        _ctx(server, build_mcp_config(dispatch_timeout=0.01)),
+        _ctx(_slow_server(dispatch_timeout=None), build_mcp_config(dispatch_timeout=0.01)),
     )
     # A second timer at the dispatcher would have fired here regardless of the
     # binding's opt-out.
-    assert isinstance(out, dict)
     assert out["structuredContent"]["items"] == []
 
 
@@ -672,8 +597,6 @@ async def test_run_with_deadline_raises_past_the_deadline() -> None:
 
 
 def test_resolve_bound_treats_unset_as_defer_and_none_as_disabled() -> None:
-    from django_service_specs import UNSET
-
     assert resolve_bound(UNSET, 500) == 500
     assert resolve_bound(None, 500) is None
     assert resolve_bound(10, 500) == 10

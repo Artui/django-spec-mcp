@@ -16,7 +16,7 @@ assert set(tool["outputSchema"]["items"]["properties"]) == set(result["structure
 That catches a field that vanished. It passes unchanged when a property
 advertised as ``integer`` arrives as a string, or when a ``date-time`` arrives
 as ``"soon"`` -- which is the failure a typed client actually breaks on, and the
-one an output serializer's ``to_representation`` override introduces without
+one a presenter's override introduces without
 touching a single key.
 
 **Verification, not compulsion.** There is deliberately no setting that forces
@@ -165,8 +165,8 @@ def assert_tool_result_conforms(tool: Mapping[str, Any], result: Mapping[str, An
             f"Tool {name!r} advertises no 'outputSchema', so there is nothing to "
             "conform to and this assertion would pass for any result at all. "
             "Either the binding sets include_output_schema=False (or "
-            "SPEC_MCP['INCLUDE_OUTPUT_SCHEMA'] is False), or it has no "
-            "output serializer for a schema to be derived from."
+            "SPEC_MCP['INCLUDE_OUTPUT_SCHEMA'] is False), or its spec "
+            "declares no output for a schema to be derived from."
         )
     if "structuredContent" not in result:
         # An error result is the likeliest reason, and saying so beats letting

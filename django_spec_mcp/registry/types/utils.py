@@ -1,4 +1,4 @@
-"""Shared validation and derivation for the three tool bindings.
+"""Shared validation for the kernel tool and resource bindings.
 
 In a sibling ``utils.py`` rather than its own leaf module because it is
 internal infrastructure for ``registry.types``, not part of the exported
@@ -7,13 +7,10 @@ type surface.
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Sequence
 
 from django.core.exceptions import ImproperlyConfigured
-from django_service_specs import SelectorKind
-from rest_framework_services import can_present_nothing as spec_can_present_nothing
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_service_specs import PermissionCheck, check_permissions
 
 from django_spec_mcp.types.tool_content_kind import ToolContentKind
 
@@ -58,67 +55,58 @@ def validate_content_kind(
         )
 
 
-def rendered_kind(spec: ServiceSpec[Any, Any, Any] | SelectorSpec[Any, Any]) -> SelectorKind:
-    """Whether ``spec``'s rendered result is one object or a list of them.
+def scope_names(label: str, scopes: str | Sequence[str] | None) -> tuple[str, ...] | None:
+    """A binding's ``scopes`` as it holds them: a tuple of names, or ``None`` for no gate.
 
-    The cardinality drf-services' ``dispatch_spec`` gives the result, which is
-    what the payload is rendered ``many=`` by:
+    Run by every binding's ``__post_init__``, so one built by hand gates as one
+    the registrar built does. ``handlers.utils.scope_verdict`` judges the
+    result against the caller's token.
 
-    - A ``SelectorSpec`` answers its own ``kind``.
-    - A ``many=True`` ``ServiceSpec`` answers ``LIST``. Its result is the list the
-      service returns, rendered ``many``, and no re-fetch runs; its
-      ``output_selector_spec`` is ``RETRIEVE`` by convention, because that kind
-      describes one row of it. drf-services' own ``spec_to_json_schema`` answers
-      the output phase the same way.
-    - Any other ``ServiceSpec`` answers ``LIST`` when its ``output_selector_spec``
-      declares ``LIST``, with a selector or without one: the re-fetch produces
-      the set, and with no selector drf-services presents the service's own
-      return as the set the declaration names (``kind="list"``), refusing a
-      return that is not one. Anything else is a single object. The selector is
-      not read: ``test_a_list_output_spec_with_no_selector_renders_and_advertises_a_list``
-      fails for a service tool if it is. The guard is one
-      ``and``-chain, so each conjunct is held by a row of
-      ``test_the_rendered_kind_is_the_one_dispatch_gives``: ``no-output-spec``
-      (``nested is not None``) and ``retrieve-output-no-re-read`` (the kind).
-
-    Each binding's ``rendered_kind`` reads it, which picks the advertised
-    ``outputSchema`` shape. Only a selector tool's schema was once kind-aware, so
-    every other ``LIST`` output advertised one object while serving an array.
+    A bare string is the single-scope case: ``tuple("billing")`` would be seven
+    one-character scopes no token carries
+    (``test_a_handbuilt_kernel_resource_reads_a_bare_string_scope_as_one``). An
+    empty sequence is refused, since it reads as a gate and admits every caller
+    (``test_a_handbuilt_kernel_binding_refuses_an_empty_scope_tuple``). Each
+    half of that guard is held by a test:
+    ``test_a_kernel_resource_carries_its_scope_gate`` fails without the
+    emptiness test, and
+    ``test_a_handbuilt_kernel_resource_without_scopes_has_no_gate`` without the
+    ``None`` one.
     """
-    if isinstance(spec, SelectorSpec):
-        return spec.kind
-    if spec.many:
-        return SelectorKind.LIST
-    nested = spec.output_selector_spec
-    if nested is not None and nested.kind is SelectorKind.LIST:
-        return SelectorKind.LIST
-    return SelectorKind.RETRIEVE
+    if isinstance(scopes, str):
+        scopes = (scopes,)
+    if scopes is not None and not scopes:
+        raise ImproperlyConfigured(
+            f"{label}: scopes=() permits every caller while reading as a gate. "
+            "Name at least one scope, or leave scopes=None for no scope gate."
+        )
+    if scopes is None:
+        return None
+    return tuple(scopes)
 
 
-def can_present_nothing(spec: ServiceSpec[Any, Any, Any] | SelectorSpec[Any, Any]) -> bool:
-    """Whether a successful dispatch of ``spec`` can present nothing (``None``).
+def binding_checks(
+    label: str, permissions: Sequence[PermissionCheck] | None
+) -> tuple[PermissionCheck, ...]:
+    """A prompt's or a view's ``permissions`` as it holds them, by the kernel's rule for a spec's.
 
-    drf-services' ``can_present_nothing`` answers, so this server's
-    ``outputSchema`` admits ``{}`` exactly where drf-services' own output
-    schema admits ``null``: a ``RETRIEVE``
-    selector under ``allow_none``, a single-row service whose output re-read
-    has a ``selector`` (dispatch materializes it with ``.first()``), and a
-    single-row service presenting its own return that declares
-    ``ServiceSpec(allow_none=True)``. A list result never does, empty at worst.
+    The kernel's ``check_permissions`` decides, so a prompt's or a view's
+    checks are refused by exactly the rules a spec's ``permissions=`` gets: a
+    string or any other non-sequence, a class where an instance belongs, an
+    entry that is not a ``PermissionCheck``, an ``async def`` on any of the
+    three check methods, and an empty sequence, which reads as a gate and
+    admits everyone (``test_a_prompt_refuses_what_is_not_a_check``).
 
-    A service returning ``None`` without the declaration is still served
-    ``{}`` against a strict schema: drf-services presents an undeclared
-    ``None`` rather than refusing it, and admitting ``{}`` for every such
-    service would turn every row field optional for each client generating
-    types from the schema. Held by
-    ``test_a_service_declaring_allow_none_serves_an_empty_object_its_schema_admits``
-    beside ``test_a_service_with_no_output_reread_keeps_its_schema_strict``.
+    Run at registration on the ``permissions=`` passed, so an explicit ``[]``
+    is refused there, and by each binding's ``__post_init__`` on
+    ``permissions or None``, so a binding built by hand is held to every other
+    rule while its empty sequence, the field's default ``()``, is no checks.
 
-    What stays this server's is what it does with the answer, and where it
-    asks: the schema keeps its root an object and admits ``{}`` rather than
-    ``null`` (``build_output_schema``).
+    ``None`` is no checks and comes back as ``()``: unlike a spec's, these
+    ``permissions`` are optional, and a prompt with neither them nor ``scopes``
+    is what ``REQUIRE_TOOL_PERMISSIONS`` refuses.
     """
-    return spec_can_present_nothing(spec)
+    return check_permissions(permissions, label=label) or ()
 
 
-__all__ = ["can_present_nothing", "rendered_kind", "validate_content_kind"]
+__all__ = ["binding_checks", "scope_names", "validate_content_kind"]

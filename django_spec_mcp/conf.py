@@ -34,7 +34,6 @@ DEFAULTS: dict[str, Any] = {
     "INPUT_REQUEST_TTL_SECONDS": 600,
     "MAX_INPUT_ROUNDS": 5,
     "ALLOWED_ORIGINS": [],
-    "DEFAULT_OUTPUT_FORMAT": "json",
     # Recognised keys: ``name``, ``version``, ``title``, ``description``,
     # ``websiteUrl``, ``icons``. All but ``description`` are also ``MCPServer``
     # constructor kwargs; the constructor's ``description=`` means the
@@ -52,14 +51,6 @@ DEFAULTS: dict[str, Any] = {
     # Async transport only, and it does not reclaim the worker — pair it with a
     # database statement timeout.
     "DISPATCH_TIMEOUT": 60.0,
-    # Only the default for ``MCPServer(resource_url=...)``: RFC 8707 binds a
-    # token to *a* resource, so two servers sharing one URL means a token
-    # minted for one passes the audience check at the other.
-    "RESOURCE_URL": None,
-    # Off by default because DOT's stock ``AccessToken`` records no resource,
-    # so enforcement would reject every token. Needs a swapped
-    # ``ACCESS_TOKEN_MODEL`` or an explicit ``audience_getter=``.
-    "ENFORCE_AUDIENCE": False,
     "PAGE_SIZE": 100,
     # Off by default: the arguments dict can carry PII or secrets.
     "INCLUDE_VALIDATION_VALUE": False,

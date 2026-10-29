@@ -2,17 +2,18 @@ from __future__ import annotations
 
 from typing import Any
 
-from rest_framework_services import build_offline_context, resolve_callable_kwargs
+from django_service_specs import resolve_callable_kwargs
 
 from django_spec_mcp._compat.acall import acall
 from django_spec_mcp._compat.tracing import span
 from django_spec_mcp.handlers.handle_tools_call import _span_attrs
+from django_spec_mcp.handlers.judge_binding import judge_binding
+from django_spec_mcp.handlers.kernel_utils import carry_token
 from django_spec_mcp.handlers.render_prompt_messages import normalize_render_result
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import (
-    check_permissions,
     consume_rate_limits,
-    prompt_shape,
+    forbidden,
 )
 from django_spec_mcp.output.enforce_result_bytes import enforce_result_bytes
 from django_spec_mcp.protocol.types.get_prompt_result import GetPromptResult
@@ -66,20 +67,10 @@ async def handle_prompts_get_async(
         )
 
     with span("mcp.prompts.get", attributes=_span_attrs(binding.name, context)):
-        # See the sync sibling: judged on the prompt's arguments.
-        allowed, required_scopes = await acall(
-            check_permissions,
-            binding.permissions,
-            context.http_request,
-            context.token,
-            shape=prompt_shape(binding, arguments_raw),
-        )
+        # See the sync sibling. Off the loop, since a permission may query.
+        allowed, required_scopes = await acall(judge_binding, binding, context.token)
         if not allowed:
-            return JsonRpcError(
-                JsonRpcErrorCode.FORBIDDEN,
-                "Insufficient permission",
-                data={"requiredScopes": required_scopes} if required_scopes else None,
-            )
+            return forbidden(required_scopes)
 
         retry_after: int | None = await acall(
             consume_rate_limits, binding.rate_limits, context.http_request, context.token
@@ -91,21 +82,14 @@ async def handle_prompts_get_async(
                 data={"retryAfter": retry_after},
             )
 
-        drf_request = build_offline_context(
-            context.token.user,
-            None,
-            http_request=context.http_request,
-            # See the sync sibling: nothing here reads ``request.query_params``,
-            # and the empty mapping keeps the endpoint's own out if that changes.
-            query_params={},
-        ).request
-        # See the sync sibling: the transport's seeds land *after* the
-        # client-supplied arguments, so an argument named ``user`` or
-        # ``request`` shadows nothing.
+        # See the sync sibling: the transport's own ``HttpRequest``, carrying
+        # the token, and the seeds land *after* the client-supplied arguments,
+        # so an argument named ``user`` or ``request`` shadows nothing.
+        request = carry_token(context.http_request, context.token)
         pool: dict[str, Any] = {
             **arguments_raw,
-            "request": drf_request,
-            "user": context.token.user,
+            "request": request,
+            "user": request.user,
         }
         kwargs: dict[str, Any] = resolve_callable_kwargs(binding.render, pool)
         raw: Any = await acall(binding.render, **kwargs)

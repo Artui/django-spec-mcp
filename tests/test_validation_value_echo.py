@@ -1,10 +1,14 @@
-"""Coverage for ``SPEC_MCP['INCLUDE_VALIDATION_VALUE']``.
+"""Coverage for ``SPEC_MCP['INCLUDE_VALIDATION_VALUE']``, on kernel tools.
 
 The setting is opt-in: when True, ``value`` echoes the offending ``arguments``
-dict back to the client -- beside ``detail`` in a ``validation_error`` result's
+dict back to the client, beside ``detail`` in a ``validation_error`` result's
 ``error`` object on ``tools/call``, in the ``-32602`` ``data`` on ``prompts/get``.
-We exercise both states across all four handler call sites — sync + async,
-tools/call DRF + ServiceValidationError, and prompts/get missing-required-args.
+Both states are exercised at every call site: sync and async, a kernel tool's
+two validation refusals, and prompts/get's missing required arguments.
+
+A kernel tool's two refusals are the kernel's ``InvalidArguments``, from the
+shape check before its Validator runs, and a ``ServiceValidationError`` the
+service raises. The prompt cases build no spec.
 """
 
 from __future__ import annotations
@@ -14,8 +18,14 @@ from typing import Any
 
 import pytest
 from django.http import HttpRequest
-from django_service_specs import ServiceValidationError
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_service_specs import (
+    DataclassValidator,
+    Parameter,
+    Parameters,
+    ServiceSpec,
+    ServiceValidationError,
+    Unrestricted,
+)
 
 from django_spec_mcp import MCPServer, PromptArgument
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
@@ -29,7 +39,6 @@ from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.registry.prompt_registry import PromptRegistry
 from django_spec_mcp.registry.resource_registry import ResourceRegistry
 from django_spec_mcp.registry.tool_registry import ToolRegistry
-from django_spec_mcp.registry.types.tool_binding import ToolBinding
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from tests.utils import tool_error
@@ -51,36 +60,47 @@ def _ctx(tools: ToolRegistry) -> MCPCallContext:
     )
 
 
-def _tools_with_dataclass_input() -> ToolRegistry:
-    def svc(*, data: _Args) -> dict[str, Any]:
-        return {"name": data.name}
+def _tools(spec: ServiceSpec) -> ToolRegistry:
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server.register_tool(spec, name="t", description="d")
+    return server.tools
 
-    tools = ToolRegistry()
-    tools.register(
-        ToolBinding(
-            name="t",
-            description=None,
-            spec=ServiceSpec(service=svc, input_serializer=_Args, atomic=False),
-        )
+
+def _tools_with_dataclass_input() -> ToolRegistry:
+    def svc(*, name: str) -> dict[str, Any]:
+        return {"name": name}
+
+    return _tools(
+        ServiceSpec(service=svc, validator=DataclassValidator(_Args), permissions=[Unrestricted()])
     )
-    return tools
 
 
 def _tools_raising_validation() -> ToolRegistry:
-    def svc() -> None:
+    # ``x`` is declared, so the call reaches the service: an undeclared key
+    # would be refused by the kernel's shape check before it ran.
+    def svc(*, x: int = 0) -> None:
         raise ServiceValidationError({"f": ["bad"]})
 
-    tools = ToolRegistry()
-    tools.register(
-        ToolBinding(name="t", description=None, spec=ServiceSpec(service=svc, atomic=False))
+    return _tools(
+        ServiceSpec(
+            service=svc,
+            reads=Parameters([Parameter("x", "integer")]),
+            permissions=[Unrestricted()],
+        )
     )
-    return tools
 
 
-# ---------- tools/call DRF ValidationError ----------
+def _raised_by_the_service(out: Any) -> dict[str, Any]:
+    error = tool_error(out)
+    assert error["detail"] == {"f": ["bad"]}, error
+    return error
 
 
-def test_sync_tools_call_drf_validation_default_omits_value(settings) -> None:
+# ---------- tools/call: the kernel refusing the arguments ----------
+
+
+@pytest.mark.django_db
+def test_sync_tools_call_invalid_arguments_default_omits_value(settings) -> None:
     settings.SPEC_MCP = {}
     out = handle_tools_call(
         {"name": "t", "arguments": {"junk": True}}, _ctx(_tools_with_dataclass_input())
@@ -90,7 +110,8 @@ def test_sync_tools_call_drf_validation_default_omits_value(settings) -> None:
     assert "value" not in error
 
 
-def test_sync_tools_call_drf_validation_echo(settings) -> None:
+@pytest.mark.django_db
+def test_sync_tools_call_invalid_arguments_echo(settings) -> None:
     settings.SPEC_MCP = {"INCLUDE_VALIDATION_VALUE": True}
     out = handle_tools_call(
         {"name": "t", "arguments": {"junk": True}}, _ctx(_tools_with_dataclass_input())
@@ -100,7 +121,8 @@ def test_sync_tools_call_drf_validation_echo(settings) -> None:
     assert error["value"] == {"junk": True}
 
 
-async def test_async_tools_call_drf_validation_default_omits_value(settings) -> None:
+@pytest.mark.django_db(transaction=True)
+async def test_async_tools_call_invalid_arguments_default_omits_value(settings) -> None:
     settings.SPEC_MCP = {}
     out = await handle_tools_call_async(
         {"name": "t", "arguments": {"junk": True}}, _ctx(_tools_with_dataclass_input())
@@ -110,7 +132,8 @@ async def test_async_tools_call_drf_validation_default_omits_value(settings) -> 
     assert "value" not in error
 
 
-async def test_async_tools_call_drf_validation_echo(settings) -> None:
+@pytest.mark.django_db(transaction=True)
+async def test_async_tools_call_invalid_arguments_echo(settings) -> None:
     settings.SPEC_MCP = {"INCLUDE_VALIDATION_VALUE": True}
     out = await handle_tools_call_async(
         {"name": "t", "arguments": {"junk": True}}, _ctx(_tools_with_dataclass_input())
@@ -123,42 +146,39 @@ async def test_async_tools_call_drf_validation_echo(settings) -> None:
 # ---------- tools/call ServiceValidationError ----------
 
 
+@pytest.mark.django_db
 def test_sync_tools_call_service_validation_default_omits_value(settings) -> None:
     settings.SPEC_MCP = {}
     out = handle_tools_call({"name": "t", "arguments": {}}, _ctx(_tools_raising_validation()))
-    assert "value" not in tool_error(out)
+    assert "value" not in _raised_by_the_service(out)
 
 
+@pytest.mark.django_db
 def test_sync_tools_call_service_validation_echo(settings) -> None:
     settings.SPEC_MCP = {"INCLUDE_VALIDATION_VALUE": True}
     out = handle_tools_call({"name": "t", "arguments": {"x": 1}}, _ctx(_tools_raising_validation()))
-    assert tool_error(out)["value"] == {"x": 1}
+    assert _raised_by_the_service(out)["value"] == {"x": 1}
 
 
+@pytest.mark.django_db(transaction=True)
 async def test_async_tools_call_service_validation_default_omits_value(settings) -> None:
     settings.SPEC_MCP = {}
     out = await handle_tools_call_async(
         {"name": "t", "arguments": {}}, _ctx(_tools_raising_validation())
     )
-    assert "value" not in tool_error(out)
+    assert "value" not in _raised_by_the_service(out)
 
 
+@pytest.mark.django_db(transaction=True)
 async def test_async_tools_call_service_validation_echo(settings) -> None:
     settings.SPEC_MCP = {"INCLUDE_VALIDATION_VALUE": True}
     out = await handle_tools_call_async(
         {"name": "t", "arguments": {"x": 1}}, _ctx(_tools_raising_validation())
     )
-    assert tool_error(out)["value"] == {"x": 1}
+    assert _raised_by_the_service(out)["value"] == {"x": 1}
 
 
 # ---------- prompts/get missing required args ----------
-
-
-class _AlwaysAllow:
-    """Minimal MCP permission — a prompt must declare one to register."""
-
-    def has_permission(self, *_args: object, **_kwargs: object) -> bool:
-        return True
 
 
 def _server_with_required_prompt() -> MCPServer:
@@ -169,7 +189,7 @@ def _server_with_required_prompt() -> MCPServer:
         name="echo",
         render=lambda *, who: f"hi {who}",
         arguments=[PromptArgument(name="who", required=True)],
-        permissions=[_AlwaysAllow()],
+        permissions=[Unrestricted()],
     )
     return server
 

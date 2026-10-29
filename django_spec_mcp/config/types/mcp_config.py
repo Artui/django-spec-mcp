@@ -3,7 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from django_spec_mcp.types.modern_protocol_versions import MODERN_PROTOCOL_VERSIONS
-from django_spec_mcp.types.output_format import OutputFormat
 
 
 @dataclass(frozen=True)
@@ -53,9 +52,6 @@ class MCPConfig:
     allowed_origins: tuple[str, ...]
     """``Origin`` allowlist. Empty rejects every cross-origin request; the MCP
     spec makes this check mandatory."""
-
-    default_output_format: OutputFormat
-    """Fallback ``output_format`` for tools registered without one."""
 
     max_request_bytes: int
     """Request-body ceiling; larger bodies get a ``413`` before parsing."""

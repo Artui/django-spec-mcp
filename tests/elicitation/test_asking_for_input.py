@@ -6,23 +6,48 @@ server-initiated requests: a call that needs something answers with an
 request carrying the answer. Nothing is held between the two — which is what
 these tests are really pinning, since every one of them builds a new context
 rather than reusing one.
+
+Asked here of kernel service tools: ``rows.delete`` and its two neighbours are
+kernel ``ServiceSpec`` objects registered with ``register_tool``, validating
+through a dataclass, so the answer reaches the service as a spread keyword
+argument and the call runs through the kernel's ``dispatch``. The module's own
+``server`` fixture builds that server.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
 from django.core import signing
+from django_service_specs import (
+    AdditionalInputRequired,
+    DataclassValidator,
+    Parameter,
+    Parameters,
+    ServerArguments,
+    ServiceSpec,
+    UnknownArguments,
+    Unrestricted,
+)
+from typing_extensions import TypedDict
 
 from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
 from django_spec_mcp.types.request_state_salt import REQUEST_STATE_SALT
-from tests.elicitation.conftest import TOOL, context
+from tests.elicitation.conftest import TOOL, DeleteRows, build_kernel_server, context
 from tests.utils import tool_error
+
+
+@pytest.fixture
+def server() -> MCPServer:
+    """The kernel server, under the name every test here asks for."""
+    return build_kernel_server()
 
 
 def _call(server: MCPServer, arguments: dict[str, Any], **extra: Any) -> Any:
@@ -99,7 +124,7 @@ def test_retrying_with_the_answer_completes_the_call(server: MCPServer) -> None:
 
 def test_the_answer_reaches_the_service_as_an_ordinary_argument(server: MCPServer) -> None:
     """The load-bearing claim of the whole design: the service declared
-    ``confirmed`` as a normal serializer field and read it as one. It has no
+    ``confirmed`` as a normal argument and read it as one. It has no
     idea a dialog happened."""
     asked = _call(server, {"count": 400})
     out = _call(
@@ -321,7 +346,138 @@ def test_the_budget_counts_rounds_not_calls(server: MCPServer) -> None:
 # ---------- other registration shapes ----------
 
 
+def _asks_for_an_undeclared_name(*, count: int, confirmed: bool = False, reason: str = "") -> Any:  # noqa: ARG001
+    raise AdditionalInputRequired("Confirm?", schema={"confirm": {"type": "boolean"}})
+
+
+def test_a_question_whose_answer_the_spec_refuses_is_an_internal_error() -> None:
+    """A question the spec cannot take back: the answer
+    to ``confirm`` comes back as an argument the spec does not declare, which
+    the closed argument set refuses as unknown on the second round. So the
+    first round refuses the question, as an unrenderable one is refused."""
+    server = MCPServer(name="undeclared", auth_backend=AllowAnyBackend())
+    server.register_tool(
+        ServiceSpec(
+            service=_asks_for_an_undeclared_name,
+            validator=DataclassValidator(DeleteRows),
+            permissions=[Unrestricted()],
+            atomic=False,
+        ),
+        name=TOOL,
+    )
+    out = _call(server, {"count": 1})
+    assert isinstance(out, JsonRpcError)
+    assert out.code == -32603
+    assert "'confirm'" in out.message
+
+
+def _asking_server(
+    service: Any,
+    *,
+    validator: Any = None,
+    reads: Any = None,
+    kwargs: Any = None,
+    **registration: Any,
+) -> MCPServer:
+    """One tool whose service always asks, so only the admitted names decide the answer."""
+    server = MCPServer(name="asking", auth_backend=AllowAnyBackend())
+    server.register_tool(
+        ServiceSpec(
+            service=service,
+            validator=validator,
+            reads=reads if reads is not None else Parameters([]),
+            kwargs=kwargs,
+            permissions=[Unrestricted()],
+            atomic=False,
+        ),
+        name=TOOL,
+        **registration,
+    )
+    return server
+
+
+def _asks_for_account(**_: Any) -> Any:
+    raise AdditionalInputRequired("Which account?", schema={"account": {"type": "string"}})
+
+
+@dataclass
+class _Scoped:
+    count: int
+    account: str = ""
+
+
+class _AccountScope(TypedDict):
+    account: str
+
+
+def _provides_the_account() -> _AccountScope:
+    return {"account": "acme"}
+
+
+def test_a_field_the_server_fills_is_not_admitted() -> None:
+    """``account`` is a declared field, and the server answers it for the mount, so the
+    answer a user typed would be replaced: the question is refused. Without the
+    subtraction of the binding's ``server_arguments`` it would be asked."""
+    server = _asking_server(
+        _asks_for_account,
+        validator=DataclassValidator(_Scoped),
+        server_arguments=ServerArguments(values={"account": "acme"}),
+    )
+    out = _call(server, {"count": 1})
+    assert isinstance(out, JsonRpcError)
+    assert out.code == -32603
+    assert "'account'" in out.message
+
+
+def test_a_key_a_provider_fills_is_not_admitted() -> None:
+    """A typed ``kwargs=`` provider always fills ``account``, whatever the client sends.
+    Without the subtraction of the kernel's ``server_owned_keys`` it would be asked."""
+    server = _asking_server(
+        _asks_for_account,
+        reads=Parameters([Parameter("account", "string")]),
+        kwargs=_provides_the_account,
+    )
+    out = _call(server, {})
+    assert isinstance(out, JsonRpcError)
+    assert out.code == -32603
+    assert "'account'" in out.message
+
+
+def test_a_refused_question_fails_even_for_a_client_that_cannot_be_asked() -> None:
+    """As an unrenderable schema does: the check precedes the capability one."""
+    server = _asking_server(_asks_for_account)
+    out = handle_tools_call({"name": TOOL, "arguments": {}}, context(server, capabilities={}))
+    assert isinstance(out, JsonRpcError)
+    assert out.code == -32603
+
+
+def test_a_field_the_caller_sends_is_admitted() -> None:
+    """The control for the two above: the same field with no server filling it is asked."""
+    server = _asking_server(_asks_for_account, validator=DataclassValidator(_Scoped))
+    out = _call(server, {"count": 1})
+    assert out["resultType"] == "input_required"
+
+
+def test_a_tool_ignoring_unknown_arguments_drops_an_answer_the_spec_does_not_declare() -> None:
+    """Under ``IGNORE`` the answer is dropped rather than refused, so the service would
+    ask again until the budget ran out: the question is refused as under ``REJECT``."""
+    server = _asking_server(_asks_for_account, unknown_arguments=UnknownArguments.IGNORE)
+    out = _call(server, {})
+    assert isinstance(out, JsonRpcError)
+    assert out.code == -32603
+    assert "'account'" in out.message
+
+
 # ---------- async parity ----------
+
+
+@pytest.mark.asyncio
+async def test_the_async_path_refuses_a_question_the_spec_would_refuse_the_answer_to() -> None:
+    server = _asking_server(_asks_for_account)
+    out = await handle_tools_call_async({"name": TOOL, "arguments": {}}, context(server))
+    assert isinstance(out, JsonRpcError)
+    assert out.code == -32603
+    assert "'account'" in out.message
 
 
 @pytest.mark.asyncio

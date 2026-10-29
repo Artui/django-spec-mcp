@@ -1,4 +1,7 @@
-"""End-to-end prompts coverage through the live transport + capability advertisement."""
+"""End-to-end prompts coverage through the live transport + capability advertisement.
+
+Asked of the default mount, the kernel test server.
+"""
 
 from __future__ import annotations
 

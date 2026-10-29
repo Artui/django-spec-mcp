@@ -1,11 +1,10 @@
-"""A namesake default for a URL kwarg the call left out is evaluated off the event loop.
+"""A value a kernel spec computes by a query for a read the call left out is computed off the loop.
 
-A selector tool's ``input_serializer`` field named for a URL kwarg supplies that
-kwarg's value when the call leaves it out. The async selector path called that
-default while building the dispatch keywords on the event loop, so a default
-that queries raised ``SynchronousOnlyOperation`` there, where the sync path
-served. The keywords are now built in a worker thread, as the serializer's own
-validation already was.
+What fills a read the call leaves out, by a query, is the spec's ``kwargs``
+provider. A provider that queries on the event loop raises
+``SynchronousOnlyOperation`` where the sync path serves, so this asks that the
+provider is called off the loop on every route a kernel tool is called by: the
+sync handler, the async handler and ``acall_tool``.
 """
 
 from __future__ import annotations
@@ -15,12 +14,15 @@ from typing import Any
 import pytest
 from asgiref.sync import sync_to_async
 from django.http import HttpRequest
-from django_service_specs import SelectorKind
-from rest_framework import serializers
-from rest_framework.permissions import AllowAny
-from rest_framework_services.types.selector_spec import SelectorSpec
+from django_service_specs import (
+    Parameter,
+    Parameters,
+    SelectorKind,
+    SelectorSpec,
+    Unrestricted,
+)
 
-from django_spec_mcp import MCPServer, UrlKwarg
+from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
@@ -29,27 +31,23 @@ from django_spec_mcp.handlers.types.context import MCPCallContext
 from tests.testapp.models import Invoice
 
 
-def _default_project() -> int:
+def _default_project() -> dict[str, Any]:
     # Any ORM read; the test database holds no invoice, so this is 7.
-    return Invoice.objects.count() + 7
-
-
-class _Input(serializers.Serializer):
-    project_pk = serializers.IntegerField(default=_default_project)
+    return {"project_pk": Invoice.objects.count() + 7}
 
 
 def _server() -> MCPServer:
     server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
-    server.register_selector_tool(
+    server.register_tool(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=lambda *, project_pk: {"project": project_pk},
+            reads=Parameters([Parameter("project_pk", "integer")]),
+            kwargs=_default_project,
+            permissions=[Unrestricted()],
+        ),
         name="tool",
         description="Read a project.",
-        spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            selector=lambda project_pk: {"project": project_pk},
-            permission_classes=[AllowAny],
-        ),
-        input_serializer=_Input,
-        url_kwargs=(UrlKwarg("project_pk", type="integer"),),
     )
     return server
 
@@ -68,7 +66,7 @@ def _ctx(server: MCPServer) -> MCPCallContext:
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("route", ["handler", "async_handler", "acall_tool"])
-async def test_a_namesake_default_that_queries_fills_the_route_on_every_route(route: str) -> None:
+async def test_a_provider_that_queries_fills_the_read_on_every_route(route: str) -> None:
     server = _server()
     params: dict[str, Any] = {"name": "tool", "arguments": {}}
     if route == "acall_tool":
@@ -77,6 +75,5 @@ async def test_a_namesake_default_that_queries_fills_the_route_on_every_route(ro
         out = await handle_tools_call_async(params, _ctx(server))
     else:
         out = await sync_to_async(handle_tools_call)(params, _ctx(server))
-
     assert isinstance(out, dict), f"answered {out!r}"
     assert out.get("structuredContent") == {"project": 7}

@@ -1,35 +1,30 @@
 """Mutation-shaped callables. Each is registered as a service tool.
 
 Services are pure Python functions — they don't know anything about
-MCP. The ``data`` kwarg comes from the validated input serializer; the
-return value is rendered through the registered ``output_serializer``.
+MCP. Each is called with the keywords it declares: the validated arguments
+spread by name, the target row as ``instance``. The return value is rendered
+through the spec's ``presenter``.
 """
 
 from __future__ import annotations
-
-from typing import Any
 
 from django_service_specs import ServiceError, ServiceValidationError
 
 from invoices.models import Invoice
 
 
-def create_invoice(*, data: dict[str, Any]) -> Invoice:
-    """Create a new invoice. Returns the created instance for serialization."""
-    return Invoice.objects.create(
-        number=data["number"],
-        amount_cents=data["amount_cents"],
-    )
+def create_invoice(*, number: str, amount_cents: int) -> Invoice:
+    """Create a new invoice. Returns the created instance for presenting."""
+    return Invoice.objects.create(number=number, amount_cents=amount_cents)
 
 
-def mark_invoice_sent(*, data: dict[str, Any]) -> Invoice:
+def mark_invoice_sent(*, pk: int) -> Invoice:
     """Flip the ``sent`` flag on an existing invoice.
 
     Raises ``ServiceError`` (mapped to ``-32000`` at the MCP boundary)
     when the invoice doesn't exist or is already sent — both are
     semantic errors, not input-shape errors.
     """
-    pk: int = data["pk"]
     try:
         invoice: Invoice = Invoice.objects.get(pk=pk)
     except Invoice.DoesNotExist as exc:
@@ -41,14 +36,14 @@ def mark_invoice_sent(*, data: dict[str, Any]) -> Invoice:
     return invoice
 
 
-def set_invoice_amount(*, instance: Invoice, data: dict[str, Any]) -> Invoice:
+def set_invoice_amount(*, instance: Invoice, amount_cents: int) -> Invoice:
     """Set an invoice's amount. ``instance`` is the row ``invoice_by_number`` found.
 
     Idempotent: the same call twice leaves the invoice as one call did, which
     the spec declares with ``idempotent=True`` and the tool lists as
     ``idempotentHint``.
     """
-    instance.amount_cents = data["amount_cents"]
+    instance.amount_cents = amount_cents
     instance.save(update_fields=["amount_cents"])
     return instance
 
@@ -56,10 +51,10 @@ def set_invoice_amount(*, instance: Invoice, data: dict[str, Any]) -> Invoice:
 def apply_credit(*, instance: Invoice, credit_cents: int) -> Invoice | None:
     """Take ``credit_cents`` off an invoice; ``None`` when the credit settles it.
 
-    ``instance`` is the row ``invoice_by_number`` found. There is no input
-    serializer: the tool spreads its arguments into this signature, so
-    ``credit_cents`` is the tool's own argument, listed in its ``inputSchema``
-    and required because it has no default. A credit covering the whole amount
+    ``instance`` is the row ``invoice_by_number`` found. There is no
+    Validator: ``credit_cents`` is one of the spec's ``reads``, so it is the
+    tool's own argument, listed in its ``inputSchema`` and required because
+    the read says so. A credit covering the whole amount
     deletes the invoice and presents nothing, which the spec declares with
     ``allow_none=True``.
     """

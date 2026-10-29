@@ -4,6 +4,11 @@ Each was reachable on a supported configuration and each passed CI at 100%
 coverage — they were unexercised *combinations*, not uncovered lines, which is
 exactly the gap a coverage number cannot see. Grouped in one file so the
 provenance stays obvious.
+
+The two that registered a tool or a resource now ask it of kernel specs
+registered with ``register_tool`` and ``register_resource``. A kernel resource
+has two gates: its ``scopes=`` and its spec's own checks, so the denied read is
+asked of each.
 """
 
 from __future__ import annotations
@@ -14,8 +19,7 @@ from typing import Any
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django.test import Client, override_settings
-from django_service_specs import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
+from django_service_specs import PermissionCheck, SelectorKind, SelectorSpec, Unrestricted
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
@@ -96,12 +100,13 @@ def _selector() -> list[dict[str, str]]:
     return [{"ok": "1"}]
 
 
-class _Denies:
-    def has_permission(self, request: Any, token: Any) -> bool:
-        return False
+def _thing() -> dict[str, str]:
+    return {"ok": "1"}
 
-    def required_scopes(self) -> list[str]:
-        return ["things:read"]
+
+class _Denies(PermissionCheck):
+    def has_permission(self, *args: Any, **kwargs: Any) -> bool:
+        return False
 
 
 def _stream_server() -> MCPServer:
@@ -110,17 +115,22 @@ def _stream_server() -> MCPServer:
         auth_backend=AllowAnyBackend(),
         session_store=InMemorySessionStore(),
     )
-    server.register_selector_tool(
+    server.register_tool(
+        SelectorSpec(kind=SelectorKind.LIST, selector=_selector, permissions=[Unrestricted()]),
         name="s.list",
         description="x",
-        spec=SelectorSpec(kind=SelectorKind.LIST, selector=_selector),
         paginate=True,
     )
     server.register_resource(
-        name="gated",
-        uri_template="gated://thing",
-        selector=SelectorSpec(kind=SelectorKind.LIST, selector=_selector),
-        permissions=[_Denies()],
+        SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_thing, permissions=[Unrestricted()]),
+        name="scoped",
+        uri_template="scoped://thing",
+        scopes="things:read",
+    )
+    server.register_resource(
+        SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_thing, permissions=[_Denies()]),
+        name="denied",
+        uri_template="denied://thing",
     )
     return server
 
@@ -156,13 +166,15 @@ def _post(client: Client, method: str, params: dict[str, Any]) -> Any:
 
 
 @pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("uri", ["scoped://thing", "denied://thing"])
 def test_a_denied_resource_read_keeps_its_403_even_with_a_progress_token(
-    stream_urls: Any,
+    stream_urls: Any, uri: str
 ) -> None:
     """**The security-relevant one.** ``resources/read`` runs a permission
     stack but the pre-flight could only speak for ``tools/call``, so a denial
-    rode inside a ``200`` SSE body with no ``WWW-Authenticate`` — and a client
-    acting on status parsed the denial as success."""
+    rode inside a ``200`` SSE body with no ``WWW-Authenticate``, and a client
+    acting on status parsed the denial as success. Asked of the scope gate and
+    of the spec's own check."""
     with override_settings(ROOT_URLCONF=stream_urls):
         response = Client().post(
             "/mcp/",
@@ -172,7 +184,7 @@ def test_a_denied_resource_read_keeps_its_403_even_with_a_progress_token(
                     "id": 1,
                     "method": "resources/read",
                     "params": {
-                        "uri": "gated://thing",
+                        "uri": uri,
                         "_meta": {
                             "io.modelcontextprotocol/protocolVersion": MODERN,
                             "io.modelcontextprotocol/clientCapabilities": {},
@@ -185,12 +197,13 @@ def test_a_denied_resource_read_keeps_its_403_even_with_a_progress_token(
             headers={
                 "Mcp-Method": "resources/read",
                 "Mcp-Protocol-Version": MODERN,
-                "Mcp-Name": "gated://thing",
+                "Mcp-Name": uri,
             },
         )
     assert response.status_code == 403
     assert "WWW-Authenticate" in response.headers
     assert response.headers["Content-Type"] != "text/event-stream"
+    assert json.loads(response.content)["error"]["code"] == -32006
 
 
 @pytest.mark.django_db(transaction=True)

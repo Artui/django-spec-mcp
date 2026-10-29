@@ -57,7 +57,7 @@ class MCPCallContext:
     way it lands in the dispatched callable's kwarg pool as the ``progress``
     seed and the service body cannot tell which it got.
 
-    ``None`` costs nothing: drf-services substitutes its no-op reporter, so a
+    ``None`` costs nothing: the kernel substitutes its no-op reporter, so a
     service declaring ``progress`` runs unchanged with nobody listening."""
 
     client_capabilities: dict[str, Any] = field(default_factory=dict)
@@ -94,6 +94,15 @@ class MCPCallContext:
     testing a predicate costs nothing to repeat, consuming a quota is a side
     effect that must happen exactly once."""
 
+    in_task_worker: bool = False
+    """Whether this call is a task worker's run of a task already created.
+
+    Set only by the worker's context (``MCPServer._worker_context``). The run is
+    the task, so ``maybe_create_task`` never asks it to become one: answering it
+    by the tool's ``task_policy`` again refused every ``REQUIRED`` tool's run
+    ``-32021``, since the worker declares no extension, and no such task could
+    ever complete."""
+
     config: MCPConfig = field(default_factory=build_mcp_config)
     """The owning server's resolved scalars, snapshotted in
     ``MCPServer.__init__``. Handlers read these instead of calling
@@ -101,7 +110,7 @@ class MCPCallContext:
     project could not otherwise differ on any of them.
 
     The default builds a config from settings for a context constructed without a server
-    (a hand-wired viewset, or a test driving a handler directly), which does make the
+    (a hand-wired view, or a test driving a handler directly), which does make the
     *default* a settings read at construction time; a context built by
     [`MCPServer`][django_spec_mcp.server.mcp_server.MCPServer] never takes that
     path."""
@@ -110,10 +119,11 @@ class MCPCallContext:
     """The owning server's ``pool_seeds=``: the project's own always-available
     names (a tenant, a locale, a clock) that hang off ``request`` over HTTP.
 
-    Read wherever this context reaches a spec -- every ``dispatch_spec`` /
-    ``adispatch_spec``, and the availability check ``tools/list`` runs -- so a
-    condition is asked with the same seeds the call that enforces it resolves. drf-services' own default, so
-    a context built without a server behaves exactly as before."""
+    Read wherever this context reaches a spec -- every ``dispatch`` /
+    ``adispatch``, and the availability check ``tools/list`` runs -- so a
+    condition is asked with the same seeds the call that enforces it resolves.
+    The kernel's own default, so a context built without a server behaves
+    exactly as before."""
 
     conventions: AgentConventions = field(default_factory=AgentConventions)
     """The owning server's ``conventions=``: the sentences it writes for a model.

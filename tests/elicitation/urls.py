@@ -1,32 +1,18 @@
-"""A mounted server whose one tool needs a confirmation, for the HTTP suite."""
+"""A mounted server whose ``rows.delete`` needs a confirmation, for the HTTP suite.
+
+The conftest's kernel server, mounted once at import as a deployment would
+mount it, so the retry of an input round trip reaches the same server as a
+second, independent request.
+"""
 
 from __future__ import annotations
 
 from typing import Any
 
 from django.urls import path
-from rest_framework_services.types.service_spec import ServiceSpec
 
-from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
-from tests.elicitation.conftest import TOOL, DeleteInput, delete_rows
+from tests.elicitation.conftest import build_kernel_server
 
-
-def _build() -> MCPServer:
-    server = MCPServer(
-        name="elicitation-e2e",
-        auth_backend=AllowAnyBackend(),
-        session_store=InMemorySessionStore(),
-    )
-    server.register_service_tool(
-        name=TOOL,
-        description="Delete rows.",
-        spec=ServiceSpec(service=delete_rows, input_serializer=DeleteInput, atomic=False),
-    )
-    return server
-
-
-SERVER = _build()
+SERVER = build_kernel_server()
 
 urlpatterns: list[Any] = [path("mcp/", SERVER.urls)]

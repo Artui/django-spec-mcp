@@ -34,15 +34,13 @@ from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.registry.prompt_registry import PromptRegistry
 from django_spec_mcp.registry.resource_registry import ResourceRegistry
 from django_spec_mcp.registry.tool_registry import ToolRegistry
-from django_spec_mcp.transport.async_streamable_http_viewset import (
-    ASYNC_STREAMABLE_HTTP_ACTION_MAP,
-    AsyncStreamableHttpViewSet,
+from django_spec_mcp.transport.async_streamable_http_view import (
+    AsyncStreamableHttpView,
 )
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from django_spec_mcp.transport.in_memory_sse_broker import InMemorySSEBroker
-from django_spec_mcp.transport.streamable_http_viewset import (
-    STREAMABLE_HTTP_ACTION_MAP,
-    StreamableHttpViewSet,
+from django_spec_mcp.transport.streamable_http_view import (
+    StreamableHttpView,
 )
 
 factory = RequestFactory()
@@ -86,10 +84,8 @@ def _view(*, sessions: bool, is_async: bool = False, broker: Any = None) -> Any:
         "config": build_mcp_config(sessions_enabled=sessions),
     }
     if is_async:
-        return AsyncStreamableHttpViewSet.as_view(
-            ASYNC_STREAMABLE_HTTP_ACTION_MAP, sse_broker=broker, **common
-        )
-    return StreamableHttpViewSet.as_view(STREAMABLE_HTTP_ACTION_MAP, **common)
+        return AsyncStreamableHttpView.as_view(sse_broker=broker, **common)
+    return StreamableHttpView.as_view(**common)
 
 
 def _get(*, version: str = _LEGACY_VERSION, principal: str | None = None) -> Any:

@@ -50,8 +50,7 @@ def build_content_blocks(
 
     ``TEXT`` never reaches this function;
     [`build_tool_result`][django_spec_mcp.output.tool_result.build_tool_result]
-    handles it directly, along with the ``OutputFormat`` rendering only text blocks
-    have."""
+    handles it directly, encoding the payload as JSON."""
     if content_kind is ToolContentKind.RESOURCE_LINK:
         return _resource_links(payload)
     # IMAGE / AUDIO — the payload is the media itself.
@@ -59,8 +58,8 @@ def build_content_blocks(
         return (
             f"declares content_kind={content_kind.name} but produced "
             f"{type(payload).__name__}. Media content is the bytes themselves "
-            "(or a str already in base64), not a JSON-shaped value — an "
-            "output_serializer on this binding is probably rendering it away."
+            "(or a str already in base64), not a JSON-shaped value — the "
+            "spec's presenter is probably rendering it away."
         )
     factory = (
         ToolContentBlock.image if content_kind is ToolContentKind.IMAGE else ToolContentBlock.audio

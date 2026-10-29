@@ -1,26 +1,54 @@
-"""``completion/complete`` — argument autocompletion for prompts and templates."""
+"""``completion/complete`` for prompts and for kernel resource templates.
+
+The prompt half is not about a spec, since a prompt is not one. The resource half registers kernel ``RETRIEVE`` specs through
+``register_resource(spec, uri_template=..., name=...)``, whose ``reads`` are the
+template's variables. A completion is a read of what it completes, so a kernel
+resource's spec permissions answer it as they answer ``resources/read``: the
+class-level checks, judged as the listing judges the spec, on no arguments,
+since a completion names a template rather than a URI, and before the rate
+limit, as the read asks them. A check reading ``arguments`` is handed ``None``
+there and refuses, whether it guards against ``None`` or raises on it, so a
+template whose check is scoped to a route completes for nobody; a ``ServiceError`` it raises refuses the completion as it hides the template,
+and a configuration error fails the completion as it fails the read.
+
+A prompt's kernel checks are handed the principal and the prompt's binding,
+as its ``prompts/get`` hands them.
+"""
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
+from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest
-from django_service_specs import SelectorKind
-from rest_framework.permissions import BasePermission
-from rest_framework_services.types.selector_spec import SelectorSpec
+from django.test import Client, override_settings
+from django_service_specs import (
+    Parameter,
+    Parameters,
+    PermissionCheck,
+    SelectorKind,
+    SelectorSpec,
+    ServiceNotFound,
+    Unrestricted,
+)
 
-from django_spec_mcp import DRFPermissionAdapter, MCPServer, PromptArgument
+from django_spec_mcp import MCPServer, PromptArgument
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.auth.permissions.types.mcp_permission import MCPPermission
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_completion_complete import handle_completion_complete
 from django_spec_mcp.handlers.handle_initialize import handle_initialize
+from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
+from django_spec_mcp.handlers.is_binding_listable import is_binding_listable
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
-from tests.utils import granting_route
+from tests.kernel_client import KernelClient
+from tests.testapp.auth_backend import HeaderAuthBackend
+from tests.testapp.urlconf_for import urlconf_for
+from tests.utils import RefusingRateLimit
 
 LANGUAGES = ["python", "pytorch", "pyside", "ruby"]
 
@@ -40,6 +68,16 @@ def _ctx(server: MCPServer, scopes: tuple[str, ...] = ()) -> MCPCallContext:
         prompts=server.prompts,
         protocol_version=server.config.protocol_versions[0],
         config=server.config,
+    )
+
+
+def _invoice(*checks: PermissionCheck) -> SelectorSpec:
+    """A kernel ``RETRIEVE`` reading the ``pk`` its URI template names."""
+    return SelectorSpec(
+        kind=SelectorKind.RETRIEVE,
+        selector=lambda *, pk: None,
+        reads=Parameters([Parameter("pk", "integer", required=True)]),
+        permissions=list(checks) or [Unrestricted()],
     )
 
 
@@ -149,9 +187,9 @@ def test_transport_seeds_win_over_a_same_named_sibling_argument() -> None:
 def test_resource_template_variable_completion() -> None:
     server = _server()
     server.register_resource(
+        _invoice(),
         name="invoice",
         uri_template="invoices://{pk}",
-        selector=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda **_: None),
         completions={"pk": lambda: ["1", "2", "3"]},
     )
     result = _complete(
@@ -168,9 +206,9 @@ def test_a_concrete_uri_is_not_mistaken_for_its_own_template() -> None:
     """``resolve`` would match ``invoices://7`` — the ref lookup must not."""
     server = _server()
     server.register_resource(
+        _invoice(),
         name="invoice",
         uri_template="invoices://{pk}",
-        selector=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda **_: None),
         completions={"pk": lambda: ["1"]},
     )
     result = _complete(
@@ -241,12 +279,9 @@ def test_a_lone_string_is_one_suggestion_not_its_characters() -> None:
 # ----- guards -----
 
 
-class _DenyAll(MCPPermission):
-    def has_permission(self, request: Any, token: Any) -> bool:
+class _DenyAll(PermissionCheck):
+    def has_permission(self, principal: Any, spec: Any) -> bool:
         return False
-
-    def required_scopes(self) -> tuple[str, ...]:
-        return ()
 
 
 def test_completion_runs_the_bindings_permissions() -> None:
@@ -262,66 +297,207 @@ def test_completion_runs_the_bindings_permissions() -> None:
     assert result.code == -32006
 
 
-def test_a_prompt_completion_judges_no_arguments_and_no_action() -> None:
-    """Unlike ``prompts/get``, which judges the prompt's arguments under its name.
+class _Refuses(PermissionCheck):
+    """A kernel check refusing everyone, counting how often it is asked."""
 
-    A completion names one argument being typed, not a call, so a permission
-    reading ``request.data`` sees ``{}`` and one reading ``view.action`` sees
-    ``None``, even when the request carries the sibling arguments already
-    filled in.
-    """
-    seen: list[tuple[Any, ...]] = []
+    def __init__(self) -> None:
+        self.asked = 0
 
-    class _Recording(BasePermission):
-        def has_permission(self, request: Any, view: Any) -> bool:
-            seen.append((dict(request.data), view.action))
-            return True
-
-    result = _complete(
-        _prompt_server(permissions=[DRFPermissionAdapter(_Recording)]),
-        {
-            "ref": {"type": "ref/prompt", "name": "code_review"},
-            "argument": {"name": "language", "value": "py"},
-            "context": {"arguments": {"framework": "django"}},
-        },
-    )
-
-    assert not isinstance(result, JsonRpcError), result
-    assert seen == [({}, None)]
+    def has_permission(self, principal: Any, spec: Any) -> bool:
+        self.asked += 1
+        return False
 
 
-def test_a_route_scoped_templates_completion_is_judged_on_no_route() -> None:
-    """Fails closed: a permission reading a URI variable sees ``{}`` and refuses.
+class _GrantsProjectSeven(PermissionCheck):
+    """Scopes by the ``pk`` a read names, recording what it was handed."""
 
-    A completion names a template, not a URI, so there is no route to judge,
-    and ``context.arguments`` is a partial route no read produces; a completer
-    ignoring it would offer one project's caller the ids of every project. So a
-    template whose permission scopes by ``view.kwargs`` completes for nobody,
-    including a caller ``resources/read`` admits, as ``docs/auth.md`` states.
-    """
-    seen: list[dict[str, Any]] = []
+    def __init__(self) -> None:
+        self.seen: list[Any] = []
+
+    def has_permission(self, principal: Any, spec: Any, *, arguments: Any = None) -> bool:
+        self.seen.append(arguments)
+        return arguments is not None and arguments.get("pk") == 7
+
+
+_INVOICE_PK = {
+    "ref": {"type": "ref/resource", "uri": "invoices://{pk}"},
+    "argument": {"name": "pk", "value": ""},
+}
+
+
+def test_a_kernel_resources_completion_asks_its_spec_permissions() -> None:
+    # The scope gate alone answered a kernel resource's completion, so a spec
+    # refusing the caller still listed which ``pk`` values exist.
+    check = _Refuses()
     server = _server()
     server.register_resource(
-        name="project-invoices",
-        uri_template="projects://{project_pk}/invoices",
-        selector=SelectorSpec(
-            kind=SelectorKind.LIST,
-            selector=lambda **_: [],
-            permission_classes=[granting_route("project_pk", "7", seen)],
-        ),
-        completions={"project_pk": lambda: ["7", "8"]},
+        _invoice(check),
+        name="invoice",
+        uri_template="invoices://{pk}",
+        completions={"pk": lambda: ["1", "2"]},
     )
-    result = _complete(
-        server,
-        {
-            "ref": {"type": "ref/resource", "uri": "projects://{project_pk}/invoices"},
-            "argument": {"name": "project_pk", "value": ""},
-            "context": {"arguments": {"project_pk": "7"}},
-        },
-    )
+
+    result = _complete(server, _INVOICE_PK)
+
     assert isinstance(result, JsonRpcError)
     assert result.code == -32006
-    assert seen == [{}]
+    assert check.asked == 1
+
+
+def test_a_kernel_resources_completion_is_judged_on_no_arguments() -> None:
+    # Fails closed: a completion names a template, not a URI, so a check
+    # scoping by a variable is handed ``None`` and refuses, whatever siblings
+    # the request carries, as it would admit a read of ``invoices://7``.
+    check = _GrantsProjectSeven()
+    server = _server()
+    server.register_resource(
+        _invoice(check),
+        name="invoice",
+        uri_template="invoices://{pk}",
+        completions={"pk": lambda: ["7", "8"]},
+    )
+
+    result = _complete(server, {**_INVOICE_PK, "context": {"arguments": {"pk": "7"}}})
+
+    assert isinstance(result, JsonRpcError)
+    assert result.code == -32006
+    assert check.seen == [None]
+
+
+def test_a_kernel_resources_scope_gate_answers_before_its_spec() -> None:
+    # The scope gate is the shell's and answers first, with the scopes the
+    # token lacks; the spec's check is never asked for a caller it refuses.
+    check = _Refuses()
+    server = _server()
+    server.register_resource(
+        _invoice(check),
+        name="invoice",
+        uri_template="invoices://{pk}",
+        scopes=("invoices:read",),
+        completions={"pk": lambda: ["1"]},
+    )
+
+    result = _complete(server, _INVOICE_PK)
+
+    assert isinstance(result, JsonRpcError)
+    assert result.code == -32006
+    assert result.data == {"requiredScopes": ["invoices:read"]}
+    assert check.asked == 0
+
+
+class _RaisesNotFound(PermissionCheck):
+    """A kernel check that answers by raising a ``ServiceError``, as one may."""
+
+    def has_permission(self, principal: Any, spec: Any) -> bool:
+        raise ServiceNotFound("no such tenant")
+
+
+def test_a_check_raising_a_service_error_refuses_the_completion_as_the_listing() -> None:
+    # A completion names a template rather than a URI, so it has no arguments
+    # and is judged as the listing judges the spec, where a check that raises
+    # rather than answering refuses: hidden from the listing, a read of a URI
+    # whose variable has no checked form is ``-32006``, and so is the
+    # completion. A read with a checked form dispatches, and raises the
+    # check's ``ServiceError`` on to the transport's internal error.
+    server = _server()
+    server.register_resource(
+        _invoice(_RaisesNotFound()),
+        name="invoice",
+        uri_template="invoices://{pk}",
+        completions={"pk": lambda: ["1"]},
+    )
+    context = _ctx(server)
+    binding = server.resources.by_uri_template("invoices://{pk}")
+
+    completed = _complete(server, _INVOICE_PK)
+    malformed = handle_resources_read({"uri": "invoices://abc"}, context)
+
+    assert is_binding_listable(binding, context.http_request, context.token) is False
+    assert isinstance(completed, JsonRpcError) and completed.code == -32006, completed
+    assert isinstance(malformed, JsonRpcError) and malformed.code == -32006, malformed
+    with pytest.raises(ServiceNotFound):
+        handle_resources_read({"uri": "invoices://1"}, _ctx(server))
+
+
+class _KeyedOnPk(PermissionCheck):
+    """Scopes by the ``pk`` a read names, with no guard for a call naming none."""
+
+    def has_permission(self, principal: Any, spec: Any, *, arguments: Any) -> bool:
+        return arguments["pk"] == 1
+
+
+@pytest.fixture(params=[False, True], ids=["sync", "async"])
+def keyed_caller(request: pytest.FixtureRequest, client: Client) -> Iterator[KernelClient]:
+    """A caller of a mount whose resource is guarded by ``_KeyedOnPk``, over the wire."""
+    server = MCPServer(name="t", auth_backend=HeaderAuthBackend())
+    server.register_resource(
+        _invoice(_KeyedOnPk()),
+        name="invoice",
+        uri_template="invoices://{pk}",
+        completions={"pk": lambda: pytest.fail("the completer ran for a refused caller")},
+    )
+    with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=request.param)):
+        caller = KernelClient(client)
+        caller.initialize()
+        yield caller
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_check_raising_on_no_arguments_refuses_the_completion_as_the_read_refuses(
+    keyed_caller: KernelClient,
+) -> None:
+    # A check that indexes ``arguments`` raises ``TypeError`` on the ``None`` a
+    # completion hands it. That was an internal error (HTTP 500, -32603) where a
+    # read the check refuses answers -32006; it is the same refusal now, on the
+    # same HTTP status.
+    completed = keyed_caller.post("completion/complete", _INVOICE_PK)
+    read = keyed_caller.post("resources/read", {"uri": "invoices://2"})
+
+    assert completed.status_code == read.status_code
+    assert completed.json()["error"]["code"] == read.json()["error"]["code"] == -32006
+    assert completed.json()["error"]["message"] == "Insufficient permission"
+
+
+class _AnswersWithACoroutine(PermissionCheck):
+    """A sync check handing back a coroutine, which ``authorize`` refuses as misconfigured."""
+
+    def has_permission(self, principal: Any, spec: Any) -> Any:
+        async def granted() -> bool:
+            return True
+
+        return granted()
+
+
+def test_a_misconfigured_check_fails_the_completion_as_the_read() -> None:
+    # A configuration error is raised, as the read raises it, rather than read
+    # as a refusal that would hide the mistake behind a -32006.
+    server = _server()
+    server.register_resource(
+        _invoice(_AnswersWithACoroutine()),
+        name="invoice",
+        uri_template="invoices://{pk}",
+        completions={"pk": lambda: ["1"]},
+    )
+
+    with pytest.raises(ImproperlyConfigured, match="awaitable"):
+        _complete(server, _INVOICE_PK)
+    with pytest.raises(ImproperlyConfigured, match="awaitable"):
+        handle_resources_read({"uri": "invoices://1"}, _ctx(server))
+
+
+def test_a_kernel_resource_admitting_the_caller_completes() -> None:
+    server = _server()
+    server.register_resource(
+        _invoice(),
+        name="invoice",
+        uri_template="invoices://{pk}",
+        scopes=("invoices:read",),
+        completions={"pk": lambda: ["1"]},
+    )
+
+    result = _complete(server, _INVOICE_PK, scopes=("invoices:read",))
+
+    assert result == {"completion": {"values": ["1"], "hasMore": False}}
 
 
 class _AlwaysLimited:
@@ -341,6 +517,45 @@ def test_completion_runs_the_bindings_rate_limits() -> None:
     assert isinstance(result, JsonRpcError)
     assert result.code == -32005
     assert result.data == {"retryAfter": 30}
+
+
+def test_a_kernel_resources_spec_is_asked_before_its_rate_limit() -> None:
+    # Asked before the charge, as the read asks it, so a caller the spec
+    # refuses is told that and is charged nothing on either.
+    check = _Refuses()
+    limit = RefusingRateLimit()
+    server = _server()
+    server.register_resource(
+        _invoice(check),
+        name="invoice",
+        uri_template="invoices://{pk}",
+        rate_limits=[limit],
+        completions={"pk": lambda: ["1"]},
+    )
+
+    result = _complete(server, _INVOICE_PK)
+
+    assert isinstance(result, JsonRpcError)
+    assert result.code == -32006
+    assert check.asked == 1
+    assert limit.consumed == 0
+
+
+def test_a_kernel_resource_its_spec_admits_is_still_charged() -> None:
+    # The other half: a caller the spec admits meets the rate limit after it.
+    server = _server()
+    server.register_resource(
+        _invoice(),
+        name="invoice",
+        uri_template="invoices://{pk}",
+        rate_limits=[_AlwaysLimited()],
+        completions={"pk": lambda: ["1"]},
+    )
+
+    result = _complete(server, _INVOICE_PK)
+
+    assert isinstance(result, JsonRpcError)
+    assert result.code == -32005
 
 
 def test_unknown_prompt_is_invalid_params() -> None:
@@ -425,9 +640,9 @@ def test_a_completer_for_an_unknown_template_variable_is_refused() -> None:
     server = _server()
     with pytest.raises(ImproperlyConfigured, match=r"\['id'\]"):
         server.register_resource(
+            _invoice(),
             name="invoice",
             uri_template="invoices://{pk}",
-            selector=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda **_: None),
             completions={"id": lambda: []},
         )
 
@@ -443,9 +658,9 @@ def test_the_capability_is_advertised_only_when_something_is_completable() -> No
 def test_a_resource_completer_alone_advertises_the_capability() -> None:
     server = _server()
     server.register_resource(
+        _invoice(),
         name="invoice",
         uri_template="invoices://{pk}",
-        selector=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda **_: None),
         completions={"pk": lambda: []},
     )
     assert handle_initialize({}, _ctx(server)).capabilities.to_dict()["completions"] == {}
@@ -474,9 +689,9 @@ def test_capabilities_describe_what_the_server_can_answer() -> None:
 
     server = _server()
     server.register_resource(
+        _invoice(),
         name="invoice",
         uri_template="invoices://{pk}",
-        selector=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda **_: None),
     )
     assert handle_initialize({}, _ctx(server)).capabilities.to_dict() == {"resources": {}}
 
@@ -504,3 +719,74 @@ def test_a_sibling_named_after_a_newer_kernel_seed_does_not_reach_the_completer(
         },
     )
     assert result["completion"]["values"] == ["None-None"]
+
+
+# ----- what a completer is handed as ``request`` -----
+
+
+def test_a_completer_declaring_request_receives_the_transports_http_request() -> None:
+    """The plain ``HttpRequest`` the kernel tool path hands a spec, the token on it.
+
+    Its ``user`` is the token's principal, as the ``user`` seed is, and never the
+    one the endpoint's session resolved.
+    """
+    seen: dict[str, Any] = {}
+
+    def completer(*, value: str, request: Any, user: Any) -> list[str]:
+        seen.update(request=request, user=user)
+        return ["a"]
+
+    server = _server()
+    server.register_prompt(
+        name="p",
+        render=lambda language="python": language,
+        arguments=[PromptArgument(name="language")],
+        completions={"language": completer},
+    )
+    context = _ctx(server)
+    session_user = object()
+    context.http_request.user = session_user
+    context = MCPCallContext(
+        http_request=context.http_request,
+        token=TokenInfo(user=object()),
+        tools=server.tools,
+        resources=server.resources,
+        prompts=server.prompts,
+        protocol_version=context.protocol_version,
+        config=server.config,
+    )
+
+    out = handle_completion_complete(
+        {"ref": {"type": "ref/prompt", "name": "p"}, "argument": {"name": "language"}},
+        context,
+    )
+
+    assert out == {"completion": {"values": ["a"], "hasMore": False}}
+    assert seen["request"] is context.http_request
+    assert seen["request"].mcp_token is context.token
+    assert seen["user"] is context.token.user
+    assert seen["request"].user is context.token.user
+
+
+def test_a_completers_user_and_request_user_agree_for_a_token_naming_no_one() -> None:
+    seen: dict[str, Any] = {}
+
+    def completer(*, request: Any, user: Any) -> list[str]:
+        seen.update(user=user, request_user=request.user)
+        return ["a"]
+
+    server = _server()
+    server.register_prompt(
+        name="p",
+        render=lambda language="python": language,
+        arguments=[PromptArgument(name="language")],
+        completions={"language": completer},
+    )
+
+    handle_completion_complete(
+        {"ref": {"type": "ref/prompt", "name": "p"}, "argument": {"name": "language"}},
+        _ctx(server),
+    )
+
+    assert isinstance(seen["user"], AnonymousUser)
+    assert seen["user"] is seen["request_user"]

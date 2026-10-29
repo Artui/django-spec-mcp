@@ -3,19 +3,13 @@ from __future__ import annotations
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import DEFAULT_POOL_SEEDS, PoolSeeds, check_server_arguments
 
-from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
-from django_spec_mcp.registry.types.tool_binding import ToolBinding
-
-# Deliberately a union rather than a shared base class, so each binding stays a
-# frozen dataclass with its own structure. ``tools/list`` and ``tools/call``
-# discriminate at dispatch time.
-ToolBindingLike = ToolBinding | SelectorToolBinding
+from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 
 
 class ToolRegistry:
     """Name to tool binding lookup.
 
-    Holds service and selector bindings in one namespace, rejecting
+    Holds service and selector tools in one namespace, rejecting
     duplicates loudly so a misconfigured project surfaces the conflict at
     registration rather than silently shadowing a tool.
 
@@ -25,10 +19,10 @@ class ToolRegistry:
     """
 
     def __init__(self, *, pool_seeds: PoolSeeds = DEFAULT_POOL_SEEDS) -> None:
-        self._bindings: dict[str, ToolBindingLike] = {}
+        self._bindings: dict[str, KernelToolBinding] = {}
         self._pool_seeds: PoolSeeds = pool_seeds
 
-    def register(self, binding: ToolBindingLike) -> None:
+    def register(self, binding: KernelToolBinding) -> None:
         """Add ``binding``, refusing a duplicate name or a binding of server values that cannot hold.
 
         The ``server_arguments`` check is made here rather than in the
@@ -44,10 +38,10 @@ class ToolRegistry:
         _refuse_server_arguments_that_cannot_hold(binding, self._pool_seeds)
         self._bindings[binding.name] = binding
 
-    def get(self, name: str) -> ToolBindingLike | None:
+    def get(self, name: str) -> KernelToolBinding | None:
         return self._bindings.get(name)
 
-    def all(self) -> list[ToolBindingLike]:
+    def all(self) -> list[KernelToolBinding]:
         """Every binding, in **registration order**.
 
         ``tools/list`` has to be deterministic so clients can cache the catalog
@@ -66,27 +60,18 @@ class ToolRegistry:
 
 
 def _refuse_server_arguments_that_cannot_hold(
-    binding: ToolBindingLike, pool_seeds: PoolSeeds
+    binding: KernelToolBinding, pool_seeds: PoolSeeds
 ) -> None:
     """Raise ``ImproperlyConfigured`` naming the tool for a binding of server values that cannot hold.
 
     The kernel's ``check_server_arguments`` decides, and names the spec's kind
     and callable; this adds the tool's name, which is what a server binding
     many tools needs to find the one at fault.
-
-    A binding that binds nothing is not asked, because the kernel's check
-    assembles the spec's parameters, and the assembly refuses declarations the
-    registration does not: without the guard, a target lookup's filter named
-    like an ``input_serializer`` field is refused here as two sources of one
-    parameter, where it registers and fails each call
-    (``test_a_lookup_filter_named_like_a_field_is_left_to_the_kernel``).
     """
-    if not binding.server_arguments.names():
-        return
     try:
         check_server_arguments(binding.spec, binding.server_arguments, pool_seeds=pool_seeds)
     except ImproperlyConfigured as exc:
         raise ImproperlyConfigured(f"MCP tool {binding.name!r}: {exc}") from exc
 
 
-__all__ = ["ToolBindingLike", "ToolRegistry"]
+__all__ = ["ToolRegistry"]

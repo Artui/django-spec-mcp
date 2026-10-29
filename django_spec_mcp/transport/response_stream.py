@@ -43,7 +43,7 @@ def build_response_stream(
     keep-alive without waiting the production period out.
 
     **Async transport only** — a sync WSGI view cannot yield while the dispatch
-    runs, so the sync viewset keeps answering ``application/json``, which the
+    runs, so the sync view keeps answering ``application/json``, which the
     spec always permits.
 
     **The HTTP status is committed before the dispatch runs**, which costs the
@@ -124,7 +124,7 @@ async def _run(coro: Awaitable[Any], queue: asyncio.Queue[Any], *, request_id: A
     which the client can at least read.
 
     **The frame says ``Internal error`` and nothing else**, as the JSON-mode
-    backstop in both viewsets does: the exception's text used to ride in the
+    backstop in both views does: the exception's text used to ride in the
     message, and it is written for an operator, not a client (a DRF
     ``ValidationError`` arrived as ``ValidationError: [ErrorDetail(...)]``).
     The traceback goes to the log instead, under the request id the frame
@@ -160,12 +160,12 @@ async def _run(coro: Awaitable[Any], queue: asyncio.Queue[Any], *, request_id: A
 class _StreamReporter:
     """The ``ProgressReporter`` handed to the dispatched callable.
 
-    **Called from a worker thread, not the event loop.** ``adispatch_spec``
+    **Called from a worker thread, not the event loop.** the kernel's ``adispatch``
     bridges sync services off-loop and ``asyncio.Queue`` is not thread-safe, so
     every frame goes through ``call_soon_threadsafe``.
 
     **The counters are guarded by a lock, not by an assumption.** Today
-    ``adispatch_spec`` bridges to a single thread, so the read-modify-write on
+    ``adispatch`` bridges to a single thread, so the read-modify-write on
     ``_remaining`` and the monotonicity check does not race — but that is a
     property of a collaborator, and a service fanning reports across a thread
     pool would over-emit past the cap or slip a non-increasing frame through.

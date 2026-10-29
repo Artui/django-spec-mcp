@@ -1,31 +1,100 @@
-"""Progress over an SSE response stream: the streaming half of the transport.
+"""Progress over an SSE response stream, for kernel tools: the streaming half of the transport.
 
 A client asks by putting a ``progressToken`` in the request's ``_meta``; the
 server answers with ``text/event-stream`` carrying ``notifications/progress``
 frames and then the response. Everything here drives the real async URL conf,
-because the subject is what comes back over HTTP — content type, frame order,
+because the subject is what comes back over HTTP: content type, frame order,
 which status was committed.
+
+The tools are kernel specs registered with ``register_tool``, and a kernel
+service asks for the reporter by declaring ``progress``, which ``adispatch``
+fills.
+
+What the kernel adds is a second permission stack. A kernel binding's own
+``permissions`` hold only its ``scopes=`` gate, and the spec's
+permission checks run inside ``adispatch``, after a stream has committed
+its ``200``. So the pre-flight runs the kernel's own prelude as well
+(``test_a_spec_check_denying_a_streamed_call_keeps_its_403_and_challenge`` and
+the cases after it). A kernel spec declares its reads as arguments, and
+``test_a_check_reading_arguments_is_judged_on_the_servers_value`` asks that the
+pre-flight judges them on the server's value.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
+from django.contrib.auth import get_user_model
+from django.http import HttpRequest
 from django.test import AsyncClient, override_settings
-from django_service_specs import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_service_specs import (
+    DEFAULT_POOL_SEEDS,
+    DataclassValidator,
+    PermissionCheck,
+    SelectorKind,
+    SelectorSpec,
+    ServerArguments,
+    ServiceNotFound,
+    ServiceSpec,
+    UnknownArguments,
+    Unrestricted,
+)
 
-from django_spec_mcp import MCPServer, ScopeRequired
+from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.auth_backend import MCPAuthBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
+from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp.transport.progress_dispatch import preflight_permissions
+from django_spec_mcp.transport.response_stream import (
+    _stream,
+    _StreamReporter,
+    build_response_stream,
+)
+from tests.testapp.auth_backend import HeaderAuthBackend
 from tests.testapp.urlconf_for import urlconf_for
 
 MODERN = "2026-07-28"
 LEGACY = "2025-11-25"
+OPEN = [Unrestricted()]
+
+
+class _Deny(PermissionCheck):
+    def has_permission(self, *args: Any, **kwargs: Any) -> bool:
+        return False
+
+
+class _OnlyAcme(PermissionCheck):
+    """Admits a call whose ``tenant`` argument is ``acme``, and no other."""
+
+    def has_permission(self, principal: Any, spec: Any, *, arguments: Any) -> bool:
+        return arguments.get("tenant") == "acme"
+
+
+class _NeedsWriteScope(PermissionCheck):
+    """Admits a token carrying ``mcp:write``, read off the call's request."""
+
+    def has_permission(self, principal: Any, spec: Any, *, call_context: Any) -> bool:
+        return "mcp:write" in call_context["request"].mcp_token.scopes
+
+
+class _DeniesTenantGlobex(PermissionCheck):
+    """Denies on the value of the ``tenant`` seed, which only a server's own seeds supply."""
+
+    def has_permission(self, principal: Any, spec: Any, *, tenant: str) -> bool:
+        return tenant != "globex"
+
+
+@dataclass
+class _Tenanted:
+    tenant: str
 
 
 def _meta(token: Any = "abc123", *, modern: bool = True) -> dict[str, Any]:
@@ -38,13 +107,17 @@ def _meta(token: Any = "abc123", *, modern: bool = True) -> dict[str, Any]:
     return meta
 
 
-def _server(**config: Any) -> MCPServer:
-    server = MCPServer(
+def _bare(*, auth_backend: MCPAuthBackend | None = None, **config: Any) -> MCPServer:
+    return MCPServer(
         name="p",
-        auth_backend=AllowAnyBackend(),
+        auth_backend=auth_backend or AllowAnyBackend(),
         session_store=InMemorySessionStore(),
         config=build_mcp_config(**config) if config else None,
     )
+
+
+def _server(*, auth_backend: MCPAuthBackend | None = None) -> MCPServer:
+    server = _bare(auth_backend=auth_backend)
 
     def export(*, progress: Any) -> dict[str, Any]:
         progress(1, total=3, message="starting")
@@ -52,16 +125,30 @@ def _server(**config: Any) -> MCPServer:
         progress(3, total=3, message="done")
         return {"rows": 3}
 
-    server.register_service_tool(
-        name="p.export",
-        description="Export things.",
-        spec=ServiceSpec(service=export, atomic=False),
-    )
-    server.register_selector_tool(
+    server.register_tool(ServiceSpec(service=export, permissions=OPEN), name="p.export")
+    server.register_tool(
+        SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda: None, permissions=OPEN),
         name="p.gated",
-        description="Gated.",
-        spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda: None),
-        permissions=[ScopeRequired(["mcp:admin"])],
+        scopes="mcp:admin",
+    )
+    server.register_tool(ServiceSpec(service=lambda: {}, permissions=[_Deny()]), name="p.denied")
+    server.register_tool(
+        ServiceSpec(
+            service=lambda *, tenant: {"tenant": tenant},
+            validator=DataclassValidator(_Tenanted),
+            permissions=[_OnlyAcme()],
+        ),
+        name="p.tenanted",
+        server_arguments=ServerArguments(values={"tenant": "acme"}),
+    )
+    server.register_tool(
+        ServiceSpec(service=lambda: {"wrote": True}, permissions=[_NeedsWriteScope()]),
+        name="p.write",
+    )
+    server.register_tool(
+        SelectorSpec(kind=SelectorKind.LIST, selector=lambda: [], permissions=[_Deny()]),
+        name="p.pages",
+        paginate=True,
     )
     return server
 
@@ -72,17 +159,23 @@ async def _post(
     name: str = "p.export",
     token: Any = "abc123",
     modern: bool = True,
+    arguments: dict[str, Any] | None = None,
+    headers: dict[str, str] | None = None,
 ) -> Any:
-    params: dict[str, Any] = {"name": name, "arguments": {}, "_meta": _meta(token, modern=modern)}
-    headers: dict[str, str] = {"Mcp-Protocol-Version": MODERN if modern else LEGACY}
+    params: dict[str, Any] = {
+        "name": name,
+        "arguments": arguments or {},
+        "_meta": _meta(token, modern=modern),
+    }
+    sent: dict[str, str] = {"Mcp-Protocol-Version": MODERN if modern else LEGACY}
     if modern:
-        headers |= {"Mcp-Method": "tools/call", "Mcp-Name": name}
+        sent |= {"Mcp-Method": "tools/call", "Mcp-Name": name}
     with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=True)):
         return await AsyncClient().post(
             "/mcp/",
             data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": params}),
             content_type="application/json",
-            headers=headers,
+            headers=sent | (headers or {}),
         )
 
 
@@ -92,6 +185,13 @@ async def _frames(response: Any) -> list[dict[str, Any]]:
     return [
         json.loads(line[len("data: ") :]) for line in body.splitlines() if line.startswith("data: ")
     ]
+
+
+async def _answer(response: Any) -> dict[str, Any]:
+    """The JSON-RPC response a call was answered with, streamed or not."""
+    if response.streaming:
+        return (await _frames(response))[-1]
+    return response.json()
 
 
 # ----- the happy path -----
@@ -195,18 +295,243 @@ async def test_a_token_that_is_not_a_string_or_int_is_treated_as_absent(token: A
 
 @pytest.mark.django_db(transaction=True)
 async def test_a_denied_tool_still_gets_403_and_a_challenge() -> None:
-    """The reason permissions are pre-flighted.
+    """The reason permissions are pre-flighted, for the ``scopes=`` gate.
 
     A streaming response commits its status before the handler runs, so a
-    denial found inside would ride as an in-stream error inside a ``200`` —
+    denial found inside would ride as an in-stream error inside a ``200``,
     losing the ``403`` the authorization spec makes normative and the
     challenge telling the client what to ask for.
     """
     response = await _post(_server(), name="p.gated")
     assert response.status_code == 403
     assert response["Content-Type"].startswith("application/json")
-    assert "WWW-Authenticate" in response.headers
     assert "mcp:admin" in response["WWW-Authenticate"]
+
+
+async def _both(server: MCPServer, **post: Any) -> tuple[Any, Any]:
+    """One call answered with a progress token and without, in that order."""
+    return await _post(server, **post), await _post(server, token=None, **post)
+
+
+def _wire(response: Any, body: dict[str, Any]) -> tuple[Any, ...]:
+    return (
+        response.status_code,
+        response["Content-Type"],
+        response.get("WWW-Authenticate"),
+        body,
+    )
+
+
+@pytest.mark.django_db(transaction=True)
+async def test_a_spec_check_denying_a_streamed_call_keeps_its_403_and_challenge() -> None:
+    """The spec's own ``PermissionCheck`` is pre-flighted, not only the scope gate.
+
+    It used to run only inside ``adispatch``, so asking for progress turned a
+    ``403`` with a challenge into a ``200`` stream carrying ``-32006``: the
+    status a client is told to act on depended on whether it wanted a
+    progress bar.
+    """
+    streamed, plain = await _both(_server(), name="p.denied")
+    assert streamed.status_code == 403
+    assert _wire(streamed, streamed.json()) == _wire(plain, plain.json())
+    assert streamed.json()["error"] == {"code": -32006, "message": "Insufficient permission"}
+
+
+@pytest.mark.django_db(transaction=True)
+async def test_a_deactivated_principal_is_refused_before_the_stream() -> None:
+    """The kernel refuses an inactive user ahead of any check, as ``-32006``,
+    so the pre-flight does too, even for a spec every caller may run."""
+    await get_user_model().objects.acreate(username="gone", is_active=False)
+    server = _server(auth_backend=HeaderAuthBackend())
+    streamed, plain = await _both(server, headers={"X-Test-User": "gone"})
+    assert streamed.status_code == 403
+    assert _wire(streamed, streamed.json()) == _wire(plain, plain.json())
+
+
+@pytest.mark.django_db(transaction=True)
+async def test_a_check_reading_arguments_is_judged_on_the_servers_value() -> None:
+    """The pre-flight runs before the handler lays the server's arguments over
+    the caller's, so it lays them itself: a check reading ``tenant`` judged the
+    caller's ``evil`` there, and the server's ``acme`` in dispatch."""
+    response = await _post(_server(), name="p.tenanted", arguments={"tenant": "evil"})
+    assert response.status_code == 200
+    assert response["Content-Type"] == "text/event-stream"
+    assert (await _frames(response))[-1]["result"]["structuredContent"] == {"tenant": "acme"}
+
+
+@pytest.mark.django_db(transaction=True)
+async def test_the_server_arguments_are_laid_without_a_second_warning(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The handler warns once that it dropped the caller's ``tenant``; the
+    pre-flight lays the same values without saying so again."""
+    caplog.set_level(logging.WARNING, logger="django_spec_mcp")
+    await _frames(await _post(_server(), name="p.tenanted", arguments={"tenant": "evil"}))
+    dropped = [r for r in caplog.records if "dropped the caller's value" in r.getMessage()]
+    assert len(dropped) == 1
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("paging", [{"page": 2}, {"limit": 5}])
+async def test_a_paged_call_its_spec_denies_keeps_its_403(paging: dict[str, int]) -> None:
+    """``page`` and ``limit`` are the transport's, split off before the checks
+    are asked on either path, so a caller the spec denies is a ``403`` whether
+    the call streams or not. The split itself is held by
+    ``test_a_paged_call_is_asked_once``."""
+    streamed, plain = await _both(_server(), name="p.pages", arguments=paging)
+    assert streamed.status_code == 403
+    assert _wire(streamed, streamed.json()) == _wire(plain, plain.json())
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize(("scopes", "streamed"), [("mcp:write", True), ("", False)])
+async def test_a_check_reading_the_token_sees_the_calls_request(
+    scopes: str, streamed: bool
+) -> None:
+    """A check depending on the token reads ``call_context["request"].mcp_token``,
+    as the plan's call context promises, in the pre-flight as in dispatch."""
+    server = _server(auth_backend=HeaderAuthBackend())
+    response = await _post(server, name="p.write", headers={"X-Test-Scopes": scopes})
+    assert response.streaming is streamed
+    assert response.status_code == (200 if streamed else 403)
+
+
+@pytest.mark.django_db(transaction=True)
+async def test_a_refusal_that_is_not_a_denial_is_left_to_the_handler() -> None:
+    """An unknown argument from a caller the spec admits is an ``isError`` result
+    on both paths, never a ``403``.
+
+    The pre-flight answers only the refusals ``KERNEL_REFUSALS`` answers
+    ``-32006``, and leaves every other one to the handler, which answers it in
+    the stream as it would without one.
+    """
+    streamed, plain = await _both(_server(), name="p.export", arguments={"stray": 1})
+    assert streamed.status_code == 200
+    assert streamed["Content-Type"] == "text/event-stream"
+    answer = await _answer(streamed)
+    assert answer["result"]["isError"] is True
+    assert answer == plain.json()
+
+
+class _LooksUpATenant(PermissionCheck):
+    """Raises a ``ServiceError`` rather than answering, as a check looking a tenant up may."""
+
+    def has_permission(self, principal: Any, spec: Any) -> bool:
+        raise ServiceNotFound("No such tenant.")
+
+
+@pytest.mark.django_db(transaction=True)
+async def test_a_service_error_a_check_raises_streams_the_plain_calls_answer() -> None:
+    """A ``ServiceError`` from a check is no denial, so the pre-flight leaves it
+    to the handler, which answers it as an ``isError`` result in the stream,
+    the answer the same call gets without a progress token."""
+    server = _bare()
+    server.register_tool(
+        ServiceSpec(service=lambda: {}, permissions=[_LooksUpATenant()]), name="p.tenant"
+    )
+
+    streamed, plain = await _both(server, name="p.tenant")
+
+    assert streamed.status_code == 200
+    answer = await _answer(streamed)
+    assert answer["result"]["isError"] is True
+    assert "No such tenant." in json.dumps(answer)
+    assert answer == plain.json()
+
+
+@pytest.mark.django_db(transaction=True)
+async def test_a_caller_the_spec_denies_is_refused_before_its_unknown_argument() -> None:
+    """A caller ``_Deny`` refuses is a ``403`` on both paths, its stray argument unread.
+
+    The transport asks the spec's checks before it reads the call's shape, on
+    both paths, so a caller the tool is not for learns nothing of the
+    arguments it takes.
+    """
+    streamed, plain = await _both(_server(), name="p.denied", arguments={"stray": 1})
+    assert streamed.status_code == 403
+    assert _wire(streamed, streamed.json()) == _wire(plain, plain.json())
+
+
+class _Counted(PermissionCheck):
+    """Admits everyone, counting how often it is asked."""
+
+    def __init__(self) -> None:
+        self.asked = 0
+
+    def has_permission(self, principal: Any, spec: Any) -> bool:
+        self.asked += 1
+        return True
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize(("token", "asked"), [("abc123", 2), (None, 1)], ids=["streamed", "plain"])
+async def test_a_streamed_call_asks_the_spec_once_more_than_a_plain_one(
+    token: Any, asked: int
+) -> None:
+    """Once by the pre-flight, before a stream commits its status, and once by the
+    handler, before the charge; ``adispatch`` runs under the handler's grant and
+    asks nothing again."""
+    check = _Counted()
+    server = _bare()
+    server.register_tool(ServiceSpec(service=lambda: {}, permissions=[check]), name="p.counted")
+
+    response = await _post(server, name="p.counted", token=token)
+
+    assert (await _answer(response))["result"]["structuredContent"] == {}
+    assert check.asked == asked
+
+
+@pytest.mark.django_db(transaction=True)
+async def test_a_denied_call_the_spec_ignores_unknown_arguments_for_keeps_its_403() -> None:
+    """The pre-flight judges unknown arguments by the binding's own policy.
+
+    A tool registered with ``UnknownArguments.IGNORE`` drops the stray
+    argument and reaches its permission check, so a denied caller is a ``403``
+    on both paths. That the policy is the binding's is held by
+    ``test_a_stray_argument_a_tool_ignores_is_asked_once``.
+    """
+    server = _bare()
+    server.register_tool(
+        ServiceSpec(service=lambda: {}, permissions=[_Deny()]),
+        name="p.lenient",
+        unknown_arguments=UnknownArguments.IGNORE,
+    )
+    streamed, plain = await _both(server, name="p.lenient", arguments={"stray": 1})
+    assert streamed.status_code == 403
+    assert _wire(streamed, streamed.json()) == _wire(plain, plain.json())
+
+
+@pytest.mark.django_db(transaction=True)
+async def test_a_check_reading_a_servers_own_seed_is_judged_on_that_seed() -> None:
+    """The pre-flight resolves the seeds the check names from the server's own
+    ``pool_seeds=``. Handed the defaults it cannot resolve ``tenant``, the
+    kernel raises a configuration error the pre-flight does not answer, and the
+    call is a ``500`` where the plain one is a ``403``."""
+    server = MCPServer(
+        name="p",
+        auth_backend=AllowAnyBackend(),
+        session_store=InMemorySessionStore(),
+        pool_seeds=DEFAULT_POOL_SEEDS.extend(tenant=lambda: "globex"),
+    )
+    server.register_tool(
+        ServiceSpec(service=lambda: {}, permissions=[_DeniesTenantGlobex()]), name="p.seeded"
+    )
+    streamed, plain = await _both(server, name="p.seeded")
+    assert streamed.status_code == 403
+    assert _wire(streamed, streamed.json()) == _wire(plain, plain.json())
+
+
+@pytest.mark.django_db(transaction=True)
+async def test_an_unguarded_spec_streams_under_the_grant_its_call_carries() -> None:
+    """With ``REQUIRE_TOOL_PERMISSIONS`` off, the pre-flight hands the kernel
+    the same ``Grant`` the call does; without it the kernel refuses the
+    unguarded spec as a configuration error, and the call is a ``500``."""
+    server = _bare(require_tool_permissions=False)
+    with pytest.warns(UserWarning):
+        server.register_tool(ServiceSpec(service=lambda: {"ok": True}), name="p.open")
+    response = await _post(server, name="p.open")
+    assert response["Content-Type"] == "text/event-stream"
+    assert (await _frames(response))[-1]["result"]["structuredContent"] == {"ok": True}
 
 
 # ----- bounds -----
@@ -215,21 +540,14 @@ async def test_a_denied_tool_still_gets_403_and_a_challenge() -> None:
 @pytest.mark.django_db(transaction=True)
 async def test_notifications_are_capped() -> None:
     """The spec asks both parties to rate-limit; a per-row reporter floods."""
-    server = MCPServer(
-        name="p",
-        auth_backend=AllowAnyBackend(),
-        session_store=InMemorySessionStore(),
-        config=build_mcp_config(max_progress_notifications=2),
-    )
+    server = _bare(max_progress_notifications=2)
 
     def chatty(*, progress: Any) -> dict[str, Any]:
         for i in range(1, 50):
             progress(i, total=50)
         return {"ok": True}
 
-    server.register_service_tool(
-        name="p.export", description="x", spec=ServiceSpec(service=chatty, atomic=False)
-    )
+    server.register_tool(ServiceSpec(service=chatty, permissions=OPEN), name="p.export")
     frames = await _frames(await _post(server))
     assert sum(1 for f in frames if f.get("method") == "notifications/progress") == 2
     # Capping the *reports* must not cap the work: the result still arrives.
@@ -239,20 +557,16 @@ async def test_notifications_are_capped() -> None:
 @pytest.mark.django_db(transaction=True)
 async def test_a_non_increasing_report_is_dropped() -> None:
     """The spec makes increase a MUST, so forwarding one would violate it here."""
-    server = MCPServer(
-        name="p", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore()
-    )
+    server = _bare()
 
     def backwards(*, progress: Any) -> dict[str, Any]:
         progress(5, total=10)
         progress(3, total=10)  # dropped
-        progress(5, total=10)  # dropped — equal is not an increase
+        progress(5, total=10)  # dropped: equal is not an increase
         progress(9, total=10)
         return {"ok": True}
 
-    server.register_service_tool(
-        name="p.export", description="x", spec=ServiceSpec(service=backwards, atomic=False)
-    )
+    server.register_tool(ServiceSpec(service=backwards, permissions=OPEN), name="p.export")
     frames = await _frames(await _post(server))
     reported = [f["params"]["progress"] for f in frames if f.get("method")]
     assert reported == [5, 9]
@@ -264,17 +578,13 @@ async def test_a_non_increasing_report_is_dropped() -> None:
 @pytest.mark.django_db(transaction=True)
 async def test_an_exception_becomes_an_in_stream_error_not_a_truncated_body() -> None:
     """There is no status left to change once the stream is open."""
-    server = MCPServer(
-        name="p", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore()
-    )
+    server = _bare()
 
     def boom(*, progress: Any) -> dict[str, Any]:
         progress(1, total=2)
         raise RuntimeError("nope")
 
-    server.register_service_tool(
-        name="p.export", description="x", spec=ServiceSpec(service=boom, atomic=False)
-    )
+    server.register_tool(ServiceSpec(service=boom, permissions=OPEN), name="p.export")
     frames = await _frames(await _post(server))
     assert frames[0]["method"] == "notifications/progress"
     assert frames[-1]["error"]["code"] == -32603
@@ -293,9 +603,6 @@ async def _drain(response: Any) -> bytes:
 
 async def test_a_quiet_dispatch_still_emits_keepalives() -> None:
     """Something has to hold the connection open past an idle proxy timeout."""
-    import asyncio
-
-    from django_spec_mcp.transport.response_stream import build_response_stream
 
     async def slow(reporter: Any) -> dict[str, Any]:
         await asyncio.sleep(0.05)
@@ -307,12 +614,11 @@ async def test_a_quiet_dispatch_still_emits_keepalives() -> None:
     )
     body = (await _drain(response)).decode()
     assert ": keepalive" in body
-    assert '"done": true' in body.replace(" ", "").replace('"done":true', '"done": true')
+    assert '"done":true' in body.replace(" ", "")
 
 
 async def test_a_report_with_no_total_omits_the_field() -> None:
-    """`total` is omitted rather than guessed — a wrong one renders a wrong bar."""
-    from django_spec_mcp.transport.response_stream import build_response_stream
+    """`total` is omitted rather than guessed: a wrong one renders a wrong bar."""
 
     async def one(reporter: Any) -> dict[str, Any]:
         reporter(1)
@@ -328,14 +634,10 @@ async def test_a_report_with_no_total_omits_the_field() -> None:
 async def test_closing_the_stream_cancels_the_dispatch() -> None:
     """Cancellation-by-disconnect: the client going away *is* the signal.
 
-    It cancels the await, not the work — a thread parked in a driver's
-    socket read is not interruptible by asyncio, the same caveat the dispatch
+    It cancels the await, not the work: a thread parked in a driver's socket
+    read is not interruptible by asyncio, the same caveat the dispatch
     deadline carries.
     """
-    import asyncio
-
-    from django_spec_mcp.transport.response_stream import _stream
-
     seen: list[str] = []
 
     async def never(reporter: Any) -> dict[str, Any]:
@@ -349,7 +651,7 @@ async def test_closing_the_stream_cancels_the_dispatch() -> None:
 
     # Driving the generator rather than the response: Django wraps the
     # iterator, and closing the wrapper does not reach through to the
-    # generator's ``finally`` — which is the whole subject here.
+    # generator's ``finally``, which is the whole subject here.
     iterator = _stream(
         dispatch=never, request_id=1, progress_token="t", max_notifications=10, keepalive=5
     )
@@ -363,10 +665,6 @@ async def test_closing_the_stream_cancels_the_dispatch() -> None:
 
 async def test_a_report_after_the_client_left_is_dropped_not_raised() -> None:
     """A reporter must not raise into domain code that cannot defend itself."""
-    import asyncio
-
-    from django_spec_mcp.transport.response_stream import _StreamReporter
-
     closed = asyncio.new_event_loop()
     closed.close()
     reporter = _StreamReporter(loop=closed, queue=asyncio.Queue(), token="t", remaining=5)
@@ -377,14 +675,8 @@ async def test_a_report_after_the_client_left_is_dropped_not_raised() -> None:
 
 
 def test_preflight_stands_aside_for_everything_it_cannot_speak_for() -> None:
-    """An unknown tool, or a bad name, is the handler's error to report — with
+    """An unknown tool, or a bad name, is the handler's error to report, with
     a better message than a pre-flight could give."""
-    from django.http import HttpRequest
-
-    from django_spec_mcp.auth.types.token_info import TokenInfo
-    from django_spec_mcp.handlers.types.context import MCPCallContext
-    from django_spec_mcp.transport.progress_dispatch import preflight_permissions
-
     server = _server()
     context = MCPCallContext(
         http_request=HttpRequest(),

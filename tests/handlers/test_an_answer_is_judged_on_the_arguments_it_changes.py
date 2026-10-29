@@ -1,34 +1,34 @@
-"""A retry's answer changing any argument is judged on the arguments it produces.
+"""A retry's answer to a kernel service tool is judged on the arguments it produces.
 
-``tools/call`` judges the binding's permissions on the arguments as sent, merges
-a retry's ``inputResponses`` over them, and judged again only when the answers
-moved a URL kwarg. Once the stand-in carried ``request.data`` and
-``request.query_params`` as the dispatch view does, an answer changing only
-those was never judged again: a per-binding ``DRFPermissionAdapter`` admitting
-only project ``"7"`` refused ``{"project": "8"}`` sent plainly, and ran the
-service on project ``"8"`` sent as ``"7"`` with ``"8"`` answered, on either
-handler and over a stream. A spec's own ``permission_classes`` were judged again
-by the dispatch view, but only after the rate limit had charged the call.
+``tools/call`` merges a retry's ``inputResponses`` over the arguments as sent,
+even with no ``requestState``, so a first call can carry one. A kernel spec's
+permissions are its own ``PermissionCheck``s, and one declaring an
+``arguments`` keyword is handed the call's arguments by ``dispatch``, which the
+transport reaches once, with the merged arguments. So a check admitting only
+project ``"7"`` refuses ``"8"`` whether it was sent plainly or answered over an
+admitted ``"7"``, and admits ``"7"`` answered over a refused ``"8"``, on either
+handler, either view and over a stream.
 
-An answer is merged even with no ``requestState``, so a first call can carry
-one. The answers are now judged whenever they change the arguments, before the
-rate limit is charged.
+A kernel check reads the arguments rather than a request, so there is nothing
+to judge before the merge for an answer to slip past.
+
+A caller the spec refuses is not charged the rate limit, answered or not: the
+shell asks a kernel spec's checks before the charge (``admit_kernel_call``).
 """
 
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
 from asgiref.sync import sync_to_async
 from django.http import HttpRequest
 from django.test import AsyncClient, Client, override_settings
-from rest_framework import serializers
-from rest_framework.permissions import BasePermission
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_service_specs import DataclassValidator, PermissionCheck, ServiceSpec
 
-from django_spec_mcp import DRFPermissionAdapter, MCPServer, QueryParam
+from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
@@ -41,55 +41,40 @@ from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from tests.testapp.urlconf_for import urlconf_for
 from tests.utils import RefusingRateLimit
 
+pytestmark = pytest.mark.django_db(transaction=True)
+
 _MODERN = "2026-07-28"
 
 
-class _Args(serializers.Serializer):
-    project = serializers.CharField()
+@dataclass
+class _Project:
+    project: str
 
 
-class _OnlyProject7(BasePermission):
-    """The docs' shape: a DRF class admitting a call whose arguments name project 7."""
+class _OnlyProject7(PermissionCheck):
+    """Admits a call whose arguments name project 7, read as dispatch hands them."""
 
-    def has_permission(self, request: Any, view: Any) -> bool:
-        return request.data.get("project") == "7"
-
-
-class _OnlyFields7(BasePermission):
-    """Admits a call whose routed ``fields`` query value is 7."""
-
-    def has_permission(self, request: Any, view: Any) -> bool:
-        return request.query_params.get("fields") == "7"
+    def has_permission(self, principal: Any, spec: Any, *, arguments: Any) -> bool:
+        return arguments.get("project") == "7"
 
 
-def _server(
-    permission: type[BasePermission],
-    ran: list[Any],
-    *,
-    query: bool = False,
-    on_spec: bool = False,
-    limiter: Any = None,
-) -> MCPServer:
-    """``tool`` behind ``permission``, per binding unless ``on_spec``."""
-
-    def _service(data: Any = None) -> dict[str, Any]:
-        ran.append(dict(data))
+def _server(ran: list[Any], *, limiter: Any = None) -> MCPServer:
+    def _service(*, data: _Project) -> dict[str, bool]:
+        ran.append(data.project)
         return {"ok": True}
 
     server = MCPServer(
         name="t", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore()
     )
-    server.register_service_tool(
+    server.register_tool(
+        ServiceSpec(
+            service=_service,
+            validator=DataclassValidator(_Project),
+            atomic=False,
+            permissions=[_OnlyProject7()],
+        ),
         name="tool",
         description="Touch a project.",
-        spec=ServiceSpec(
-            service=_service,
-            input_serializer=_Args,
-            atomic=False,
-            permission_classes=[permission] if on_spec else None,
-        ),
-        permissions=[] if on_spec else [DRFPermissionAdapter(permission)],
-        query_params=(QueryParam("fields"),) if query else (),
         rate_limits=[limiter] if limiter is not None else None,
     )
     return server
@@ -130,50 +115,64 @@ async def _post(server: MCPServer, params: dict[str, Any], *, is_async: bool) ->
     return response.status_code, json.loads(response.content)
 
 
-# (arguments as sent, the answer, the permission, whether the value is a query param)
-_SMUGGLED: list[tuple[dict[str, Any], dict[str, Any], type[BasePermission], bool]] = [
-    ({"project": "7"}, {"project": "8"}, _OnlyProject7, False),
-    ({"project": "1", "fields": "7"}, {"fields": "8"}, _OnlyFields7, True),
-]
-_SMUGGLED_IDS = ["request-data", "query-param"]
+def _ctx(server: MCPServer) -> MCPCallContext:
+    return MCPCallContext(
+        http_request=HttpRequest(),
+        token=TokenInfo(user=None),
+        tools=server.tools,
+        resources=server.resources,
+        prompts=server.prompts,
+        protocol_version=_MODERN,
+    )
 
 
-@pytest.mark.django_db(transaction=True)
+async def _handle(server: MCPServer, params: dict[str, Any], *, is_async: bool) -> Any:
+    if is_async:
+        return await handle_tools_call_async(params, _ctx(server))
+    return await sync_to_async(handle_tools_call)(params, _ctx(server))
+
+
 @pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
-@pytest.mark.parametrize(("sent", "answer", "permission", "query"), _SMUGGLED, ids=_SMUGGLED_IDS)
 async def test_an_answer_changing_a_value_the_permission_reads_is_refused(
     is_async: bool,
-    sent: dict[str, Any],
-    answer: dict[str, Any],
-    permission: type[BasePermission],
-    query: bool,
 ) -> None:
     ran: list[Any] = []
-    server = _server(permission, ran, query=query)
+    server = _server(ran)
 
     # Sent plainly, the answered value is refused.
-    plain = await _post(server, _params({**sent, **answer}, None), is_async=is_async)
+    plain = await _post(server, _params({"project": "8"}, None), is_async=is_async)
+    # Answered over an admitted value, it is refused the same way.
+    status, envelope = await _post(
+        server, _params({"project": "7"}, {"project": "8"}), is_async=is_async
+    )
+
     assert plain[0] == 403
     assert plain[1]["error"]["code"] == JsonRpcErrorCode.FORBIDDEN
-
-    # Answered over an admitted value, it is refused the same way.
-    status, envelope = await _post(server, _params(sent, answer), is_async=is_async)
-
     assert status == 403, envelope
     assert envelope["error"]["code"] == JsonRpcErrorCode.FORBIDDEN
     assert ran == []
 
 
-@pytest.mark.django_db(transaction=True)
-async def test_a_streamed_answer_changing_request_data_is_refused() -> None:
-    # The pre-flight judges the arguments as sent, before any answer is read,
-    # and admits; the stream's handler merges the answer and must judge it.
+@pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
+async def test_an_answer_naming_the_admitted_value_runs_on_it(is_async: bool) -> None:
+    # The other half: the check reads the merged arguments rather than
+    # refusing every answered call, so the test above holds what it was shown.
     ran: list[Any] = []
-    server = _server(_OnlyProject7, ran)
+
+    out = await _handle(
+        _server(ran), _params({"project": "8"}, {"project": "7"}), is_async=is_async
+    )
+
+    assert out["structuredContent"] == {"ok": True}
+    assert ran == ["7"]
+
+
+async def test_a_streamed_answer_changing_a_value_the_permission_reads_is_refused() -> None:
+    ran: list[Any] = []
     params = _params({"project": "7"}, {"project": "8"})
     params["_meta"]["progressToken"] = "abc"
 
-    with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=True)):
+    with override_settings(ROOT_URLCONF=urlconf_for(_server(ran), is_async=True)):
         response = await AsyncClient().post(
             "/mcp/", data=_body(params), content_type="application/json", headers=_HEADERS
         )
@@ -186,45 +185,19 @@ async def test_a_streamed_answer_changing_request_data_is_refused() -> None:
     assert ran == []
 
 
-def _ctx(server: MCPServer) -> MCPCallContext:
-    return MCPCallContext(
-        http_request=HttpRequest(),
-        token=TokenInfo(user=None),
-        tools=server.tools,
-        resources=server.resources,
-        prompts=server.prompts,
-        protocol_version=_MODERN,
-        conventions=server.conventions,
-    )
-
-
-async def _handle(server: MCPServer, params: dict[str, Any], *, is_async: bool) -> Any:
-    if is_async:
-        return await handle_tools_call_async(params, _ctx(server))
-    return await sync_to_async(handle_tools_call)(params, _ctx(server))
-
-
-@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize(
+    ("sent", "answer"),
+    [({"project": "7"}, {"project": "8"}), ({"project": "8"}, None)],
+    ids=["answered", "plain"],
+)
 @pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
-@pytest.mark.parametrize("on_spec", [False, True], ids=["per-binding", "spec"])
-@pytest.mark.parametrize(("sent", "answer", "permission", "query"), _SMUGGLED, ids=_SMUGGLED_IDS)
-async def test_a_caller_refused_on_an_answered_value_is_not_charged(
-    is_async: bool,
-    on_spec: bool,
-    sent: dict[str, Any],
-    answer: dict[str, Any],
-    permission: type[BasePermission],
-    query: bool,
+async def test_a_caller_the_spec_refuses_is_not_charged(
+    sent: dict[str, Any], answer: dict[str, Any] | None, is_async: bool
 ) -> None:
-    # A spec's own class was judged again by the dispatch view, so it refused,
-    # but after the rate limit had charged a unit; against a spent quota the
-    # caller was told ``RATE_LIMITED`` rather than that the value is not its to
-    # name. A per-binding class was not judged again at all.
     limit = RefusingRateLimit()
     ran: list[Any] = []
-    server = _server(permission, ran, query=query, on_spec=on_spec, limiter=limit)
 
-    out = await _handle(server, _params(sent, answer), is_async=is_async)
+    out = await _handle(_server(ran, limiter=limit), _params(sent, answer), is_async=is_async)
 
     assert isinstance(out, JsonRpcError) and out.code == JsonRpcErrorCode.FORBIDDEN, out
     assert limit.consumed == 0

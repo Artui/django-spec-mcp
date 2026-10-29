@@ -1,3 +1,9 @@
+"""The default mount, end to end: the kernel test server through the live transport.
+
+``ROOT_URLCONF`` mounts ``tests.testapp.mcp.build_server``, whose tools and
+resource are kernel specs.
+"""
+
 from __future__ import annotations
 
 import json

@@ -1,12 +1,24 @@
-"""Coverage: ``UnknownArguments`` policy on validation + ``tools/list``.
+"""The ``UnknownArguments`` policy of a kernel tool, on the call and in ``tools/list``.
 
-The three policies live on the binding and influence two layers:
+A kernel tool's policy is handed to ``dispatch``, whose closed argument set
+refuses or drops a key ``spec.parameters()`` does not declare, so the policy
+reaches two layers from one place: the call, and the ``inputSchema``'s
+``additionalProperties``. These tests pin both from a real ``MCPServer``, on a
+service tool and a paginated ``LIST`` selector tool, whose ``page`` and
+``limit`` are arguments the transport declares beside the spec's.
 
-- runtime validation (``handlers/utils.validate_input_against_serializer``)
-- ``tools/list`` schema (``additionalProperties`` toggle)
+The kernel's rules:
 
-These tests pin both behaviours from a real ``MCPServer`` so the wire
-shape is what end users see.
+- ``PASSTHROUGH`` is refused at registration, because no argument the spec
+  does not declare ever reaches a kernel callable.
+- A seed's name the caller sends is refused under ``REJECT`` like any other
+  undeclared key, and dropped under ``IGNORE`` so the seed's value is the one
+  the callable reads.
+- An unknown key's refusal is keyed by its own name.
+
+Which keys a kernel spec admits is ``spec.parameters()``,
+and ``tests/conformance/test_unknown_arguments_matrix.py`` holds the schema's
+agreement with it.
 """
 
 from __future__ import annotations
@@ -15,491 +27,162 @@ from dataclasses import dataclass
 from typing import Any
 
 import pytest
-from django.http import HttpRequest
-from django_service_specs import SelectorKind, UnknownArguments
-from rest_framework import serializers as drf_serializers
-from rest_framework_services import ArgumentBinding
-from rest_framework_services.dispatch.utils import refuse_retired_modes
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django.core.exceptions import ImproperlyConfigured
+from django_service_specs import (
+    DataclassValidator,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    UnknownArguments,
+    Unrestricted,
+)
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.auth.types.token_info import TokenInfo
-from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
-from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
-from django_spec_mcp.handlers.types.context import MCPCallContext
-from django_spec_mcp.handlers.utils import validate_input_against_serializer
-from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
-from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.utils import tool_error
 
+pytestmark = pytest.mark.django_db(transaction=True)
 
-def _server() -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore())
-
-
-def _ctx(server: MCPServer) -> MCPCallContext:
-    return MCPCallContext(
-        http_request=HttpRequest(),
-        token=TokenInfo(user=None),
-        tools=server.tools,
-        resources=server.resources,
-        prompts=server.prompts,
-        protocol_version="2025-11-25",
-    )
+OPEN = [Unrestricted()]
 
 
-class _OneFieldInput(drf_serializers.Serializer):
-    """Serializer that declares a single ``known`` field."""
-
-    known = drf_serializers.CharField()
-
-
-def _svc(*, data: dict[str, Any]) -> dict[str, Any]:
-    return dict(data)
+@dataclass
+class _Known:
+    known: str
 
 
-# ---------- inputSchema additionalProperties ----------
+def _server(policy: UnknownArguments, seen: dict[str, Any]) -> MCPServer:
+    """A service tool and a paginated list tool under ``policy``, recording what reaches each.
 
-
-def test_reject_schema_carries_additional_properties_false() -> None:
-    server = _server()
-    server.register_service_tool(
-        name="t",
-        spec=ServiceSpec(service=_svc, input_serializer=_OneFieldInput, atomic=False),
-        unknown_arguments=UnknownArguments.REJECT,
-    )
-    out = handle_tools_list(None, _ctx(server))
-    assert isinstance(out, dict)
-    schema = out["tools"][0]["inputSchema"]
-    assert schema["additionalProperties"] is False
-
-
-def test_ignore_schema_carries_additional_properties_true() -> None:
-    server = _server()
-    server.register_service_tool(
-        name="t",
-        spec=ServiceSpec(service=_svc, input_serializer=_OneFieldInput, atomic=False),
-        unknown_arguments=UnknownArguments.IGNORE,
-    )
-    out = handle_tools_list(None, _ctx(server))
-    assert isinstance(out, dict)
-    assert out["tools"][0]["inputSchema"]["additionalProperties"] is True
-
-
-def _svc_no_input(*, user: Any = None) -> dict[str, Any]:
-    return {"ok": True}
-
-
-def test_serializerless_service_schema_is_closed_under_reject() -> None:
-    # A service with no input_serializer keeps REJECT at dispatch, and bundled
-    # with no target lookup it declares no argument at all, so its schema is
-    # closed and lists nothing.
-    server = _server()
-    server.register_service_tool(
-        name="t",
-        spec=ServiceSpec(service=_svc_no_input, atomic=False),
-        unknown_arguments=UnknownArguments.REJECT,
-    )
-    out = handle_tools_list(None, _ctx(server))
-    assert isinstance(out, dict)
-    schema = out["tools"][0]["inputSchema"]
-    assert schema["additionalProperties"] is False
-    assert not schema.get("properties")
-
-
-@pytest.mark.django_db
-def test_serializerless_service_refuses_unknown_key_under_reject() -> None:
-    # The runtime side of the same contract: an unknown key is refused for a
-    # serializer-less service, matching the closed schema above.
-    server = _server()
-    server.register_service_tool(
-        name="t",
-        spec=ServiceSpec(service=_svc_no_input, atomic=False),
-        unknown_arguments=UnknownArguments.REJECT,
-    )
-    out = handle_tools_call({"name": "t", "arguments": {"rogue": "v"}}, _ctx(server))
-    assert tool_error(out)["detail"] == {"non_field_errors": ["Unexpected argument(s): 'rogue'."]}
-
-
-# ---------- Runtime behaviour ----------
-
-
-def test_reject_rejects_unknown_key_with_a_validation_error_result() -> None:
-    server = _server()
-    server.register_service_tool(
-        name="t",
-        spec=ServiceSpec(service=_svc, input_serializer=_OneFieldInput, atomic=False),
-        unknown_arguments=UnknownArguments.REJECT,
-    )
-    out = handle_tools_call(
-        {"name": "t", "arguments": {"known": "ok", "unknown": "x"}}, _ctx(server)
-    )
-    error = tool_error(out)
-    assert error["type"] == "validation_error"
-    detail = error["detail"]
-    assert "non_field_errors" in detail
-    assert "unknown" in detail["non_field_errors"][0]
-
-
-def test_reject_accepts_when_only_known_keys_present() -> None:
-    server = _server()
-    server.register_service_tool(
-        name="t",
-        spec=ServiceSpec(service=_svc, input_serializer=_OneFieldInput, atomic=False),
-        unknown_arguments=UnknownArguments.REJECT,
-    )
-    out = handle_tools_call({"name": "t", "arguments": {"known": "ok"}}, _ctx(server))
-    assert isinstance(out, dict)
-    assert out["structuredContent"] == {"known": "ok"}
-
-
-def test_ignore_drops_unknown_keys() -> None:
-    server = _server()
-    server.register_service_tool(
-        name="t",
-        spec=ServiceSpec(service=_svc, input_serializer=_OneFieldInput, atomic=False),
-        unknown_arguments=UnknownArguments.IGNORE,
-    )
-    out = handle_tools_call({"name": "t", "arguments": {"known": "ok", "extra": 99}}, _ctx(server))
-    assert isinstance(out, dict)
-    # ``extra`` was silently dropped; only the validated ``known`` remains.
-    assert out["structuredContent"] == {"known": "ok"}
-
-
-def test_reject_does_not_flag_pool_seed_keys() -> None:
-    """Pool-seed keys (``user`` / ``request`` / ``data``) are silently dropped, not flagged."""
-    server = _server()
-    server.register_service_tool(
-        name="t",
-        spec=ServiceSpec(service=_svc, input_serializer=_OneFieldInput, atomic=False),
-        unknown_arguments=UnknownArguments.REJECT,
-    )
-    out = handle_tools_call(
-        {"name": "t", "arguments": {"known": "ok", "user": "evil"}}, _ctx(server)
-    )
-    # ``user`` is reserved — not flagged as unknown.
-    assert isinstance(out, dict)
-    assert out["structuredContent"] == {"known": "ok"}
-
-
-# ---------- Selector tool: filter / ordering / pagination keys are "known" ----------
-
-
-def _list(**_kwargs: Any) -> list[dict[str, str]]:
-    # ``**kwargs`` absorbs whatever flows through the spread so the
-    # registration-time field/param check is happy regardless of which
-    # input_serializer this fixture is paired with.
-    return [{"id": "1"}]
-
-
-def test_selector_tool_reject_treats_post_fetch_keys_as_known() -> None:
-    """``ordering`` / ``page`` / ``limit`` aren't rejected even under REJECT.
-
-    Pagination itself is exercised in
-    :mod:`tests.handlers.test_selector_tool_dispatch`; here we only verify
-    that the validator doesn't flag pipeline-knob keys as unknown. The
-    selector returns a list (not a queryset) so the post-fetch
-    paginator no-ops and we sidestep the queryset-vs-list ``count()``
-    quirk.
-    """
-    server = _server()
-    server.register_selector_tool(
-        name="x",
-        spec=SelectorSpec(kind=SelectorKind.LIST, selector=_list),
-        unknown_arguments=UnknownArguments.REJECT,
-    )
-    out = handle_tools_call(
-        {"name": "x", "arguments": {"ordering": "id", "page": 1, "limit": 10}},
-        _ctx(server),
-    )
-    assert not isinstance(out, JsonRpcError)
-
-
-def test_selector_tool_reject_rejects_truly_unknown_keys() -> None:
-    server = _server()
-    server.register_selector_tool(
-        name="x",
-        spec=SelectorSpec(kind=SelectorKind.LIST, selector=_list),
-        paginate=True,
-        unknown_arguments=UnknownArguments.REJECT,
-        input_serializer=_OneFieldInput,
-    )
-    out = handle_tools_call({"name": "x", "arguments": {"known": "ok", "rogue": "v"}}, _ctx(server))
-    error = tool_error(out)
-    assert error["type"] == "validation_error"
-    assert "rogue" in error["detail"]["non_field_errors"][0]
-
-
-def _selector_tool_under_reject(seen: dict[str, Any]) -> MCPServer:
-    """A selector tool under ``REJECT`` whose selector records what reaches it.
-
-    It takes a bare ``**kwargs`` rather than naming the keys these tests send: a
-    name the selector declares is known for that reason alone, so declaring them
-    would let each test pass without the seed set it is about.
+    Both callables take a bare ``**kwargs``, so a key reaching either is seen
+    whatever its name, and a test asserting it absent asserts the policy.
     """
 
-    def _recording(*, known: str, **kwargs: Any) -> list[dict[str, str]]:
+    def _service(**kwargs: Any) -> dict[str, bool]:
         seen.update(kwargs)
-        return [{"id": "1"}]
+        return {"ok": True}
 
-    server = _server()
-    server.register_selector_tool(
-        name="x",
-        spec=SelectorSpec(kind=SelectorKind.LIST, selector=_recording),
-        unknown_arguments=UnknownArguments.REJECT,
-        input_serializer=_OneFieldInput,
+    def _rows(**kwargs: Any) -> list[dict[str, int]]:
+        seen.update(kwargs)
+        return [{"id": 1}, {"id": 2}]
+
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server.register_tool(
+        ServiceSpec(service=_service, validator=DataclassValidator(_Known), permissions=OPEN),
+        name="service",
+        unknown_arguments=policy,
+    )
+    server.register_tool(
+        SelectorSpec(kind=SelectorKind.LIST, selector=_rows, permissions=OPEN),
+        name="rows",
+        unknown_arguments=policy,
+        paginate=True,
     )
     return server
 
 
-@pytest.mark.parametrize("name", ["result", "queryset"])
-def test_a_kernel_seed_is_not_refused_as_unknown(name: str) -> None:
-    """Every reserved seed is known, ``result`` and ``queryset`` included: dispatch
-    drops a caller's key of a seed's name rather than refusing it, so admitting it
-    here delivers nothing."""
-    seen: dict[str, Any] = {}
-    out = handle_tools_call(
-        {"name": "x", "arguments": {"known": "ok", name: "v"}},
-        _ctx(_selector_tool_under_reject(seen)),
-    )
-    assert isinstance(out, dict)
-    assert "isError" not in out, out
-    assert seen.get(name) != "v"
+def _schemas(server: MCPServer) -> dict[str, dict[str, Any]]:
+    listed: Any = server.list_tools(user=None)
+    return {tool["name"]: tool["inputSchema"] for tool in listed["tools"]}
 
 
-@pytest.mark.parametrize("name", ["request", "serializer"])
-def test_a_name_drf_services_drops_is_not_refused_as_unknown(name: str) -> None:
-    """A selector tool's input serializer admits what the service path drops.
-
-    Neither name is a kernel seed any more, but drf-services drops a caller's key
-    of either one on every path, so refusing it here alone would answer the same
-    call two ways depending on which kind of tool received it. Admitting it opens
-    nothing: the caller's value never reaches the selector.
-    """
-    seen: dict[str, Any] = {}
-    out = handle_tools_call(
-        {"name": "x", "arguments": {"known": "ok", name: "v"}},
-        _ctx(_selector_tool_under_reject(seen)),
-    )
-    assert isinstance(out, dict)
-    assert "isError" not in out, out
-    assert seen.get(name) != "v"
+# ---------- tools/list ----------
 
 
-# ---------- A service tool whose declared key set is not enumerable ----------
+def test_reject_closes_the_schema() -> None:
+    schemas = _schemas(_server(UnknownArguments.REJECT, {}))
+
+    assert schemas["service"]["additionalProperties"] is False
+    assert schemas["rows"]["additionalProperties"] is False
+    assert set(schemas["rows"]["properties"]) == {"page", "limit"}
 
 
-def _widget_by_pk(user: Any, pk: Any, **kwargs: Any) -> dict[str, Any]:
-    """A nested instance selector taking a bare ``**kwargs`` — an open surface.
+def test_ignore_leaves_the_schema_open() -> None:
+    schemas = _schemas(_server(UnknownArguments.IGNORE, {}))
 
-    The sister package cannot enumerate what such a callable declares, so its
-    unknown-argument check has nothing to compare against and lets every
-    undeclared key through, silently.
-    """
-    return {"pk": pk}
+    assert schemas["service"].get("additionalProperties", True) is not False
+    assert schemas["rows"].get("additionalProperties", True) is not False
 
 
-def test_service_schema_stays_open_when_the_declared_key_set_is_not_enumerable() -> None:
-    # REJECT plus a serializer is not on its own enough for a *service* tool:
-    # the enforcement runs in the sister package against the key set the spec
-    # declares, and a nested selector with a bare ``**kwargs`` leaves that set
-    # open. Advertising ``additionalProperties: false`` there tells the client
-    # a typo'd field will be refused while the server accepts and drops it.
-    server = _server()
-    server.register_service_tool(
-        name="x",
-        spec=ServiceSpec(
-            service=_svc,
-            input_serializer=_OneFieldInput,
-            atomic=False,
-            instance_selector_spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_widget_by_pk),
-        ),
-        unknown_arguments=UnknownArguments.REJECT,
-    )
-    out = handle_tools_list(None, _ctx(server))
-    assert isinstance(out, dict)
-    assert out["tools"][0]["inputSchema"]["additionalProperties"] is True
+def test_passthrough_is_refused_at_registration() -> None:
+    with pytest.raises(ImproperlyConfigured, match="PASSTHROUGH is not honoured"):
+        _server(UnknownArguments.PASSTHROUGH, {})
 
 
-def test_the_open_service_schema_matches_what_dispatch_actually_does() -> None:
-    """The advertisement and the runtime must agree — which way round is secondary."""
-    server = _server()
-    server.register_service_tool(
-        name="x",
-        spec=ServiceSpec(
-            service=_svc,
-            input_serializer=_OneFieldInput,
-            atomic=False,
-            instance_selector_spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_widget_by_pk),
-        ),
-        unknown_arguments=UnknownArguments.REJECT,
-    )
-    out = handle_tools_call(
-        {"name": "x", "arguments": {"known": "k", "pk": 1, "typo": "?"}}, _ctx(server)
-    )
-    # Accepted and dropped, not refused: exactly the behaviour the open schema
-    # now advertises.
-    assert isinstance(out, dict)
-    assert "isError" not in out
+# ---------- tools/call ----------
 
 
-def test_service_schema_closes_when_the_nested_selector_declares_its_keys() -> None:
-    def _widget(user: Any, pk: Any) -> dict[str, Any]:
-        return {"pk": pk}
-
-    server = _server()
-    server.register_service_tool(
-        name="x",
-        spec=ServiceSpec(
-            service=_svc,
-            input_serializer=_OneFieldInput,
-            atomic=False,
-            instance_selector_spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_widget),
-        ),
-        unknown_arguments=UnknownArguments.REJECT,
-    )
-    out = handle_tools_list(None, _ctx(server))
-    assert isinstance(out, dict)
-    assert out["tools"][0]["inputSchema"]["additionalProperties"] is False
-
-
-# ---------- Selector schema reflects the policy on the merged inputSchema ----------
-
-
-def test_selector_tool_schema_additional_properties_false_under_reject() -> None:
-    # A closed schema is honest only with a serializer to validate against —
-    # the runtime then really rejects unknown keys under REJECT.
-    server = _server()
-    server.register_selector_tool(
-        name="x",
-        spec=SelectorSpec(kind=SelectorKind.LIST, selector=_list),
-        input_serializer=_OneFieldInput,
-        paginate=True,
-        unknown_arguments=UnknownArguments.REJECT,
-    )
-    out = handle_tools_list(None, _ctx(server))
-    assert isinstance(out, dict)
-    assert out["tools"][0]["inputSchema"]["additionalProperties"] is False
-
-
-def test_selector_tool_schema_stays_open_under_a_permissive_policy() -> None:
-    # The same serializer as the closed case above: it is the policy, not the
-    # serializer, that leaves an undeclared key served here, so the schema
-    # stays open.
-    server = _server()
-    server.register_selector_tool(
-        name="x",
-        spec=SelectorSpec(kind=SelectorKind.LIST, selector=_list),
-        input_serializer=_OneFieldInput,
-        paginate=True,
-        unknown_arguments=UnknownArguments.IGNORE,
-    )
-    out = handle_tools_list(None, _ctx(server))
-    assert isinstance(out, dict)
-    assert out["tools"][0]["inputSchema"]["additionalProperties"] is True
-
-
-def test_selector_tool_schema_additional_properties_true_when_serializerless_reject() -> None:
-    # A serializer-less binding can't reject unknown keys (the read-path
-    # validator short-circuits when there is no serializer), so even under REJECT
-    # its schema must stay open rather than falsely advertise a closed contract.
-    server = _server()
-    server.register_selector_tool(
-        name="x",
-        spec=SelectorSpec(kind=SelectorKind.LIST, selector=_list),
-        paginate=True,
-        unknown_arguments=UnknownArguments.REJECT,
-    )
-    out = handle_tools_list(None, _ctx(server))
-    assert isinstance(out, dict)
-    assert out["tools"][0]["inputSchema"]["additionalProperties"] is True
-
-
-def test_a_bare_var_keyword_selector_stays_open_and_drops_an_undeclared_key_under_reject() -> None:
-    # The open schema is the truth about refusal, not about delivery: nothing
-    # refuses the undeclared key, and drf-services drops it before the
-    # selector runs, so its bare ``**kwargs`` receives the seeds and nothing the
-    # caller named. 0.52.1 handed it ``colour``.
-    seen: list[set[str]] = []
-
-    def rows(**kwargs: Any) -> list[Any]:
-        seen.append(set(kwargs))
-        return []
-
-    server = _server()
-    server.register_selector_tool(
-        name="x",
-        spec=SelectorSpec(kind=SelectorKind.LIST, selector=rows),
-        unknown_arguments=UnknownArguments.REJECT,
-    )
-    listed = handle_tools_list(None, _ctx(server))
-    assert isinstance(listed, dict)
-
-    result = server.call_tool("x", {"colour": "red"}, user=None).to_dict()
-
-    assert listed["tools"][0]["inputSchema"]["additionalProperties"] is True
-    assert result.get("isError") is not True, result
-    assert len(seen) == 1
-    assert "colour" not in seen[0]
-
-
-# ---------- Validator-level unit edge cases ----------
-
-
-def test_selector_dataclass_input_serializer_is_wrapped() -> None:
-    """A selector's ``input_serializer`` may be a bare dataclass (auto-wrapped).
-
-    Exercises the read-path validator's dataclass wrap: the undeclared ``extra``
-    is dropped under ``IGNORE`` and the call is served.
-    """
-
-    @dataclass
-    class _DC:
-        known: str
-
-    server = _server()
-    server.register_selector_tool(
-        name="x",
-        spec=SelectorSpec(kind=SelectorKind.LIST, selector=_list),
-        input_serializer=_DC,
-        unknown_arguments=UnknownArguments.IGNORE,
-    )
-    out = handle_tools_call({"name": "x", "arguments": {"known": "ok", "extra": 1}}, _ctx(server))
-    assert not isinstance(out, JsonRpcError)
-    assert isinstance(out, dict)
-    assert out["structuredContent"] == [{"id": "1"}]
-
-
-@pytest.mark.parametrize("policy", [UnknownArguments.REJECT, UnknownArguments.IGNORE])
-def test_no_input_serializer_short_circuits_policy(policy: UnknownArguments) -> None:
-    """With no ``input_serializer``, the validator returns None and policy is a no-op."""
-    server = _server()
-    server.register_service_tool(
-        name="t",
-        spec=ServiceSpec(service=lambda: {}, atomic=False),
-        unknown_arguments=policy,
-    )
-    out = handle_tools_call({"name": "t", "arguments": {"anything": 1}}, _ctx(server))
-    assert isinstance(out, dict)
-
-
-@pytest.mark.parametrize("serializer", [_OneFieldInput, None], ids=["serializer", "none"])
-def test_the_read_path_under_passthrough_raises_as_drf_services_dispatch_does(
-    serializer: type | None,
+@pytest.mark.parametrize(
+    ("name", "arguments"),
+    [("service", {"known": "ok", "rogue": 1}), ("rows", {"rogue": 1})],
+)
+async def test_reject_refuses_an_unknown_key_with_a_validation_error_result(
+    name: str, arguments: dict[str, Any]
 ) -> None:
-    """A selector binding validates its arguments here rather than through
-    ``dispatch_spec``, so a binding built by hand with a retired ``PASSTHROUGH``
-    is refused here. Without the refusal it would run as ``IGNORE`` without a
-    word."""
-    with pytest.raises(ValueError) as caught:
-        validate_input_against_serializer(
-            {"known": "ok", "extra": 1},
-            serializer,
-            unknown_arguments=UnknownArguments.PASSTHROUGH,
-        )
-    with pytest.raises(ValueError) as upstream:
-        refuse_retired_modes(ArgumentBinding.AUTO, UnknownArguments.PASSTHROUGH)
-    # drf-services' own words, so the message cannot drift from dispatch's.
-    assert str(caught.value) == str(upstream.value)
+    seen: dict[str, Any] = {}
+
+    out = await _server(UnknownArguments.REJECT, seen).acall_tool(name, arguments, user=None)
+
+    error = tool_error(out)
+    assert error["type"] == "validation_error"
+    assert error["detail"] == {"rogue": ["Unknown argument."]}
+    assert seen == {}
+
+
+async def test_reject_accepts_only_known_keys() -> None:
+    seen: dict[str, Any] = {}
+
+    out = await _server(UnknownArguments.REJECT, seen).acall_tool(
+        "service", {"known": "ok"}, user=None
+    )
+
+    assert out["structuredContent"] == {"ok": True}
+    assert seen["known"] == "ok"
+
+
+async def test_reject_treats_the_page_arguments_as_known() -> None:
+    # The transport's own arguments, read off before dispatch, so the
+    # kernel's closed set never sees them.
+    out = await _server(UnknownArguments.REJECT, {}).acall_tool(
+        "rows", {"page": 1, "limit": 1}, user=None
+    )
+
+    assert out["structuredContent"]["items"] == [{"id": 1}]
+    assert out["structuredContent"]["hasNext"] is True
+
+
+@pytest.mark.parametrize(
+    ("name", "arguments"),
+    [("service", {"known": "ok", "rogue": 1}), ("rows", {"rogue": 1})],
+)
+async def test_ignore_drops_an_unknown_key(name: str, arguments: dict[str, Any]) -> None:
+    seen: dict[str, Any] = {}
+
+    out = await _server(UnknownArguments.IGNORE, seen).acall_tool(name, arguments, user=None)
+
+    assert "isError" not in out, out
+    assert "rogue" not in seen
+
+
+@pytest.mark.parametrize("name", ["user", "data"])
+async def test_reject_refuses_a_seeds_name_the_caller_sends(name: str) -> None:
+    seen: dict[str, Any] = {}
+
+    out = await _server(UnknownArguments.REJECT, seen).acall_tool(
+        "service", {"known": "ok", name: "evil"}, user=None
+    )
+
+    assert tool_error(out)["detail"] == {name: ["Unknown argument."]}
+    assert seen == {}
+
+
+@pytest.mark.parametrize("name", ["user", "data"])
+async def test_ignore_drops_a_seeds_name_so_the_seed_is_read(name: str) -> None:
+    seen: dict[str, Any] = {}
+
+    out = await _server(UnknownArguments.IGNORE, seen).acall_tool(
+        "service", {"known": "ok", name: "evil"}, user=None
+    )
+
+    assert "isError" not in out, out
+    assert seen[name] != "evil"

@@ -17,14 +17,14 @@ HTTP request
 Dispatch
    │
    │ ② Handler — name lookup, permissions, rate limits, input validation,
-   │    kwarg-pool resolution, output serializer, ToolResult shaping
+   │    kwarg-pool resolution, presenter, ToolResult shaping
    ▼
 Service callable
        ③ — your code
 ```
 
 The benchmark in `scripts/benchmark.py` runs the same trivial service
-(`def _service(*, data) -> {"result": data["n"] * 2}`) through each
+(`def _service(*, n) -> {"result": n * 2}`, declared as a kernel spec) through each
 layer and reports the per-call median.
 
 ## A run on this machine
@@ -35,8 +35,8 @@ Python 3.14, MacBook (Apple silicon), in-memory SQLite, fresh
 | Path                     | Median (µs)   | Overhead vs direct |
 |--------------------------|---------------|--------------------|
 | Direct callable          | ~0.1          | 1×                 |
-| Handler dispatch only    | ~50           | ~500×              |
-| Full HTTP round-trip     | ~170          | ~1,800×            |
+| Handler dispatch only    | ~150          | ~2,000×            |
+| Full HTTP round-trip     | ~285          | ~4,000×            |
 
 Run it locally:
 
@@ -46,16 +46,16 @@ uv run python scripts/benchmark.py
 
 ## What to take away
 
-- **Per-call overhead is in the tens of microseconds at the handler
-  layer and ~170 µs end-to-end** for an in-process Django test client.
+- **Per-call overhead is around 150 µs at the handler layer and
+  ~285 µs end-to-end** for an in-process Django test client.
   For typical MCP workloads — LLM agents calling tools at human speed
   — this is several orders of magnitude below what matters. Spending
   effort optimising the dispatch path is almost never worth it.
 - **The dominant cost on real servers is the service callable** — a
   database round-trip, a remote API call, or LLM-shaped output
   rendering. Optimise those.
-- **The transport accounts for roughly a third of the total** in this
-  micro-benchmark (~120 µs out of ~170 µs). Most of that is Django
+- **The transport accounts for roughly half of the total** in this
+  micro-benchmark (~135 µs out of ~285 µs). Most of that is Django
   request/response construction and JSON-RPC envelope parsing — the
   same cost any Django view pays. Async dispatch (`server.async_urls`)
   shifts I/O off the request thread but doesn't materially change
@@ -68,10 +68,9 @@ A few specific things that can show up at scale:
 - **Auth backend** — if every call hits an external introspection
   endpoint, that's the bottleneck. Cache the introspection result in
   Django's cache (per-token TTL) and reuse across requests.
-- **Output serializer** — `ModelSerializer(many=True)` on a list of
-  thousands is N+1-prone. Add `.select_related()` /
-  `.prefetch_related()` in the selector; use `output_format="toon"`
-  to reduce token count if the bottleneck is downstream LLM cost.
+- **Presenter** — presenting thousands of rows, each of which follows a
+  relation, is N+1-prone. Add `.select_related()` /
+  `.prefetch_related()` in the selector.
 - **`atomic=True` on a service that doesn't write** — services
   default to wrapping in `transaction.atomic()`. If a service is
   read-shaped, set `atomic=False` on the spec, or — better — register

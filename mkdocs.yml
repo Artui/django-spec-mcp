@@ -1,5 +1,5 @@
 site_name: django-spec-mcp
-site_description: Expose djangorestframework-services services and selectors as a Model Context Protocol (MCP) server.
+site_description: Serve django-service-specs services and selectors as a Model Context Protocol (MCP) server.
 site_url: https://artui.github.io/django-spec-mcp/
 repo_url: https://github.com/Artui/django-spec-mcp
 repo_name: Artui/django-spec-mcp
@@ -39,19 +39,20 @@ theme:
 
 plugins:
   - search
+  # Listed explicitly so it scans each page for Markdown anchors: a
+  # reference page sets one where a docstring names a symbol that page does
+  # not render, so the strict build finds a target for it.
+  - autorefs
   - mkdocstrings:
       handlers:
         python:
-          # This package re-exports drf-services types, and their docstrings link
-          # to drf-services' own symbols. Those links resolve in that project's
-          # inventory, not ours, so without this the strict build aborts on
-          # cross-reference targets it cannot find -- and a reader following one
-          # would have nowhere to land. Importing the inventory makes them point
-          # at the upstream page they mean. The kernel's inventory does the same
-          # for the dispatch policies documented from it, whose docstrings link
-          # to the kernel's own functions.
+          # Docstrings rendered here link to symbols another project documents:
+          # the kernel's specs, presenters and dispatch policies. Those links
+          # resolve in the kernel's inventory, not ours, so without it the
+          # strict build aborts on cross-reference targets it cannot find --
+          # and a reader following one would have nowhere to land. Importing
+          # the inventory makes them point at the upstream page they mean.
           inventories:
-            - https://artui.github.io/djangorestframework-services/objects.inv
             - https://artui.github.io/django-service-specs/objects.inv
           options:
             docstring_style: google
@@ -85,6 +86,7 @@ markdown_extensions:
 nav:
   - Home: index.md
   - Quickstart: quickstart.md
+  - Moving from drf-mcp: moving-from-drf-mcp.md
   - Concepts: concepts.md
   - Authentication: auth.md
   - Async deployment: async.md
@@ -96,17 +98,14 @@ nav:
       - recipes/index.md
       - Expose a service: recipes/expose-a-service.md
       - Swap the session store: recipes/swap-session-store.md
-      - Ship TOON for large lists: recipes/toon-output.md
       - Hide plumbing from the model: recipes/agent-audience.md
       - Add a custom permission: recipes/custom-permission.md
       - Async-native auth backend: recipes/async-auth-backend.md
       - Add rate limiting: recipes/rate-limiting.md
       - Multi-worker SSE with Redis: recipes/redis-sse-broker.md
       - Resume SSE with Last-Event-ID: recipes/sse-replay-buffer.md
-      - Honor drf-spectacular annotations: recipes/drf-spectacular.md
       - Selector tool with FilterSet: recipes/selector-tool-with-filterset.md
-      - Expose a polymorphic action as tools: recipes/polymorphic-action.md
-      - Render a DRF list as an interactive table: recipes/interactive-view.md
+      - Render a list as an interactive table: recipes/interactive-view.md
       - Register tools from a spec registry: recipes/register-from-spec-registry.md
       - Connect a Pydantic-AI agent: recipes/pydantic-ai-client.md
       - Migrate from fastapi-mcp / hand-rolled: recipes/migrating.md

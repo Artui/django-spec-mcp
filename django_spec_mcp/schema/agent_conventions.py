@@ -1,7 +1,7 @@
 """The default agent-facing wording, and the helper that appends the handle line.
 
 Every sentence here is a prompt, so it lives in the transport that knows a model
-is reading. drf-services supplies the markings and no wording at all: what a
+is reading. The kernel supplies the markings and no wording at all: what a
 reader should *do* with an identifier depends on the reader.
 
 These are the defaults
@@ -35,21 +35,22 @@ PAGED_QUERY_PARAM_SCOPE = (
     "On a paged result it applies to each item in `items`, never to the page "
     "envelope (`items`, `page`, `totalPages`, `hasNext`)."
 )
-"""What a read-shaping ``QueryParam`` applies to on a tool that returns a page.
+"""What a read-shaping parameter applies to on a tool that returns a page.
 
 The ``outputSchema`` of a paged tool describes the envelope, because that is what
 the result is, and a field-selection param names fields. So the one shape a model
 has been shown is exactly the wrong one to select against: ``{items{id, name}}``
-reads naturally off the schema, and a serializer rendering one row at a time has
+reads naturally off the schema, and a presenter rendering one row at a time has
 no ``items`` field. This sentence says which of the two shapes the param
-addresses, beside the param (``selector_tool_schema``) and again in the
-``isError`` text when a selection is refused while rendering
-(``handlers.utils.read_shaping_error_result``), which is where a model that got
+addresses, beside the param (a kernel tool's ``shapes``, in
+``kernel_tool_input_schema``) and again in the ``isError`` text
+when a selection is refused while rendering
+(``handlers.utils.rendering_refusal_result``), which is where a model that got
 it wrong reads next.
 
 Only a paged tool gets it. A service tool's result and an unpaginated list have
 no envelope, so on those the sentence would describe a shape the model never
-sees. Written here rather than supplied by drf-services for the reason the module
+sees. Written here rather than supplied by the kernel for the reason the module
 docstring gives: it is a prompt, and the wording belongs to the transport that
 knows a model is reading."""
 

@@ -1,24 +1,34 @@
 # Auth
 
-Backends, permissions, response builders, rate limits, and OAuth-related views
-(RFC 9728 PRM + the opt-in contrib `oauth/` mount).
+Backends, response builders, rate limits, and the RFC 9728
+protected-resource metadata view.
+
+A tool or resource is guarded by its spec's own `permissions`, the kernel's
+[`PermissionCheck`][django_service_specs.PermissionCheck], and by the
+`scopes=` gate at registration; see
+[Who may call a tool](../auth.md#who-may-call-a-tool). A prompt or an
+interactive view takes the same kernel checks through `permissions=`, each
+handed the prompt's or view's binding as the spec, and the same `scopes=`; see
+[Prompts and views](../auth.md#prompts-and-interactive-views).
 
 ## Protocols
 
 ::: django_spec_mcp.auth.types.auth_backend.MCPAuthBackend
 ::: django_spec_mcp.auth.types.token_info.TokenInfo
-::: django_spec_mcp.auth.permissions.types.mcp_permission.MCPPermission
+::: django_spec_mcp.auth.types.self_checking.SelfChecking
 
 ## Backends
 
 ::: django_spec_mcp.auth.backends.allow_any_backend.AllowAnyBackend
-::: django_spec_mcp.auth.backends.django_oauth_toolkit_backend.DjangoOAuthToolkitBackend
 
-## Permissions
+This package ships no backend that verifies tokens; a project writes its own
+([Writing your own backend](../auth.md#writing-your-own-backend)). A backend of
+its own compares the token's audience with `audience_matches`, the exact
+comparison RFC 8707 asks for, and builds its 401 challenge with
+`bearer_challenge`.
 
-::: django_spec_mcp.auth.permissions.scope_required.ScopeRequired
-::: django_spec_mcp.auth.permissions.django_perm_required.DjangoPermRequired
-::: django_spec_mcp.auth.permissions.drf_permission_adapter.DRFPermissionAdapter
+::: django_spec_mcp.auth.audience.audience_matches
+::: django_spec_mcp.auth.bearer_challenge.bearer_challenge
 
 ## Rate limits
 
@@ -34,6 +44,8 @@ Backends, permissions, response builders, rate limits, and OAuth-related views
 
 ## Protected Resource Metadata (RFC 9728)
 
-::: django_spec_mcp.auth.protected_resource_metadata.ProtectedResourceMetadataViewSet
+The view serving the document is a plain Django view, mounted under the
+server's URLs as `protected-resource-metadata`.
+
+::: django_spec_mcp.auth.protected_resource_metadata_view.ProtectedResourceMetadataView
 ::: django_spec_mcp.auth.types.protected_resource_metadata.ProtectedResourceMetadata
-::: django_spec_mcp.auth.types.authorization_server_metadata.AuthorizationServerMetadata

@@ -2,28 +2,16 @@ from __future__ import annotations
 
 from typing import Any
 
+from django_spec_mcp.handlers.kernel_tool_entry import kernel_tool_entry
 from django_spec_mcp.handlers.listable_tool_bindings import listable_tool_bindings
 from django_spec_mcp.handlers.offered_tools import offered_tools
 from django_spec_mcp.handlers.pagination import paginate
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import (
-    advertises_closed_items,
-    advertises_closed_schema,
     catalog_cache_hints,
-    render_convention,
-    resolve_bound,
-    takes_list_payload,
 )
-from django_spec_mcp.output.resolve_structured_output import resolve_structured_output
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
-from django_spec_mcp.protocol.types.tool import Tool
-from django_spec_mcp.registry.types.selector_tool_binding import SelectorToolBinding
-from django_spec_mcp.schema.agent_conventions import append_agent_conventions
-from django_spec_mcp.schema.output_schema import build_output_schema
-from django_spec_mcp.schema.selector_tool_schema import build_selector_tool_input_schema
-from django_spec_mcp.schema.service_tool_schema import build_service_tool_input_schema
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
-from django_spec_mcp.types.tool_content_kind import ToolContentKind
 
 
 def handle_tools_list(
@@ -78,82 +66,8 @@ def handle_tools_list(
     except ValueError as exc:
         return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, str(exc))
 
-    tools: list[dict[str, Any]] = []
-    for binding in page:
-        # Selector tools merge filter / ordering / pagination args in; service
-        # tools expose what drf-services' dispatch declares for them: the input
-        # serializer's schema, or without one a spread service's own
-        # parameters, plus their target lookup. Every reflection is given the server's seeds, which
-        # fill a parameter of the same name, so it is never asked of the client.
-        if isinstance(binding, SelectorToolBinding):
-            input_schema = build_selector_tool_input_schema(
-                binding,
-                max_page_size=resolve_bound(binding.max_page_size, context.config.max_page_size),
-                pool_seeds=context.pool_seeds,
-                query_param_on_pages=render_convention(context.conventions.query_param_on_pages),
-            )
-        else:
-            input_schema = build_service_tool_input_schema(binding, pool_seeds=context.pool_seeds)
-        # Stamped to match what the runtime actually enforces, read from the
-        # policy and the declared set dispatch reads; every builder returns a
-        # ``"type": "object"`` shape, so this reaches every schema.
-        input_schema = dict(input_schema)
-        input_schema["additionalProperties"] = not advertises_closed_schema(binding)
-        if takes_list_payload(binding):
-            input_schema = _stamp_items(input_schema, binding)
-        # ``outputSchema`` and ``structuredContent`` are independently
-        # toggleable, but the spec forbids advertising the schema while
-        # suppressing the content — ``resolve_structured_output`` raises
-        # ``ImproperlyConfigured`` for that combination before anything is
-        # serialized.
-        emit_output_schema, _emit_structured_content = resolve_structured_output(
-            include_output_schema_override=binding.include_output_schema,
-            include_structured_content_override=binding.include_structured_content,
-            binding_name=binding.name,
-            default_output_schema=context.config.include_output_schema,
-            default_structured_content=context.config.include_structured_content,
-        )
-        # ``output_serializer`` reconciles where each binding kind keeps
-        # its response serializer, and carries the same agent markings the
-        # dispatch path projects the payload through -- one declaration, so a
-        # schema cannot advertise a field the payload no longer carries.
-        # ``rendered_affordances`` is reconciled the same way, because the
-        # renderer adds an ``affordances`` key no serializer declares.
-        # ``outputSchema`` must match the payload shape the dispatch pipeline
-        # actually emits — a LIST result is a bare array, or the pagination
-        # envelope — so the schema is kind-aware on every binding, and
-        # ``rendered_kind`` is reconciled per binding like the two above. Only
-        # the selector schema once was: a service tool re-fetching a LIST
-        # advertised a single object and served an array. Only a selector tool paginates, so only it passes the flag.
-        output_schema = build_output_schema(
-            binding.output_serializer,
-            kind=binding.rendered_kind,
-            paginate=isinstance(binding, SelectorToolBinding) and binding.paginate,
-            projection=binding.audience_projection,
-            affordances=binding.rendered_affordances,
-            may_be_empty=binding.can_present_nothing,
-            handle_description=render_convention(context.conventions.handle_field_description),
-        )
-        # A media tool has no JSON result to describe, so the schema is dropped
-        # rather than advertised over a payload arriving as an image block.
-        # Resource links keep theirs: the links are JSON.
-        if binding.content_kind in (ToolContentKind.IMAGE, ToolContentKind.AUDIO):
-            output_schema = None
-        tool = Tool(
-            name=binding.name,
-            description=append_agent_conventions(
-                binding.description,
-                binding.audience_projection,
-                handle_line=render_convention(context.conventions.handle_line),
-            ),
-            title=binding.title,
-            icons=binding.icons,
-            input_schema=input_schema,
-            output_schema=(output_schema if emit_output_schema else None),
-            annotations=dict(binding.annotations) or None,
-            meta=dict(binding.meta) or None,
-        )
-        tools.append(tool.to_dict())
+    # Each entry is built from the kernel's own schemas.
+    tools: list[dict[str, Any]] = [kernel_tool_entry(binding, context) for binding in page]
     response: dict[str, Any] = {
         "tools": tools,
         **catalog_cache_hints(
@@ -164,35 +78,6 @@ def handle_tools_list(
     if next_cursor is not None:
         response["nextCursor"] = next_cursor
     return response
-
-
-def _stamp_items(input_schema: dict[str, Any], binding: Any) -> dict[str, Any]:
-    """Stamp a ``many=True`` service tool's item schema with the closedness dispatch
-    enforces on each item.
-
-    The object holding the list is closed whatever the policy, so the policy is
-    advertised where it applies, one level down. Each level is copied rather than
-    written through, so nothing the reflection returned is mutated.
-
-    A ``metadata["json_schema"]["input"]`` fragment replaces the reflection's keys
-    whole, so one declaring its own ``properties`` may leave no object item schema
-    to stamp. That schema is the author's and is served as written, rather than
-    failing the whole listing on a lookup.
-    """
-    argument: str = binding.spec.many_argument
-    properties: Any = input_schema.get("properties")
-    array: Any = properties.get(argument) if isinstance(properties, dict) else None
-    item: Any = array.get("items") if isinstance(array, dict) else None
-    if not isinstance(item, dict):
-        return input_schema
-    closed: bool = advertises_closed_items(binding)
-    return {
-        **input_schema,
-        "properties": {
-            **properties,
-            argument: {**array, "items": {**item, "additionalProperties": not closed}},
-        },
-    }
 
 
 __all__ = ["handle_tools_list"]

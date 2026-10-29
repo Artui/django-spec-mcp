@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from typing import Any
 
 from django.core.exceptions import ImproperlyConfigured
@@ -8,7 +8,9 @@ from django.core.exceptions import ImproperlyConfigured
 from django_spec_mcp.types.elicitation_scalar_types import ELICITATION_SCALAR_TYPES
 
 
-def build_requested_schema(schema: Mapping[str, Any]) -> dict[str, Any]:
+def build_requested_schema(
+    schema: Mapping[str, Any], *, admitted: Collection[str] | None = None
+) -> dict[str, Any]:
     """Turn ``AdditionalInputRequired.schema`` into a spec-legal ``requestedSchema``.
 
     The service declares only the properties — ``{"confirmed": {"type":
@@ -26,11 +28,38 @@ def build_requested_schema(schema: Mapping[str, Any]) -> dict[str, Any]:
     whole result. An unusable schema is a programming error in the service, so
     it fails loudly here, where its author can still be told which property is
     wrong.
+
+    **``admitted`` is the argument names the tool takes from a client**, and the
+    kernel tool path (``run_kernel_tool``, sync and async) always passes it: the
+    spec's parameters less the names the server fills for the call, the binding's
+    ``server_arguments`` and the kernel's ``server_owned_keys`` (``admitted_arguments``).
+    The answer comes back as an ordinary argument, so a property outside that set is
+    one the call would then refuse as unknown, drop under ``IGNORE`` or replace with
+    the server's value, after the user has filled it in; it is refused here instead,
+    as an unrenderable one is, and the ``ImproperlyConfigured`` becomes a ``-32603``
+    naming the property and the names that are admitted. ``None`` asks nothing of the
+    names, for a caller that does not know the set.
     """
     properties: dict[str, Any] = {}
     required: list[str] = []
     for name, definition in schema.items():
         _reject_unusable(name, definition)
+        # Two conjuncts, one branch arc: ``admitted is not None`` is held by
+        # ``test_no_admitted_set_judges_the_schema_alone`` and the membership by
+        # ``test_a_property_the_tool_admits_passes``.
+        if admitted is not None and name not in admitted:
+            # Reaches the client verbatim as a ``-32603``, so it holds for both ways
+            # of not being admitted: undeclared, and declared but filled by the server.
+            instead = (
+                f"Ask for one of: {', '.join(sorted(admitted))}."
+                if admitted
+                else "This tool takes no argument from a client, so it can ask for nothing."
+            )
+            raise ImproperlyConfigured(
+                f"AdditionalInputRequired asked for {name!r}, which this tool does not take "
+                "from a client: the spec does not declare it, or the server fills it for the "
+                f"call, so its answer would be refused, dropped or replaced. {instead}"
+            )
         properties[name] = definition
         if "default" not in definition:
             required.append(name)

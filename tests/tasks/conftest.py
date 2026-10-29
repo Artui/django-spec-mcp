@@ -2,6 +2,9 @@
 
 The executors here are the point of the seam: neither imports a queue, and the
 package never learns which one it got.
+
+``policy_server`` carries one kernel tool per ``TaskPolicy``; ``server``,
+below, carries none.
 """
 
 from __future__ import annotations
@@ -9,7 +12,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_service_specs import ServiceSpec, Unrestricted
 
 from django_spec_mcp import MCPServer, TaskPolicy
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
@@ -48,10 +51,6 @@ class BrokenExecutor:
         raise RuntimeError("broker unreachable")
 
 
-def slow_service(**_: Any) -> dict[str, str]:
-    return {"done": "yes"}
-
-
 @pytest.fixture
 def store() -> InMemoryTaskStore:
     return InMemoryTaskStore()
@@ -64,8 +63,37 @@ def executor(store: InMemoryTaskStore) -> RecordingExecutor:
 
 @pytest.fixture
 def server(store: InMemoryTaskStore, executor: RecordingExecutor) -> MCPServer:
+    """A task-running server with no tool: a task created by name, or run when it
+    names no live tool, asks nothing of a spec. A test that needs tools asks for
+    ``policy_server`` instead.
+    """
+    return MCPServer(
+        name="tasks-kernel",
+        auth_backend=AllowAnyBackend(),
+        task_store=store,
+        task_executor=executor,
+    )
+
+
+def done() -> dict[str, str]:
+    return {"done": "yes"}
+
+
+def register_kernel_tool(server: MCPServer, name: str, service: Any, **kwargs: Any) -> None:
+    """Register ``service`` as an open kernel service tool, with ``kwargs`` as its knobs."""
+    server.register_tool(
+        ServiceSpec(service=service, permissions=[Unrestricted()], atomic=False),
+        name=name,
+        description="x",
+        **kwargs,
+    )
+
+
+@pytest.fixture
+def policy_server(store: InMemoryTaskStore, executor: RecordingExecutor) -> MCPServer:
+    """A task-running server with one kernel tool per policy, each answering ``done``."""
     built = MCPServer(
-        name="tasks-fixture",
+        name="tasks-policies",
         auth_backend=AllowAnyBackend(),
         session_store=InMemorySessionStore(),
         task_store=store,
@@ -76,12 +104,7 @@ def server(store: InMemoryTaskStore, executor: RecordingExecutor) -> MCPServer:
         ("tasks.required", TaskPolicy.REQUIRED),
         ("tasks.inline", TaskPolicy.FORBIDDEN),
     ):
-        built.register_service_tool(
-            name=name,
-            description="x",
-            spec=ServiceSpec(service=slow_service, atomic=False),
-            task_policy=policy,
-        )
+        register_kernel_tool(built, name, done, task_policy=policy)
     return built
 
 
@@ -112,3 +135,16 @@ def context(
         task_executor=server.task_executor,
         config=server._config,
     )
+
+
+__all__ = [
+    "BrokenExecutor",
+    "RecordingExecutor",
+    "context",
+    "done",
+    "executor",
+    "policy_server",
+    "register_kernel_tool",
+    "server",
+    "store",
+]

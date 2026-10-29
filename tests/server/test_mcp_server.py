@@ -1,19 +1,31 @@
+"""``MCPServer``'s registrars, collaborators, session namespacing and URL mounting.
+
+The registrars are asked here with kernel specs: ``register_tool`` and the
+kernel form of ``register_resource``. A kernel spec is registered through the
+registrars, which are the one way in.
+"""
+
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Any
+
 import pytest
-from django.core.exceptions import ImproperlyConfigured
-from django_service_specs import SelectorKind
-from rest_framework import serializers as drf_serializers
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_service_specs import (
+    DataclassPresenter,
+    Parameter,
+    Parameters,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+)
 
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.auth.backends.django_oauth_toolkit_backend import (
-    DjangoOAuthToolkitBackend,
-)
 from django_spec_mcp.server.mcp_server import MCPServer
 from django_spec_mcp.transport.django_cache_session_store import DjangoCacheSessionStore
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
+from tests.testapp.services import record_invoice
 
 
 def _make() -> MCPServer:
@@ -26,164 +38,51 @@ def _make() -> MCPServer:
     )
 
 
-class _Payload(drf_serializers.Serializer):
-    """What fills ``data`` for the fixture services below, which require it."""
+@dataclass
+class _Note:
+    pk: int
 
-    text = drf_serializers.CharField()
+
+def _service() -> ServiceSpec:
+    return ServiceSpec(service=record_invoice, permissions=[Unrestricted()])
+
+
+def _retrieve() -> SelectorSpec:
+    return SelectorSpec(
+        kind=SelectorKind.RETRIEVE,
+        selector=lambda *, pk: _Note(pk=pk),
+        reads=Parameters([Parameter("pk", "integer", required=True)]),
+        permissions=[Unrestricted()],
+        presenter=DataclassPresenter(_Note),
+    )
 
 
 def test_register_tool_imperative() -> None:
     server = _make()
-
-    def svc(*, data: dict) -> dict:
-        return data
-
-    binding = server.register_service_tool(
-        name="t", spec=ServiceSpec(service=svc, input_serializer=_Payload)
-    )
+    binding = server.register_tool(_service(), name="t", description="d")
     assert server.tools.get("t") is binding
 
 
 def test_register_resource_imperative() -> None:
     server = _make()
-    binding = server.register_resource(
-        name="r",
-        uri_template="r://",
-        selector=SelectorSpec(kind=SelectorKind.LIST, selector=lambda: None),
-    )
-    assert server.resources.resolve("r://") is not None
+    binding = server.register_resource(_retrieve(), name="r", uri_template="r://{pk}")
+    assert server.resources.resolve("r://1") is not None
     assert binding.name == "r"
 
 
 def test_register_resource_rejects_bare_callable() -> None:
-    """The imperative surface requires a ``SelectorSpec``."""
+    """The kernel form requires a ``SelectorSpec``."""
     server = _make()
+    bare: Any = lambda: None  # noqa: E731
     with pytest.raises(TypeError, match="SelectorSpec"):
-        server.register_resource(
-            name="r",
-            uri_template="r://",
-            selector=lambda: None,  # type: ignore[arg-type],
-        )
+        server.register_resource(bare, name="r", uri_template="r://")
 
 
-def test_tool_decorator_uses_function_doc_as_description() -> None:
+def test_register_tool_duplicate_raises() -> None:
     server = _make()
-
-    @server.service_tool(name="t.create", input_serializer=_Payload)
-    def create(*, data: dict) -> dict:
-        """Create something."""
-        return data
-
-    assert server.tools.get("t.create").description == "Create something."
-
-
-def test_tool_decorator_with_explicit_spec() -> None:
-    server = _make()
-
-    def svc(*, data: dict) -> dict:
-        return data
-
-    @server.service_tool(name="t.x", spec=ServiceSpec(service=svc, input_serializer=_Payload))
-    def placeholder(*, data: dict) -> dict:
-        return {"ignored": True}
-
-    # Decorator returns the original function unchanged.
-    assert placeholder(data={"a": 1}) == {"ignored": True}
-    binding = server.tools.get("t.x")
-    assert binding.spec.service is svc
-
-
-def test_resource_decorator_uses_function_name_when_unspecified() -> None:
-    server = _make()
-
-    @server.resource(uri_template="x://{pk}", kind=SelectorKind.RETRIEVE)
-    def get_x(*, pk: int) -> int:
-        """Fetch an x."""
-        return pk
-
-    found = server.resources.resolve("x://7")
-    assert found is not None
-    binding, _ = found
-    assert binding.name == "get_x"
-    assert binding.description == "Fetch an x."
-
-
-def test_resource_decorator_overrides_name() -> None:
-    server = _make()
-
-    @server.resource(uri_template="y://", name="custom", kind=SelectorKind.LIST)
-    def listy() -> list:
-        return []
-
-    found = server.resources.resolve("y://")
-    assert found is not None and found[0].name == "custom"
-
-
-def test_service_tool_decorator_builds_output_selector_spec_when_serializer_given() -> None:
-    """The flat ``output_serializer`` decorator kwarg flows into a
-    nested ``output_selector_spec`` (sister-repo 0.13+).
-    """
-    from rest_framework import serializers
-
-    class _Out(serializers.Serializer):
-        x = serializers.IntegerField()
-
-    server = _make()
-
-    @server.service_tool(name="t.create", input_serializer=_Payload, output_serializer=_Out)
-    def create(*, data: dict) -> dict:
-        return data
-
-    binding = server.tools.get("t.create")
-    assert binding.spec.output_selector_spec is not None
-    assert binding.spec.output_selector_spec.output_serializer is _Out
-    assert binding.spec.output_selector_spec.kind is SelectorKind.RETRIEVE
-
-
-def test_selector_tool_decorator_requires_kind_when_spec_omitted() -> None:
-    server = _make()
-    with pytest.raises(TypeError, match="``kind`` is required"):
-
-        @server.selector_tool(name="t")
-        def fn() -> list:
-            return []
-
-
-def test_selector_tool_decorator_accepts_explicit_spec() -> None:
-    """When ``spec=`` is passed, ``kind`` kwarg is ignored and spec.kind wins."""
-    server = _make()
-
-    @server.selector_tool(name="t", spec=SelectorSpec(kind=SelectorKind.LIST, selector=lambda: []))
-    def fn() -> list:
-        return []
-
-    binding = server.tools.get("t")
-    assert binding.kind is SelectorKind.LIST
-
-
-def test_resource_decorator_requires_kind_when_spec_omitted() -> None:
-    server = _make()
-    with pytest.raises(TypeError, match="``kind`` is required"):
-
-        @server.resource(uri_template="x://")
-        def fn() -> list:
-            return []
-
-
-def test_resource_decorator_accepts_explicit_spec() -> None:
-    server = _make()
-
-    @server.resource(
-        uri_template="x://",
-        spec=SelectorSpec(kind=SelectorKind.LIST, selector=lambda: []),
-    )
-    def fn() -> list:
-        return []
-
-    found = server.resources.resolve("x://")
-    assert found is not None
-    binding, _ = found
-    assert binding.kind is SelectorKind.LIST
+    server.register_tool(_service(), name="dup", description="d")
+    with pytest.raises(ValueError, match="Duplicate"):
+        server.register_tool(_service(), name="dup", description="d")
 
 
 def test_accessors() -> None:
@@ -195,7 +94,7 @@ def test_accessors() -> None:
 def test_omitted_collaborators_get_constructed_defaults() -> None:
     """No dotted-path resolution: the package defaults are built directly."""
     server = MCPServer(name="s")
-    assert isinstance(server.auth_backend, DjangoOAuthToolkitBackend)
+    assert server.auth_backend is None
     assert isinstance(server.session_store, DjangoCacheSessionStore)
 
 
@@ -257,31 +156,6 @@ def test_a_hand_built_session_store_keeps_its_own_namespace() -> None:
     session_id = server.session_store.create(principal_id="user:2")
 
     assert DjangoCacheSessionStore().owner(session_id) == "user:2"
-
-
-def test_resource_url_configures_the_default_backend() -> None:
-    server = MCPServer(name="internal", resource_url="https://example.com/internal/mcp/")
-    md = server.auth_backend.protected_resource_metadata()
-    assert md.resource == "https://example.com/internal/mcp/"
-
-
-def test_resource_url_with_a_custom_backend_raises() -> None:
-    """A custom backend owns its own audience binding, so resource_url= has
-    nowhere to go — silently dropping it would leave enforcement unconfigured
-    in a project that believes it configured it."""
-    with pytest.raises(ImproperlyConfigured, match="not both"):
-        MCPServer(
-            name="s",
-            resource_url="https://example.com/mcp/",
-            auth_backend=AllowAnyBackend(),
-        )
-
-
-def test_register_tool_duplicate_raises() -> None:
-    server = _make()
-    server.register_service_tool(name="dup", spec=ServiceSpec(service=lambda: None))
-    with pytest.raises(ValueError, match="Duplicate"):
-        server.register_service_tool(name="dup", spec=ServiceSpec(service=lambda: None))
 
 
 def test_urls_is_the_namespaced_triple() -> None:

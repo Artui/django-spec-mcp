@@ -6,6 +6,11 @@ modern-only method. ``extensions`` is not even a field on the legacy
 ``ServerCapabilities``. Advertising either to a legacy client promises something
 nothing on its path can deliver, and a client acting on it does not get a clean
 error — for ``listChanged`` it gets silence, which is worse.
+
+These ask it of a server whose resources and tool are registered with
+``register_resource`` and ``register_tool`` on kernel specs. The server,
+context and executor are local to this file, so it reads no other suite's
+fixtures.
 """
 
 from __future__ import annotations
@@ -14,21 +19,78 @@ import json
 from typing import Any
 
 import pytest
-from django.test import Client
-from rest_framework_services.types.service_spec import ServiceSpec
+from django.http import HttpRequest
+from django.test import Client, override_settings
+from django_service_specs import SelectorKind, SelectorSpec, ServiceSpec, Unrestricted
 
 from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_initialize import build_capabilities, handle_initialize
 from django_spec_mcp.handlers.handle_server_discover import handle_server_discover
+from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.subscriptions.in_memory_subscription_broker import (
     InMemorySubscriptionBroker,
 )
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
-from tests.subscriptions.test_subscription_core import _context, _server
-from tests.tasks.conftest import RecordingExecutor, slow_service
+from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
+from tests.testapp.auth_backend import HeaderAuthBackend
+from tests.testapp.urlconf_for import urlconf_for
 
 MODERN = "2026-07-28"
 LEGACY = "2025-11-25"
+
+
+class _RecordingExecutor:
+    """Records what it was handed instead of queueing it."""
+
+    def __init__(self) -> None:
+        self.enqueued: list[str] = []
+
+    def enqueue(self, task_id: str) -> None:
+        self.enqueued.append(task_id)
+
+
+def _thing() -> dict[str, str]:
+    return {"thing": "yes"}
+
+
+def _slow() -> dict[str, str]:
+    return {"done": "yes"}
+
+
+def _server(**kwargs: Any) -> MCPServer:
+    server = MCPServer(
+        name="subs",
+        auth_backend=HeaderAuthBackend(),
+        session_store=InMemorySessionStore(),
+        **kwargs,
+    )
+    server.register_resource(
+        SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_thing, permissions=[Unrestricted()]),
+        name="open",
+        uri_template="open://thing",
+    )
+    return server
+
+
+def _context(server: MCPServer, **overrides: Any) -> MCPCallContext:
+    request = HttpRequest()
+    request.method = "POST"
+    base: dict[str, Any] = {
+        "http_request": request,
+        "token": TokenInfo(user=None),
+        "tools": server.tools,
+        "resources": server.resources,
+        "prompts": server.prompts,
+        "protocol_version": MODERN,
+        "client_capabilities": {"extensions": {TASKS_EXTENSION_ID: {}}},
+        "tasks": server.task_store,
+        "subscriptions": server.subscription_broker,
+        "config": server.config,
+    }
+    base.update(overrides)
+    return MCPCallContext(**base)
 
 
 def _pushing_server() -> MCPServer:
@@ -42,10 +104,10 @@ def _full_server() -> MCPServer:
     server = _server(
         subscription_broker=InMemorySubscriptionBroker(),
         task_store=store,
-        task_executor=RecordingExecutor(store),
+        task_executor=_RecordingExecutor(),
     )
-    server.register_service_tool(
-        name="x", description="x", spec=ServiceSpec(service=slow_service, atomic=False)
+    server.register_tool(
+        ServiceSpec(service=_slow, permissions=[Unrestricted()]), name="x", description="x"
     )
     return server
 
@@ -123,46 +185,46 @@ def test_discover_follows_the_caller_not_the_server() -> None:
 
 
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.urls("tests.subscriptions.urls")
 def test_the_method_a_legacy_client_would_have_called_does_not_exist(client: Client) -> None:
     """``resources/subscribe`` is deliberately not implemented: optional in
     ``2025-11-25``, and in ``2026-07-28`` the schema says
     ``SubscriptionFilter.resourceUris`` *"replaces the former resources/subscribe
     RPC"*. This is the concrete thing the old advertisement invited a client to
     do — so the fix is the advertisement, not the method."""
-    handshake = client.post(
-        "/mcp/",
-        data=json.dumps(
-            {
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "initialize",
-                "params": {
-                    "protocolVersion": LEGACY,
-                    "capabilities": {},
-                    "clientInfo": {"name": "t", "version": "1"},
-                },
-            }
-        ),
-        content_type="application/json",
-    )
-    capabilities: dict[str, Any] = json.loads(handshake.content)["result"]["capabilities"]
-    assert "subscribe" not in capabilities.get("resources", {})
+    with override_settings(ROOT_URLCONF=urlconf_for(_pushing_server())):
+        handshake = client.post(
+            "/mcp/",
+            data=json.dumps(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "initialize",
+                    "params": {
+                        "protocolVersion": LEGACY,
+                        "capabilities": {},
+                        "clientInfo": {"name": "t", "version": "1"},
+                    },
+                }
+            ),
+            content_type="application/json",
+        )
+        capabilities: dict[str, Any] = json.loads(handshake.content)["result"]["capabilities"]
+        assert "subscribe" not in capabilities.get("resources", {})
 
-    attempt = client.post(
-        "/mcp/",
-        data=json.dumps(
-            {
-                "jsonrpc": "2.0",
-                "id": 2,
-                "method": "resources/subscribe",
-                "params": {"uri": "open://thing"},
-            }
-        ),
-        content_type="application/json",
-        headers={
-            "Mcp-Session-Id": handshake["Mcp-Session-Id"],
-            "Mcp-Protocol-Version": LEGACY,
-        },
-    )
-    assert json.loads(attempt.content)["error"]["code"] == -32601
+        attempt = client.post(
+            "/mcp/",
+            data=json.dumps(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 2,
+                    "method": "resources/subscribe",
+                    "params": {"uri": "open://thing"},
+                }
+            ),
+            content_type="application/json",
+            headers={
+                "Mcp-Session-Id": handshake["Mcp-Session-Id"],
+                "Mcp-Protocol-Version": LEGACY,
+            },
+        )
+        assert json.loads(attempt.content)["error"]["code"] == -32601

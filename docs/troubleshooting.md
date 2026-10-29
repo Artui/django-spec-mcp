@@ -7,7 +7,7 @@ unrelated causes look identical from the client. Work down the list.
 
 ### 1. Read the `MCP-Error` header
 
-Since 0.25.0 every session rejection carries one:
+Every session rejection carries one:
 
 | Header | HTTP | Meaning |
 |---|---|---|
@@ -90,18 +90,21 @@ this section applies to you.
 
 ## `ImproperlyConfigured` on startup
 
-### "registered with no permissions"
+### "its kernel spec declares no permissions"
 
-Since 0.25.0 a tool must declare permissions. DRF viewset-level and
-`REST_FRAMEWORK` default permission classes **do not reach MCP** — this package
-deliberately bypasses DRF's view pipeline — so a spec that looks guarded over
-HTTP ships as an open tool.
+A tool or resource must declare permissions on its spec, or it would ship as
+an open tool. Declare the checks on the spec, `[Unrestricted()]` for an
+operation open to every caller:
 
 ```python
-ServiceSpec(service=create_invoice, permission_classes=[IsAuthenticated])
+from django_service_specs import ServiceSpec, Unrestricted
+
+ServiceSpec(service=create_invoice, permissions=[Unrestricted()])
 ```
 
-To migrate a large surface gradually, downgrade it to a warning:
+A `scopes=` gate at registration does not count: it is a transport check beside
+the spec's permissions. To migrate a large surface gradually, downgrade the
+refusal to a warning:
 
 ```python
 SPEC_MCP = {"REQUIRE_TOOL_PERMISSIONS": False}
@@ -116,160 +119,99 @@ SPEC_MCP = {"REQUIRE_TOOL_PERMISSIONS": False}
 ### "outputSchema would be advertised but structuredContent is disabled"
 
 The spec requires a tool declaring an `outputSchema` to return conforming
-`structuredContent`. Since 0.25.0 this is caught when the tool is registered
-rather than on the first call.
+`structuredContent`. This is caught when the tool is registered rather than on
+the first call.
 
 Note that server-wide `INCLUDE_OUTPUT_SCHEMA=True` with
 `INCLUDE_STRUCTURED_CONTENT=False` is **legal** — it just requires every binding
 to override the content back on. The error names the binding that did not.
 
-### "input_serializer must be a DRF Serializer subclass" or "output serializer must be a DRF BaseSerializer subclass"
+### "paginate and max_page_size belong to a LIST selector tool", or "invalidates belongs to a service tool"
 
-The serializer declared for a tool or resource is a shape no MCP path can use.
-The usual cause is an instance where the class belongs:
+`register_tool` refuses a knob of the other kind of tool: `paginate` or
+`max_page_size` on a service tool, whose result is never paginated, and
+`invalidates` on a selector tool, which changes nothing. The spec's class says
+which kind of tool it is; move the knob to the tool it belongs to.
 
-```python
-ServiceSpec(service=create_invoice, input_serializer=InvoiceSerializer(many=True))  # refused
-ServiceSpec(service=create_invoice, input_serializer=InvoiceSerializer)  # accepted
-```
-
-The two sides accept different shapes. An **input** serializer is validated, so
-it must be a `Serializer` subclass or a dataclass type. An **output** serializer
-is only rendered, so any `BaseSerializer` subclass is accepted there, including
-DRF's read-only pattern that implements just `to_representation`. A dataclass
-is accepted on both sides: as output it renders through a `DataclassSerializer`
-built for it. A resource has only an output serializer, and it is held to the same
-rule.
-
-Such a tool used to register cleanly. Every call to it then failed, and `tools/list`
-failed too, for every tool on the server, because this transport derives each
-tool's schema on each listing. A resource never had a schema to derive, so it
-failed on every read instead.
-
-### "takes the name the spec's list travels under"
+### "are declared by two sources" { #takes-the-name-the-specs-list-travels-under }
 
 A `ServiceSpec` with `many=True` takes its list under one argument, named by the
 spec's `many_argument` (default `items`; see
-[A list payload](concepts.md#list-payload)). A
-`UrlKwarg` or `QueryParam` of that name is popped out of the arguments before
-dispatch, so the list would be routed to `view.kwargs` or the query string and
-every call would be refused as missing its list. Rename the channel, or give the
-list another name on the spec:
+[A list payload](concepts.md#list-payload)). A read declared under that name
+would compete with the list for the one argument, so the kernel refuses the
+spec when it is built. Rename the read, or give the list another name on the
+spec:
 
 ```python
+from django_service_specs import DataclassValidator, ServiceSpec, Unrestricted
+
 ServiceSpec(
     service=create_invoices,
-    input_serializer=InvoiceSerializer,
+    validator=DataclassValidator(InvoiceRow),
     many=True,
     many_argument="invoices",
+    permissions=[Unrestricted()],
 )
 ```
 
-### "cannot apply to a spec declaring many=True"
+### "ServiceSpec declares a collection_selector_spec with many=True"
 
-A `many=True` service receives the whole list as one `data` argument, so a
-`SPREAD_AUTHOR_WINS` argument binding has nothing to spread, and registration
-refuses it with `ImproperlyConfigured`. Leave `argument_binding` at its
-`BUNDLE` default.
+The kernel raises this when the spec is built, before any registration, and
+the same for an `instance_selector_spec` beside `many=True`. A list of rows
+resolves no target, so dispatch would never run the lookup. Declare no target
+lookup, or drop `many=True`.
 
-### "ArgumentBinding.SPREAD_CALLER_WINS is retired"
+## Refused when registering a resource
 
-drf-services 0.58.0 retired the member: a call has one pool, and an author's
-value for an argument (the spec's `kwargs` provider, a declared read) always
-outranks the caller's, so a caller cannot override what the server's spec
-declares. The member stays importable, and registering a tool with it raises
-`ImproperlyConfigured` naming the tool, rather than shipping one that fails
-every call. Pass `ArgumentBinding.SPREAD_AUTHOR_WINS` for a service whose own
-parameters are the caller's input, or `ArgumentBinding.BUNDLE` for one
-validated `data` payload. Where the caller's value should win for a key, leave
-that key out of the `kwargs` provider.
+### "a kernel resource reads one row"
 
-### "ServiceSpec declares collection_selector_spec with many=True"
+`register_resource` takes a `RETRIEVE` `SelectorSpec`: a resource names one
+row by its URI, and the URI template's variables are the spec's reads. A `LIST`
+selector is refused with `ImproperlyConfigured`; register it as a selector tool,
+which pages it.
 
-drf-services raises this when the spec is built, before any registration, and
-the same for an `instance_selector_spec` beside `many=True` or beside a
-`collection_selector_spec`. A list payload resolves no target, and beside a
-collection lookup dispatch never calls the instance one, so the lookup would be
-declared and never run. Declare one target lookup, or drop `many=True`.
+### "got an unexpected keyword argument 'permissions'"
 
-## `ValueError` when registering a resource
-
-### "sets ..., which the resource read path does not apply"
-
-`register_resource` refuses a `SelectorSpec` carrying any of eleven behavioural
-fields — `preconditions`, `filter_set`, `select_related`, `prefetch_related`,
-`annotations`, `extend_queryset`, `allow_none`, `output_serializer_context`,
-`progress_reporter`, `metadata`, `affordances`. `resources/read` dispatches the
-bare selector callable, so those would be silently dropped, and a `filter_set`
-that scopes a tenant over HTTP would return every row here with nothing in the
-response saying so.
-
-Register the same spec as a selector *tool* — which honours all eleven — or move
-the behaviour into the callable, where it travels with every dispatch.
-[What a resource cannot carry, and why registration refuses it](concepts.md#what-a-resource-cannot-carry-and-why-registration-refuses-it)
-has the field-by-field consequences.
-
-## OAuth discovery returns 404s
-
-### The authorization server must be a site root
-
-Endpoint paths are appended to it, so passing the value django-oauth-toolkit
-advertises as *its* issuer (`https://host/oauth`) publishes
-`https://host/oauth/oauth/authorize/` and two siblings like it. Pass the site
-root. Since 0.25.0 this warns at construction; if you genuinely mount elsewhere,
-set the paths instead:
-
-```python
-DjangoOAuthToolkitBackend(
-    authorization_servers=["https://host"],
-    authorize_path="/custom/authorize/",
-)
-```
+`register_resource` takes no `permissions=`: a kernel spec declares its own,
+and they are the resource's guard, so passing one is Python's `TypeError`.
+Declare the checks on the spec, and add a `scopes=` gate at registration if the
+resource needs one.
 
 ## A tool result is too large for the client
 
 `MAX_RESULT_BYTES` (default 5 MiB) bounds the wire payload, but a client's
 context window is far smaller — a result well under the ceiling can still be
-undeliverable. The bound now logs at `WARNING` when it fires.
+undeliverable. The bound logs at `WARNING` when it fires.
 
 If a paginated tool still returns too much, the row count is not the problem:
-check how wide each row is. A nested serializer that expands related objects can
+check how wide each row is. A presenter that expands related objects can
 make ten rows larger than a thousand lean ones, and `limit` cannot express a
 byte budget.
 
-## A tool call returns a DRF error body instead of JSON-RPC
+## A tool call answers `Internal error`
 
-A `tools/call` answered with something like HTTP `400` and a body of
-``["`items` field is not found"]`` — no `jsonrpc`, no `id` — or with Django's
-HTML `500` page, is an exception that escaped the dispatch. The transport had
-no answer for it, so DRF's exception handler rendered it: an `APIException`
-as DRF's own body, anything else as a server error. A client matching
-responses by `id` has nothing to match, and most report a parse failure rather
-than the error.
+A `tools/call` answered `-32603` with the message `Internal error`, under HTTP
+`500`, is an exception that escaped the dispatch: the service, the selector or
+the presenter raised something no refusal arm answers. The exception is logged
+at `ERROR` with its traceback; its text is not in the response, so read the
+log. The response still carries the request's `id`, so a client matching
+responses by `id` reports the error rather than a parse failure.
 
 The common cause is a field selection written against the page envelope, for
-example django-restql's `{items{id, number}}`, or `fields=items` for a
-hand-written one. On a `paginate=True` tool the serializer renders each item,
-so the selection names a field no item has and the serializer raises while
-rendering. Select per item, `{id, number}` or `fields=id,number`: see
-[Query params](concepts.md#query-param-per-item).
+example `fields=items` on a `paginate=True` tool. The presenter renders each
+item, so a presenter narrowing each row to the named fields looks up a field no
+item has, and raises. Select per item,
+`fields=id,number`: see [Query params](concepts.md#query-param-per-item). A
+presenter that refuses a shape the caller sent with a `ServiceValidationError`
+is answered as an `isError` `validation_error` result, the same as any other
+validation failure, so declaring the shape's `choices` on its
+`Parameter` turns this `500` into a correctable answer.
 
-Fixed in 0.49.0, which answers every such exception as JSON-RPC:
-
-- A render-time rejection of a value the caller supplied is an `isError`
-  `validation_error` tool result naming the param, the same shape as any
-  other validation failure.
-- Anything else is a `-32603` whose message is `Internal error`, carrying the
-  request's `id`, under HTTP `500`. The exception is logged at `ERROR` with its
-  traceback under `django_spec_mcp.transport`; the text is not in the
-  response, so read the log.
-- A `PermissionDenied` (DRF's or Django's) is the exception: a permission
-  class that refuses by raising, rather than returning `False`, is answered
-  exactly like one that returned `False`, as a `FORBIDDEN` under `403` with its
-  `WWW-Authenticate` challenge. It is a refusal, not a server fault, so nothing
-  is logged at `ERROR`.
+A `PermissionDenied` raised inside the call is the exception: it is a refusal,
+not a server fault, so it is answered `-32006` under `403` with the
+`WWW-Authenticate` challenge, exactly like a permission check that answered
+no, and nothing is logged at `ERROR`.
 
 A progress-carrying call (one sent with a `progressToken`) has committed its
-`200` before the dispatch runs, so it never showed a DRF body; before 0.49.0
-its last frame was a `-32603` whose message was the exception's own text.
-Since 0.49.0 that frame reads `Internal error` too.
+`200` before the dispatch runs, so the same failure arrives as its last frame,
+a `-32603` whose message is `Internal error` too.

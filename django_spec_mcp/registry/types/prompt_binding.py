@@ -4,8 +4,11 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from django_service_specs import PermissionCheck
+
 from django_spec_mcp.protocol.types.icon import Icon
 from django_spec_mcp.protocol.types.prompt_argument import PromptArgument
+from django_spec_mcp.registry.types.utils import binding_checks, scope_names
 
 
 @dataclass(frozen=True)
@@ -28,10 +31,24 @@ class PromptBinding:
     description: str | None
     render: Callable[..., Any]
     arguments: tuple[PromptArgument, ...] = ()
-    permissions: tuple[Any, ...] = ()
+    permissions: tuple[PermissionCheck, ...] = ()
+    """The kernel ``PermissionCheck``s a caller must pass, every one of them.
+
+    A prompt is not a spec, so nothing dispatches it: each check is asked
+    ``has_permission(principal, binding)`` with this binding as the spec
+    (``handlers.judge_binding``), at ``prompts/list``, ``prompts/get`` and a
+    completion of one of its arguments alike. A check on the principal alone,
+    the usual case, is the same instance a spec carries. Held to the kernel's
+    rule for a spec's (``registry.types.utils.binding_checks``), but for one
+    case: an empty sequence here is no checks, the field's default, and only
+    ``register_prompt`` refuses an explicit ``[]``."""
+    scopes: tuple[str, ...] | None = None
+    """The OAuth scopes a caller's token must carry, every one of them, asked
+    before ``permissions``. ``None`` is no scope gate; a bare string is one scope,
+    and ``()`` is refused, as on ``KernelToolBinding.scopes``."""
     rate_limits: tuple[Any, ...] = ()
     annotations: dict[str, Any] = field(default_factory=dict)
-    # Free-form for the reason given on ``ToolBinding.meta``.
+    # Free-form for the reason given on ``KernelToolBinding.meta``.
     meta: dict[str, Any] = field(default_factory=dict)
     title: str | None = None
     completions: dict[str, Callable[..., Any]] = field(default_factory=dict)
@@ -51,7 +68,12 @@ class PromptBinding:
     always_listed: bool = False
     """Keep this prompt in ``prompts/list`` even when ``FILTER_LISTINGS_BY_PERMISSIONS``
     would hide it — same semantics as
-    [`ToolBinding.always_listed`][django_spec_mcp.registry.types.tool_binding.ToolBinding.always_listed]."""
+    [`KernelToolBinding.always_listed`][django_spec_mcp.registry.types.kernel_tool_binding.KernelToolBinding.always_listed]."""
+
+    def __post_init__(self) -> None:
+        label = f"Prompt {self.name!r}"
+        object.__setattr__(self, "scopes", scope_names(label, self.scopes))
+        object.__setattr__(self, "permissions", binding_checks(label, self.permissions or None))
 
 
 __all__ = ["PromptBinding"]

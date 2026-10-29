@@ -5,9 +5,7 @@ from typing import Any
 from django.contrib.auth.models import AnonymousUser
 from django.http import HttpRequest
 
-from django_spec_mcp.auth.types.authorization_server_metadata import (
-    AuthorizationServerMetadata,
-)
+from django_spec_mcp.auth.bearer_challenge import bearer_challenge
 from django_spec_mcp.auth.types.protected_resource_metadata import ProtectedResourceMetadata
 from django_spec_mcp.auth.types.token_info import TokenInfo
 
@@ -32,21 +30,10 @@ class AllowAnyBackend:
             warning="AllowAnyBackend is for development only.",
         )
 
-    def authorization_server_metadata(self) -> AuthorizationServerMetadata:
-        raise NotImplementedError(
-            "AllowAnyBackend doesn't host an authorization server. "
-            "Configure a real auth backend (e.g. DjangoOAuthToolkitBackend)."
-        )
-
     def www_authenticate_challenge(
         self, *, scopes: list[str] | None = None, error: str | None = None
     ) -> str:
-        parts: list[str] = ['Bearer realm="mcp"']
-        if error:
-            parts.append(f'error="{error}"')
-        if scopes:
-            parts.append(f'scope="{" ".join(scopes)}"')
-        return ", ".join(parts)
+        return bearer_challenge(resource_metadata_url=None, scopes=scopes, error=error)
 
 
 __all__ = ["AllowAnyBackend"]

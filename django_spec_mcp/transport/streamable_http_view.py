@@ -1,0 +1,668 @@
+from __future__ import annotations
+
+import json
+from collections.abc import Callable
+from typing import Any
+
+from django.http import (
+    HttpRequest,
+    HttpResponse,
+    HttpResponseBase,
+    HttpResponseNotAllowed,
+    JsonResponse,
+)
+from django.utils.decorators import classonlymethod
+from django.views import View
+from django_service_specs import DEFAULT_POOL_SEEDS, PoolSeeds
+
+from django_spec_mcp._compat.reject_awaitable import reject_awaitable
+from django_spec_mcp.auth.principal_for_token import principal_for_token
+from django_spec_mcp.auth.types.auth_backend import MCPAuthBackend
+from django_spec_mcp.config.types.mcp_config import MCPConfig
+from django_spec_mcp.handlers.dispatch import dispatch
+from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.observability import get_logger, session_fingerprint
+from django_spec_mcp.protocol.parse_message import parse_message
+from django_spec_mcp.protocol.types.implementation import Implementation
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.protocol.types.json_rpc_notification import JsonRpcNotification
+from django_spec_mcp.protocol.types.json_rpc_request import JsonRpcRequest
+from django_spec_mcp.protocol.types.json_rpc_response import JsonRpcResponse
+from django_spec_mcp.registry.prompt_registry import PromptRegistry
+from django_spec_mcp.registry.resource_registry import ResourceRegistry
+from django_spec_mcp.registry.tool_registry import ToolRegistry
+from django_spec_mcp.schema.types.agent_conventions import AgentConventions
+from django_spec_mcp.subscriptions.types.subscription_broker import SubscriptionBroker
+from django_spec_mcp.tasks.types.task_executor import TaskExecutor
+from django_spec_mcp.tasks.types.task_store import TaskStore
+from django_spec_mcp.transport.negotiate_protocol_version import negotiate_protocol_version
+from django_spec_mcp.transport.origin_validation import is_origin_allowed
+from django_spec_mcp.transport.types.request_metadata import RequestMetadata
+from django_spec_mcp.transport.types.session_store import SessionStore
+from django_spec_mcp.transport.utils import (
+    allowed_methods,
+    carry_principal,
+    exempt_endpoint,
+    insufficient_scope_challenge,
+    is_permission_denial,
+    is_raised_denial,
+    modern_error_status,
+    not_acceptable,
+    raised_denial_error,
+    seat_anonymous,
+    session_gate_failure,
+)
+from django_spec_mcp.transport.validate_modern_request import validate_modern_request
+from django_spec_mcp.types.internal_error_message import INTERNAL_ERROR_MESSAGE
+from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
+from django_spec_mcp.types.mcp_error_header import MCP_ERROR_HEADER
+from django_spec_mcp.types.modern_protocol_versions import MODERN_PROTOCOL_VERSIONS
+from django_spec_mcp.types.sessionless_methods import SESSIONLESS_METHODS
+
+_SESSION_HEADER: str = "Mcp-Session-Id"
+_VERSION_HEADER: str = "Mcp-Protocol-Version"
+# WSGI never streams, so JSON is all this view answers a POST, DELETE or
+# OPTIONS with, and a client accepting only ``text/event-stream`` there cannot
+# be served (``test_the_sync_endpoint_refuses_an_accept_naming_only_a_stream``).
+_ANSWERS_WITH: tuple[str, ...] = ("application/json",)
+# Answered with a bodyless ``405`` whatever the ``Accept``, so never refused
+# for it: the spec has a GET list ``text/event-stream`` and a server that
+# offers no stream answer ``405``, which negotiating first turned into a ``406``
+# (``test_a_sync_get_naming_only_a_stream_is_the_405_not_a_406``). ``head``
+# because Django routes it to the ``get`` handler.
+_UNNEGOTIATED: frozenset[str] = frozenset({"GET", "HEAD"})
+
+logger = get_logger(__name__)
+
+
+def _error_response(
+    *,
+    code: int,
+    message: str,
+    data: Any = None,
+    status: int = 400,
+    request_id: Any = None,
+    error_hint: str | None = None,
+) -> JsonResponse:
+    body: dict[str, Any] = JsonRpcResponse(
+        id=request_id, error=JsonRpcError(code=code, message=message, data=data)
+    ).to_dict()
+    response = JsonResponse(body, status=status)
+    if error_hint is not None:
+        # Summarises the body for clients that surface only the status line.
+        response[MCP_ERROR_HEADER] = error_hint
+    return response
+
+
+def _internal_error_response(message: JsonRpcRequest) -> JsonResponse:
+    """Answer a dispatch that raised with a JSON-RPC ``-32603``, and log why.
+
+    **The backstop, not a classifier.** Every failure a caller can act on is
+    already *returned* by the handlers, as an ``isError`` tool result or a
+    JSON-RPC error, and the permission denial, unknown method and rate limit
+    responses are all built from those return values. What reaches this is
+    what nothing mapped, which makes it a server fault whatever its type.
+
+    Without it the exception would leave the view as Django's ``500`` page,
+    which is not a JSON-RPC reply at all: a spec-following client could not
+    even match it to the request it sent.
+
+    **Nothing is meant to escape.** The ``406`` for an ``Accept`` header the
+    view cannot answer is decided in ``dispatch``, before this action is
+    called, so the backstop cannot reach it.
+    tests/transport/test_dispatch_backstop.py pins the denial, rate-limit and
+    unknown-method answers the handlers return rather than raise.
+
+    **The status stays a ``500``** so proxies, load balancers and error-rate
+    monitoring still count a server fault, which a ``200`` carrying the error
+    would hide from all three. **The message is generic** and the exception
+    goes to the log with its traceback: see ``INTERNAL_ERROR_MESSAGE``.
+
+    Must be called from inside the ``except`` block: ``logger.exception``
+    reads the exception being handled.
+    """
+    logger.exception(
+        "Unhandled exception dispatching %s (request id %r)", message.method, message.id
+    )
+    return _error_response(
+        code=JsonRpcErrorCode.INTERNAL_ERROR,
+        message=INTERNAL_ERROR_MESSAGE,
+        status=500,
+        request_id=message.id,
+    )
+
+
+def _reject_awaitable_token(result: Any, *, backend: Any) -> Any:
+    """Return the token, or refuse an ``authenticate`` that must be awaited.
+
+    **A security gate, not a type check.** The sync transport cannot await, so
+    an ``async def authenticate`` mounted under ``server.urls`` hands back an
+    un-awaited coroutine — which is *truthy*, so every ``token is None`` check
+    downstream passes and every caller is authenticated under the shared
+    ``"anonymous"`` principal, with nothing in the response saying so. The
+    backend is fine; its *mounting* is wrong, so the message names both ways
+    out.
+    """
+    return reject_awaitable(
+        result,
+        call=f"{type(backend).__name__}.authenticate()",
+        remedy=(
+            "This request was served by the sync MCP transport (server.urls), which "
+            "cannot await it. Mount the server under server.async_urls (ASGI) so the "
+            "backend is awaited, or make authenticate a plain 'def'."
+        ),
+        hazard=(
+            "an un-awaited coroutine is truthy, so serving it would authenticate every caller."
+        ),
+    )
+
+
+def _reject_awaitable_session(result: Any, *, store: Any, method: str) -> Any:
+    """Return a session-store answer, or refuse one that must be awaited.
+
+    An ``async def owner`` is a correct implementation under the async
+    transport, which ``acall``s these methods, and the same store mounted under
+    ``server.urls`` silently stops working. This one fails *closed* — a
+    coroutine matches no principal — but incomprehensibly: every request
+    answers "re-initialize", and a session id minted from ``create`` is the
+    ``repr`` of a coroutine. Naming the mounting is the whole value here; the
+    store is not the bug.
+    """
+    return reject_awaitable(
+        result,
+        call=f"{type(store).__name__}.{method}()",
+        remedy=(
+            "Session stores may be async only under the async transport, which awaits "
+            "them; this request was served by the sync transport (server.urls). Mount "
+            f"the server under server.async_urls (ASGI), or make {method} a plain 'def'."
+        ),
+        hazard=(
+            "an un-awaited coroutine matches no principal and is not a usable session "
+            "id, so every subsequent request would be rejected as un-initialized."
+        ),
+    )
+
+
+class StreamableHttpView(View):
+    """The single ``/mcp`` endpoint per MCP 2025-11-25 (Streamable HTTP).
+
+    A plain Django view answering three HTTP methods on one URL, each by the
+    method of that name (``StreamableHttpView.as_view(...)``):
+
+    - **POST** → exactly one JSON-RPC message, returns ``application/json``
+      (or HTTP 202 for notifications).
+    - **GET** → not implemented in v1; returns 405 (allowed by spec).
+    - **DELETE** → terminates the session referenced by ``MCP-Session-Id``.
+
+    ``HEAD`` takes the ``GET`` handler and ``OPTIONS`` is Django's, naming the
+    methods in ``Allow``. Nothing of a project's own middleware decides who
+    calls: [`MCPAuthBackend`][django_spec_mcp.auth.types.auth_backend.MCPAuthBackend]
+    is the auth layer, the view is CSRF-exempt and never redirected to a login
+    page, and per-binding permissions live on the registered tool, resource and
+    prompt. Rate limits are the package's own, ``rate_limits=`` on each binding;
+    no DRF throttle, authentication class, renderer or exception handler
+    reaches this view.
+
+    Collaborators (registries, auth backend, session store) are instance-scoped and
+    passed in by [`MCPServer`][django_spec_mcp.server.mcp_server.MCPServer] through
+    ``as_view``, never looked up at module level, so independent servers in one process
+    cannot interfere."""
+
+    # Django's ``as_view`` requires kwargs to be existing class attributes, so
+    # these are declared with defaults for the server to populate.
+    tools: ToolRegistry | None = None
+    resources: ResourceRegistry | None = None
+    prompts: PromptRegistry | None = None
+    auth_backend: MCPAuthBackend | None = None
+    session_store: SessionStore | None = None
+    # ``None`` on both means this server runs no tasks.
+    task_store: TaskStore | None = None
+    task_executor: TaskExecutor | None = None
+    # **Publishing only.** Serving ``subscriptions/listen`` needs a stream that
+    # stays open, which a sync WSGI view cannot hold, so that action is the
+    # async view's alone. Announcing an ``invalidates=`` change is the other
+    # direction and costs nothing but a publish, so a tool mutating over WSGI
+    # while subscribers hold their streams on an ASGI process still reaches
+    # them - the exact split a cross-process broker exists for.
+    subscription_broker: SubscriptionBroker | None = None
+    # Identity the owning server resolved at construction. Unlike the
+    # collaborators above these stay optional at dispatch: a hand-wired view
+    # with no server still answers ``initialize``, falling back to
+    # ``SERVER_INFO``.
+    server_info: Implementation | None = None
+    instructions: str | None = None
+    config: MCPConfig | None = None
+    # The owning server's ``pool_seeds=``, read into every context this view
+    # builds. The kernel's default for a hand-wired view, which is exactly
+    # the seeds dispatch would use with none passed.
+    pool_seeds: PoolSeeds = DEFAULT_POOL_SEEDS
+    # The owning server's ``conventions=``, read into every context this view
+    # builds, so the wording it serves is that server's. The defaults for a
+    # hand-wired view, which is what a server given none would say.
+    conventions: AgentConventions = AgentConventions()
+
+    @classonlymethod
+    def as_view(cls, **initkwargs: Any) -> Callable[..., Any]:
+        """Build the view function, opted out of CSRF and of the login redirect."""
+        return exempt_endpoint(super().as_view(**initkwargs))
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        if request.method not in _UNNEGOTIATED:
+            refused: JsonResponse | None = not_acceptable(request, _ANSWERS_WITH)
+            if refused is not None:
+                return refused
+        return super().dispatch(request, *args, **kwargs)
+
+    # ----- the methods the endpoint serves -----
+
+    def post(self, http_request: HttpRequest) -> HttpResponse:
+        """POST action: parse a single JSON-RPC message and dispatch."""
+        guard: HttpResponse | None = self._check_origin(http_request)
+        if guard is not None:
+            return guard
+
+        max_bytes: int = self._require_config().max_request_bytes
+        if len(http_request.body) > max_bytes:
+            return _error_response(
+                code=JsonRpcErrorCode.INVALID_REQUEST,
+                message="Request body too large",
+                status=413,
+            )
+
+        # ``JSONDecodeError`` is not all ``json.loads`` raises on a body it
+        # cannot decode: nesting past the decoder's recursion is a
+        # ``RecursionError``, an integer over the 4300-digit conversion cap a
+        # plain ``ValueError``, and bytes that are not UTF-8 a
+        # ``UnicodeDecodeError``. Each escaped as a 500, and this parse runs
+        # before authentication, so anyone could produce one. Held by
+        # ``test_a_body_json_cannot_decode_is_a_parse_error``: its nested case
+        # fails without ``RecursionError``, the other two without widening
+        # ``JSONDecodeError`` to ``ValueError``.
+        try:
+            payload: Any = json.loads(http_request.body or b"null")
+        except (ValueError, RecursionError) as exc:
+            # Only ``JSONDecodeError`` carries ``msg`` - what the decoder
+            # expected, without the body echoed back. The others' text is
+            # either an interpreter internal or advice to raise a server-side
+            # limit, so they get a fixed message instead. The kept detail is
+            # held by ``test_a_decode_error_keeps_the_decoders_detail``.
+            detail: str = (
+                exc.msg if isinstance(exc, json.JSONDecodeError) else "body could not be decoded"
+            )
+            return _error_response(
+                code=JsonRpcErrorCode.PARSE_ERROR, message=f"Invalid JSON: {detail}"
+            )
+
+        try:
+            message = parse_message(payload)
+        except ValueError as exc:
+            return _error_response(code=JsonRpcErrorCode.INVALID_REQUEST, message=str(exc))
+
+        is_initialize: bool = isinstance(message, JsonRpcRequest) and message.method == "initialize"
+        # ``server/discover`` joins ``initialize`` in being answerable without a
+        # session, but does *not* mint one — hence a second flag rather than a
+        # widening of the first.
+        is_sessionless: bool = (
+            isinstance(message, JsonRpcRequest) and message.method in SESSIONLESS_METHODS
+        )
+
+        # **The era fork.** Per-request ``_meta`` carrying a protocol version
+        # means modern (stateless, header-validated); its absence means legacy
+        # (``initialize`` handshake, sessions). One branch, here at the edge —
+        # everything below the transport is era-agnostic by construction.
+        metadata: RequestMetadata | None = RequestMetadata.from_params(
+            _params_dict(getattr(message, "params", None))
+        )
+        if metadata is not None:
+            return self._handle_modern(http_request, message, metadata)
+
+        version_header: str | None = http_request.headers.get(_VERSION_HEADER)
+        negotiated: str | None = negotiate_protocol_version(
+            version_header, is_sessionless=is_sessionless, config=self._require_config()
+        )
+        if negotiated is None:
+            return _error_response(
+                code=JsonRpcErrorCode.INVALID_REQUEST,
+                message="Missing or unsupported MCP-Protocol-Version",
+                request_id=getattr(message, "id", None),
+            )
+        protocol_version: str = negotiated
+
+        # Authentication runs *before* the session lookup: an unauthenticated
+        # caller always sees 401 regardless of session validity, so session ids
+        # cannot be probed through a 404-vs-401 oracle. The checks above are
+        # not principal-revealing.
+        token = self._authenticate(http_request)
+        if token is None:
+            logger.warning("Authentication failed for %s", http_request.path)
+            return self._unauthenticated_response()
+
+        # A session is bound to the principal it was minted for at
+        # ``initialize``; a wrong-principal presentation renders the same
+        # 404 as an unknown id (no fresh ownership oracle).
+        store = self._require_session_store()
+        session_id: str | None = http_request.headers.get(_SESSION_HEADER)
+        principal: str = principal_for_token(token)
+        if self._sessions_enabled() and not is_sessionless:
+            owner_matches = (
+                bool(session_id)
+                and _reject_awaitable_session(store.owner(session_id), store=store, method="owner")
+                == principal
+            )
+            failure = session_gate_failure(session_id, owner_matches=owner_matches)
+            if failure is not None:
+                message_text, status, hint = failure
+                # The log names the *exact* condition while the response merges
+                # unknown-id with wrong-principal: the gate must not be an
+                # ownership oracle, but a log line is not the wire.
+                logger.warning(
+                    "Session rejected: %s (session=%s, principal=%s, method=%s) -> HTTP %s",
+                    hint,
+                    session_fingerprint(session_id),
+                    principal,
+                    getattr(message, "method", "?"),
+                    status,
+                )
+                return _error_response(
+                    code=JsonRpcErrorCode.INVALID_REQUEST,
+                    message=message_text,
+                    status=status,
+                    request_id=getattr(message, "id", None),
+                    error_hint=hint,
+                )
+
+        context = MCPCallContext(
+            http_request=http_request,
+            token=token,
+            tools=self._require_tools(),
+            resources=self._require_resources(),
+            prompts=self._require_prompts(),
+            protocol_version=protocol_version,
+            session_id=session_id,
+            server_info=self.server_info,
+            instructions=self.instructions,
+            tasks=self.task_store,
+            task_executor=self.task_executor,
+            subscriptions=self.subscription_broker,
+            config=self._require_config(),
+            pool_seeds=self.pool_seeds,
+            conventions=self.conventions,
+        )
+
+        if isinstance(message, JsonRpcNotification):
+            return HttpResponse(status=202)
+
+        if not isinstance(message, JsonRpcRequest):
+            return _error_response(
+                code=JsonRpcErrorCode.INVALID_REQUEST, message="Expected a JSON-RPC request"
+            )
+
+        try:
+            result: Any = dispatch(message.method, _params_dict(message.params), context)
+        except Exception as exc:  # noqa: BLE001 — the backstop; see ``_internal_error_response``
+            if not is_raised_denial(exc):
+                return _internal_error_response(message)
+            # A denial raised rather than returned; see ``raised_denial_error``.
+            result = raised_denial_error()
+
+        if isinstance(result, JsonRpcError):
+            response_body = JsonRpcResponse(id=message.id, error=result).to_dict()
+        else:
+            response_body = JsonRpcResponse(id=message.id, result=result).to_dict()
+        # A permission denial is a 403 with a challenge naming the missing
+        # scopes, not a 200 with the error tucked inside: the MCP authorization
+        # spec's error table makes the status normative, and the challenge is
+        # how a client learns what to ask for. Every other dispatch outcome,
+        # including a tool that failed on its own terms, stays a 200.
+        denied: bool = is_permission_denial(result)
+        http_response = JsonResponse(response_body, status=403 if denied else 200)
+        if denied:
+            http_response["WWW-Authenticate"] = insufficient_scope_challenge(
+                result, self._require_auth_backend()
+            )
+
+        if is_initialize and self._sessions_enabled() and not isinstance(result, JsonRpcError):
+            # The spec makes assignment the server's choice ("MAY assign a
+            # session ID") and the client's duty to echo one conditional on it
+            # arriving, so not minting is the whole of sessionless mode here.
+            new_session: str = _reject_awaitable_session(
+                store.create(principal_id=principal), store=store, method="create"
+            )
+            http_response[_SESSION_HEADER] = new_session
+        return http_response
+
+    def _handle_modern(
+        self, http_request: Any, message: Any, metadata: RequestMetadata
+    ) -> HttpResponse:
+        """Serve one request under the stateless (``2026-07-28``) rules.
+
+        Everything the legacy path does with a session is absent: no lookup, no
+        minting, no echo. An ``Mcp-Session-Id`` a legacy-minded client sends
+        anyway is ignored rather than rejected, as the spec asks of a modern
+        server receiving older traffic.
+
+        Header validation runs **before** authentication, unlike the legacy
+        session check: a header/body mismatch reveals nothing about who is
+        asking, and it is the signal a client uses to tell a modern server from
+        a legacy one, so gating it on credentials would break era detection for
+        anonymous probes.
+        """
+        config: MCPConfig = self._require_config()
+        request_id: Any = getattr(message, "id", None)
+        if isinstance(message, JsonRpcRequest):
+            invalid: JsonRpcError | None = validate_modern_request(
+                method=message.method,
+                params=_params_dict(message.params),
+                metadata=metadata,
+                headers=http_request.headers,
+                supported_versions=config.modern_protocol_versions,
+            )
+            if invalid is not None:
+                return _error_response(
+                    code=invalid.code,
+                    message=invalid.message,
+                    data=invalid.data,
+                    status=modern_error_status(invalid),
+                    request_id=request_id,
+                )
+
+        token = self._authenticate(http_request)
+        if token is None:
+            return self._unauthenticated_response()
+
+        context = MCPCallContext(
+            http_request=http_request,
+            token=token,
+            tools=self._require_tools(),
+            resources=self._require_resources(),
+            prompts=self._require_prompts(),
+            protocol_version=metadata.protocol_version,
+            session_id=None,
+            # Modern path only. The legacy context leaves this empty by design:
+            # a legacy client declared its capabilities once, at
+            # ``initialize``, and the spec forbids relying on a declaration
+            # that did not arrive *with the request*.
+            client_capabilities=metadata.client_capabilities,
+            server_info=self.server_info,
+            instructions=self.instructions,
+            tasks=self.task_store,
+            task_executor=self.task_executor,
+            subscriptions=self.subscription_broker,
+            config=config,
+            pool_seeds=self.pool_seeds,
+            conventions=self.conventions,
+        )
+
+        if isinstance(message, JsonRpcNotification):
+            return HttpResponse(status=202)
+
+        # Necessarily a request by now. The era test reads ``params``, which a
+        # JSON-RPC *response* does not carry, so a response body is always
+        # routed to the legacy path — and rejected there.
+        try:
+            result: Any = dispatch(message.method, _params_dict(message.params), context)
+        except Exception as exc:  # noqa: BLE001 — the backstop; see ``_internal_error_response``
+            if not is_raised_denial(exc):
+                return _internal_error_response(message)
+            # A denial raised rather than returned; see ``raised_denial_error``.
+            result = raised_denial_error()
+        if isinstance(result, JsonRpcError):
+            body = JsonRpcResponse(id=message.id, error=result).to_dict()
+            status: int = modern_error_status(result)
+            response = JsonResponse(body, status=status)
+            if status == 403:
+                response["WWW-Authenticate"] = insufficient_scope_challenge(
+                    result, self._require_auth_backend()
+                )
+            return response
+        return JsonResponse(JsonRpcResponse(id=message.id, result=result).to_dict())
+
+    def get(self, http_request: HttpRequest) -> HttpResponse:
+        """GET action: SSE-from-server isn't implemented in v1; 405 per spec.
+
+        Unconditional, and so decided without authenticating. This once
+        challenged unauthenticated callers first, to keep the endpoint from
+        revealing even its 405 — but that confidentiality never existed:
+        ``delete`` answers 405 to an anonymous DELETE whenever
+        sessions are off, and POST answers 401 with a challenge naming the
+        publicly fetchable protected-resource metadata. What the challenge did
+        buy was an OAuth flow, browser window and all, ending at the 405 the
+        caller would have got for free.
+
+        The async sibling still authenticates on this path, because there it
+        guards a stream a credential can actually open. WSGI serves no stream
+        on any configuration, so it inherited the gate without the reason.
+        """
+        guard: HttpResponse | None = self._check_origin(http_request)
+        if guard is not None:
+            return guard
+        return self._method_not_allowed()
+
+    def delete(self, http_request: HttpRequest) -> HttpResponse:
+        """DELETE action: end the session named by ``MCP-Session-Id``.
+
+        Requires authentication, and only the principal a session was
+        minted for can destroy it — a wrong-principal (or unknown) id
+        renders 404 without touching the session.
+        """
+        guard: HttpResponse | None = self._check_origin(http_request)
+        if guard is not None:
+            return guard
+        if self._modern_era_requested(http_request) or not self._sessions_enabled():
+            # The spec's blessed answer for a server that does not let clients
+            # terminate sessions, which is exactly true when there are none.
+            return self._method_not_allowed()
+        token = self._authenticate(http_request)
+        if token is None:
+            return self._unauthenticated_response()
+        session_id: str | None = http_request.headers.get(_SESSION_HEADER)
+        if session_id:
+            store = self._require_session_store()
+            owner = _reject_awaitable_session(store.owner(session_id), store=store, method="owner")
+            if owner != principal_for_token(token):
+                return _error_response(
+                    code=JsonRpcErrorCode.INVALID_REQUEST,
+                    message="Unknown or missing MCP-Session-Id",
+                    status=404,
+                )
+            _reject_awaitable_session(store.destroy(session_id), store=store, method="destroy")
+        return HttpResponse(status=204)
+
+    def _modern_era_requested(self, http_request: Any) -> bool:
+        """Whether the caller named a modern revision in its version header.
+
+        GET and DELETE carry no body, so the per-request ``_meta`` that decides
+        the era everywhere else is unavailable and the header is the only
+        signal. A modern client should never send either verb; ``405`` is what
+        the spec asks of a server receiving wrong-era traffic, and it beats
+        silently serving a mechanism the caller's revision removed.
+        """
+        version: str | None = http_request.headers.get(_VERSION_HEADER)
+        return version in MODERN_PROTOCOL_VERSIONS
+
+    # ----- collaborator accessors -----
+
+    def _method_not_allowed(self) -> HttpResponse:
+        """A ``405`` naming the methods this view routes, as RFC 9110 requires."""
+        return HttpResponseNotAllowed(allowed_methods(self))
+
+    def _authenticate(self, http_request: HttpRequest) -> Any:
+        """Resolve the caller's token; on success the request is the token's.
+
+        The backend is handed an anonymous request (``seat_anonymous``), and an
+        authenticated one carries the token's principal from here on
+        (``carry_principal``), so every context this view builds afterwards
+        reads the token's caller.
+        """
+        backend: MCPAuthBackend = self._require_auth_backend()
+        seat_anonymous(http_request)
+        token: Any = _reject_awaitable_token(backend.authenticate(http_request), backend=backend)
+        if token is not None:
+            carry_principal(http_request, token)
+        return token
+
+    def _unauthenticated_response(self) -> JsonResponse:
+        challenge: str = self._require_auth_backend().www_authenticate_challenge(
+            error="invalid_token"
+        )
+        response = JsonResponse(
+            {"error": "unauthorized", "error_description": "Authentication required."},
+            status=401,
+        )
+        response["WWW-Authenticate"] = challenge
+        return response
+
+    def _check_origin(self, request: Any) -> HttpResponse | None:
+        origin: str | None = request.headers.get("Origin")
+        if not is_origin_allowed(origin, self._require_config().allowed_origins):
+            return _error_response(
+                code=JsonRpcErrorCode.INVALID_REQUEST,
+                message=f"Origin not allowed: {origin!r}",
+                status=403,
+            )
+        return None
+
+    def _require_tools(self) -> ToolRegistry:
+        if self.tools is None:  # pragma: no cover - guarded by MCPServer
+            raise RuntimeError("StreamableHttpView is missing a ToolRegistry")
+        return self.tools
+
+    def _require_resources(self) -> ResourceRegistry:
+        if self.resources is None:  # pragma: no cover - guarded by MCPServer
+            raise RuntimeError("StreamableHttpView is missing a ResourceRegistry")
+        return self.resources
+
+    def _require_prompts(self) -> PromptRegistry:
+        if self.prompts is None:  # pragma: no cover - guarded by MCPServer
+            raise RuntimeError("StreamableHttpView is missing a PromptRegistry")
+        return self.prompts
+
+    def _require_auth_backend(self) -> MCPAuthBackend:
+        if self.auth_backend is None:  # pragma: no cover - guarded by MCPServer
+            raise RuntimeError("StreamableHttpView is missing an MCPAuthBackend")
+        return self.auth_backend
+
+    def _require_config(self) -> MCPConfig:
+        if self.config is None:  # pragma: no cover - guarded by MCPServer
+            raise RuntimeError("StreamableHttpView is missing an MCPConfig")
+        return self.config
+
+    def _sessions_enabled(self) -> bool:
+        """Whether the legacy era mints and requires an ``Mcp-Session-Id``."""
+        return self._require_config().sessions_enabled
+
+    def _require_session_store(self) -> SessionStore:
+        if self.session_store is None:  # pragma: no cover - guarded by MCPServer
+            raise RuntimeError("StreamableHttpView is missing a SessionStore")
+        return self.session_store
+
+
+def _params_dict(params: Any) -> dict[str, Any] | None:
+    if params is None:
+        return None
+    if isinstance(params, dict):
+        return params
+    return None  # JSON-RPC list params are not used by MCP today.
+
+
+__all__ = ["StreamableHttpView"]

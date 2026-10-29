@@ -1,41 +1,86 @@
-"""``build_output_schema`` — where the agent projection lands for each kind."""
+"""A kernel tool's ``outputSchema``: where the agent projection lands for each kind.
+
+The schema is the kernel's ``spec_output_schema`` under the binding's
+projection, which ``kernel_tool_output_schema`` asks for and the listing serves;
+the handle wording is this transport's, the server's
+``AgentConventions.handle_field_description``.
+"""
 
 from __future__ import annotations
 
-from typing import Any
+from dataclasses import dataclass
+from typing import Annotated, Any
 
-from django_service_specs import FieldMarking, SelectorKind
-from rest_framework import serializers
-from rest_framework_services import MARKING, build_audience_projection
+from django_service_specs import (
+    DataclassPresenter,
+    FieldMarking,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+)
 
+from django_spec_mcp import AgentConventions, MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.schema.agent_conventions import HANDLE_DESCRIPTION
-from django_spec_mcp.schema.output_schema import build_output_schema
-from tests.testapp.serializers import AgentInvoiceSerializer, InvoiceOutputSerializer
+from tests.testapp.kernel_shapes import InvoiceOutput
 
-PROJECTION = build_audience_projection(AgentInvoiceSerializer)
+
+@dataclass
+class _AgentInvoice:
+    id: Annotated[int, FieldMarking.handle("Invoice handle.")]
+    number: Annotated[str, FieldMarking.label()]
+    sent: Annotated[bool, FieldMarking.hidden()]
+
+
+@dataclass
+class _Handles:
+    ref: Annotated[str, FieldMarking.handle()]
+    described: Annotated[str, FieldMarking.handle("A widget handle.")]
+
+
+def _output_schema(
+    presented: type | None,
+    *,
+    kind: SelectorKind = SelectorKind.RETRIEVE,
+    paginate: bool = False,
+    conventions: AgentConventions | None = None,
+) -> Any:
+    server = MCPServer(
+        name="t", auth_backend=AllowAnyBackend(), session_store=None, conventions=conventions
+    )
+    server.register_tool(
+        SelectorSpec(
+            kind=kind,
+            selector=lambda: [],
+            presenter=None if presented is None else DataclassPresenter(presented),
+            permissions=[Unrestricted()],
+        ),
+        name="t",
+        description="Read.",
+        paginate=paginate,
+    )
+    listed: Any = server.list_tools(user=None)
+    return listed["tools"][0].get("outputSchema")
 
 
 def test_retrieve_schema_is_annotated_directly() -> None:
-    schema: Any = build_output_schema(AgentInvoiceSerializer, projection=PROJECTION)
+    schema = _output_schema(_AgentInvoice)
 
     assert "sent" not in schema["properties"]
     assert schema["properties"]["id"]["description"] == "Invoice handle."
 
 
 def test_list_schema_is_annotated_inside_the_array() -> None:
-    schema: Any = build_output_schema(
-        AgentInvoiceSerializer, kind=SelectorKind.LIST, projection=PROJECTION
-    )
+    schema = _output_schema(_AgentInvoice, kind=SelectorKind.LIST)
 
     assert schema["type"] == "array"
     assert "sent" not in schema["items"]["properties"]
 
 
 def test_paginated_schema_is_annotated_inside_the_envelope() -> None:
-    """The envelope's own keys belong to this transport, not to a serializer."""
-    schema: Any = build_output_schema(
-        AgentInvoiceSerializer, kind=SelectorKind.LIST, paginate=True, projection=PROJECTION
-    )
+    """The envelope's own keys belong to the paging, not to a presenter."""
+    schema = _output_schema(_AgentInvoice, kind=SelectorKind.LIST, paginate=True)
     item = schema["properties"]["items"]["items"]
 
     assert "sent" not in item["properties"]
@@ -43,32 +88,32 @@ def test_paginated_schema_is_annotated_inside_the_envelope() -> None:
     assert schema["required"] == ["items", "page", "totalPages", "hasNext"]
 
 
-def test_an_empty_projection_leaves_the_schema_alone() -> None:
-    projection = build_audience_projection(InvoiceOutputSerializer)
-    schema: Any = build_output_schema(InvoiceOutputSerializer, projection=projection)
+def test_an_unmarked_presenter_is_described_in_full() -> None:
+    schema = _output_schema(InvoiceOutput)
 
-    assert schema == build_output_schema(InvoiceOutputSerializer)
+    assert set(schema["properties"]) == {"id", "number", "amount_cents", "sent"}
+    assert all("description" not in fragment for fragment in schema["properties"].values())
 
 
-def test_no_serializer_yields_no_schema() -> None:
-    assert build_output_schema(None, projection=PROJECTION) is None
+def test_no_presenter_yields_no_schema() -> None:
+    # A spec that declares nothing
+    # about its result is advertised with no ``outputSchema`` at all.
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server.register_tool(
+        ServiceSpec(service=lambda: None, atomic=False, permissions=[Unrestricted()]),
+        name="t",
+        description="Do.",
+    )
+    listed: Any = server.list_tools(user=None)
+
+    assert "outputSchema" not in listed["tools"][0]
 
 
 def test_an_unlabelled_handle_gets_this_transport_s_wording() -> None:
-    """The sentence is a prompt, so it is supplied here, not upstream.
-
-    drf-services holds the markings and no wording at all — it does not know a
-    model is what reads the schema. This asserts the two halves are joined up.
-    """
-
-    class _Thing(serializers.Serializer):
-        ref = serializers.CharField(style={MARKING: FieldMarking.handle()})
-        described = serializers.CharField(style={MARKING: FieldMarking.handle("A widget handle.")})
-
-    schema: Any = build_output_schema(_Thing, projection=build_audience_projection(_Thing))
+    """The sentence is a prompt, so this transport supplies it; the kernel holds the markings."""
+    schema = _output_schema(_Handles)
 
     assert schema["properties"]["ref"]["description"] == HANDLE_DESCRIPTION
-    # The Pydantic-AI toolset's sentence; it was "... do not read it out."
     assert schema["properties"]["ref"]["description"] == (
         "An opaque identifier. Pass it to other tools that ask for one; refer to the "
         "record by its name in anything you say, never by this value."
@@ -77,19 +122,12 @@ def test_an_unlabelled_handle_gets_this_transport_s_wording() -> None:
     assert schema["properties"]["described"]["description"] == "A widget handle."
 
 
-class _Handles(serializers.Serializer):
-    ref = serializers.CharField(style={MARKING: FieldMarking.handle()})
-    described = serializers.CharField(style={MARKING: FieldMarking.handle("A widget handle.")})
-
-
-def test_the_handle_description_is_the_one_passed() -> None:
-    """A server's ``AgentConventions.handle_field_description`` arrives here as text."""
-    schema: Any = build_output_schema(
+def test_the_handle_description_is_the_servers() -> None:
+    schema = _output_schema(
         _Handles,
         kind=SelectorKind.LIST,
         paginate=True,
-        projection=build_audience_projection(_Handles),
-        handle_description="Pass it on.",
+        conventions=AgentConventions(handle_field_description="Pass it on."),
     )
 
     item = schema["properties"]["items"]["items"]
@@ -98,9 +136,7 @@ def test_the_handle_description_is_the_one_passed() -> None:
 
 
 def test_none_leaves_an_undescribed_handle_undescribed() -> None:
-    schema: Any = build_output_schema(
-        _Handles, projection=build_audience_projection(_Handles), handle_description=None
-    )
+    schema = _output_schema(_Handles, conventions=AgentConventions(handle_field_description=None))
 
     assert "description" not in schema["properties"]["ref"]
     assert schema["properties"]["described"]["description"] == "A widget handle."

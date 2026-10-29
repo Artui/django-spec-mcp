@@ -1,29 +1,30 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
-from django_service_specs import UNSET, base_pool
-from rest_framework.exceptions import PermissionDenied
-from rest_framework_services import resolve_callable_kwargs
+from django_service_specs import base_pool, resolve_callable_kwargs
 
 from django_spec_mcp._compat.acall import acall
 from django_spec_mcp._compat.tracing import span
 from django_spec_mcp._compat.utils import arun_selector_sync_safe
-from django_spec_mcp.auth.permissions.utils import DispatchShape
-from django_spec_mcp.handlers.guard_resource_object import guard_resource_object
 from django_spec_mcp.handlers.handle_tools_call import _span_attrs
+from django_spec_mcp.handlers.judge_binding import judge_binding
+from django_spec_mcp.handlers.kernel_utils import KernelAdmission, admit_kernel_read, carry_token
+from django_spec_mcp.handlers.read_kernel_resource_async import read_kernel_resource_async
+from django_spec_mcp.handlers.runs_on_kernel import runs_on_kernel
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import (
-    check_permissions,
     consume_rate_limits,
+    forbidden,
     resolve_bound,
     resource_cache_hints,
     resource_not_found_code,
-    resource_shape,
 )
 from django_spec_mcp.output.build_resource_contents import build_resource_contents
 from django_spec_mcp.output.enforce_result_bytes import enforce_result_bytes
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.protocol.types.resource_contents import ResourceContents
+from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 
 
@@ -33,15 +34,10 @@ async def handle_resources_read_async(
 ) -> dict[str, Any] | JsonRpcError:
     """Async sibling of ``handle_resources_read``.
 
-    Same shape, but nothing that can touch the ORM runs on the event loop: the
-    selector goes through ``arun_selector_sync_safe`` (async selectors run
-    native, sync ones are bridged) and the render + encode step through
-    ``acall``, because a selector returning a queryset returns it **lazy**
-    and the serializer is what evaluates it. The object-permission guard runs
-    off the loop for the same reason: ``has_object_permission`` may query.
-
-    See the sync sibling for why this method does not route through
-    ``dispatch_spec`` and what stands in for it.
+    Same shape, but nothing that can touch the ORM runs on the event loop:
+    the permission check, the kernel admission and the rate limits go
+    through ``acall``, and each read path keeps its selector and its
+    rendering off the loop too.
     """
     if not isinstance(params, dict):
         return JsonRpcError(
@@ -67,21 +63,20 @@ async def handle_resources_read_async(
         "mcp.resources.read",
         attributes={**_span_attrs(binding.name, context), "mcp.resource.uri": uri},
     ):
-        # See the sync sibling: the check and the view are built from one shape.
-        shape: DispatchShape = resource_shape(binding, vars_)
-        allowed, required_scopes = await acall(
-            check_permissions,
-            binding.permissions,
-            context.http_request,
-            context.token,
-            shape=shape,
-        )
+        allowed, required_scopes = await acall(judge_binding, binding, context.token)
         if not allowed:
-            return JsonRpcError(
-                JsonRpcErrorCode.FORBIDDEN,
-                "Insufficient permission",
-                data={"requiredScopes": required_scopes} if required_scopes else None,
+            return forbidden(required_scopes)
+
+        # See the sync sibling: a kernel resource's spec's own checks, before
+        # the charge, off the loop because a check may query.
+        admission: KernelAdmission | None = None
+        if runs_on_kernel(binding):
+            admitted = await acall(
+                admit_kernel_read, cast(KernelResourceBinding, binding), vars_, context
             )
+            if isinstance(admitted, JsonRpcError):
+                return admitted
+            admission = admitted
 
         retry_after: int | None = await acall(
             consume_rate_limits, binding.rate_limits, context.http_request, context.token
@@ -93,52 +88,26 @@ async def handle_resources_read_async(
                 data={"retryAfter": retry_after},
             )
 
-        # See the sync sibling: URI-template variables ride on ``view.kwargs``,
-        # and ``auth`` beside ``user`` keeps the caller.
-        offline = shape.build(
-            user=context.token.user, auth=context.token.raw, http_request=context.http_request
-        )
-        drf_request = offline.request
-        view = offline.view
-
-        # See the sync sibling: the transport's seeds, the server's
-        # ``pool_seeds`` among them, land after the URI-template variables, so
-        # none can be shadowed from the URI.
+        # See the sync sibling: a kernel resource reads through the kernel from
+        # here, under the admission its spec's checks gave.
+        if admission is not None:
+            return await read_kernel_resource_async(
+                cast(KernelResourceBinding, binding), uri, vars_, admission, context
+            )
+        # See the sync sibling: the kernel's pool and the transport's request.
+        # The selector goes through ``arun_selector_sync_safe`` and the encoding
+        # through ``acall``, so neither a template it renders nor a lazy value
+        # ``JSON`` encoding iterates is read on the loop.
+        request = carry_token(context.http_request, context.token)
         pool: dict[str, Any] = {
             **vars_,
-            **base_pool(user=context.token.user, request=drf_request, seeds=context.pool_seeds),
+            **base_pool(user=context.token.user, request=request, seeds=context.pool_seeds),
         }
-        if binding.kwargs_provider is not None:
-            # ``SelectorSpec.kwargs``, invoked by name through the keyword pool
-            # as on the HTTP path, ``UNSET`` decline included. It is sync — a
-            # spec is written once for both transports — and its headline use
-            # is a scoping tenant / role query, so it runs off the loop.
-            provider_pool: dict[str, Any] = {"view": view, "request": drf_request}
-            provided: dict[str, Any] = await acall(
-                binding.kwargs_provider,
-                **resolve_callable_kwargs(binding.kwargs_provider, provider_pool),
-            )
-            pool.update({key: value for key, value in provided.items() if value is not UNSET})
-        kwargs: dict[str, Any] = resolve_callable_kwargs(binding.selector, pool)
-        raw: Any = await arun_selector_sync_safe(binding.selector, kwargs)
-
-        # See the sync sibling: object-level permissions on the resolved row.
-        # ``has_object_permission`` may query, so it runs off the loop.
-        try:
-            await acall(guard_resource_object, binding, raw, offline)
-        except PermissionDenied:
-            return JsonRpcError(JsonRpcErrorCode.FORBIDDEN, "Insufficient permission")
-
-        # Rendering is ORM work: ``output_serializer(...).data`` iterates the
-        # value, evaluating a lazy queryset right here. Off the loop, like the
-        # selector above.
-        contents = await acall(
-            build_resource_contents,
-            binding=binding,
-            uri=uri,
-            raw=raw,
-            view=view,
-            request=drf_request,
+        raw: Any = await arun_selector_sync_safe(
+            binding.selector, resolve_callable_kwargs(binding.selector, pool)
+        )
+        contents: ResourceContents | JsonRpcError = await acall(
+            build_resource_contents, binding=binding, uri=uri, raw=raw
         )
         if isinstance(contents, JsonRpcError):
             return contents

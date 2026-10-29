@@ -1,25 +1,11 @@
 """Public API for ``django_spec_mcp``.
 
-Nine drf-services symbols used to be re-exported here -- ``ServiceSpec``,
-``SelectorSpec``, ``SelectorKind``, ``ServiceView`` and the five service /
-selector protocols -- on the reasoning that a consumer should not have to know
-which sub-package each lives in, the dependency being mandatory anyway.
-
-They are gone, because the convenience pinned this package's **public** API to
-the sister package's **internal** layout: every one of those imports named a
-module path (``rest_framework_services.types.service_spec``) that drf-services
-is free to move, and moving one would have broken an import from *here*.
-Import them from ``rest_framework_services``, which is where they are declared
-and where that package's own ``__init__`` keeps them stable.
+The specs this server registers are the kernel's: import ``ServiceSpec``,
+``SelectorSpec`` and the rest from ``django_service_specs``, which declares
+them. Nothing here re-exports a kernel name, so this package's public surface
+never pins a module path that is the kernel's to move.
 """
 
-from django_service_specs import UnknownArguments
-from rest_framework_services import ArgumentBinding
-
-from django_spec_mcp.auth.permissions.django_perm_required import DjangoPermRequired
-from django_spec_mcp.auth.permissions.drf_permission_adapter import DRFPermissionAdapter
-from django_spec_mcp.auth.permissions.scope_required import ScopeRequired
-from django_spec_mcp.auth.permissions.types.mcp_permission import MCPPermission
 from django_spec_mcp.auth.types.auth_backend import MCPAuthBackend
 from django_spec_mcp.auth.types.self_checking import SelfChecking
 from django_spec_mcp.auth.types.token_info import TokenInfo
@@ -30,17 +16,11 @@ from django_spec_mcp.protocol.types.prompt_message import PromptMessage
 from django_spec_mcp.protocol.types.resource_contents import ResourceContents
 from django_spec_mcp.protocol.types.tool_content_block import ToolContentBlock
 from django_spec_mcp.registry.prompt_registry import PromptRegistry
-from django_spec_mcp.registry.register_tools import register_tools
 from django_spec_mcp.registry.resource_registry import ResourceRegistry
 from django_spec_mcp.registry.tool_registry import ToolRegistry
-from django_spec_mcp.registry.types.query_param import QueryParam
-from django_spec_mcp.registry.types.selector_defaults import SelectorDefaults
-from django_spec_mcp.registry.types.service_defaults import ServiceDefaults
-from django_spec_mcp.registry.types.tool_definition import ToolDefinition
 from django_spec_mcp.registry.types.ui_csp import UICsp
 from django_spec_mcp.registry.types.ui_resource_meta import UIResourceMeta
 from django_spec_mcp.registry.types.ui_tool_meta import UIToolMeta
-from django_spec_mcp.registry.types.url_kwarg import UrlKwarg
 from django_spec_mcp.schema.types.agent_conventions import AgentConventions
 from django_spec_mcp.server.mcp_server import MCPServer
 from django_spec_mcp.subscriptions.in_memory_subscription_broker import (
@@ -63,12 +43,10 @@ from django_spec_mcp.transport.types.sse_replay_buffer import SSEReplayBuffer
 from django_spec_mcp.types.icon_theme import IconTheme
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from django_spec_mcp.types.notification_kind import NotificationKind
-from django_spec_mcp.types.output_format import OutputFormat
 from django_spec_mcp.types.resource_encoding import ResourceEncoding
 from django_spec_mcp.types.task_policy import TaskPolicy
 from django_spec_mcp.types.task_status import TaskStatus
 from django_spec_mcp.types.tool_content_kind import ToolContentKind
-from django_spec_mcp.types.tool_kind import ToolKind
 from django_spec_mcp.types.ui_extension_id import UI_EXTENSION_ID
 from django_spec_mcp.types.ui_permission import UIPermission
 from django_spec_mcp.types.ui_resource_mime_type import UI_RESOURCE_MIME_TYPE
@@ -80,10 +58,7 @@ __all__ = [
     "UI_EXTENSION_ID",
     "UI_RESOURCE_MIME_TYPE",
     "AgentConventions",
-    "ArgumentBinding",
-    "DRFPermissionAdapter",
     "DjangoCacheSessionStore",
-    "DjangoPermRequired",
     "InMemorySSEBroker",
     "InMemorySSEReplayBuffer",
     "Icon",
@@ -92,9 +67,7 @@ __all__ = [
     "JsonRpcError",
     "JsonRpcErrorCode",
     "MCPAuthBackend",
-    "MCPPermission",
     "MCPServer",
-    "OutputFormat",
     "PromptArgument",
     "PromptMessage",
     "PromptRegistry",
@@ -103,9 +76,6 @@ __all__ = [
     "ResourceRegistry",
     "SSEBroker",
     "SSEReplayBuffer",
-    "ScopeRequired",
-    "SelectorDefaults",
-    "ServiceDefaults",
     "SessionStore",
     "DjangoCacheTaskStore",
     "InMemoryTaskStore",
@@ -122,18 +92,12 @@ __all__ = [
     "TokenInfo",
     "ToolContentBlock",
     "ToolContentKind",
-    "ToolDefinition",
-    "ToolKind",
     "ToolRegistry",
     "UICsp",
     "UIPermission",
     "UIResourceMeta",
     "UIToolMeta",
     "UIVisibility",
-    "UnknownArguments",
-    "QueryParam",
-    "UrlKwarg",
     "build_app_document",
-    "register_tools",
     "__version__",
 ]

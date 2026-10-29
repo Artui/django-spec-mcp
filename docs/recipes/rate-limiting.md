@@ -5,22 +5,26 @@
 is the suggested retry-after-in-seconds when the limit has been hit, or
 `None` to allow the call.
 
+`rate_limits=` on `register_tool`, `register_resource` and `register_prompt`
+is what limits an MCP call.
+
 The shipped `FixedWindowRateLimit` is backed by `django.core.cache` and is
 the right choice for most Django deployments — the cache is already shared
 across worker processes when you're running anything serious.
 
 ```python
+from django_service_specs import ServiceSpec, Unrestricted
+
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.rate_limits.fixed_window_rate_limit import (
     FixedWindowRateLimit,
 )
-from rest_framework_services.types.service_spec import ServiceSpec
 
-server = MCPServer(name="my-app")
+server = MCPServer(name="my-app", auth_backend=my_auth_backend)
 
-server.register_service_tool(
+server.register_tool(
+    ServiceSpec(service=create_invoice, permissions=[Unrestricted()]),
     name="invoices.create",
-    spec=ServiceSpec(service=create_invoice),  # …plus the rest of your spec
     rate_limits=[
         FixedWindowRateLimit(max_calls=120, per_seconds=60, namespace="burst"),
         FixedWindowRateLimit(max_calls=10_000, per_seconds=86_400, namespace="daily"),
@@ -63,8 +67,9 @@ def per_org_key(request, token) -> str:
     return f"org:{token.user.organization_id}"
 
 
-server.register_service_tool(
-    ...,
+server.register_tool(
+    spec,
+    name="invoices.create",
     rate_limits=[
         FixedWindowRateLimit(max_calls=10_000, per_seconds=60, key=per_org_key),
     ],
@@ -93,9 +98,9 @@ from django_spec_mcp.auth.rate_limits import (
     TokenBucketRateLimit,
 )
 
-server.register_service_tool(
+server.register_tool(
+    spec,
     name="invoices.create",
-    spec=...,
     rate_limits=[
         # Steady-state 1 call/sec, but absorb bursts up to 60.
         TokenBucketRateLimit(capacity=60, refill_per_second=1.0),
@@ -132,8 +137,10 @@ class LeakyBucketRateLimit:
 Pass it to a binding the same way:
 
 ```python
-server.register_service_tool(
-    ..., rate_limits=[LeakyBucketRateLimit(capacity=60, leak_per_second=1)]
+server.register_tool(
+    spec,
+    name="invoices.create",
+    rate_limits=[LeakyBucketRateLimit(capacity=60, leak_per_second=1)],
 )
 ```
 
@@ -148,7 +155,7 @@ server.register_service_tool(
 - The default Django `locmem` cache is process-local. In production, use
   Memcached or Redis so all workers see the same counter.
 - **`consume` must be a plain `def`**, on both transports — see
-  [Add a custom permission](custom-permission.md#permissions-are-synchronous-on-both-transports).
+  [Add a custom permission](custom-permission.md#checks-are-synchronous-on-both-transports).
   An `async def consume` raises `ImproperlyConfigured`: nothing awaits it, and
   a coroutine is not `None`, so every call would be denied with the coroutine
   object standing in for `retryAfter`. Wrap any awaiting in

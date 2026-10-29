@@ -1,25 +1,39 @@
-"""``page`` and ``limit`` reach a selector alike on every route.
+"""``page`` and ``limit`` reach a kernel spec alike on every route.
 
-Both belong to the read pipeline's pagination on a ``LIST`` selector tool, so
-the wire and ``acall_tool`` strip them from a ``LIST`` selector's arguments,
-while ``call_tool`` passed them through: a ``**kwargs`` selector received them
-on one route only. A ``RETRIEVE`` tool cannot paginate, so nothing takes either
-name from its selector, which receives them as sent on every route, as the
-Pydantic-AI ``SpecToolset`` hands them over.
+``call_tool``, ``acall_tool`` and both wire handlers hand a selector the same
+arguments, ``page`` and ``limit`` taken by the pagination on a ``LIST`` and left
+alone elsewhere. The pagination is ``paginate=True`` on ``register_tool``, and
+the split is ``page_request``'s on every route, so the questions are: a
+paginated ``LIST`` never hands either name to its selector; an unpaginated one,
+a ``RETRIEVE`` and a service tool take them as their own reads, a filter set's
+filter named ``limit`` included. A kernel spec declares its reads, and nothing
+sits between the wire and them.
+
+A paginated ``LIST`` whose spec declares a read named ``page`` or ``limit`` is
+refused at registration, because the pagination would take the value the read
+advertises and the selector would never receive it.
 """
 
 from __future__ import annotations
 
+import re
+from dataclasses import dataclass
 from typing import Any
 
 import django_filters
 import pytest
 from asgiref.sync import sync_to_async
+from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest
-from django_service_specs import SelectorKind
-from rest_framework import serializers as drf_serializers
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_service_specs import (
+    DataclassValidator,
+    Parameter,
+    Parameters,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+)
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
@@ -29,7 +43,12 @@ from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_a
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from tests.testapp.models import Invoice
 
-_ROUTES = ["call_tool", "acall_tool", "handler", "async_handler"]
+pytestmark = pytest.mark.django_db(transaction=True)
+
+_ROUTES = pytest.mark.parametrize("route", ["call_tool", "acall_tool", "handler", "async_handler"])
+OPEN = [Unrestricted()]
+_PAGE_AND_LIMIT = [Parameter("page", "integer"), Parameter("limit", "integer")]
+_STATUS = Parameter("status", "string")
 
 
 def _ctx(server: MCPServer) -> MCPCallContext:
@@ -64,104 +83,45 @@ async def _structured(server: MCPServer, route: str, arguments: dict[str, Any]) 
     return out["structuredContent"]
 
 
-def _register(
-    server: MCPServer, selector: Any, *, kind: SelectorKind = SelectorKind.LIST, **kwargs: Any
-) -> MCPServer:
-    server.register_selector_tool(
-        name="read",
-        description="Read.",
-        spec=SelectorSpec(kind=kind, selector=selector),
-        **kwargs,
-    )
+def _server(spec: Any, **tool: Any) -> MCPServer:
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server.register_tool(spec, name="read", description="Read.", **tool)
     return server
 
 
-def _server() -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+def _sent(**kwargs: Any) -> dict[str, Any]:
+    """What the caller sent, out of the pool the selector was handed."""
+    return {name: kwargs[name] for name in ("page", "limit", "status") if name in kwargs}
 
 
-def _sent(kwargs: dict[str, Any]) -> dict[str, Any]:
-    # The pool's seeds arrive too; only what the caller sent is compared.
-    return {
-        name: kwargs[name] for name in ("page", "limit", "status") if kwargs.get(name) is not None
-    }
+def _selector(kind: SelectorKind, *reads: Parameter) -> SelectorSpec:
+    def read(**kwargs: Any) -> Any:
+        sent = _sent(**kwargs)
+        return [sent] if kind is SelectorKind.LIST else sent
+
+    return SelectorSpec(kind=kind, selector=read, reads=Parameters(list(reads)), permissions=OPEN)
 
 
-# Each names what it reads: a bare ``**kwargs`` is handed the declared arguments
-# and the seeds, never a key nothing declares, so an undeclared ``status`` would
-# reach neither selector on any route.
-def _anything(*, status: str | None = None, **kwargs: Any) -> list[dict[str, Any]]:
-    return [_sent({"status": status, **kwargs})]
+@_ROUTES
+async def test_a_paginated_list_never_hands_its_selector_page_or_limit(route: str) -> None:
+    server = _server(_selector(SelectorKind.LIST, _STATUS), paginate=True)
+
+    out = await _structured(server, route, {"page": 1, "limit": 5, "status": "open"})
+
+    assert out["items"] == [{"status": "open"}]
+    assert (out["page"], out["hasNext"]) == (1, False)
 
 
-def _anything_one(
-    *, page: int | None = None, limit: int | None = None, status: str | None = None
-) -> dict[str, Any]:
-    return _sent({"page": page, "limit": limit, "status": status})
-
-
-def _page(*, page: int = 1) -> list[dict[str, Any]]:
-    return [{"page": page}]
-
-
-def _entry_page(*, page: int = 1) -> dict[str, Any]:
-    return {"page": page}
-
-
-class _PageIn(drf_serializers.Serializer):
-    page = drf_serializers.IntegerField(required=False)
-
-
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("route", _ROUTES)
-async def test_every_route_hands_a_selector_the_same_arguments(route: str) -> None:
-    server = _register(_server(), _anything)
-
-    out = await _structured(server, route, {"page": 2, "limit": 5, "status": "open"})
-
-    assert out == [{"status": "open"}]
-
-
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("route", _ROUTES)
-async def test_a_retrieve_selector_receives_page_and_limit_on_every_route(route: str) -> None:
-    # Nothing paginates a ``RETRIEVE`` tool, so neither name is the pipeline's
-    # to take. Each route's strip holds a row: stripped, the selector got
-    # ``{"status": "open"}`` alone.
-    server = _register(_server(), _anything_one, kind=SelectorKind.RETRIEVE)
-
-    out = await _structured(server, route, {"page": 2, "limit": 5, "status": "open"})
-
-    assert out == {"page": 2, "limit": 5, "status": "open"}
-
-
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("route", _ROUTES)
-async def test_a_retrieve_selectors_page_parameter_registers_and_reaches_it_on_every_route(
-    route: str,
+@_ROUTES
+@pytest.mark.parametrize("kind", [SelectorKind.LIST, SelectorKind.RETRIEVE])
+async def test_a_selector_nothing_paginates_takes_page_and_limit_as_its_reads(
+    route: str, kind: SelectorKind
 ) -> None:
-    # Refused at registration while the names were reserved on every selector
-    # tool, and before that served page 1 when asked for page 2.
-    server = _register(_server(), _entry_page, kind=SelectorKind.RETRIEVE)
+    sent = {"page": 2, "limit": 5, "status": "open"}
 
-    out = await _structured(server, route, {"page": 2})
+    out = await _structured(_server(_selector(kind, *_PAGE_AND_LIMIT, _STATUS)), route, sent)
 
-    assert out == {"page": 2}
-
-
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("route", _ROUTES)
-async def test_a_name_the_input_serializer_lays_back_reaches_the_selector_on_every_route(
-    route: str,
-) -> None:
-    # The wire strips ``page`` and the ``input_serializer`` lays it back;
-    # ``call_tool`` runs no ``input_serializer``, so it keeps the name instead,
-    # or the selector ran on its own default.
-    server = _register(_server(), _page, input_serializer=_PageIn)
-
-    out = await _structured(server, route, {"page": 3})
-
-    assert out == [{"page": 3}]
+    assert out == ([sent] if kind is SelectorKind.LIST else sent)
 
 
 class _AmountCeiling(django_filters.FilterSet):
@@ -174,27 +134,17 @@ class _AmountCeiling(django_filters.FilterSet):
         fields: list[str] = []
 
 
-class _Number(drf_serializers.Serializer):
-    number = drf_serializers.CharField()
-
-
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("route", _ROUTES)
-async def test_a_filter_set_still_reads_a_pagination_named_filter_on_every_route(
-    route: str,
-) -> None:
+@_ROUTES
+async def test_a_filter_set_reads_a_pagination_named_filter_on_every_route(route: str) -> None:
     await Invoice.objects.acreate(number="A-1", amount_cents=50)
     await Invoice.objects.acreate(number="A-2", amount_cents=500)
-    server = _server()
-    server.register_selector_tool(
-        name="read",
-        description="Read.",
-        spec=SelectorSpec(
+    server = _server(
+        SelectorSpec(
             kind=SelectorKind.LIST,
-            selector=lambda: Invoice.objects.order_by("pk"),
-            output_serializer=_Number,
+            selector=lambda: Invoice.objects.order_by("pk").values("number"),
             filter_set=_AmountCeiling,
-        ),
+            permissions=OPEN,
+        )
     )
 
     out = await _structured(server, route, {"limit": 100})
@@ -202,22 +152,22 @@ async def test_a_filter_set_still_reads_a_pagination_named_filter_on_every_route
     assert out == [{"number": "A-1"}]
 
 
-class _PageAndLimit(drf_serializers.Serializer):
-    page = drf_serializers.IntegerField()
-    limit = drf_serializers.IntegerField()
+@dataclass
+class _PageAndLimit:
+    page: int
+    limit: int
 
 
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("route", _ROUTES)
+@_ROUTES
 async def test_a_service_tools_page_and_limit_are_its_own_on_every_route(route: str) -> None:
-    # No read pipeline paginates a service tool, so nothing strips either name.
-    server = _server()
-    server.register_service_tool(
-        name="read",
-        description="Read.",
-        spec=ServiceSpec(
-            service=lambda *, data: dict(data), input_serializer=_PageAndLimit, atomic=False
-        ),
+    # No read pipeline paginates a service tool, so nothing takes either name.
+    server = _server(
+        ServiceSpec(
+            service=lambda *, page, limit: {"page": page, "limit": limit},
+            validator=DataclassValidator(_PageAndLimit),
+            atomic=False,
+            permissions=OPEN,
+        )
     )
 
     out = await _structured(server, route, {"page": 2, "limit": 5})
@@ -225,32 +175,9 @@ async def test_a_service_tools_page_and_limit_are_its_own_on_every_route(route: 
     assert out == {"page": 2, "limit": 5}
 
 
-class _PageDroppedByValidate(drf_serializers.Serializer):
-    """Declares ``page`` and then drops it: the serializer decides the selector gets none."""
-
-    page = drf_serializers.IntegerField(required=False)
-
-    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        attrs.pop("page", None)
-        return attrs
-
-
-# ``call_tool`` is left out: it runs no ``input_serializer`` (``call_spec_tool``),
-# so nothing there can drop the name and the wire's value is the one served.
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("route", ["acall_tool", "handler", "async_handler"])
-async def test_a_page_the_input_serializer_drops_does_not_reach_a_list_selector_raw(
-    route: str,
-) -> None:
-    # The strip on a ``LIST`` tool's selector arguments is what keeps the raw
-    # ``page`` out: the overlay lays back only what the serializer validated, and
-    # this one validated ``page`` away. Without the strip
-    # (``strip_post_fetch_keys=binding.kind is SelectorKind.LIST`` in
-    # ``selector_tool_dispatch``) the caller's 3 reached the selector past the
-    # serializer that dropped it; with ``**kwargs`` selectors no longer handed
-    # undeclared keys, this is the case left in which the strip is observable.
-    server = _register(_server(), _page, input_serializer=_PageDroppedByValidate)
-
-    out = await _structured(server, route, {"page": 3})
-
-    assert out == [{"page": 1}]
+@pytest.mark.parametrize("name", ["page", "limit"])
+def test_a_paginated_list_declaring_a_read_named_page_or_limit_is_refused(name: str) -> None:
+    # The name as the registration message lists it, so a message that only
+    # mentions ``page`` and ``limit`` in passing cannot satisfy the match.
+    with pytest.raises(ImproperlyConfigured, match=re.escape(f"['{name}']")):
+        _server(_selector(SelectorKind.LIST, Parameter(name, "integer")), paginate=True)

@@ -16,12 +16,10 @@ from django_spec_mcp.types.max_completion_values import MAX_COMPLETION_VALUES
 from django_spec_mcp.types.mcp_error_header import MCP_ERROR_HEADER
 from django_spec_mcp.types.modern_protocol_versions import MODERN_PROTOCOL_VERSIONS
 from django_spec_mcp.types.notification_kind import NotificationKind
-from django_spec_mcp.types.output_format import OutputFormat
 from django_spec_mcp.types.progress_token_meta_key import PROGRESS_TOKEN_META_KEY
 from django_spec_mcp.types.protocol_version_meta_key import PROTOCOL_VERSION_META_KEY
 from django_spec_mcp.types.request_state_salt import REQUEST_STATE_SALT
 from django_spec_mcp.types.reserved_post_fetch_keys import RESERVED_POST_FETCH_KEYS
-from django_spec_mcp.types.resource_edge_seeds import RESOURCE_EDGE_SEEDS
 from django_spec_mcp.types.resource_encoding import ResourceEncoding
 from django_spec_mcp.types.resource_updated_method import RESOURCE_UPDATED_METHOD
 from django_spec_mcp.types.result_type import ResultType
@@ -40,8 +38,6 @@ from django_spec_mcp.types.task_status import TaskStatus
 from django_spec_mcp.types.task_status_method import TASK_STATUS_METHOD
 from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
 from django_spec_mcp.types.tool_content_kind import ToolContentKind
-from django_spec_mcp.types.tool_edge_seeds import TOOL_EDGE_SEEDS
-from django_spec_mcp.types.tool_kind import ToolKind
 from django_spec_mcp.types.ui_extension_id import UI_EXTENSION_ID
 from django_spec_mcp.types.ui_meta_key import UI_META_KEY
 from django_spec_mcp.types.ui_permission import UIPermission
@@ -65,12 +61,10 @@ __all__ = [
     "MCP_ERROR_HEADER",
     "MODERN_PROTOCOL_VERSIONS",
     "NotificationKind",
-    "OutputFormat",
     "PROGRESS_TOKEN_META_KEY",
     "PROTOCOL_VERSION_META_KEY",
     "REQUEST_STATE_SALT",
     "RESERVED_POST_FETCH_KEYS",
-    "RESOURCE_EDGE_SEEDS",
     "RESOURCE_UPDATED_METHOD",
     "ResourceEncoding",
     "ResultType",
@@ -84,11 +78,9 @@ __all__ = [
     "TASKS_EXTENSION_ID",
     "TASK_METHODS",
     "TASK_STATUS_METHOD",
-    "TOOL_EDGE_SEEDS",
     "TaskPolicy",
     "TaskStatus",
     "ToolContentKind",
-    "ToolKind",
     "UIPermission",
     "UIVisibility",
     "UI_EXTENSION_ID",

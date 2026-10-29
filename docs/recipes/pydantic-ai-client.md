@@ -27,14 +27,13 @@ through a socket back into the same interpreter, and paying an auth round trip
 buys nothing when there is no network between the two.
 
 Use
-[`djangorestframework-pydantic-ai`](https://artui.github.io/djangorestframework-pydantic-ai/)'s
-`SpecToolset` instead. It takes the same `ServiceSpec` / `SelectorSpec` objects
-you register here, reflects the same schemas through
-`djangorestframework-services`' `spec_to_json_schema`, and dispatches
-in-process:
+[`django-spec-agents`](https://artui.github.io/django-spec-agents/)'
+`SpecToolset` instead, from its `[specs]` extra. It takes the same kernel
+`ServiceSpec` / `SelectorSpec` objects you register here, reads the same
+schemas off them, and dispatches in-process:
 
 ```python
-from rest_framework_pydantic_ai import SpecToolset
+from django_spec_agents.spec_tools import SpecToolset
 
 agent = Agent("openai:gpt-5", toolsets=[SpecToolset(registry)])
 ```
@@ -49,7 +48,7 @@ Reach for `MCPToolset` when the network is real:
 
 The two are not exclusive. Declare the specs once in a `SpecRegistry` (see
 [Register tools from a shared spec registry](register-from-spec-registry.md)),
-feed it to `MCPServer.register_specs` for the wire and to `SpecToolset` for
+feed it to `MCPServer.register_tools` for the wire and to `SpecToolset` for
 the in-process agent, and the two surfaces cannot drift apart.
 
 ## What the client stack resolves to
@@ -184,8 +183,8 @@ If the confirmation must come from a human, the modern stack is not optional.
 ## What you still have to configure
 
 **Authentication.** `MCPToolset` sends whatever headers you give it; this
-server checks them with its `MCPAuthBackend`. For the default OAuth backend,
-pass the bearer token through:
+server checks them with its `MCPAuthBackend`. For a backend that verifies
+bearer tokens, pass the token through:
 
 ```python
 MCPToolset(
@@ -210,7 +209,8 @@ when the agent should receive push notifications or when dispatch is I/O-bound
 ## Trying it locally
 
 The [`invoicing` example](https://github.com/Artui/django-spec-mcp/tree/main/examples/invoicing)
-is a complete server to point this at:
+is a complete server to point this at. Its backend is a demo that knows two
+hard-coded tokens, and `demo-clerk` is the one that may do everything:
 
 ```bash
 cd examples/invoicing
@@ -225,7 +225,9 @@ from pydantic_ai.mcp import MCPToolset
 
 
 async def main() -> None:
-    async with MCPToolset("http://127.0.0.1:8000/mcp/") as toolset:
+    async with MCPToolset(
+        "http://127.0.0.1:8000/mcp/", headers={"Authorization": "Bearer demo-clerk"}
+    ) as toolset:
         print([tool.name for tool in await toolset.list_tools()])
         print(await toolset.direct_call_tool("invoices.list", {}))
 

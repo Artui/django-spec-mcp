@@ -1,16 +1,22 @@
-"""Linking a tool to an interactive view — ``register_*_tool(ui=...)``."""
+"""Linking a kernel tool to an interactive view: ``register_tool(ui=...)``.
+
+Asked of kernel specs registered with ``register_tool``.
+"""
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
 from django.http import HttpRequest
-from django_service_specs import SelectorKind
-from rest_framework import serializers
-from rest_framework.permissions import IsAuthenticated
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_service_specs import (
+    DataclassPresenter,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+)
 
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
@@ -22,6 +28,7 @@ from django_spec_mcp.server.mcp_server import MCPServer
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from django_spec_mcp.types.ui_meta_key import UI_META_KEY
 from django_spec_mcp.types.ui_visibility import UIVisibility
+from tests.testapp.services import record_invoice
 
 VIEW_URI = "ui://invoices/table.html"
 
@@ -39,35 +46,38 @@ def _server(**config: Any) -> MCPServer:
     return server
 
 
+@dataclass
+class _Row:
+    pk: int
+
+
 def _selector_spec() -> SelectorSpec:
     return SelectorSpec(
         kind=SelectorKind.LIST,
-        selector=lambda: None,
-        permission_classes=[IsAuthenticated],
+        selector=lambda: [],
+        presenter=DataclassPresenter(_Row),
+        permissions=[Unrestricted()],
     )
 
 
-class _Payload(serializers.Serializer):
-    text = serializers.CharField()
-
-
 def _service_spec() -> ServiceSpec:
-    def svc(*, data: dict) -> dict:
-        return data
+    return ServiceSpec(service=record_invoice, permissions=[Unrestricted()])
 
-    # The serializer is what fills ``data``; registration refuses the service
-    # without one.
-    return ServiceSpec(service=svc, input_serializer=_Payload, permission_classes=[IsAuthenticated])
+
+def _register(server: MCPServer, *, name: str, spec: Any, **knobs: Any) -> Any:
+    """``register_tool`` with a description and pagination on, plus the knobs a test asks."""
+    return server.register_tool(spec, name=name, description="d", paginate=True, **knobs)
 
 
 def _link(server: MCPServer, **overrides: Any) -> Any:
-    return server.register_selector_tool(
+    return _register(
+        server,
         **{
             "name": "list_invoices",
             "spec": _selector_spec(),
             "ui": UIToolMeta(resource_uri=VIEW_URI),
             **overrides,
-        }
+        },
     )
 
 
@@ -81,13 +91,6 @@ def _ctx(server: MCPServer) -> MCPCallContext:
         protocol_version="2025-11-25",
         config=server._config,
     )
-
-
-class _AlwaysAllow:
-    """A minimal real permission — the sentinel it replaces gated nothing."""
-
-    def has_permission(self, request: Any, token: Any) -> bool:
-        return True
 
 
 class TestTheLink:
@@ -116,7 +119,7 @@ class TestTheLink:
 
     def test_an_unlinked_tool_gains_no_meta(self) -> None:
         server = _server()
-        binding = server.register_selector_tool(name="plain", spec=_selector_spec())
+        binding = _register(server, name="plain", spec=_selector_spec())
 
         assert binding.meta == {}
 
@@ -128,24 +131,11 @@ class TestTheLink:
 class TestEveryToolKind:
     def test_a_service_tool_can_link(self) -> None:
         server = _server()
-        binding = server.register_service_tool(
-            name="refund", spec=_service_spec(), ui=UIToolMeta(resource_uri=VIEW_URI)
+        binding = server.register_tool(
+            _service_spec(), name="refund", description="d", ui=UIToolMeta(resource_uri=VIEW_URI)
         )
 
         assert binding.meta[UI_META_KEY]["resourceUri"] == VIEW_URI
-
-    def test_the_decorator_form_can_link(self) -> None:
-        server = _server()
-
-        @server.selector_tool(
-            name="decorated",
-            kind=SelectorKind.LIST,
-            permissions=[_AlwaysAllow()],
-            ui=UIToolMeta(resource_uri=VIEW_URI),
-        )
-        def decorated() -> None: ...
-
-        assert server.tools.get("decorated").meta[UI_META_KEY]["resourceUri"] == VIEW_URI
 
 
 class TestRefusedLinks:
@@ -158,9 +148,14 @@ class TestRefusedLinks:
     def test_a_data_resource_is_not_a_view(self) -> None:
         server = _server()
         server.register_resource(
+            SelectorSpec(
+                kind=SelectorKind.RETRIEVE,
+                selector=lambda: _Row(pk=1),
+                presenter=DataclassPresenter(_Row),
+                permissions=[Unrestricted()],
+            ),
             name="invoice",
             uri_template="invoices://data",
-            selector=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda: None),
         )
 
         with pytest.raises(ValueError, match="not a view registered on this server"):
@@ -192,8 +187,8 @@ class TestRefusedLinks:
     def test_a_hand_written_ui_key_alone_is_allowed(self) -> None:
         """The escape hatch stays open — and is unvalidated, by definition."""
         server = _server()
-        binding = server.register_selector_tool(
-            name="raw", spec=_selector_spec(), meta={UI_META_KEY: {"future": True}}
+        binding = _register(
+            server, name="raw", spec=_selector_spec(), meta={UI_META_KEY: {"future": True}}
         )
 
         assert binding.meta == {UI_META_KEY: {"future": True}}

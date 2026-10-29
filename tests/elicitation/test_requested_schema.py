@@ -25,8 +25,8 @@ def test_the_properties_are_wrapped_in_the_objects_the_spec_expects() -> None:
 
 
 def test_a_property_with_a_default_is_not_required() -> None:
-    """The only signal available, and the same one the dict would carry as a
-    serializer field: a default says what to do without an answer."""
+    """The only signal available, and the same one a Validator field
+    would carry: a default says what to do without an answer."""
     built = build_requested_schema(
         {"confirmed": {"type": "boolean"}, "reason": {"type": "string", "default": ""}}
     )
@@ -89,3 +89,52 @@ def test_the_message_names_the_offending_property() -> None:
     entire content of the error."""
     with pytest.raises(ImproperlyConfigured, match="'profile'"):
         build_requested_schema({"confirmed": {"type": "boolean"}, "profile": {"type": "object"}})
+
+
+# ---------- what the spec admits ----------
+
+
+def test_a_property_the_tool_does_not_admit_is_refused() -> None:
+    """The answer comes back as an ordinary argument, and a kernel spec's closed
+    argument set refuses one it does not declare as unknown. Asked anyway, the
+    user fills in a form whose answer the call then refuses, so the question is
+    refused here, where its author can be told which name is wrong."""
+    with pytest.raises(ImproperlyConfigured, match="'confirm'.*count, reason"):
+        build_requested_schema({"confirm": {"type": "boolean"}}, admitted=("count", "reason"))
+
+
+def test_the_refusal_is_worded_for_a_name_the_spec_lacks_and_one_the_server_fills() -> None:
+    """The message reaches the client verbatim as a ``-32603``, and the set it is given
+    holds neither a name the spec does not declare nor one the server fills, so it must
+    not tell the author to "ask for one the spec declares" when the spec declares it."""
+    with pytest.raises(ImproperlyConfigured) as raised:
+        build_requested_schema({"confirm": {"type": "boolean"}}, admitted=("reason", "count"))
+    assert str(raised.value) == (
+        "AdditionalInputRequired asked for 'confirm', which this tool does not take from a "
+        "client: the spec does not declare it, or the server fills it for the call, so its "
+        "answer would be refused, dropped or replaced. Ask for one of: count, reason."
+    )
+
+
+def test_a_tool_that_takes_nothing_from_a_client_says_so() -> None:
+    """An empty set is not rendered as an empty list of names."""
+    with pytest.raises(ImproperlyConfigured) as raised:
+        build_requested_schema({"confirm": {"type": "boolean"}}, admitted=())
+    assert str(raised.value) == (
+        "AdditionalInputRequired asked for 'confirm', which this tool does not take from a "
+        "client: the spec does not declare it, or the server fills it for the call, so its "
+        "answer would be refused, dropped or replaced. This tool takes no argument from a client, "
+        "so it can ask for nothing."
+    )
+
+
+def test_a_property_the_tool_admits_passes() -> None:
+    built = build_requested_schema({"confirmed": {"type": "boolean"}}, admitted=("confirmed",))
+    assert built["properties"] == {"confirmed": {"type": "boolean"}}
+
+
+def test_no_admitted_set_judges_the_schema_alone() -> None:
+    """``None`` is a caller that does not know the set, such as a tool passing
+    unknown arguments through, and asks nothing of the names."""
+    built = build_requested_schema({"anything": {"type": "boolean"}}, admitted=None)
+    assert built["properties"] == {"anything": {"type": "boolean"}}

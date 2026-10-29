@@ -21,11 +21,14 @@ from typing import Any
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest
+from django_service_specs import PermissionCheck
 
 from django_spec_mcp._compat.reject_awaitable import reject_awaitable
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.is_binding_listable import is_binding_listable
-from django_spec_mcp.handlers.utils import check_permissions, consume_rate_limits
+from django_spec_mcp.handlers.judge_binding import judge_binding
+from django_spec_mcp.handlers.utils import consume_rate_limits
+from django_spec_mcp.registry.types.prompt_binding import PromptBinding
 
 _TOKEN = TokenInfo(user=None, scopes=())
 
@@ -92,20 +95,14 @@ def test_the_message_carries_all_three_parts() -> None:
 # ----- the family -----
 
 
-class _AsyncHasPermission:
-    async def has_permission(self, request: HttpRequest, token: TokenInfo) -> bool:  # noqa: ARG002
-        return False  # pragma: no cover — never awaited, which is the defect
+class _HandsBackACoroutine(PermissionCheck):
+    """A plain ``def`` handing back a coroutine, which no binding can refuse when built."""
 
-    def required_scopes(self) -> list[str]:
-        return []  # pragma: no cover
+    def has_permission(self, principal: Any, spec: Any) -> Any:  # noqa: ARG002
+        async def later() -> bool:
+            return False  # pragma: no cover — never awaited, which is the defect
 
-
-class _AsyncIsListable:
-    def has_permission(self, request: HttpRequest, token: TokenInfo) -> bool:  # noqa: ARG002
-        return True  # pragma: no cover — ``is_listable`` short-circuits first
-
-    async def is_listable(self, token: TokenInfo) -> bool:  # noqa: ARG002
-        return False  # pragma: no cover — never awaited, which is the defect
+        return later()
 
 
 class _AsyncRateLimit:
@@ -113,50 +110,50 @@ class _AsyncRateLimit:
         return None  # pragma: no cover — never awaited, which is the defect
 
 
-class _Binding:
-    """The duck-typed shape all four binding dataclasses share."""
-
-    always_listed = False
-
-    def __init__(self, permissions: tuple[Any, ...]) -> None:
-        self.permissions = permissions
+def _prompt() -> PromptBinding:
+    return PromptBinding(
+        name="p", description=None, render=lambda: "", permissions=(_HandsBackACoroutine(),)
+    )
 
 
-def _call_check_permissions() -> None:
-    check_permissions((_AsyncHasPermission(),), _request(), _TOKEN)
-
-
-def _call_is_listable() -> None:
-    is_binding_listable(_Binding((_AsyncIsListable(),)), _request(), _TOKEN)
+def _call_judge_binding() -> None:
+    judge_binding(_prompt(), _TOKEN)
 
 
 def _call_listable_has_permission() -> None:
-    is_binding_listable(_Binding((_AsyncHasPermission(),)), _request(), _TOKEN)
+    is_binding_listable(_prompt(), _request(), _TOKEN)
 
 
 def _call_consume_rate_limits() -> None:
     consume_rate_limits((_AsyncRateLimit(),), _request(), _TOKEN)
 
 
-@pytest.mark.parametrize(
-    ("call", "named"),
-    [
-        (_call_check_permissions, "_AsyncHasPermission.has_permission()"),
-        (_call_is_listable, "_AsyncIsListable.is_listable()"),
-        (_call_listable_has_permission, "_AsyncHasPermission.has_permission()"),
-        (_call_consume_rate_limits, "_AsyncRateLimit.consume()"),
-    ],
-    ids=["tools/call permission", "list is_listable", "list has_permission", "rate limit"],
-)
-def test_an_async_hook_is_refused_and_named(call: Any, named: str) -> None:
+def test_an_async_rate_limit_is_refused_and_named() -> None:
     with pytest.raises(ImproperlyConfigured) as excinfo:
-        call()
+        _call_consume_rate_limits()
 
     message = str(excinfo.value)
     # Naming the offending class is the whole value: "returned an awaitable"
     # alone leaves an operator grepping a settings module.
-    assert named in message
+    assert "_AsyncRateLimit.consume()" in message
     assert "async_to_sync" in message
+
+
+@pytest.mark.parametrize(
+    "call",
+    [_call_judge_binding, _call_listable_has_permission],
+    ids=["prompt or view permission", "list has_permission"],
+)
+def test_a_prompt_check_answering_a_coroutine_is_refused_by_the_kernel_s_rule(call: Any) -> None:
+    """Both paths read the answer through the kernel's ``sync_answer``, not this helper."""
+    with pytest.raises(ImproperlyConfigured) as excinfo:
+        call()
+
+    assert str(excinfo.value) == (
+        "_HandsBackACoroutine.has_permission answered with an awaitable (coroutine) where a "
+        "bool was asked for. A permission check is sync-only and is never awaited, so the "
+        "call is refused rather than allowed; declare the method with def."
+    )
 
 
 def test_the_rate_limiter_refusal_explains_that_it_fails_closed() -> None:

@@ -39,7 +39,7 @@ def handle_server_discover(
     server_info: Implementation | None = context.server_info
     if server_info is None:
         # The degenerate path, as in ``initialize``: a context assembled without
-        # an owning server (a hand-wired viewset).
+        # an owning server (a hand-wired view).
         server_info = build_server_info()
     result: dict[str, Any] = DiscoverResult(
         supported_versions=context.config.protocol_versions,

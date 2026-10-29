@@ -1,9 +1,21 @@
-"""Client-supplied names never outrank the transport's own pool seeds.
+"""Client-supplied names never outrank the transport's own seeds, on a kernel resource too.
 
-Every method that lets a caller route a value into a kwarg pool — a prompt
-argument, a URI-template variable, a completion sibling — has to apply ``RESERVED_POOL_SEEDS`` precedence, or an argument
-called ``user`` binds to the parameter the dispatcher owns and the callable runs
-under a principal the caller named.
+Every method that lets a caller route a value into a pool, a prompt argument, a URI-template variable or a
+completion sibling, has to keep the dispatcher's own names out of the caller's
+reach, or an argument called ``user`` binds to the parameter the dispatcher owns
+and the callable runs under a principal the caller named.
+
+The prompt and completion cases name no spec. The resource cases are asked of a kernel
+``RETRIEVE`` spec. ``register_resource`` refuses a template variable named after
+a reserved seed, and the kernel refuses a spec declaring a read of that name, so
+the runtime lock is reached only by a binding built by hand: there the kernel's
+argument check refuses ``user`` as an argument the spec does not declare, and
+the selector never runs under the name the URI carried: the read is answered
+``-32602`` with the kernel's detail, as any admitted read of arguments the check
+refuses is. That is the only outcome on this path: a resource read dispatches
+under the kernel's default ``REJECT``, and ``register_resource`` takes no
+``unknown_arguments`` knob, so the ``IGNORE`` case the tool path asks (in
+``test_handler_branches.py``) is not asked of a resource.
 """
 
 from __future__ import annotations
@@ -11,8 +23,17 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from asgiref.sync import async_to_sync
+from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest
-from django_service_specs import SelectorKind
+from django_service_specs import (
+    Parameter,
+    Parameters,
+    SelectorKind,
+    SelectorSpec,
+    UnknownArguments,
+    Unrestricted,
+)
 
 from django_spec_mcp import MCPServer, PromptArgument
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
@@ -23,22 +44,16 @@ from django_spec_mcp.handlers.handle_prompts_get_async import handle_prompts_get
 from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
 from django_spec_mcp.handlers.handle_resources_read_async import handle_resources_read_async
 from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.registry.resource_registry import ResourceRegistry
-from django_spec_mcp.registry.types.resource_binding import ResourceBinding
-from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
+from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 
 _CALLER = "alice"
 
 
-class _AlwaysAllow:
-    """Minimal MCP permission — a registration must declare one."""
-
-    def has_permission(self, *_args: object, **_kwargs: object) -> bool:
-        return True
-
-
 def _server() -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore())
+    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
 
 
 def _ctx(server: MCPServer, *, resources: ResourceRegistry | None = None) -> MCPCallContext:
@@ -61,7 +76,7 @@ def _server_with_scoped_prompt() -> MCPServer:
         name="scoped",
         render=lambda *, user, topic: f"{user}:{topic}",
         arguments=[PromptArgument(name="topic", required=True)],
-        permissions=[_AlwaysAllow()],
+        permissions=[Unrestricted()],
     )
     return server
 
@@ -84,27 +99,31 @@ def test_prompt_argument_named_user_cannot_replace_the_caller() -> None:
 
 
 def test_prompt_argument_named_request_cannot_replace_the_request() -> None:
-    """The same key works for ``request``, which is what a ``render`` reading
-    ``request.user`` would otherwise be fooled by."""
+    """The same key works for ``request``: an argument of that name does not
+    replace the transport's request, whose ``user`` is the caller, so a
+    ``render`` reading ``request.user`` is not fooled by it."""
     seen: dict[str, Any] = {}
 
     server = _server()
 
-    def render(*, request: Any, topic: str) -> str:
-        seen["user"] = request.user
+    def render(*, request: Any, user: Any, topic: str) -> str:
+        seen.update(request=request, user=user)
         return topic
 
     server.register_prompt(
         name="scoped",
         render=render,
         arguments=[PromptArgument(name="topic", required=True)],
-        permissions=[_AlwaysAllow()],
+        permissions=[Unrestricted()],
     )
+    context = _ctx(server)
 
     handle_prompts_get(
-        {"name": "scoped", "arguments": {"topic": "x", "request": "spoofed"}}, _ctx(server)
+        {"name": "scoped", "arguments": {"topic": "x", "request": "spoofed"}}, context
     )
 
+    assert seen["request"] is context.http_request
+    assert seen["request"].user == _CALLER
     assert seen["user"] == _CALLER
 
 
@@ -129,54 +148,108 @@ def test_ordinary_prompt_arguments_still_reach_render() -> None:
 
 # ---------- resources/read ----------
 
+ran: list[Any] = []
 
-def _registry_with_templated_resource(variable: str) -> ResourceRegistry:
-    """Register the binding straight onto the registry.
 
-    ``register_resource`` refuses a template variable named after a reserved
-    seed, so the runtime precedence is reached only by bypassing it — which is
-    exactly the second lock this asserts.
-    """
+def _notes(*, user: Any, pk: str) -> dict[str, Any]:  # pragma: no cover - never reached
+    ran.append(user)
+    return {"scoped_to": str(user), "pk": pk}
+
+
+def _notes_spec() -> SelectorSpec:
+    return SelectorSpec(
+        kind=SelectorKind.RETRIEVE,
+        selector=_notes,
+        reads=Parameters([Parameter("pk", "string", required=True)]),
+        permissions=[Unrestricted()],
+    )
+
+
+def test_register_resource_refuses_a_template_variable_named_user() -> None:
+    with pytest.raises(ImproperlyConfigured, match="reserved transport keys"):
+        _server().register_resource(_notes_spec(), name="notes", uri_template="notes://{user}/{pk}")
+
+
+def test_a_kernel_spec_declaring_a_read_named_user_is_refused() -> None:
+    with pytest.raises(ImproperlyConfigured, match="dispatch seeds itself"):
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=_notes,
+            reads=Parameters([Parameter("user", "string", required=True)]),
+            permissions=[Unrestricted()],
+        )
+
+
+def test_a_resource_takes_no_unknown_argument_policy() -> None:
+    """Holds the module's claim that a resource read is always ``REJECT``."""
+    with pytest.raises(TypeError, match="unknown_arguments"):
+        _server().register_resource(
+            _notes_spec(),
+            name="notes",
+            uri_template="notes://{pk}",
+            unknown_arguments=UnknownArguments.IGNORE,
+        )
+
+
+def _handbuilt_notes() -> ResourceRegistry:
+    """The binding ``register_resource`` refuses, built by hand to reach the second lock."""
+    spec = _notes_spec()
     resources = ResourceRegistry()
     resources.register(
-        ResourceBinding(
+        KernelResourceBinding(
             name="notes",
-            uri_template=f"notes://{{{variable}}}/{{pk}}",
+            uri_template="notes://{user}/{pk}",
             description=None,
-            selector=lambda user, pk: {"scoped_to": user, "pk": pk},
-            kind=SelectorKind.RETRIEVE,
+            selector=spec.selector,
+            spec=spec,
         )
     )
     return resources
 
 
-def test_uri_template_variable_named_user_cannot_replace_the_caller() -> None:
-    resources = _registry_with_templated_resource("user")
-
-    out = handle_resources_read({"uri": "notes://victim/1"}, _ctx(_server(), resources=resources))
-
-    assert isinstance(out, dict)
-    assert f'"scoped_to": "{_CALLER}"' in out["contents"][0]["text"]
-
-
-async def test_async_uri_template_variable_named_user_cannot_replace_the_caller() -> None:
-    resources = _registry_with_templated_resource("user")
-
-    out = await handle_resources_read_async(
-        {"uri": "notes://victim/1"}, _ctx(_server(), resources=resources)
-    )
-
-    assert isinstance(out, dict)
-    assert f'"scoped_to": "{_CALLER}"' in out["contents"][0]["text"]
+@pytest.mark.parametrize(
+    "read",
+    [handle_resources_read, async_to_sync(handle_resources_read_async)],
+    ids=["sync", "async"],
+)
+def test_a_uri_template_variable_named_user_cannot_replace_the_caller(read: Any) -> None:
+    """The kernel's argument check refuses ``user`` as undeclared, and the read is
+    answered ``-32602`` naming it, so the selector never runs under the name the
+    URI carried."""
+    # The kernel declares no such read, so the argument check refuses the
+    # hand-built binding outright. The outcome that matters, that the selector
+    # never runs under the URI's name, would hold if the value were dropped
+    # instead, and an error is the louder way to hold it.
+    ran.clear()
+    refused = read({"uri": "notes://victim/1"}, _ctx(_server(), resources=_handbuilt_notes()))
+    assert isinstance(refused, JsonRpcError), refused
+    assert refused.code == JsonRpcErrorCode.INVALID_PARAMS
+    assert refused.data["detail"] == {"user": ["Unknown argument."]}
+    assert ran == []
 
 
 def test_ordinary_uri_template_variables_still_reach_the_selector() -> None:
-    resources = _registry_with_templated_resource("user")
-
-    out = handle_resources_read({"uri": "notes://victim/42"}, _ctx(_server(), resources=resources))
-
-    assert isinstance(out, dict)
-    assert '"pk": "42"' in out["contents"][0]["text"]
+    server = _server()
+    server.register_resource(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=lambda *, user, owner, pk: {"scoped_to": user, "owner": owner, "pk": pk},
+            reads=Parameters(
+                [
+                    Parameter("owner", "string", required=True),
+                    Parameter("pk", "string", required=True),
+                ]
+            ),
+            permissions=[Unrestricted()],
+        ),
+        name="notes",
+        uri_template="notes://{owner}/{pk}",
+    )
+    out = handle_resources_read({"uri": "notes://bob/42"}, _ctx(server))
+    text = out["contents"][0]["text"]
+    assert '"owner": "bob"' in text
+    assert '"pk": "42"' in text
+    assert f'"scoped_to": "{_CALLER}"' in text
 
 
 # ---------- completion/complete ----------
@@ -189,7 +262,7 @@ def _server_with_completer(completer: Any) -> MCPServer:
         render=lambda **_: "x",
         arguments=[PromptArgument(name="id"), PromptArgument(name="other")],
         completions={"id": completer},
-        permissions=[_AlwaysAllow()],
+        permissions=[Unrestricted()],
     )
     return server
 
@@ -249,20 +322,34 @@ def test_a_sibling_named_as_a_kernel_seed_does_not_reach_the_completer(name: str
     assert seen["other"] == "kept"
 
 
-def test_a_sibling_named_as_a_name_drf_services_drops_never_reaches_the_completer() -> None:
-    """``serializer`` is no kernel seed, but drf-services drops a caller's key of
-    that name everywhere else, so a completer is not handed one either."""
+def test_a_sibling_named_serializer_reaches_the_completer_as_on_a_tool() -> None:
+    """``serializer`` is no seed, and a kernel tool receives a caller's key of
+    that name, so a completer is handed it as any other sibling."""
     seen: dict[str, Any] = {}
 
     def completer(*, value: str, **kwargs: Any) -> list[str]:
         seen.update(kwargs)
         return ["a"]
 
-    out = _complete(_server_with_completer(completer), {"serializer": "attacker", "other": "kept"})
+    out = _complete(_server_with_completer(completer), {"serializer": "sent", "other": "kept"})
 
     assert isinstance(out, dict)
-    assert "serializer" not in seen
+    assert seen["serializer"] == "sent"
     assert seen["other"] == "kept"
+
+
+def test_a_sibling_named_request_is_outranked_by_the_seed() -> None:
+    """``request`` is no kernel seed and is not stripped, so it is the seed
+    written over the spread that keeps a caller's value out."""
+    seen: dict[str, Any] = {}
+
+    def completer(*, value: str, request: Any) -> list[str]:
+        seen["request"] = request
+        return ["a"]
+
+    _complete(_server_with_completer(completer), {"request": "spoofed"})
+
+    assert isinstance(seen["request"], HttpRequest)
 
 
 def test_an_ordinary_sibling_still_reaches_the_completer_by_name() -> None:

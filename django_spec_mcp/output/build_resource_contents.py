@@ -1,17 +1,11 @@
 from __future__ import annotations
 
-import base64
 from typing import Any
 
-from django_service_specs import SelectorKind
-from rest_framework_services import base_serializer_context, renderable_serializer_class
-
-from django_spec_mcp.output.encode_json import encode_json
+from django_spec_mcp.output.encode_resource_contents import encode_resource_contents
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.protocol.types.resource_contents import ResourceContents
 from django_spec_mcp.registry.types.resource_binding import ResourceBinding
-from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
-from django_spec_mcp.types.resource_encoding import ResourceEncoding
 
 
 def build_resource_contents(
@@ -19,88 +13,24 @@ def build_resource_contents(
     binding: ResourceBinding,
     uri: str,
     raw: Any,
-    view: Any = None,
-    request: Any = None,
 ) -> ResourceContents | JsonRpcError:
-    """Render a selector's return value into one ``resources/read`` block.
+    """Encode a view resource's body into one ``resources/read`` block.
 
-    Shared by the sync and async read handlers, which are full parallel
-    implementations rather than wrappers — so anything that varies by binding
-    lives here, or the two transports drift and only one gets a fix.
+    Shared by both read handlers' view path. The two handlers are full
+    parallel implementations rather than wrappers, so the encoding lives here,
+    or the sync and async reads drift and only one gets a fix.
 
-    Two steps, in order:
-
-    1. **Render**, if the binding declares an ``output_serializer`` — with
-       ``many=True`` for a ``LIST`` selector. The serializer gets DRF's baseline
-       context (``request`` / ``format`` / ``view``) built from the synthesized
-       ``view`` / ``request``, so a field reading ``self.context["request"]``
-       resolves it as it would behind a view. A resource binding has no context
-       provider of its own: its selector is a bare callable, not a spec.
-
-       The declaration is resolved through drf-services'
-       ``renderable_serializer_class`` before it is instantiated, as
-       ``render_spec_output`` resolves it on the tool path. This site cannot
-       delegate to that function — it takes a spec, and the binding holds none —
-       so it makes the same resolution itself, rather than wrapping a dataclass
-       here. A raw dataclass declared as the output therefore renders through a
-       ``DataclassSerializer``; instantiated as declared, its own ``__init__``
-       received ``many=`` and every read raised.
-    2. **Encode** per the binding's
-       [`ResourceEncoding`][django_spec_mcp.types.ResourceEncoding].
-       ``JSON`` pretty-prints; ``TEXT`` passes the value through verbatim, which is what
-       an HTML / Markdown / CSV resource needs; ``BLOB`` base64-encodes it into
-       the spec's ``blob`` field. ``text`` and ``blob`` are mutually exclusive
-       on a ``contents`` entry, so exactly one is ever set.
-
-    A ``TEXT`` or ``BLOB`` binding whose selector returned the wrong Python type can
-    only surface at read time, so it comes back as a
+    Encoded through ``encode_resource_contents``, the step a kernel resource's
+    read shares: per the binding's
+    [`ResourceEncoding`][django_spec_mcp.types.ResourceEncoding], ``JSON``
+    pretty-prints, ``TEXT`` passes the value through verbatim and ``BLOB``
+    base64-encodes it into the spec's ``blob`` field. A ``TEXT`` or ``BLOB``
+    binding whose selector returned the wrong Python type comes back as a
     [`JsonRpcError`][django_spec_mcp.protocol.types.json_rpc_error.JsonRpcError]
-    rather than an exception — a well-formed error response instead of a 500."""
-    payload: Any = raw
-    serializer_class = renderable_serializer_class(binding.output_serializer)
-    if serializer_class is not None:
-        payload = serializer_class(
-            raw,
-            many=binding.kind is SelectorKind.LIST,
-            context=base_serializer_context(view=view, request=request),
-        ).data
-
-    if binding.encoding is ResourceEncoding.BLOB:
-        if not isinstance(payload, bytes | bytearray | memoryview):
-            return JsonRpcError(
-                JsonRpcErrorCode.INTERNAL_ERROR,
-                f"Resource {binding.name!r} declares encoding=BLOB but produced "
-                f"{type(payload).__name__}, not bytes. A BLOB resource's body is "
-                "the binary itself, base64-encoded here, so the selector (after "
-                "any output_serializer) must return the bytes.",
-            )
-        return ResourceContents(
-            uri=uri,
-            mime_type=binding.mime_type,
-            blob=base64.b64encode(payload).decode("ascii"),
-            meta=dict(binding.meta) or None,
-        )
-
-    text: str
-    if binding.encoding is ResourceEncoding.TEXT:
-        if not isinstance(payload, str):
-            return JsonRpcError(
-                JsonRpcErrorCode.INTERNAL_ERROR,
-                f"Resource {binding.name!r} declares encoding=TEXT but produced "
-                f"{type(payload).__name__}, not str. A TEXT resource's body is "
-                "returned verbatim, so the selector (after any output_serializer) "
-                "must return the document itself.",
-            )
-        text = payload
-    else:
-        text = encode_json(payload)
-
-    return ResourceContents(
+    naming the selector, rather than as an exception."""
+    return encode_resource_contents(
+        raw,
+        binding=binding,
         uri=uri,
-        mime_type=binding.mime_type,
-        text=text,
-        meta=dict(binding.meta) or None,
+        producer="the selector",
     )
-
-
-__all__ = ["build_resource_contents"]

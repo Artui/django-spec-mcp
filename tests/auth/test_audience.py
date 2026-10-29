@@ -4,7 +4,7 @@ from django_spec_mcp.auth.audience import audience_matches
 
 
 def test_unset_expected_disables_enforcement() -> None:
-    """When ``RESOURCE_URL`` is not configured, audience is not enforced."""
+    """When no expected resource URL is given, audience is not enforced."""
     assert audience_matches(None, None) is True
     assert audience_matches("https://anything", None) is True
 

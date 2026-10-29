@@ -15,12 +15,13 @@ def reject_awaitable(result: Any, *, call: str, remedy: str, hazard: str) -> Any
     is truthy and is never ``None``**, so every downstream test of the return
     value reads it as a yes.
 
-    **This is a security gate, not a type check.** ``backend.authenticate()``,
-    ``perm.has_permission()`` and ``perm.is_listable()`` all fail *open* that
-    way: the misconfiguration is invisible in the response and the endpoint
-    serves everyone. (``limiter.consume()`` and the session store fail closed
-    or nonsensically instead.) Refusing converts a silent, total bypass into a
-    loud misconfiguration.
+    **This is a security gate, not a type check.** ``backend.authenticate()``
+    fails *open* that way: the misconfiguration is invisible in the response
+    and the endpoint serves everyone. (``limiter.consume()`` and the session
+    store fail closed or nonsensically instead.) Refusing converts a silent,
+    total bypass into a loud misconfiguration. A permission check's answer,
+    a prompt's or a view's included, is not read through this but through the
+    kernel's ``sync_answer``, which refuses an awaitable the same way.
 
     **Detection is on the returned value, not the function.**
     ``inspect.iscoroutinefunction`` would miss a plain ``def`` that hands

@@ -1,18 +1,31 @@
-"""``invalidates=`` — the write path announcing its own changes."""
+"""``invalidates=`` — the write path announcing its own changes.
+
+Asked here of kernel service tools registered with ``register_tool``: their
+arguments validate through a dataclass and reach the service spread, a refusal
+is a kernel ``PermissionCheck``, and a selector tool is a kernel
+``SelectorSpec``. The rendering questions name no spec.
+"""
 
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
 from asgiref.sync import sync_to_async
+from django.core.exceptions import ImproperlyConfigured
 from django.db import transaction
-from django_service_specs import AdditionalInputRequired, SelectorKind, ServiceError
-from rest_framework import serializers as drf_serializers
-from rest_framework.permissions import BasePermission
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_service_specs import (
+    AdditionalInputRequired,
+    DataclassValidator,
+    PermissionCheck,
+    SelectorKind,
+    SelectorSpec,
+    ServiceError,
+    ServiceSpec,
+    Unrestricted,
+)
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
@@ -25,7 +38,7 @@ from django_spec_mcp.subscriptions.in_memory_subscription_broker import (
 from django_spec_mcp.subscriptions.render_invalidations import render_invalidations
 from django_spec_mcp.subscriptions.utils import topic_for_resource
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
-from tests.subscriptions.test_subscription_core import _context
+from tests.utils import call_context
 
 # ----- rendering -----
 
@@ -108,33 +121,38 @@ def test_a_non_dict_result_contributes_no_keys() -> None:
 # ----- dispatch -----
 
 
-def _service(**kwargs: Any) -> dict[str, Any]:
-    return {"pk": kwargs.get("data", {}).get("pk", 1)}
+@dataclass
+class _PkInput:
+    pk: int = 1
 
 
-def _failing(**_: Any) -> Any:
+def _service(*, pk: int = 1) -> dict[str, Any]:
+    return {"pk": pk}
+
+
+def _failing(*, pk: int = 1) -> Any:  # noqa: ARG001
     raise ServiceError("nope")
+
+
+def _spec(service: Any, validator: type = _PkInput, **kwargs: Any) -> ServiceSpec:
+    kwargs.setdefault("permissions", [Unrestricted()])
+    return ServiceSpec(
+        service=service, validator=DataclassValidator(validator), atomic=False, **kwargs
+    )
 
 
 def _server(broker: Any) -> MCPServer:
     server = MCPServer(name="inval", auth_backend=AllowAnyBackend(), subscription_broker=broker)
-    server.register_service_tool(
+    server.register_tool(
+        _spec(_service),
         name="invoices.create",
         description="x",
-        spec=ServiceSpec(service=_service, atomic=False),
         invalidates=("invoices://{pk}", "invoices://"),
     )
-    server.register_service_tool(
-        name="invoices.broken",
-        description="x",
-        spec=ServiceSpec(service=_failing, atomic=False),
-        invalidates=("invoices://{pk}",),
+    server.register_tool(
+        _spec(_failing), name="invoices.broken", description="x", invalidates=("invoices://{pk}",)
     )
-    server.register_service_tool(
-        name="invoices.quiet",
-        description="x",
-        spec=ServiceSpec(service=_service, atomic=False),
-    )
+    server.register_tool(_spec(_service), name="invoices.quiet", description="x")
     return server
 
 
@@ -145,7 +163,9 @@ async def test_a_successful_call_announces_both_declared_uris() -> None:
     instance = await broker.subscribe(frozenset({topic_for_resource("invoices://1")}))
     collection = await broker.subscribe(frozenset({topic_for_resource("invoices://")}))
 
-    await handle_tools_call_async({"name": "invoices.create", "arguments": {}}, _context(server))
+    await handle_tools_call_async(
+        {"name": "invoices.create", "arguments": {}}, call_context(server)
+    )
     assert instance.get_nowait()["params"]["uri"] == "invoices://1"
     assert collection.get_nowait()["params"]["uri"] == "invoices://"
 
@@ -159,23 +179,24 @@ async def test_a_failed_tool_announces_nothing() -> None:
     server = _server(broker)
     queue = await broker.subscribe(frozenset({topic_for_resource("invoices://1")}))
     result = await handle_tools_call_async(
-        {"name": "invoices.broken", "arguments": {}}, _context(server)
+        {"name": "invoices.broken", "arguments": {}}, call_context(server)
     )
     assert result["isError"] is True
     assert queue.qsize() == 0
 
 
-def _confirming(**kwargs: Any) -> dict[str, Any]:
+def _confirming(*, confirmed: bool = False) -> dict[str, Any]:
     """Runs only once the caller has confirmed; asks for the confirmation otherwise."""
-    if not kwargs.get("data", {}).get("confirmed"):
+    if not confirmed:
         raise AdditionalInputRequired(
             "Confirm to proceed.", schema={"confirmed": {"type": "boolean"}}
         )
     return {"pk": 1}
 
 
-class _ConfirmInput(drf_serializers.Serializer):
-    confirmed = drf_serializers.BooleanField(required=False, default=False)
+@dataclass
+class _ConfirmInput:
+    confirmed: bool = False
 
 
 @pytest.mark.django_db(transaction=True)
@@ -192,16 +213,16 @@ async def test_only_a_completed_result_announces(
     ``isError`` to fail on, which is why the check is on the result completing."""
     broker = InMemorySubscriptionBroker()
     server = MCPServer(name="inval", auth_backend=AllowAnyBackend(), subscription_broker=broker)
-    server.register_service_tool(
+    server.register_tool(
+        _spec(_confirming, _ConfirmInput),
         name="invoices.confirm",
         description="x",
-        spec=ServiceSpec(service=_confirming, input_serializer=_ConfirmInput, atomic=False),
         # Static, so the template is fillable from any result, a request for
         # input included: what stops the announcement is the check under test.
         invalidates=("invoices://",),
     )
     queue = await broker.subscribe(frozenset({topic_for_resource("invoices://")}))
-    context = _context(server, client_capabilities={"elicitation": {}})
+    context = call_context(server, client_capabilities={"elicitation": {}})
     params: dict[str, Any] = {"name": "invoices.confirm", "arguments": arguments}
 
     if is_async:
@@ -213,8 +234,8 @@ async def test_only_a_completed_result_announces(
     assert queue.qsize() == announced
 
 
-class _Refuses(BasePermission):
-    def has_permission(self, request: Any, view: Any) -> bool:
+class _Refuses(PermissionCheck):
+    def has_permission(self, principal: Any, spec: Any) -> bool:
         return False
 
 
@@ -223,16 +244,16 @@ async def test_a_non_dict_result_announces_nothing() -> None:
     """A denied call is answered with a protocol error rather than a result."""
     broker = InMemorySubscriptionBroker()
     server = MCPServer(name="inval", auth_backend=AllowAnyBackend(), subscription_broker=broker)
-    server.register_service_tool(
+    server.register_tool(
+        _spec(_service, permissions=[_Refuses()]),
         name="invoices.denied",
         description="x",
-        spec=ServiceSpec(service=_service, atomic=False, permission_classes=[_Refuses]),
         invalidates=("invoices://",),
     )
     queue = await broker.subscribe(frozenset({topic_for_resource("invoices://")}))
 
     result: Any = await handle_tools_call_async(
-        {"name": "invoices.denied", "arguments": {}}, _context(server)
+        {"name": "invoices.denied", "arguments": {}}, call_context(server)
     )
 
     assert result.code == -32006
@@ -244,7 +265,7 @@ async def test_a_binding_that_declares_nothing_publishes_nothing() -> None:
     broker = InMemorySubscriptionBroker()
     server = _server(broker)
     queue = await broker.subscribe(frozenset({topic_for_resource("invoices://1")}))
-    await handle_tools_call_async({"name": "invoices.quiet", "arguments": {}}, _context(server))
+    await handle_tools_call_async({"name": "invoices.quiet", "arguments": {}}, call_context(server))
     assert queue.qsize() == 0
 
 
@@ -252,7 +273,7 @@ async def test_a_binding_that_declares_nothing_publishes_nothing() -> None:
 async def test_an_unknown_tool_does_not_reach_the_publisher() -> None:
     broker = InMemorySubscriptionBroker()
     server = _server(broker)
-    result = await handle_tools_call_async({"name": "nope", "arguments": {}}, _context(server))
+    result = await handle_tools_call_async({"name": "nope", "arguments": {}}, call_context(server))
     assert result.code == -32602
 
 
@@ -265,7 +286,7 @@ def test_the_sync_path_announces_too() -> None:
     from asgiref.sync import async_to_sync
 
     queue = async_to_sync(broker.subscribe)(frozenset({topic_for_resource("invoices://")}))
-    handle_tools_call({"name": "invoices.create", "arguments": {}}, _context(server))
+    handle_tools_call({"name": "invoices.create", "arguments": {}}, call_context(server))
     assert queue.qsize() == 1
 
 
@@ -281,7 +302,7 @@ def test_nothing_is_published_until_the_transaction_commits() -> None:
 
     queue = async_to_sync(broker.subscribe)(frozenset({topic_for_resource("invoices://")}))
     with transaction.atomic():
-        handle_tools_call({"name": "invoices.create", "arguments": {}}, _context(server))
+        handle_tools_call({"name": "invoices.create", "arguments": {}}, call_context(server))
         assert queue.qsize() == 0, "published before commit"
     assert queue.qsize() == 1
 
@@ -299,7 +320,7 @@ def test_a_rolled_back_write_announces_nothing() -> None:
         pass
 
     with pytest.raises(_Rollback), transaction.atomic():
-        handle_tools_call({"name": "invoices.create", "arguments": {}}, _context(server))
+        handle_tools_call({"name": "invoices.create", "arguments": {}}, call_context(server))
         raise _Rollback
     assert queue.qsize() == 0
 
@@ -321,7 +342,7 @@ def test_the_async_path_announces_on_the_thread_that_did_the_write() -> None:
     queue = async_to_sync(broker.subscribe)(frozenset({topic_for_resource("invoices://")}))
     with transaction.atomic():
         async_to_sync(handle_tools_call_async)(
-            {"name": "invoices.create", "arguments": {}}, _context(server)
+            {"name": "invoices.create", "arguments": {}}, call_context(server)
         )
         assert queue.qsize() == 0, "announced before commit"
     assert queue.qsize() == 1
@@ -342,14 +363,11 @@ async def test_a_server_with_no_broker_is_unaffected() -> None:
     error — otherwise the declaration could not be written once and deployed
     both ways."""
     server = MCPServer(name="nobroker", auth_backend=AllowAnyBackend())
-    server.register_service_tool(
-        name="invoices.create",
-        description="x",
-        spec=ServiceSpec(service=_service, atomic=False),
-        invalidates=("invoices://{pk}",),
+    server.register_tool(
+        _spec(_service), name="invoices.create", description="x", invalidates=("invoices://{pk}",)
     )
     result = await handle_tools_call_async(
-        {"name": "invoices.create", "arguments": {}}, _context(server)
+        {"name": "invoices.create", "arguments": {}}, call_context(server)
     )
     assert result["structuredContent"] == {"pk": 1}
 
@@ -357,16 +375,18 @@ async def test_a_server_with_no_broker_is_unaffected() -> None:
 # ----- registration surface -----
 
 
-def test_a_selector_tool_has_no_invalidates_kwarg() -> None:
-    """A read changes nothing, and accepting the kwarg would invite using it."""
+def test_a_selector_tool_refuses_invalidates() -> None:
+    """A read changes nothing, and accepting the knob would invite using it.
+    ``register_tool`` takes both kinds of spec, so the knob is a keyword of it
+    and a selector spec is refused at registration."""
     server = MCPServer(name="sel", auth_backend=AllowAnyBackend())
-    with pytest.raises(TypeError, match="invalidates"):
-        server.register_selector_tool(
+    with pytest.raises(ImproperlyConfigured, match="invalidates belongs to a service tool"):
+        server.register_tool(
+            SelectorSpec(kind=SelectorKind.LIST, selector=lambda: [], permissions=[Unrestricted()]),
             name="s",
             description="x",
-            spec=SelectorSpec(kind=SelectorKind.LIST, selector=lambda: []),
             paginate=True,
-            invalidates=("a://",),  # type: ignore[call-arg]
+            invalidates=("a://",),
         )
 
 
@@ -376,7 +396,7 @@ def test_the_wsgi_transport_hands_the_handler_a_broker() -> None:
 
     Every sync ``MCPCallContext`` the server builds itself — ``call_tool``, the
     task worker — carries ``subscriptions``, so the sync handler chain is
-    expected to publish. The sync viewset built its context without one, and
+    expected to publish. The sync view built its context without one, and
     ``publish_invalidations(None, uris)`` returns without touching the broker:
     a tool declaring ``invalidates=`` committed its write and told nobody, in a
     way indistinguishable from the resource never having changed. The natural
@@ -387,17 +407,15 @@ def test_the_wsgi_transport_hands_the_handler_a_broker() -> None:
     from asgiref.sync import async_to_sync
     from django.test import RequestFactory
 
-    from django_spec_mcp.transport.streamable_http_viewset import (
-        STREAMABLE_HTTP_ACTION_MAP,
-        StreamableHttpViewSet,
+    from django_spec_mcp.transport.streamable_http_view import (
+        StreamableHttpView,
     )
 
     broker = InMemorySubscriptionBroker()
     server = _server(broker)
     queue = async_to_sync(broker.subscribe)(frozenset({topic_for_resource("invoices://")}))
 
-    view = StreamableHttpViewSet.as_view(
-        STREAMABLE_HTTP_ACTION_MAP,
+    view = StreamableHttpView.as_view(
         tools=server._tools,
         resources=server._resources,
         prompts=server._prompts,
@@ -429,8 +447,8 @@ def test_the_wsgi_transport_hands_the_handler_a_broker() -> None:
 def test_the_mounted_wsgi_urls_hand_the_handler_a_broker() -> None:
     """The same guarantee, reached the way a project actually mounts the server.
 
-    The sibling test above builds the viewset by hand, so it passes as soon as
-    ``StreamableHttpViewSet`` accepts the broker -- and stays passing while
+    The sibling test above builds the view by hand, so it passes as soon as
+    ``StreamableHttpView`` accepts the broker -- and stays passing while
     ``MCPServer.urls`` forgets to pass it, which is the only path a project
     takes. ``async_urls`` always passed it, so the gap was visible on ASGI and
     invisible on WSGI: the announcement was dropped for every mounted sync

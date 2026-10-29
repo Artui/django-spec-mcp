@@ -35,7 +35,7 @@ async def adispatch(
     configuration reaches ``django.db`` and Django raises
     ``SynchronousOnlyOperation`` straight off the loop — and the four list
     handlers evaluate binding permissions, which is where a consumer's
-    ``DjangoPermRequired`` runs a query. The thread hop costs a handful of
+    ``PermissionCheck`` runs a query. The thread hop costs a handful of
     microseconds on the handlers that genuinely need nothing; a task the client
     can create but never collect is not recoverable at all.
     """

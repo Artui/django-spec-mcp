@@ -1,27 +1,35 @@
-"""``build_service_tool_input_schema`` for a serializer-less service spread into its parameters.
+"""A kernel service tool's arguments are its parameters, at the top level.
 
-With no ``input_serializer``, drf-services' dispatch under a ``SPREAD_*`` binding
-takes the caller's input as the service's own parameters and declares them, so
-``UnknownArguments.REJECT`` admits them. The schema lists them, reflected by
-drf-services' ``spec_to_json_schema`` given the binding, less every name the
-server fills. Under ``BUNDLE`` nothing reads them, so none is listed.
+The kernel spreads a service's input: a Validator's fields are the tool's arguments, and
+the service receives each validated value as its own keyword. There is no
+``argument_binding`` to choose, so a service never bundles its input under ``data``: one
+spec has one schema on every transport. The schema lists every parameter, less what the
+server fills whatever the caller sends, and does not require one a provider may fill.
 
-Bindings are built directly rather than through the adapter, so each test reads
-the schema a binding advertises, whatever registration would have said about it.
-The last test registers one and calls it on every route, because what the schema
-should offer is decided by which value a call is served.
+Every test reads what a client is served, through ``MCPServer.list_tools`` and
+the call routes.
 """
 
 from __future__ import annotations
 
-from typing import Any, TypedDict
+from dataclasses import dataclass
+from typing import Any
 
 import pytest
 from asgiref.sync import sync_to_async
 from django.http import HttpRequest
-from django_service_specs import DEFAULT_POOL_SEEDS, UnknownArguments, UnsetType
-from rest_framework_services import ArgumentBinding
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_service_specs import (
+    DEFAULT_POOL_SEEDS,
+    DataclassPresenter,
+    DataclassValidator,
+    Parameter,
+    Parameters,
+    ServiceSpec,
+    UnknownArguments,
+    Unrestricted,
+    UnsetType,
+)
+from typing_extensions import TypedDict
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
@@ -29,144 +37,196 @@ from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.types.context import MCPCallContext
-from django_spec_mcp.registry.types.tool_binding import ToolBinding
-from django_spec_mcp.schema.service_tool_schema import build_service_tool_input_schema
-
-# The one binding that spreads a serializer-less service's parameters: drf-services
-# retired ``SPREAD_CALLER_WINS``, which raises ``ValueError`` at dispatch.
-_SPREAD = (ArgumentBinding.SPREAD_AUTHOR_WINS,)
+from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
+from django_spec_mcp.schema.kernel_tool_input_schema import kernel_tool_input_schema
 
 
-def _close_ticket(
-    *, user: Any, ticket: int, resolution: str, tenant: int, note: str = ""
-) -> dict[str, Any]:
-    return {}
+@dataclass
+class _CloseTicket:
+    ticket: int
+    resolution: str
+    tenant: int
+    note: str = ""
 
 
-def _binding(spec: ServiceSpec, argument_binding: ArgumentBinding) -> ToolBinding:
-    return ToolBinding(name="close", description=None, spec=spec, argument_binding=argument_binding)
+def _close_ticket(*, ticket: int, resolution: str, tenant: int, note: str = "") -> None:
+    return None
 
 
-@pytest.mark.parametrize("argument_binding", _SPREAD)
-def test_a_spread_service_lists_its_own_parameters(argument_binding: ArgumentBinding) -> None:
-    # ``user`` is a seed, so it is not asked of the client; every other
-    # parameter without a default is required, because nothing but the caller
-    # fills it.
-    spec = ServiceSpec(service=_close_ticket, atomic=False)
+def _server(**kwargs: Any) -> MCPServer:
+    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None, **kwargs)
 
-    schema = build_service_tool_input_schema(_binding(spec, argument_binding))
+
+def _schema(server: MCPServer) -> dict[str, Any]:
+    listed: Any = server.list_tools(user=None)
+    (tool,) = listed["tools"]
+    return tool["inputSchema"]
+
+
+def _register(server: MCPServer, **declared: Any) -> None:
+    server.register_tool(
+        ServiceSpec(
+            service=_close_ticket,
+            validator=DataclassValidator(_CloseTicket),
+            atomic=False,
+            permissions=[Unrestricted()],
+            **declared,
+        ),
+        name="close",
+        description="Close a ticket.",
+    )
+
+
+def test_a_service_lists_its_validators_fields_at_the_top_level() -> None:
+    # Not bundled under ``data``. A field without a default is required,
+    # because nothing but the caller fills it, and the schema is closed, as the
+    # call's argument set is.
+    server = _server()
+    _register(server)
+
+    schema = _schema(server)
 
     assert set(schema["properties"]) == {"ticket", "resolution", "tenant", "note"}
     assert set(schema["required"]) == {"ticket", "resolution", "tenant"}
+    assert schema["additionalProperties"] is False
 
 
-def test_a_registered_seed_is_not_listed_as_a_service_parameter() -> None:
-    # Dispatch subtracts the server's registered seeds from what it declares, and
-    # strips the caller's value for one, so the schema neither lists nor
-    # requires it.
-    spec = ServiceSpec(service=_close_ticket, atomic=False)
+def test_a_field_named_like_a_registered_seed_is_still_the_callers() -> None:
+    # A registered seed's name is not subtracted from a spread service's parameters. A
+    # Validator field of that name is the caller's to send: dispatch validates it, and
+    # the seed fills only the service's keyword (``server_owned_keys``). Asked of the
+    # builder with the seeds handed in, since the listing does not pass the server's yet
+    # (``test_kernel_tool_input_schema.py``); the reflected read of the same name is the
+    # control that shows they reached it.
     seeds = DEFAULT_POOL_SEEDS.extend(tenant=lambda: 1)
+    server = _server()
+    _register(
+        server,
+        reads=Parameters([Parameter("region", "string", required=True, reflected=True)]),
+    )
+    binding = server.tools.get("close")
+    assert isinstance(binding, KernelToolBinding)
 
-    schema = build_service_tool_input_schema(
-        _binding(spec, ArgumentBinding.SPREAD_AUTHOR_WINS), pool_seeds=seeds
+    schema = kernel_tool_input_schema(
+        binding,
+        max_page_size=None,
+        pool_seeds=seeds.extend(region=lambda: "eu"),
     )
 
-    assert set(schema["properties"]) == {"ticket", "resolution", "note"}
-    assert set(schema["required"]) == {"ticket", "resolution"}
+    assert "tenant" in schema["properties"]
+    assert "tenant" in schema["required"]
+    assert "region" not in schema["properties"]
 
 
 class _TenantScope(TypedDict):
     tenant: int
 
 
-def _typed_provider(view: Any, request: Any) -> _TenantScope:
-    return {"tenant": 1}
-
-
 class _MaybeTenantScope(TypedDict):
     tenant: int | UnsetType
 
 
-def _declining_provider(view: Any, request: Any) -> _MaybeTenantScope:
+def _typed_input_data() -> _TenantScope:
+    return {"tenant": 1}
+
+
+def _declining_input_data() -> _MaybeTenantScope:
     return {"tenant": 1}
 
 
 @pytest.mark.parametrize(
-    ("provider", "argument_binding", "properties", "required"),
+    ("provider", "properties", "required"),
     [
-        # Under ``SPREAD_AUTHOR_WINS`` the provider is applied over the caller's
-        # spread, so a key it says it fills always reaches the service as the
-        # provider's: offering it would ask for a value the call then replaces.
+        # Merged over the caller's arguments before the Validator runs, so a
+        # field it always fills holds the provider's value whatever is sent.
         pytest.param(
-            _typed_provider,
-            ArgumentBinding.SPREAD_AUTHOR_WINS,
+            _typed_input_data,
             {"ticket", "resolution", "note"},
             {"ticket", "resolution"},
-            id="typed-author-wins",
+            id="typed",
         ),
-        # One that may decline ``tenant`` with ``UNSET`` leaves the caller to
-        # send it or not, so it is offered and not required.
-        *(
-            pytest.param(
-                _declining_provider,
-                binding,
-                {"ticket", "resolution", "tenant", "note"},
-                {"ticket", "resolution"},
-                id=f"declinable-{binding.name}",
-            )
-            for binding in _SPREAD
+        # One that may decline ``tenant`` leaves the caller to send it or not.
+        pytest.param(
+            _declining_input_data,
+            {"ticket", "resolution", "tenant", "note"},
+            {"ticket", "resolution"},
+            id="declinable",
         ),
-        # An untyped one may fill any name and fills none for certain, so every
-        # parameter is offered and none is required for lacking a default.
-        *(
-            pytest.param(
-                lambda view, request: {"tenant": 1},
-                binding,
-                {"ticket", "resolution", "tenant", "note"},
-                set(),
-                id=f"untyped-{binding.name}",
-            )
-            for binding in _SPREAD
+        # An untyped one may fill any field and fills none for certain.
+        pytest.param(
+            lambda: {"tenant": 1},
+            {"ticket", "resolution", "tenant", "note"},
+            set(),
+            id="untyped",
         ),
     ],
 )
-def test_a_name_the_services_provider_fills_is_offered_where_the_callers_value_is_served(
-    provider: Any, argument_binding: ArgumentBinding, properties: set[str], required: set[str]
+def test_a_field_the_input_data_provider_fills_is_offered_where_the_callers_value_is_served(
+    provider: Any, properties: set[str], required: set[str]
 ) -> None:
-    # Not required wherever the provider may fill it, because the provider
-    # fills it when the caller sends none.
-    spec = ServiceSpec(service=_close_ticket, atomic=False, kwargs=provider)
+    server = _server()
+    _register(server, input_data=provider)
 
-    schema = build_service_tool_input_schema(_binding(spec, argument_binding))
+    schema = _schema(server)
 
     assert set(schema["properties"]) == properties
     assert set(schema.get("required", [])) == required
 
 
-@pytest.mark.parametrize("argument_binding", [ArgumentBinding.AUTO, ArgumentBinding.BUNDLE])
-def test_a_service_that_does_not_spread_lists_none_of_its_parameters_beside_a_provider(
-    argument_binding: ArgumentBinding,
-) -> None:
-    # Why ``declared_service_input`` supplies the provider's keys without asking
-    # the binding: under ``AUTO`` and ``BUNDLE`` a serializer-less service's
-    # parameters are no client input, so there is nothing for them to hide.
-    spec = ServiceSpec(service=_close_ticket, atomic=False, kwargs=_typed_provider)
+def _close_by_tenant(*, tenant: int, ticket: int) -> None:
+    return None
 
-    schema = build_service_tool_input_schema(_binding(spec, argument_binding))
 
-    assert schema == {"type": "object"}
+def test_a_service_without_a_validator_relaxes_its_reads_alone() -> None:
+    # A service may declare its arguments as ``reads`` and no Validator; a
+    # provider beside them relaxes them, and there is no Validator seat to read.
+    server = _server()
+    server.register_tool(
+        ServiceSpec(
+            service=_close_by_tenant,
+            reads=Parameters(
+                [
+                    Parameter("tenant", "integer", required=True),
+                    Parameter("ticket", "integer", required=True),
+                ]
+            ),
+            kwargs=lambda: {"tenant": 1},
+            atomic=False,
+            permissions=[Unrestricted()],
+        ),
+        name="close",
+        description="Close a ticket.",
+    )
+
+    schema = _schema(server)
+
+    assert set(schema["properties"]) == {"tenant", "ticket"}
+    assert "required" not in schema
+
+
+# ---------- what the call serves, on every route ----------
+
+
+@dataclass
+class _Archive:
+    reason: str
 
 
 class _Reason(TypedDict):
     reason: str
 
 
-def _reason_of_record(view: Any) -> _Reason:
+def _reason_of_record() -> _Reason:
     return {"reason": "provider"}
 
 
-def _archive_with_reason(*, reason: str) -> dict[str, Any]:
-    return {"reason": reason}
+@dataclass
+class _Archived:
+    reason: str
+
+
+def _archive_with_reason(*, reason: str) -> _Archived:
+    return _Archived(reason=reason)
 
 
 async def _served(server: MCPServer, route: str, arguments: dict[str, Any]) -> Any:
@@ -199,27 +259,28 @@ async def _served(server: MCPServer, route: str, arguments: dict[str, Any]) -> A
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("route", ["handler", "async_handler", "call_tool", "acall_tool"])
-@pytest.mark.parametrize(
-    ("binding", "served", "advertised"),
-    [
-        # The provider is applied over the spread, so the caller's value is
-        # replaced and the name is not offered; ``REJECT`` still admits it.
-        (ArgumentBinding.SPREAD_AUTHOR_WINS, "provider", False),
-    ],
-)
-async def test_a_spread_services_provider_filled_name_is_offered_where_the_callers_value_is_served(
-    binding: ArgumentBinding, served: str, advertised: bool, route: str
+async def test_a_provider_filled_field_is_not_offered_because_the_callers_value_is_replaced(
+    route: str,
 ) -> None:
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
-    server.register_service_tool(
+    server = _server()
+    server.register_tool(
+        ServiceSpec(
+            service=_archive_with_reason,
+            validator=DataclassValidator(_Archive),
+            presenter=DataclassPresenter(_Archived),
+            input_data=_reason_of_record,
+            atomic=False,
+            permissions=[Unrestricted()],
+        ),
         name="archive",
-        spec=ServiceSpec(service=_archive_with_reason, atomic=False, kwargs=_reason_of_record),
-        argument_binding=binding,
+        description="Archive.",
         unknown_arguments=UnknownArguments.REJECT,
     )
     listed: Any = server.list_tools(user=None)
 
     out = await _served(server, route, {"reason": "caller"})
 
-    assert ("reason" in listed["tools"][0]["inputSchema"].get("properties", {})) is advertised
-    assert out == {"reason": served}
+    # ``REJECT`` still admits the name, since the spec declares it; the
+    # provider's value is the one served.
+    assert "reason" not in listed["tools"][0]["inputSchema"]["properties"]
+    assert out == {"reason": "provider"}

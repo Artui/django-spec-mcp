@@ -1,109 +1,106 @@
-"""A call that leaves out a required argument is a ``validation_error`` result.
+"""A kernel tool call that leaves out a required argument is a ``validation_error`` result.
 
-A selector -- a selector tool's own, or the lookup a service tool resolves its
-target through -- called without a parameter it has no default for raises
-``TypeError``. That escaped every handler: the wire answered HTTP 500 with
-JSON-RPC ``-32603`` "Internal error", and ``call_tool`` / ``acall_tool`` raised
-it to the caller. Now the names the tool's ``inputSchema`` requires of its
-selectors are checked before dispatch, and a missing one is answered
-``"Missing required argument(s): `pk`."`` -- the sentence the Pydantic-AI toolset
-gives the same call -- with ``{"pk": ["This field is required."]}`` under
-``detail``, the shape an input serializer gives a missing field. A serializer's
-own refusal, a missing field included, still reads ``"Invalid arguments"``.
+The kernel refuses a missing argument itself: ``dispatch``'s shape check names
+every required parameter the call left out, a selector's ``reads``, the
+``reads`` of the selector a service resolves its target through, and a
+Validator's fields alike, as ``InvalidArguments`` keyed by the name. The
+transport answers that refusal as the validation ``isError`` on every route, so
+a selector's ``TypeError`` for a missing keyword, an HTTP 500 with ``-32603`` on
+the wire, has no way to arise.
 
-The check runs after the transport-level permissions, so a caller the listing
-hides the tool from is refused for the permission and never learns, from a
-missing-argument answer, that the tool exists.
+Every route and both protocol eras answer a result, the schema's ``required`` is what dispatch refuses, several missing
+names are answered together, a provider or a registered seed filling a read
+satisfies it, and a caller the tool is not for is refused for that before any
+argument is read.
+
+The kernel's own rules:
+
+- The message is the server's ``AgentConventions.missing_arguments``,
+  ``"Missing required argument(s): `pk`."`` by default, for every name the
+  kernel reads as left out (``InvalidArguments.missing``), with
+  ``{"pk": ["This field is required."]}`` under ``detail``. A Validator field is
+  one of them.
+- A Validator field and a target lookup's read left out together are both
+  named.
+- A seed's name the client sends anyway is refused as an unknown argument: a
+  ``reflected`` read leaves the argument set once a seed fills it.
+
+A kernel read is declared on the spec, with its default, and a provider's keys
+are the ones its return annotation names.
 """
 
 from __future__ import annotations
 
 import json
-from typing import Annotated, Any
+from dataclasses import dataclass
+from typing import Any
 
 import pytest
 from asgiref.sync import sync_to_async
-from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest
 from django.test import Client
 from django_service_specs import (
     DEFAULT_POOL_SEEDS,
     UNSET,
-    PoolSeeds,
+    DataclassPresenter,
+    DataclassValidator,
+    NotPermitted,
+    Parameter,
+    Parameters,
+    PermissionCheck,
     SelectorKind,
-    UnknownArguments,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
     UnsetType,
 )
-from rest_framework import serializers
-from rest_framework.exceptions import PermissionDenied
-from rest_framework.permissions import BasePermission, IsAuthenticated
-from rest_framework_services import ArgumentBinding, InputRequired, NotClientInput
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
 from typing_extensions import TypedDict
 
-from django_spec_mcp import AgentConventions, MCPServer, UrlKwarg
+from django_spec_mcp import AgentConventions, MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
-from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
-from django_spec_mcp.registry.types.tool_binding import ToolBinding
-from django_spec_mcp.schema.utils import required_arguments
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from tests.conftest import post_jsonrpc
+from tests.testapp.kernel_shapes import InvoiceOutput
 from tests.testapp.models import Invoice
-from tests.testapp.serializers import InvoiceOutputSerializer
 from tests.testapp.urlconf_for import urlconf_for
 from tests.utils import tool_error
 
+pytestmark = pytest.mark.django_db(transaction=True)
+
 MODERN = "2026-07-28"
+OPEN = [Unrestricted()]
 _REQUIRED = ["This field is required."]
 
 
-class _NumberInput(serializers.Serializer):
-    number = serializers.CharField(max_length=32)
+@dataclass
+class _Number:
+    number: str
 
 
-class _PkInput(serializers.Serializer):
-    pk = serializers.IntegerField()
+class _Deny(PermissionCheck):
+    def has_permission(self, *args: Any, **kwargs: Any) -> bool:
+        return False
 
 
-class _OptionalPkRequiredNumber(serializers.Serializer):
-    pk = serializers.IntegerField(required=False)
-    number = serializers.CharField(max_length=32)
-
-
-class _DefaultedNumber(serializers.Serializer):
-    number = serializers.CharField(max_length=32, default="INV-1")
-
-
-class _PkScope(TypedDict):
-    pk: int
-
-
-class _TenantScope(TypedDict):
+class _Tenant(TypedDict):
     tenant: str
 
 
-class _MaybeTenantScope(TypedDict):
-    # ``UnsetType`` in the value: the provider may decline, so the key does not
-    # count as filled.
+class _MaybeTenant(TypedDict):
     tenant: str | UnsetType
 
 
-def _acme_scope() -> _TenantScope:
+def _acme() -> _Tenant:
     return {"tenant": "acme"}
 
 
-def _acme_or_decline_scope() -> _MaybeTenantScope:
-    return {"tenant": "acme"}
-
-
-def _declining_scope() -> _MaybeTenantScope:
+def _declines() -> _MaybeTenant:
     return {"tenant": UNSET}
 
 
@@ -111,113 +108,86 @@ def _by_pk(*, pk: int) -> Any:
     return Invoice.objects.filter(pk=pk)
 
 
-def _by_pk_for_tenant(*, pk: int, tenant: str) -> Any:
-    return Invoice.objects.filter(pk=pk, number__startswith=tenant)
-
-
-def _by_pk_and_number(*, pk: int, number: str) -> Any:
-    return Invoice.objects.filter(pk=pk, number=number)
-
-
 def _by_ids(*, ids: list[int]) -> Any:
     return Invoice.objects.filter(pk__in=ids)
 
 
-def _by_number_and_pk(*, number: str, pk: int = 0) -> Any:
-    # ``pk`` defaulted: registration counts a selector tool's ``input_serializer``
-    # fields as the sources of its parameters, and not its ``UrlKwarg`` names.
-    return Invoice.objects.filter(pk=pk, number=number)
+def _scoped(*, pk: int, tenant: str) -> dict[str, Any]:
+    return {"pk": pk, "tenant": tenant}
 
 
-def _by_number(*, number: str) -> Any:
-    return Invoice.objects.filter(number=number)
-
-
-def _rename(*, instance: Invoice, data: dict[str, Any]) -> Invoice:
-    instance.number = data["number"]
+def _rename(*, instance: Invoice, number: str) -> Invoice:
+    instance.number = number
     instance.save(update_fields=["number"])
     return instance
 
 
-def _rename_all(*, collection: Any, data: dict[str, Any]) -> dict[str, int]:
-    return {"renamed": collection.update(number=data["number"])}
+def _rename_all(*, collection: Any, number: str) -> dict[str, int]:
+    return {"renamed": collection.update(number=number)}
 
 
-def _first_invoice_pk() -> dict[str, Any]:
-    # Untyped: nothing says which keys it fills.
-    return {"pk": Invoice.objects.order_by("pk").values_list("pk", flat=True).first()}
+_PK = Parameter("pk", "integer", required=True)
 
 
-def _typed_first_invoice_pk() -> _PkScope:
-    return {"pk": Invoice.objects.order_by("pk").values_list("pk", flat=True).first()}
+def _get(*reads: Parameter, permissions: Any = OPEN) -> SelectorSpec:
+    return SelectorSpec(
+        kind=SelectorKind.RETRIEVE,
+        selector=_by_pk,
+        reads=Parameters(list(reads) or [_PK]),
+        presenter=DataclassPresenter(InvoiceOutput),
+        permissions=permissions,
+    )
 
 
-def _out(kind: SelectorKind = SelectorKind.RETRIEVE) -> SelectorSpec:
-    return SelectorSpec(kind=kind, output_serializer=InvoiceOutputSerializer)
+def _rename_spec(permissions: Any = OPEN) -> ServiceSpec:
+    return ServiceSpec(
+        service=_rename,
+        atomic=False,
+        validator=DataclassValidator(_Number),
+        instance_selector_spec=SelectorSpec(
+            kind=SelectorKind.RETRIEVE, selector=_by_pk, reads=Parameters([_PK])
+        ),
+        presenter=DataclassPresenter(InvoiceOutput),
+        permissions=permissions,
+    )
 
 
-def _server(**kwargs: Any) -> MCPServer:
+def _server(*, permissions: Any = OPEN, **kwargs: Any) -> MCPServer:
     server = MCPServer(
         name="t", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore(), **kwargs
     )
-    server.register_selector_tool(
-        name="get",
-        spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE, selector=_by_pk, output_serializer=InvoiceOutputSerializer
-        ),
-    )
-    server.register_service_tool(
-        name="rename",
-        spec=ServiceSpec(
-            service=_rename,
-            atomic=False,
-            input_serializer=_NumberInput,
-            instance_selector_spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_by_pk),
-            output_selector_spec=_out(),
-        ),
-    )
-    server.register_service_tool(
-        name="rename_all",
-        spec=ServiceSpec(
+    server.register_tool(_get(permissions=permissions), name="get")
+    server.register_tool(_rename_spec(permissions), name="rename")
+    server.register_tool(
+        ServiceSpec(
             service=_rename_all,
             atomic=False,
-            input_serializer=_NumberInput,
-            collection_selector_spec=SelectorSpec(kind=SelectorKind.LIST, selector=_by_ids),
+            validator=DataclassValidator(_Number),
+            collection_selector_spec=SelectorSpec(
+                kind=SelectorKind.LIST,
+                selector=_by_ids,
+                reads=Parameters([Parameter("ids", "array", items="integer", required=True)]),
+            ),
+            permissions=permissions,
         ),
+        name="rename_all",
     )
     return server
 
 
-def _ctx(server: MCPServer, pool_seeds: PoolSeeds = DEFAULT_POOL_SEEDS) -> MCPCallContext:
-    # ``pool_seeds`` is the server's on the wire; a context built by hand has to
-    # be handed the same ones, or the seeds neither fill nor outrank anything.
+def _ctx(server: MCPServer, scopes: tuple[str, ...] = ()) -> MCPCallContext:
+    # The server's seeds and wording, as the views hand them to the context
+    # they build, so a handler route answers as the wire would.
     return MCPCallContext(
         http_request=HttpRequest(),
-        token=TokenInfo(user=None),
+        token=TokenInfo(user=None, scopes=scopes),
         tools=server.tools,
         resources=server.resources,
         prompts=server.prompts,
         protocol_version="2025-11-25",
-        pool_seeds=pool_seeds,
-        # The server's wording, as the viewsets hand it to the context they
-        # build, so a handler route answers in the words the server was given.
+        pool_seeds=server.pool_seeds,
         conventions=server.conventions,
     )
-
-
-async def _call(
-    server: MCPServer,
-    name: str,
-    arguments: Any,
-    *,
-    is_async: bool,
-    pool_seeds: PoolSeeds = DEFAULT_POOL_SEEDS,
-) -> Any:
-    params: dict[str, Any] = {"name": name, "arguments": arguments}
-    if is_async:
-        return await handle_tools_call_async(params, _ctx(server, pool_seeds))
-    # Off the event loop, where the sync handler's ORM work is allowed.
-    return await sync_to_async(handle_tools_call)(params, _ctx(server, pool_seeds))
 
 
 # Every entry point a tool call takes: the wire's sync and async handlers, and
@@ -231,86 +201,88 @@ async def _via(server: MCPServer, route: str, name: str, arguments: dict[str, An
         return (await sync_to_async(server.call_tool)(name, arguments, user=None)).to_dict()
     if route == "acall_tool":
         return await server.acall_tool(name, arguments, user=None)
-    return await _call(server, name, arguments, is_async=route == "async_handler")
+    params: dict[str, Any] = {"name": name, "arguments": arguments}
+    if route == "async_handler":
+        return await handle_tools_call_async(params, _ctx(server))
+    # Off the event loop, where the sync handler's ORM work is allowed.
+    return await sync_to_async(handle_tools_call)(params, _ctx(server))
 
 
-def _missing(out: Any) -> dict[str, Any]:
-    """The detail of the result a missing argument earns.
-
-    Its message names exactly the names its detail is keyed by, so a caller
-    asserting the detail asserts the message with it.
-    """
+def _refused(out: Any, message: str = "Invalid arguments") -> dict[str, Any]:
+    """The detail of a validation result, asserting it is one answered in ``message``."""
     assert not isinstance(out, JsonRpcError), f"answered as a protocol error: {out!r}"
     error = tool_error(out)
     assert error["type"] == "validation_error"
-    names = ", ".join(f"`{name}`" for name in sorted(error["detail"]))
-    assert error["message"] == f"Missing required argument(s): {names}."
-    return error["detail"]
-
-
-def _refused(out: Any) -> dict[str, Any]:
-    """The detail of a refusal an input serializer answered: the generic message."""
-    assert not isinstance(out, JsonRpcError), f"answered as a protocol error: {out!r}"
-    error = tool_error(out)
-    assert error["type"] == "validation_error"
-    assert error["message"] == "Invalid arguments"
+    assert error["message"] == message
     return error["detail"]
 
 
 # ---------- every route that answers a tool call ----------
 
 
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("is_async", [False, True])
+@pytest.mark.parametrize("route", _ROUTES)
 @pytest.mark.parametrize(
-    ("name", "arguments", "detail", "read"),
+    ("name", "arguments", "missing"),
     [
-        # A selector tool's own parameter.
-        ("get", {}, {"pk": _REQUIRED}, _missing),
-        # A service tool's instance lookup, beside a valid serializer field.
-        ("rename", {"number": "INV-2"}, {"pk": _REQUIRED}, _missing),
+        # A selector tool's own read.
+        ("get", {}, "pk"),
+        # A service tool's instance lookup, beside a valid Validator field.
+        ("rename", {"number": "INV-2"}, "pk"),
         # A service tool's collection lookup.
-        ("rename_all", {"number": "INV-2"}, {"ids": _REQUIRED}, _missing),
+        ("rename_all", {"number": "INV-2"}, "ids"),
+        # A service tool's Validator field, beside its lookup.
+        ("rename", {"pk": 1}, "number"),
     ],
 )
 async def test_a_missing_argument_is_a_validation_error_result(
-    name: str, arguments: dict[str, Any], detail: dict[str, Any], read: Any, is_async: bool
+    route: str, name: str, arguments: dict[str, Any], missing: str
 ) -> None:
-    out = await _call(_server(), name, arguments, is_async=is_async)
+    out = await _via(_server(), route, name, arguments)
 
-    assert read(out) == detail
-
-
-@pytest.mark.django_db
-@pytest.mark.parametrize(("name", "arguments"), [("get", {}), ("rename", {"number": "INV-2"})])
-def test_call_tool_answers_a_missing_argument_with_a_result(
-    name: str, arguments: dict[str, Any]
-) -> None:
-    result = _server().call_tool(name, arguments, user=None)
-
-    assert _missing(result.to_dict()) == {"pk": _REQUIRED}
+    message = f"Missing required argument(s): `{missing}`."
+    assert _refused(out, message) == {missing: _REQUIRED}
 
 
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize(("name", "arguments"), [("get", {}), ("rename", {"number": "INV-2"})])
-async def test_acall_tool_answers_a_missing_argument_with_a_result(
-    name: str, arguments: dict[str, Any]
-) -> None:
-    result = await _server().acall_tool(name, arguments, user=None)
-
-    assert _missing(result) == {"pk": _REQUIRED}
-
-
-@pytest.mark.django_db
 def test_the_missing_argument_is_one_the_schema_requires() -> None:
     """The rule the client is told and the rule enforced are one."""
-    server = _server()
-    listed: Any = server.list_tools(user=None)
+    listed: Any = _server().list_tools(user=None)
     schemas = {tool["name"]: tool["inputSchema"] for tool in listed["tools"]}
 
     assert schemas["get"]["required"] == ["pk"]
-    assert schemas["rename"]["required"] == ["pk", "number"]
-    assert schemas["rename_all"]["required"] == ["ids", "number"]
+    assert set(schemas["rename"]["required"]) == {"pk", "number"}
+    assert set(schemas["rename_all"]["required"]) == {"ids", "number"}
+
+
+@pytest.mark.parametrize("route", _ROUTES)
+async def test_several_missing_names_are_answered_together(route: str) -> None:
+    # The lookup's read and the Validator's field, answered in one result
+    # rather than one check at a time.
+    out = await _via(_server(), route, "rename", {})
+
+    message = "Missing required argument(s): `number`, `pk`."
+    assert _refused(out, message) == {"pk": _REQUIRED, "number": _REQUIRED}
+
+
+@pytest.mark.parametrize("route", _ROUTES)
+async def test_several_missing_names_are_sorted_and_joined(route: str) -> None:
+    # Declared ``tenant`` before ``pk``, so the check finds them in that order;
+    # the sentence sorts them, as the Pydantic-AI toolset does, so one omission
+    # reads the same on every call and on both transports.
+    server = _server()
+    server.register_tool(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=_scoped,
+            reads=Parameters([Parameter("tenant", "string", required=True), _PK]),
+            permissions=OPEN,
+        ),
+        name="scoped",
+    )
+
+    out = await _via(server, route, "scoped", {})
+
+    message = "Missing required argument(s): `pk`, `tenant`."
+    assert _refused(out, message) == {"pk": _REQUIRED, "tenant": _REQUIRED}
 
 
 # ---------- the wire, in both protocol eras ----------
@@ -349,11 +321,9 @@ def era_session(request: Any, client: Client) -> str | None:
     return request.getfixturevalue("initialized_session")
 
 
-@pytest.mark.django_db
 def test_the_wire_serves_a_missing_argument_as_a_result(
     mounted: None, client: Client, era_session: str | None
 ) -> None:
-    """It was HTTP 500 with JSON-RPC ``-32603`` "Internal error" in both eras."""
     params: dict[str, Any] = {"name": "get", "arguments": {}}
     if era_session is None:
         response = _post_modern(client, params)
@@ -363,783 +333,177 @@ def test_the_wire_serves_a_missing_argument_as_a_result(
     assert response.status_code == 200, response.content
     body = response.json()
     assert "error" not in body, body
-    assert _missing(body["result"]) == {"pk": _REQUIRED}
+    message = "Missing required argument(s): `pk`."
+    assert _refused(body["result"], message) == {"pk": _REQUIRED}
 
 
 # ---------- after the permission answer ----------
 
 
-def _guarded_server() -> MCPServer:
-    """A tool whose spec admits only an authenticated caller.
-
-    Anyone else is denied, and is told so before anything about the arguments:
-    a missing-argument answer would describe a tool the caller may not call.
-    """
-    server = MCPServer(
-        name="t", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore()
-    )
-    server.register_selector_tool(
-        name="get",
-        spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            selector=_by_pk,
-            output_serializer=InvoiceOutputSerializer,
-            permission_classes=[IsAuthenticated],
-        ),
-    )
-    server.register_service_tool(
-        name="rename",
-        spec=ServiceSpec(
-            service=_rename,
-            atomic=False,
-            input_serializer=_NumberInput,
-            instance_selector_spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_by_pk),
-            output_selector_spec=_out(),
-            permission_classes=[IsAuthenticated],
-        ),
-    )
-    return server
-
-
 @pytest.mark.parametrize("is_async", [False, True])
 @pytest.mark.parametrize("name", ["get", "rename"])
-async def test_a_denied_caller_is_refused_before_the_argument_is_checked(
+async def test_a_caller_the_scope_gate_refuses_is_refused_before_the_argument_is_checked(
     name: str, is_async: bool
 ) -> None:
-    out = await _call(_guarded_server(), name, {}, is_async=is_async)
+    # The gate is the transport's, judged before dispatch is reached, so a
+    # caller without the scope is told only that.
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server.register_tool(_get(), name="get", scopes=("invoices:read",))
+    server.register_tool(_rename_spec(), name="rename", scopes=("invoices:read",))
+    params: dict[str, Any] = {"name": name, "arguments": {}}
+
+    if is_async:
+        out = await handle_tools_call_async(params, _ctx(server))
+    else:
+        out = await sync_to_async(handle_tools_call)(params, _ctx(server))
+    granted = await handle_tools_call_async(params, _ctx(server, ("invoices:read",)))
 
     assert isinstance(out, JsonRpcError)
+    assert out.code == JsonRpcErrorCode.FORBIDDEN
+    # The other half: with the scope, the same call is answered for its argument.
+    missing = "`pk`" if name == "get" else "`number`, `pk`"
+    assert "pk" in _refused(granted, f"Missing required argument(s): {missing}.")
+
+
+@pytest.mark.parametrize("route", ["handler", "async_handler", "acall_tool"])
+@pytest.mark.parametrize("name", ["get", "rename"])
+async def test_a_caller_the_spec_denies_is_refused_before_the_argument_is_checked(
+    route: str, name: str
+) -> None:
+    # A missing-argument answer would describe a tool the caller may not call.
+    out = await _via(_server(permissions=[_Deny()]), route, name, {})
+
+    assert isinstance(out, JsonRpcError), out
     assert out.code == JsonRpcErrorCode.FORBIDDEN
 
 
 @pytest.mark.parametrize("name", ["get", "rename"])
-def test_call_tool_refuses_a_denied_caller_before_the_argument_is_checked(name: str) -> None:
-    with pytest.raises(PermissionDenied):
-        _guarded_server().call_tool(name, {}, user=None)
+def test_call_tool_refuses_a_caller_the_spec_denies_before_the_argument_is_checked(
+    name: str,
+) -> None:
+    with pytest.raises(NotPermitted):
+        _server(permissions=[_Deny()]).call_tool(name, {}, user=None)
 
 
-def _hidden_url_kwarg_server() -> MCPServer:
-    """Both tool kinds, guarded as ``_guarded_server``'s are, on a listing that hides them.
+# ---------- what fills a read ----------
 
-    ``FILTER_LISTINGS_BY_PERMISSIONS`` is on, so a caller the spec denies is not
-    told the tools exist. Each takes ``pk`` as a ``UrlKwarg(required=True)``,
-    which the channel split refuses before the selectors' own check runs.
-    """
-    server = MCPServer(
-        name="t",
-        auth_backend=AllowAnyBackend(),
-        session_store=InMemorySessionStore(),
-        config=build_mcp_config(filter_listings_by_permissions=True),
-    )
-    pk = (UrlKwarg("pk", type="integer", required=True),)
-    server.register_selector_tool(
-        name="get",
-        spec=SelectorSpec(
+
+def _scoped_server(provider: Any) -> MCPServer:
+    """``get(*, pk, tenant)``, both reads required, with ``provider`` as its ``kwargs=``."""
+    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server.register_tool(
+        SelectorSpec(
             kind=SelectorKind.RETRIEVE,
-            selector=_by_pk,
-            output_serializer=InvoiceOutputSerializer,
-            permission_classes=[IsAuthenticated],
-        ),
-        url_kwargs=pk,
-    )
-    server.register_service_tool(
-        name="rename",
-        spec=ServiceSpec(
-            service=_rename,
-            atomic=False,
-            input_serializer=_NumberInput,
-            instance_selector_spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_by_pk),
-            output_selector_spec=_out(),
-            permission_classes=[IsAuthenticated],
-        ),
-        url_kwargs=pk,
-    )
-    return server
-
-
-@pytest.mark.parametrize(("name", "arguments"), [("get", {}), ("rename", {"number": "INV-1"})])
-def test_call_tool_refuses_a_denied_caller_before_a_missing_url_kwarg(
-    name: str, arguments: dict[str, Any]
-) -> None:
-    # ``call_tool`` answered the split's refusal before the permission, telling a
-    # caller the listing hides the tool from which argument it left out.
-    server = _hidden_url_kwarg_server()
-    listed: Any = server.list_tools(user=None)
-    assert name not in {tool["name"] for tool in listed["tools"]}
-
-    with pytest.raises(PermissionDenied):
-        server.call_tool(name, arguments, user=None)
-
-
-@pytest.mark.parametrize("route", ["handler", "async_handler", "acall_tool"])
-@pytest.mark.parametrize(("name", "arguments"), [("get", {}), ("rename", {"number": "INV-1"})])
-async def test_every_other_route_refuses_a_denied_caller_before_a_missing_url_kwarg(
-    name: str, arguments: dict[str, Any], route: str
-) -> None:
-    server = _hidden_url_kwarg_server()
-    if route == "acall_tool":
-        out: Any = await server.acall_tool(name, arguments, user=None)
-    else:
-        out = await _call(server, name, arguments, is_async=route == "async_handler")
-
-    assert isinstance(out, JsonRpcError)
-    assert out.code == JsonRpcErrorCode.FORBIDDEN
-
-
-class _AcmeRoute(BasePermission):
-    """Grants a ``call_tool`` call whose route names ``acme``, as a view reads a route.
-
-    ``tenant`` is a route capture, so ``call_tool`` puts it in ``view.kwargs``
-    and leaves it out of ``request.data``. A context built without the URL
-    kwargs the call delivered has no ``tenant`` in ``view.kwargs``, and one
-    built from the raw arguments has it in ``request.data``: either denies.
-    """
-
-    def has_permission(self, request: Any, view: Any) -> bool:
-        return view.kwargs.get("tenant") == "acme" and "tenant" not in request.data
-
-
-def _acme_route_server() -> MCPServer:
-    """Both tool kinds behind ``_AcmeRoute``, routed by a required ``pk`` and a ``tenant``."""
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
-    route = (UrlKwarg("pk", type="integer", required=True), UrlKwarg("tenant"))
-    server.register_selector_tool(
-        name="get",
-        spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            selector=_by_pk,
-            output_serializer=InvoiceOutputSerializer,
-            permission_classes=[_AcmeRoute],
-        ),
-        url_kwargs=route,
-    )
-    server.register_service_tool(
-        name="rename",
-        spec=ServiceSpec(
-            service=_rename,
-            atomic=False,
-            input_serializer=_NumberInput,
-            instance_selector_spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_by_pk),
-            output_selector_spec=_out(),
-            permission_classes=[_AcmeRoute],
-        ),
-        url_kwargs=route,
-    )
-    return server
-
-
-@pytest.mark.parametrize(("name", "arguments"), [("get", {}), ("rename", {"number": "INV-1"})])
-def test_call_tool_checks_a_missing_url_kwargs_permission_against_the_delivered_route(
-    name: str, arguments: dict[str, Any]
-) -> None:
-    # ``pk`` is missing and ``tenant`` delivered, so the permission answering
-    # first sees the request and view the call would have run with, grants,
-    # and the missing argument is what the caller is told.
-    result = _acme_route_server().call_tool(name, {**arguments, "tenant": "acme"}, user=None)
-
-    assert _missing(result.to_dict()) == {"pk": _REQUIRED}
-
-
-@pytest.mark.parametrize(("name", "arguments"), [("get", {}), ("rename", {"number": "INV-1"})])
-def test_call_tool_denies_a_missing_url_kwargs_call_its_route_does_not_grant(
-    name: str, arguments: dict[str, Any]
-) -> None:
-    # The other half: the permission reads ``tenant`` rather than granting every
-    # call, so the test above holds the context it was shown.
-    with pytest.raises(PermissionDenied):
-        _acme_route_server().call_tool(name, {**arguments, "tenant": "beta"}, user=None)
-
-
-@pytest.mark.parametrize("is_async", [False, True])
-async def test_a_selector_tools_input_serializer_answers_first(is_async: bool) -> None:
-    # Its own refusal comes first, as it did before; the selector's check sees
-    # only arguments the serializer accepted, so the two never answer together.
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
-    server.register_selector_tool(
-        name="get",
-        spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            selector=_by_pk_and_number,
-            output_serializer=InvoiceOutputSerializer,
-        ),
-        input_serializer=_OptionalPkRequiredNumber,
-    )
-
-    neither = await _call(server, "get", {}, is_async=is_async)
-    no_pk = await _call(server, "get", {"number": "INV-1"}, is_async=is_async)
-
-    assert _refused(neither) == {"number": _REQUIRED}
-    assert _missing(no_pk) == {"pk": _REQUIRED}
-
-
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("route", _ROUTES)
-async def test_several_missing_names_are_sorted_and_joined(route: str) -> None:
-    # The selector declares ``pk`` before ``number``, so the check finds them in
-    # that order; the sentence sorts them, as the Pydantic-AI toolset does, so
-    # one omission reads the same on every call and on both transports.
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
-    server.register_selector_tool(
-        name="get",
-        spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            selector=_by_pk_and_number,
-            output_serializer=InvoiceOutputSerializer,
-        ),
-    )
-
-    out = await _via(server, route, "get", {})
-
-    error = tool_error(out)
-    assert error["message"] == "Missing required argument(s): `number`, `pk`."
-    assert error["detail"] == {"pk": _REQUIRED, "number": _REQUIRED}
-
-
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("route", _ROUTES)
-async def test_a_service_tools_serializer_keeps_the_generic_message_for_its_own_field(
-    route: str,
-) -> None:
-    # The lookup's ``pk`` is sent, so the selectors' check passes and the input
-    # serializer answers for ``number``: a missing field, but the serializer's
-    # refusal rather than the selectors' check, so "Invalid arguments".
-    invoice = await Invoice.objects.acreate(number="INV-1")
-
-    out = await _via(_server(), route, "rename", {"pk": invoice.pk})
-
-    assert _refused(out) == {"number": _REQUIRED}
-
-
-class _OptionalPkShortNumber(serializers.Serializer):
-    pk = serializers.IntegerField(required=False)
-    number = serializers.CharField(max_length=3)
-
-
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("route", ["handler", "async_handler", "acall_tool"])
-async def test_a_refused_value_beside_a_missing_argument_keeps_the_generic_message(
-    route: str,
-) -> None:
-    # ``pk`` is missing and ``number`` is refused. A selector tool's serializer
-    # answers first, so the refusal is the serializer's and reads "Invalid
-    # arguments", with only its own field in the detail. ``call_tool`` is not
-    # among the routes: it does not run this serializer.
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
-    server.register_selector_tool(
-        name="get",
-        spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            selector=_by_pk_and_number,
-            output_serializer=InvoiceOutputSerializer,
-        ),
-        input_serializer=_OptionalPkShortNumber,
-    )
-
-    out = await _via(server, route, "get", {"number": "INV-0001"})
-
-    assert list(_refused(out)) == ["number"]
-
-
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("route", _ROUTES)
-async def test_a_missing_url_kwarg_is_answered_before_a_selector_tools_input_serializer(
-    route: str,
-) -> None:
-    # The channel split runs before the serializer, so a call missing both a
-    # ``UrlKwarg(required=True)`` and a serializer field is told about the URL
-    # kwarg alone; the serializer would have answered ``number``.
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
-    server.register_selector_tool(
-        name="get",
-        spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            selector=_by_number_and_pk,
-            output_serializer=InvoiceOutputSerializer,
-        ),
-        input_serializer=_NumberInput,
-        url_kwargs=(UrlKwarg("pk", type="integer", required=True),),
-    )
-
-    out = await _via(server, route, "get", {})
-
-    assert _missing(out) == {"pk": _REQUIRED}
-
-
-# ---------- what is not refused ----------
-
-
-def _url_kwarg_server(*, required: bool = False, **server_kwargs: Any) -> MCPServer:
-    """Both tool kinds, each taking ``pk`` as a ``UrlKwarg`` with no default."""
-    server = MCPServer(
-        name="t", auth_backend=AllowAnyBackend(), session_store=None, **server_kwargs
-    )
-    pk = (UrlKwarg("pk", type="integer", required=required),)
-    server.register_selector_tool(
-        name="get",
-        spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE, selector=_by_pk, output_serializer=InvoiceOutputSerializer
-        ),
-        url_kwargs=pk,
-    )
-    server.register_service_tool(
-        name="rename",
-        spec=ServiceSpec(
-            service=_rename,
-            atomic=False,
-            input_serializer=_NumberInput,
-            instance_selector_spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_by_pk),
-            output_selector_spec=_out(),
-        ),
-        url_kwargs=pk,
-    )
-    return server
-
-
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("route", ["handler", "async_handler", "call_tool", "acall_tool"])
-@pytest.mark.parametrize(("name", "arguments"), [("get", {}), ("rename", {"number": "INV-1"})])
-async def test_a_url_kwarg_carrying_the_argument_satisfies_it(
-    name: str, arguments: dict[str, Any], route: str
-) -> None:
-    # Popped out of the arguments into ``view.kwargs``, from where dispatch
-    # spreads it into the selector's pool: present, though not in the params.
-    invoice = await Invoice.objects.acreate(number="INV-1")
-
-    out = await _via(_url_kwarg_server(), route, name, {**arguments, "pk": invoice.pk})
-
-    assert out["structuredContent"]["number"] == "INV-1"
-
-
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("route", _ROUTES)
-@pytest.mark.parametrize(("name", "arguments"), [("get", {}), ("rename", {"number": "INV-1"})])
-async def test_a_missed_required_url_kwarg_is_answered_in_the_same_shape(
-    name: str, arguments: dict[str, Any], route: str
-) -> None:
-    # Refused by the channel split rather than by the selectors' check, and
-    # answered as that check answers, so a client reads one shape for a missing
-    # argument whichever way the parameter was declared. It was
-    # ``non_field_errors`` "Missing required argument(s): 'pk'." under
-    # "Service validation error.".
-    out = await _via(_url_kwarg_server(required=True), route, name, arguments)
-
-    assert _missing(out) == {"pk": _REQUIRED}
-
-
-@pytest.mark.parametrize("is_async", [False, True])
-async def test_a_null_url_kwarg_is_a_missing_argument(is_async: bool) -> None:
-    # A null route capture is an omitted one, so nothing reaches the selector.
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
-    server.register_selector_tool(
-        name="get",
-        spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE, selector=_by_pk, output_serializer=InvoiceOutputSerializer
-        ),
-        url_kwargs=(UrlKwarg("pk", type="integer"),),
-    )
-
-    out = await _call(server, "get", {"pk": None}, is_async=is_async)
-
-    assert _missing(out) == {"pk": _REQUIRED}
-
-
-def _by_pk_in_tenant(*, pk: int, tenant: str) -> Any:
-    # Names ``tenant`` plainly and with no default, so the lookup alone would
-    # require it of the caller.
-    return Invoice.objects.filter(pk=pk)
-
-
-def _same_tenant(*, tenant: Annotated[str, NotClientInput] = "acme") -> None:
-    # Owns ``tenant`` for the whole call (``server_owned_keys``).
-    return None
-
-
-class _NumberAndTenantInput(_NumberInput):
-    # Optional, so the serializer does not refuse a call leaving it out.
-    tenant = serializers.CharField(required=False)
-
-
-def _owned_tenant_spec(input_serializer: type[serializers.Serializer]) -> ServiceSpec:
-    """A service spec whose lookup requires ``tenant``, which its precondition owns."""
-    return ServiceSpec(
-        service=_rename,
-        atomic=False,
-        input_serializer=input_serializer,
-        instance_selector_spec=SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_by_pk_in_tenant),
-        preconditions=[_same_tenant],
-        output_selector_spec=_out(),
-    )
-
-
-def _owned_tenant_server(input_serializer: type[serializers.Serializer]) -> MCPServer:
-    """A service tool named ``rename`` over ``_owned_tenant_spec``."""
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
-    server.register_service_tool(name="rename", spec=_owned_tenant_spec(input_serializer))
-    return server
-
-
-def _rename_schema(server: MCPServer) -> dict[str, Any]:
-    listed: Any = server.list_tools(user=None)
-    return next(tool for tool in listed["tools"] if tool["name"] == "rename")["inputSchema"]
-
-
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("route", _ROUTES)
-async def test_a_lookup_key_the_server_owns_is_not_asked_of_the_caller(route: str) -> None:
-    # The precondition marks ``tenant`` ``NotClientInput``, so drf-services drops
-    # the caller's value before the lookup reads it, and the tool's schema does
-    # not advertise it. Nothing the server supplies fills it either, which is the
-    # author's gap: no resend could deliver it, so the call is not refused
-    # naming it, and fails as the lookup's own ``TypeError``, as drf-services
-    # answers a server-side gap. It was refused as
-    # "Missing required argument(s): `tenant`.", for a key the caller cannot send.
-    invoice = await Invoice.objects.acreate(number="INV-1")
-    server = _owned_tenant_server(_NumberInput)
-
-    assert "tenant" not in _rename_schema(server)["properties"]
-    with pytest.raises(TypeError, match="tenant"):
-        await _via(server, route, "rename", {"pk": invoice.pk, "number": "INV-2"})
-
-
-class _NumberAndHiddenTenantInput(_NumberInput):
-    # Takes nothing from the caller, so registration admits it beside the
-    # lookup key of the same name.
-    tenant = serializers.HiddenField(default="acme")
-
-
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("route", _ROUTES)
-async def test_a_hidden_field_of_an_owned_lookup_key_is_not_asked_of_the_caller(
-    route: str,
-) -> None:
-    # A ``HiddenField`` is in the serializer's schema but is no input of the
-    # caller's, so it does not put the owned key back into what the tool asks
-    # for. It did: ``tenant`` was advertised as required and every call was
-    # refused as "Missing required argument(s): `tenant`.", which no resend
-    # could satisfy. The field's default goes into ``data``, not to the lookup,
-    # so the call now fails as the no-field case above does.
-    invoice = await Invoice.objects.acreate(number="INV-1")
-    server = _owned_tenant_server(_NumberAndHiddenTenantInput)
-    schema = _rename_schema(server)
-
-    assert "tenant" not in schema["properties"]
-    assert "tenant" not in schema["required"]
-    with pytest.raises(TypeError, match="tenant"):
-        await _via(server, route, "rename", {"pk": invoice.pk, "number": "INV-2"})
-
-
-def test_an_owned_lookup_key_a_field_declares_is_refused_at_registration() -> None:
-    # drf-services withholds a name the target lookup reads from the
-    # serializer's data, so a writable ``tenant`` field could never be filled,
-    # owned or not. Registration refuses it, as it does any lookup key a field
-    # declares (``tests/adapters/test_lookup_key_input_field.py``).
-    with pytest.raises(ImproperlyConfigured, match=r"declares field\(s\) \['tenant'\]"):
-        _owned_tenant_server(_NumberAndTenantInput)
-
-
-def test_the_check_and_the_schema_agree_on_a_hand_registered_owned_key_field() -> None:
-    # ``server.tools.register`` does not run the registrars' lookup-key-field
-    # refusal, so a writable ``tenant`` reaches both owned-key subtractions.
-    # Each keeps the field the caller sends, so the missing-argument check asks
-    # for what the schema requires, rather than the two drifting apart.
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
-    binding = ToolBinding(
-        name="rename", description=None, spec=_owned_tenant_spec(_NumberAndTenantInput)
-    )
-    server.tools.register(binding)
-
-    schema = _rename_schema(server)
-
-    assert "tenant" in schema["properties"]
-    assert set(required_arguments(binding)) == {"pk", "tenant"} <= set(schema["required"])
-
-
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("is_async", [False, True])
-async def test_a_value_the_input_serializer_defaults_satisfies_it(is_async: bool) -> None:
-    # A selector tool's own ``input_serializer`` overlays its validated values on
-    # the selector's params, so its default reaches the selector.
-    await Invoice.objects.acreate(number="INV-1")
-
-    out = await _call(_defaulted_number_server(), "get", {}, is_async=is_async)
-
-    assert out["structuredContent"]["number"] == "INV-1"
-
-
-@pytest.mark.django_db(transaction=True)
-async def test_acall_tool_runs_the_input_serializer_so_its_default_satisfies_it() -> None:
-    await Invoice.objects.acreate(number="INV-1")
-
-    out = await _defaulted_number_server().acall_tool("get", {}, user=None)
-
-    assert out["structuredContent"]["number"] == "INV-1"
-
-
-@pytest.mark.django_db
-def test_call_tool_refuses_a_name_only_the_input_serializer_it_skips_would_fill() -> None:
-    # ``call_tool`` does not run a selector tool's MCP-only ``input_serializer``,
-    # so its default never reaches the selector on that route: the name is
-    # missing there, and is refused rather than raised as the selector's
-    # ``TypeError``.
-    result = _defaulted_number_server().call_tool("get", {}, user=None)
-
-    assert _missing(result.to_dict()) == {"number": _REQUIRED}
-
-
-def _defaulted_number_server() -> MCPServer:
-    """A selector tool whose ``input_serializer`` defaults the selector's ``number``."""
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
-    server.register_selector_tool(
-        name="get",
-        spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            selector=_by_number,
-            output_serializer=InvoiceOutputSerializer,
-        ),
-        input_serializer=_DefaultedNumber,
-    )
-    return server
-
-
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("provider", [_first_invoice_pk, _typed_first_invoice_pk])
-@pytest.mark.parametrize("is_async", [False, True])
-async def test_a_value_the_provider_fills_satisfies_it(provider: Any, is_async: bool) -> None:
-    # Typed, its keys are supplied and nothing asks for ``pk``. Untyped, nothing
-    # is checked before the call, because only the assembled pool can tell.
-    await Invoice.objects.acreate(number="INV-1")
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
-    server.register_selector_tool(
-        name="get",
-        spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            selector=_by_pk,
-            output_serializer=InvoiceOutputSerializer,
+            selector=_scoped,
+            reads=Parameters([_PK, Parameter("tenant", "string", required=True)]),
             kwargs=provider,
+            permissions=OPEN,
         ),
-    )
-
-    out = await _call(server, "get", {}, is_async=is_async)
-
-    assert out["structuredContent"]["number"] == "INV-1"
-
-
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("is_async", [False, True])
-async def test_a_seed_the_client_sends_anyway_is_admitted_and_outranked(is_async: bool) -> None:
-    # ``tenant`` is not advertised, because the server fills it, but the
-    # unknown-argument check still knows it: a client sending one is not refused
-    # under ``REJECT``, and the seed's value is the one the selector reads.
-    invoice = await Invoice.objects.acreate(number="acme-1")
-    seeds = DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme")
-    server = MCPServer(
-        name="t", auth_backend=AllowAnyBackend(), session_store=None, pool_seeds=seeds
-    )
-    server.register_selector_tool(
         name="get",
-        spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            selector=_by_pk_for_tenant,
-            output_serializer=InvoiceOutputSerializer,
-        ),
-        input_serializer=_PkInput,
-        unknown_arguments=UnknownArguments.REJECT,
-    )
-
-    sent = await _call(
-        server, "get", {"pk": invoice.pk, "tenant": "other"}, is_async=is_async, pool_seeds=seeds
-    )
-    omitted = await _call(server, "get", {"pk": invoice.pk}, is_async=is_async, pool_seeds=seeds)
-
-    assert sent["structuredContent"]["number"] == "acme-1"
-    assert omitted["structuredContent"]["number"] == "acme-1"
-
-
-def _tenant_server(
-    provider: Any, *, selector: Any = _by_pk_for_tenant, **registration: Any
-) -> MCPServer:
-    """``get(*, pk, tenant)`` with ``provider`` as its ``kwargs=``."""
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
-    server.register_selector_tool(
-        name="get",
-        spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            selector=selector,
-            output_serializer=InvoiceOutputSerializer,
-            kwargs=provider,
-        ),
-        **registration,
     )
     return server
 
 
-@pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("route", _ROUTES)
-async def test_under_author_wins_the_providers_value_outranks_the_callers(route: str) -> None:
-    # The default binding, and the reason the schema hides the provider's key
-    # there: a ``tenant`` the caller sends is admitted and then overwritten, so
-    # the selector scopes to ``acme`` whatever the caller asked for.
-    acme = await Invoice.objects.acreate(number="acme-1")
-
-    out = await _via(_tenant_server(_acme_scope), route, "get", {"pk": acme.pk, "tenant": "beta"})
-
-    assert out["structuredContent"]["number"] == "acme-1"
-
-
-def _touch(*, instance: Invoice, **_: Any) -> Invoice:
-    return instance
-
-
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("route", _ROUTES)
-# ``SPREAD_CALLER_WINS`` is left out: drf-services refuses it as a retired mode.
-@pytest.mark.parametrize(
-    "binding", [b for b in ArgumentBinding if b is not ArgumentBinding.SPREAD_CALLER_WINS]
-)
-async def test_a_target_lookups_provider_outranks_the_caller_under_every_binding(
-    binding: ArgumentBinding, route: str
-) -> None:
-    # drf-services lays a target lookup's provider over the arguments whatever
-    # the binding says, so ``tenant`` is neither advertised nor the caller's to
-    # set: a ``beta`` sent anyway is overwritten and the lookup scopes to ``acme``.
-    acme = await Invoice.objects.acreate(number="acme-1")
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
-    server.register_service_tool(
-        name="touch",
-        spec=ServiceSpec(
-            service=_touch,
-            atomic=False,
-            instance_selector_spec=SelectorSpec(
-                kind=SelectorKind.RETRIEVE, selector=_by_pk_for_tenant, kwargs=_acme_scope
-            ),
-            output_selector_spec=_out(),
-        ),
-        argument_binding=binding,
-    )
+async def test_a_read_the_provider_fills_is_not_asked_of_the_caller(route: str) -> None:
+    server = _scoped_server(_acme)
     listed: Any = server.list_tools(user=None)
-
-    out = await _via(server, route, "touch", {"pk": acme.pk, "tenant": "beta"})
-
-    assert set(listed["tools"][0]["inputSchema"]["properties"]) == {"pk"}
-    assert out["structuredContent"]["number"] == "acme-1"
-
-
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("route", _ROUTES)
-async def test_a_key_the_provider_may_decline_is_not_refused(route: str) -> None:
-    # Annotated as possibly ``UNSET``, so it is not counted as filled and stays
-    # advertised, but a call leaving it out is not refused: this provider fills it.
-    acme = await Invoice.objects.acreate(number="acme-1")
-
-    out = await _via(_tenant_server(_acme_or_decline_scope), route, "get", {"pk": acme.pk})
-
-    assert out["structuredContent"]["number"] == "acme-1"
-
-
-def _by_pk_for_marked_tenant(*, pk: int, tenant: Annotated[str, InputRequired]) -> Any:
-    return _by_pk_for_tenant(pk=pk, tenant=tenant)
-
-
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("route", _ROUTES)
-async def test_a_marked_key_the_provider_may_decline_is_not_refused(route: str) -> None:
-    # The marker keeps ``tenant`` in the schema's ``required`` (the schema
-    # tests), but only the assembled pool can say whether it arrived, so the
-    # call is not refused before the provider runs; this provider fills it.
-    acme = await Invoice.objects.acreate(number="acme-1")
-    server = _tenant_server(_acme_or_decline_scope, selector=_by_pk_for_marked_tenant)
-
-    out = await _via(server, route, "get", {"pk": acme.pk})
-
-    assert out["structuredContent"]["number"] == "acme-1"
-
-
-def _untyped_empty_scope(**_: Any) -> dict[str, Any]:
-    return {}
-
-
-@pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("route", _ROUTES)
-@pytest.mark.parametrize("provider", [_declining_scope, _untyped_empty_scope])
-async def test_a_marked_parameter_a_provider_might_fill_is_drf_services_to_refuse(
-    route: str, provider: Any
-) -> None:
-    # Neither provider says it fills ``tenant`` for certain, so the check here
-    # skips it, and drf-services answers once the pool is assembled: a missing
-    # argument is its ``InvalidArguments``, keyed by the name, so it reaches the
-    # caller as an invalid-arguments refusal naming ``tenant``.
-    server = _tenant_server(provider, selector=_by_pk_for_marked_tenant)
 
     out = await _via(server, route, "get", {"pk": 1})
 
-    error = tool_error(out)
-    assert error["type"] == "validation_error"
-    assert error["message"] == "Invalid arguments"
-    assert error["detail"] == {"tenant": _REQUIRED}
+    assert set(listed["tools"][0]["inputSchema"]["properties"]) == {"pk"}
+    assert out["structuredContent"] == {"pk": 1, "tenant": "acme"}
 
 
-@pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("route", _ROUTES)
-async def test_a_key_the_provider_declines_is_the_callers_to_send(route: str) -> None:
-    # Declining removes the key from the pool, so the caller's value is the one
-    # the selector reads, under the default ``SPREAD_AUTHOR_WINS``.
-    beta = await Invoice.objects.acreate(number="beta-1")
+async def test_the_providers_value_outranks_the_callers(route: str) -> None:
+    # Checked, then dropped: a ``tenant`` the caller sends never stands in for
+    # the one the provider is annotated to fill.
+    out = await _via(_scoped_server(_acme), route, "get", {"pk": 1, "tenant": "beta"})
 
-    out = await _via(
-        _tenant_server(_declining_scope), route, "get", {"pk": beta.pk, "tenant": "beta"}
-    )
-
-    assert out["structuredContent"]["number"] == "beta-1"
+    assert out["structuredContent"] == {"pk": 1, "tenant": "acme"}
 
 
-@pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("route", _ROUTES)
-async def test_a_key_the_provider_declines_and_the_caller_leaves_out_is_refused_in_dispatch(
+async def test_a_read_the_provider_declines_is_the_callers_to_send(route: str) -> None:
+    out = await _via(_scoped_server(_declines), route, "get", {"pk": 1, "tenant": "beta"})
+
+    assert out["structuredContent"] == {"pk": 1, "tenant": "beta"}
+
+
+@pytest.mark.parametrize("route", _ROUTES)
+async def test_a_read_the_provider_declines_and_the_caller_leaves_out_is_refused(
     route: str,
 ) -> None:
-    # This server does not refuse the call, because only the assembled pool can
-    # say whether ``tenant`` arrived. drf-services can, once the provider has
-    # declined: the caller could have sent it, so dispatch refuses the call
-    # before the selector runs, as ``InvalidArguments`` keyed by the name, where
-    # the selector used to raise ``TypeError`` and the call failed as a server fault.
-    out = await _via(_tenant_server(_declining_scope), route, "get", {"pk": 1})
+    # Only the provider's answer can say whether ``tenant`` arrived, so the
+    # call is refused once it has answered, in the shape check's words.
+    out = await _via(_scoped_server(_declines), route, "get", {"pk": 1})
 
-    error = tool_error(out)
-    assert error["type"] == "validation_error"
-    assert error["message"] == "Invalid arguments"
-    assert error["detail"] == {"tenant": _REQUIRED}
+    assert _refused(out, "Missing required argument(s): `tenant`.") == {"tenant": _REQUIRED}
+
+
+def _seeded_server() -> MCPServer:
+    server = MCPServer(
+        name="t",
+        auth_backend=AllowAnyBackend(),
+        session_store=None,
+        pool_seeds=DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme"),
+    )
+    server.register_tool(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=_scoped,
+            reads=Parameters([_PK, Parameter("tenant", "string", required=True, reflected=True)]),
+            permissions=OPEN,
+        ),
+        name="get",
+    )
+    return server
+
+
+@pytest.mark.parametrize("route", _ROUTES)
+async def test_a_reflected_read_a_registered_seed_fills_is_not_asked_of_the_caller(
+    route: str,
+) -> None:
+    server = _seeded_server()
+    listed: Any = server.list_tools(user=None)
+
+    out = await _via(server, route, "get", {"pk": 1})
+
+    assert listed["tools"][0]["inputSchema"]["required"] == ["pk"]
+    assert out["structuredContent"] == {"pk": 1, "tenant": "acme"}
+
+
+@pytest.mark.parametrize("route", _ROUTES)
+async def test_a_seeds_name_the_client_sends_anyway_is_refused_as_unknown(route: str) -> None:
+    # The seed fills the read, so the name is not an
+    # argument of the call at all, and ``REJECT`` refuses it.
+    out = await _via(_seeded_server(), route, "get", {"pk": 1, "tenant": "beta"})
+
+    assert _refused(out) == {"tenant": ["Unknown argument."]}
 
 
 # ---------- in the server's own words ----------
 
 
-_WORDED = AgentConventions(missing_arguments="Left out: {names}.")
-
-
-@pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("route", _ROUTES)
-@pytest.mark.parametrize(
-    "build",
-    [
-        # A selector parameter, refused inside dispatch: the sync selector
-        # sibling's ``except`` arm answers the handler, the async one
-        # ``async_handler`` and ``acall_tool``.
-        lambda: _server(conventions=_WORDED),
-        # A ``UrlKwarg(required=True)``, refused by the channel split before
-        # dispatch: in the request-building step both selector siblings share,
-        # and in ``call_tool``'s own split ahead of its permission check.
-        lambda: _url_kwarg_server(required=True, conventions=_WORDED),
-    ],
-    ids=["selector-parameter", "required-url-kwarg"],
-)
-async def test_a_selector_tools_missing_argument_is_worded_by_the_server(
-    build: Any, route: str
-) -> None:
-    # Each of these four sites builds its result from the context's
-    # conventions, and none was reached by a server with wording of its own: a
-    # default instance in place of ``conventions`` passed everything else.
-    out = await _via(build(), route, "get", {})
+async def test_a_missing_argument_is_worded_by_the_server(route: str) -> None:
+    server = _server(conventions=AgentConventions(missing_arguments="Left out: {names}."))
+
+    out = await _via(server, route, "get", {})
 
     error = tool_error(out)
     assert error["message"] == "Left out: `pk`."
     assert error["detail"] == {"pk": _REQUIRED}
+
+
+@pytest.mark.parametrize("route", _ROUTES)
+async def test_a_call_leaving_one_argument_out_and_another_wrong_names_the_missing_one(
+    route: str,
+) -> None:
+    # The message names what was left out; the detail carries every refusal,
+    # the unknown argument's beside it.
+    out = await _via(_server(), route, "get", {"bogus": 1})
+
+    detail = _refused(out, "Missing required argument(s): `pk`.")
+    assert detail == {"pk": _REQUIRED, "bogus": ["Unknown argument."]}

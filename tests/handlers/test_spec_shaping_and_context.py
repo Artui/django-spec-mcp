@@ -1,648 +1,170 @@
-"""Coverage: sister-repo 0.12+ ``SelectorSpec`` / ``ServiceSpec`` fields.
+"""A kernel ``LIST`` tool's queryset shaping, and the call's ``request`` its callables are handed.
 
-The shaping fields (``select_related``, ``prefetch_related``,
-``annotations``, ``extend_queryset``) are exercised against a real
-SQLite model. ``connection.queries`` is the cheap-but-honest probe for
-``select_related`` (a single JOIN, no follow-up query). ``annotations``
-appears as a synthesised attribute on each row.
+Asks of kernel specs registered with ``register_tool``, against the real SQLite
+model: empty shaping is a
+no-op, ``annotations`` attach to each row, ``prefetch_related`` and
+``select_related`` land on the queryset before ``extend_queryset``, which runs
+last and may narrow it, shaping a selector that returns no queryset fails
+loudly, and a paginated page is read once.
 
-``input_serializer_context`` / ``output_serializer_context`` are
-exercised through a service tool — the spec callable's return is what
-shows up in the serializer's ``self.context``.
+The kernel hands every callable that declares it the call's ``request`` and
+``view`` (``CALL_SEEDS``): here the ``HttpRequest`` carrying the caller's token
+as ``mcp_token``, and ``None`` for the view, since this transport has none.
+That is asked here of ``extend_queryset`` and the selector. A kernel Presenter
+takes no per-call context.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django.db import models
 from django.http import HttpRequest
-from django_service_specs import SelectorKind
-from rest_framework import serializers as drf_serializers
-from rest_framework.request import Request
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_service_specs import (
+    DataclassPresenter,
+    SelectorKind,
+    SelectorSpec,
+    Unrestricted,
+)
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.types.context import MCPCallContext
-from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
+from tests.testapp.kernel_shapes import InvoiceOutput
 from tests.testapp.models import Invoice
-from tests.testapp.serializers import InvoiceOutputSerializer
+
+pytestmark = pytest.mark.django_db
+
+OPEN = [Unrestricted()]
+
+
+@dataclass
+class _Annotated:
+    id: int
+    number: str
+    annotated_double: int
 
 
 def _server() -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore())
+    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
 
 
-def _ctx(server: MCPServer) -> MCPCallContext:
-    return MCPCallContext(
+def _call(spec: SelectorSpec, arguments: dict[str, Any] | None = None, **knobs: Any) -> Any:
+    server = _server()
+    server.register_tool(spec, name="invoices.list", **knobs)
+    context = MCPCallContext(
         http_request=HttpRequest(),
-        token=TokenInfo(user=None),
+        token=TokenInfo(user=None, scopes=("read",)),
         tools=server.tools,
         resources=server.resources,
         prompts=server.prompts,
         protocol_version="2025-11-25",
     )
+    return handle_tools_call({"name": "invoices.list", "arguments": arguments or {}}, context)
 
 
-def _list_all_invoices() -> Any:
-    return Invoice.objects.all()
-
-
-# ---------- Selector-tool shaping ----------
-
-
-@pytest.mark.django_db
-def test_selector_spec_empty_shaping_is_noop() -> None:
-    """Falsy/empty shaping fields don't try to apply (no FK, no annotate, no extend)."""
-    Invoice.objects.create(number="A", amount_cents=100, sent=False)
-    server = _server()
-    server.register_selector_tool(
-        name="invoices.list",
-        spec=SelectorSpec(
-            kind=SelectorKind.LIST,
-            selector=_list_all_invoices,
-            output_serializer=InvoiceOutputSerializer,
-            select_related=(),
-            prefetch_related=(),
-            annotations={},
-            extend_queryset=None,
-        ),
+def _list(**fields: Any) -> SelectorSpec:
+    fields.setdefault("presenter", DataclassPresenter(InvoiceOutput))
+    return SelectorSpec(
+        kind=SelectorKind.LIST, selector=Invoice.objects.all, permissions=OPEN, **fields
     )
-    out = handle_tools_call({"name": "invoices.list", "arguments": {}}, _ctx(server))
-    assert isinstance(out, dict)
+
+
+def _seed(*amounts: int) -> None:
+    for i, amount in enumerate(amounts):
+        Invoice.objects.create(number=f"INV-{i}", amount_cents=amount, sent=False)
+
+
+def test_empty_shaping_is_a_no_op() -> None:
+    """Falsy shaping fields apply nothing: no join, no annotation, no extension."""
+    _seed(100)
+    out = _call(_list(select_related=(), prefetch_related=(), annotations={}, extend_queryset=None))
     assert len(out["structuredContent"]) == 1
 
 
-@pytest.mark.django_db
-def test_selector_spec_annotations_attach_to_each_row() -> None:
-    Invoice.objects.create(number="A", amount_cents=100, sent=False)
-    Invoice.objects.create(number="B", amount_cents=200, sent=False)
-
-    class _Out(drf_serializers.ModelSerializer):
-        annotated_double = drf_serializers.IntegerField()
-
-        class Meta:
-            model = Invoice
-            fields = ["id", "number", "annotated_double"]
-
-    server = _server()
-    server.register_selector_tool(
-        name="invoices.list",
-        spec=SelectorSpec(
-            kind=SelectorKind.LIST,
-            selector=_list_all_invoices,
-            output_serializer=_Out,
+def test_annotations_attach_to_each_row() -> None:
+    _seed(100, 200)
+    out = _call(
+        _list(
+            presenter=DataclassPresenter(_Annotated),
             annotations={"annotated_double": models.F("amount_cents") * 2},
-        ),
+        )
     )
-    out = handle_tools_call({"name": "invoices.list", "arguments": {}}, _ctx(server))
-    assert isinstance(out, dict)
-    rows = out["structuredContent"]
-    assert len(rows) == 2
-    assert sorted(r["annotated_double"] for r in rows) == [200, 400]
+    assert sorted(row["annotated_double"] for row in out["structuredContent"]) == [200, 400]
 
 
-@pytest.mark.django_db
-def test_selector_spec_extend_queryset_runs_last() -> None:
-    """``extend_queryset`` sees the already-shaped queryset and can narrow it."""
-    Invoice.objects.create(number="A", amount_cents=100, sent=False)
-    Invoice.objects.create(number="B", amount_cents=200, sent=False)
-    Invoice.objects.create(number="C", amount_cents=300, sent=False)
+def test_extend_queryset_runs_last_and_is_handed_the_calls_request() -> None:
+    """It sees the shaped queryset and can narrow it, and it is handed the
+    call's ``request``, carrying the token, and no view."""
+    _seed(100, 200, 300)
+    seen: dict[str, Any] = {}
 
-    received_args: dict[str, Any] = {}
+    def _narrow(*, queryset: Any, request: Any, view: Any) -> Any:
+        seen.update(request=request, view=view)
+        return queryset.filter(amount_cents__gte=200)
 
-    def _narrow(qs: Any, view: Any, request: Any) -> Any:
-        received_args["view"] = view
-        received_args["request"] = request
-        return qs.filter(amount_cents__gte=200)
-
-    server = _server()
-    server.register_selector_tool(
-        name="invoices.list",
-        spec=SelectorSpec(
-            kind=SelectorKind.LIST,
-            selector=_list_all_invoices,
-            output_serializer=InvoiceOutputSerializer,
-            extend_queryset=_narrow,
-        ),
-    )
-    out = handle_tools_call({"name": "invoices.list", "arguments": {}}, _ctx(server))
-    assert isinstance(out, dict)
-    rows = out["structuredContent"]
-    assert sorted(r["number"] for r in rows) == ["B", "C"]
-    assert received_args["view"].action == "invoices.list"
-    assert isinstance(received_args["request"], Request)
+    out = _call(_list(extend_queryset=_narrow))
+    assert sorted(row["number"] for row in out["structuredContent"]) == ["INV-1", "INV-2"]
+    assert isinstance(seen["request"], HttpRequest)
+    assert seen["request"].mcp_token.scopes == ("read",)
+    assert seen["view"] is None
 
 
-@pytest.mark.django_db
-def test_selector_spec_prefetch_related_applies() -> None:
-    """``prefetch_related`` lookups land on the queryset before ``extend_queryset``."""
-    Invoice.objects.create(number="A", amount_cents=100, sent=False)
-    captured: dict[str, Any] = {}
+def test_the_selector_is_handed_the_calls_request() -> None:
+    seen: list[Any] = []
 
-    def _capture_and_strip(qs: Any, view: Any, request: Any) -> Any:  # noqa: ARG001
-        captured["lookups"] = list(qs._prefetch_related_lookups)
-        # Return a fresh queryset so the bogus lookup is never evaluated
-        # against a real relation (the testapp model has no FKs).
+    def _rows(*, request: Any) -> list[dict[str, str]]:
+        seen.append(request)
+        return [{"number": "A"}]
+
+    out = _call(SelectorSpec(kind=SelectorKind.LIST, selector=_rows, permissions=OPEN))
+    assert out["structuredContent"] == [{"number": "A"}]
+    assert isinstance(seen[0], HttpRequest)
+
+
+@pytest.mark.parametrize(
+    ("field", "lookup", "read"),
+    [
+        ("prefetch_related", "bogus_relation", lambda qs: list(qs._prefetch_related_lookups)),
+        ("select_related", "invalid_fk", lambda qs: list(qs.query.select_related)),
+    ],
+    ids=["prefetch_related", "select_related"],
+)
+def test_related_lookups_land_before_extend_queryset(field: str, lookup: str, read: Any) -> None:
+    _seed(100)
+    captured: list[Any] = []
+
+    def _capture_and_strip(*, queryset: Any) -> Any:
+        captured.extend(read(queryset))
+        # A fresh queryset, so the lookup is never evaluated against a relation
+        # the testapp model does not have.
         return Invoice.objects.all()
 
-    server = _server()
-    server.register_selector_tool(
-        name="invoices.list",
-        spec=SelectorSpec(
-            kind=SelectorKind.LIST,
-            selector=_list_all_invoices,
-            output_serializer=InvoiceOutputSerializer,
-            prefetch_related=("bogus_relation_not_evaluated",),
-            extend_queryset=_capture_and_strip,
-        ),
-    )
-    out = handle_tools_call({"name": "invoices.list", "arguments": {}}, _ctx(server))
-    assert isinstance(out, dict)
-    assert captured["lookups"] == ["bogus_relation_not_evaluated"]
+    _call(_list(**{field: (lookup,)}, extend_queryset=_capture_and_strip))
+    assert captured == [lookup]
 
 
-@pytest.mark.django_db
-def test_selector_spec_select_related_lookups_recorded() -> None:
-    Invoice.objects.create(number="A", amount_cents=100, sent=False)
-    captured: dict[str, Any] = {}
-
-    def _capture_and_strip(qs: Any, view: Any, request: Any) -> Any:  # noqa: ARG001
-        captured["select_related"] = qs.query.select_related
-        return Invoice.objects.all()
-
-    server = _server()
-    server.register_selector_tool(
-        name="invoices.list",
-        spec=SelectorSpec(
-            kind=SelectorKind.LIST,
-            selector=_list_all_invoices,
-            output_serializer=InvoiceOutputSerializer,
-            select_related=("invalid_fk",),
-            extend_queryset=_capture_and_strip,
-        ),
-    )
-    handle_tools_call({"name": "invoices.list", "arguments": {}}, _ctx(server))
-    # ``QuerySet.query.select_related`` is a dict keyed by lookup when set.
-    assert "invalid_fk" in captured["select_related"]
-
-
-@pytest.mark.django_db
-def test_selector_spec_shaping_requires_a_queryset() -> None:
-    """Shaping fields on a selector that returns a non-queryset fail loudly.
-
-    Routing through ``dispatch_spec`` adopts drf-services' strict contract:
-    ``select_related`` … ``extend_queryset`` / ``filter_set`` require a
-    ``QuerySet``. A list-returning selector with shaping configured is a
-    misconfiguration and raises ``ImproperlyConfigured`` (a developer error,
-    surfaced loudly) rather than silently skipping the shaping.
-    """
-
-    def _return_list() -> list[dict[str, str]]:
-        return [{"id": 1, "number": "X"}]
-
-    server = _server()
-    server.register_selector_tool(
-        name="static.list",
-        spec=SelectorSpec(
-            kind=SelectorKind.LIST,
-            selector=_return_list,
-            select_related=("ignored",),
-            annotations={"ignored": models.F("amount_cents")},
-            extend_queryset=lambda qs, view, req: qs,
-        ),
+def test_shaping_a_selector_that_returns_no_queryset_fails_loudly() -> None:
+    """A misconfiguration, raised rather than silently skipping the shaping."""
+    spec = SelectorSpec(
+        kind=SelectorKind.LIST,
+        selector=lambda: [{"number": "X"}],
+        select_related=("ignored",),
+        permissions=OPEN,
     )
     with pytest.raises(ImproperlyConfigured):
-        handle_tools_call({"name": "static.list", "arguments": {}}, _ctx(server))
-
-
-# ---------- Selector-tool output_serializer_context ----------
-
-
-@pytest.mark.django_db
-def test_selector_spec_output_serializer_context_flows_into_render() -> None:
-    Invoice.objects.create(number="A", amount_cents=100, sent=False)
-
-    class _ContextProbeSerializer(drf_serializers.ModelSerializer):
-        extra = drf_serializers.SerializerMethodField()
-
-        class Meta:
-            model = Invoice
-            fields = ["id", "number", "extra"]
-
-        def get_extra(self, _: Invoice) -> str:
-            return self.context["tag"]
-
-    def _ctx_provider(view: Any, request: Any) -> Mapping[str, Any]:  # noqa: ARG001
-        return {"tag": "via-spec"}
-
-    server = _server()
-    server.register_selector_tool(
-        name="invoices.list",
-        spec=SelectorSpec(
-            kind=SelectorKind.LIST,
-            selector=_list_all_invoices,
-            output_serializer=_ContextProbeSerializer,
-            output_serializer_context=_ctx_provider,
-        ),
-    )
-    out = handle_tools_call({"name": "invoices.list", "arguments": {}}, _ctx(server))
-    assert isinstance(out, dict)
-    assert out["structuredContent"][0]["extra"] == "via-spec"
-
-
-# ---------- ServiceSpec input + output context ----------
-
-
-@pytest.mark.django_db
-def test_service_spec_input_serializer_context_flows_into_validation() -> None:
-    received: dict[str, Any] = {}
-
-    class _CtxAwareInput(drf_serializers.Serializer):
-        number = drf_serializers.CharField()
-
-        def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-            received.update(self.context)
-            return attrs
-
-    def _create(*, data: dict[str, Any]) -> dict[str, Any]:
-        return {"number": data["number"]}
-
-    def _ctx_provider(view: Any, request: Any) -> Mapping[str, Any]:  # noqa: ARG001
-        return {"tenant": "acme"}
-
-    server = _server()
-    server.register_service_tool(
-        name="invoices.create",
-        spec=ServiceSpec(
-            service=_create,
-            input_serializer=_CtxAwareInput,
-            input_serializer_context=_ctx_provider,
-            atomic=False,
-        ),
-    )
-    handle_tools_call({"name": "invoices.create", "arguments": {"number": "X"}}, _ctx(server))
-    assert received["tenant"] == "acme"
-
-
-@pytest.mark.django_db
-def test_service_spec_output_serializer_context_flows_into_render() -> None:
-    class _Out(drf_serializers.Serializer):
-        tag = drf_serializers.SerializerMethodField()
-
-        def get_tag(self, _: Any) -> str:
-            return self.context["who"]
-
-    def _svc() -> dict[str, str]:
-        return {}
-
-    def _ctx_provider(view: Any, request: Any) -> Mapping[str, Any]:  # noqa: ARG001
-        return {"who": "rendered"}
-
-    server = _server()
-    server.register_service_tool(
-        name="t",
-        spec=ServiceSpec(
-            service=_svc,
-            output_selector_spec=SelectorSpec(
-                kind=SelectorKind.RETRIEVE,
-                output_serializer=_Out,
-                output_serializer_context=_ctx_provider,
-            ),
-            atomic=False,
-        ),
-    )
-    out = handle_tools_call({"name": "t", "arguments": {}}, _ctx(server))
-    assert isinstance(out, dict)
-    assert out["structuredContent"] == {"tag": "rendered"}
-
-
-# ---------- Resolved-data extras (sister-repo 0.15+) ----------
-#
-# A provider may declare ``result`` (service tool), ``instance`` (selector
-# RETRIEVE), or ``page`` (selector LIST) and receive the exact value being
-# serialised — passed only when declared. ``invoice_pk`` below reads off
-# the resolved data to prove it is the real object, not a placeholder.
-
-
-@pytest.mark.django_db
-def test_service_tool_provider_receives_result_extra() -> None:
-    seen: dict[str, Any] = {}
-
-    class _Out(drf_serializers.ModelSerializer):
-        echoed = drf_serializers.SerializerMethodField()
-
-        class Meta:
-            model = Invoice
-            fields = ["id", "number", "echoed"]
-
-        def get_echoed(self, _: Invoice) -> int:
-            return self.context["seen_pk"]
-
-    def _create() -> Invoice:
-        return Invoice.objects.create(number="NEW", amount_cents=1)
-
-    def _ctx_provider(view: Any, request: Any, *, result: Any) -> Mapping[str, Any]:  # noqa: ARG001
-        seen["result"] = result
-        return {"seen_pk": result.pk}
-
-    server = _server()
-    server.register_service_tool(
-        name="invoices.create",
-        spec=ServiceSpec(
-            service=_create,
-            output_selector_spec=SelectorSpec(
-                kind=SelectorKind.RETRIEVE,
-                output_serializer=_Out,
-                output_serializer_context=_ctx_provider,
-            ),
-            atomic=False,
-        ),
-    )
-    out = handle_tools_call({"name": "invoices.create", "arguments": {}}, _ctx(server))
-    assert isinstance(out, dict)
-    assert isinstance(seen["result"], Invoice)
-    assert out["structuredContent"]["echoed"] == seen["result"].pk
-
-
-@pytest.mark.django_db
-def test_service_tool_result_is_post_output_selector_instance() -> None:
-    """With an output selector, the provider sees the re-fetched row."""
-    raw = Invoice.objects.create(number="RAW", amount_cents=1)
-    seen: dict[str, Any] = {}
-
-    def _svc() -> Invoice:
-        return raw
-
-    def _refetch(*, result: Invoice) -> Any:
-        # The MCP output-selector contract returns the final value directly
-        # (no queryset .first() materialisation), so re-fetch the instance.
-        return Invoice.objects.get(pk=result.pk)
-
-    def _ctx_provider(view: Any, request: Any, *, result: Any) -> Mapping[str, Any]:  # noqa: ARG001
-        seen["is_raw"] = result is raw
-        seen["pk"] = result.pk
-        return {}
-
-    server = _server()
-    server.register_service_tool(
-        name="t",
-        spec=ServiceSpec(
-            service=_svc,
-            output_selector_spec=SelectorSpec(
-                kind=SelectorKind.RETRIEVE,
-                selector=_refetch,
-                output_serializer=InvoiceOutputSerializer,
-                output_serializer_context=_ctx_provider,
-            ),
-            atomic=False,
-        ),
-    )
-    handle_tools_call({"name": "t", "arguments": {}}, _ctx(server))
-    assert seen["is_raw"] is False  # re-fetched → distinct instance
-    assert seen["pk"] == raw.pk
-
-
-@pytest.mark.django_db
-def test_selector_retrieve_tool_provider_receives_instance_extra() -> None:
-    invoice = Invoice.objects.create(number="ONE", amount_cents=1)
-    seen: dict[str, Any] = {}
-
-    def _get_one() -> Invoice:
-        return Invoice.objects.get(number="ONE")
-
-    def _ctx_provider(view: Any, request: Any, *, instance: Any) -> Mapping[str, Any]:  # noqa: ARG001
-        seen["instance"] = instance
-        return {}
-
-    server = _server()
-    server.register_selector_tool(
-        name="invoices.get",
-        spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            selector=_get_one,
-            output_serializer=InvoiceOutputSerializer,
-            output_serializer_context=_ctx_provider,
-        ),
-    )
-    handle_tools_call({"name": "invoices.get", "arguments": {}}, _ctx(server))
-    assert isinstance(seen["instance"], Invoice)
-    assert seen["instance"].pk == invoice.pk
-
-
-@pytest.mark.django_db
-def test_selector_list_tool_unpaginated_provider_receives_full_result() -> None:
-    for i in range(3):
-        Invoice.objects.create(number=f"INV-{i}", amount_cents=i)
-    seen: dict[str, Any] = {}
-
-    def _ctx_provider(view: Any, request: Any, *, page: Any) -> Mapping[str, Any]:  # noqa: ARG001
-        seen["count"] = len(list(page))
-        return {}
-
-    server = _server()
-    server.register_selector_tool(
-        name="invoices.list",
-        spec=SelectorSpec(
-            kind=SelectorKind.LIST,
-            selector=_list_all_invoices,
-            output_serializer=InvoiceOutputSerializer,
-            output_serializer_context=_ctx_provider,
-        ),
-    )
-    handle_tools_call({"name": "invoices.list", "arguments": {}}, _ctx(server))
-    assert seen["count"] == 3
-
-
-@pytest.mark.django_db
-def test_selector_list_tool_paginated_provider_receives_page_slice() -> None:
-    for i in range(5):
-        Invoice.objects.create(number=f"INV-{i}", amount_cents=i)
-    seen: dict[str, Any] = {}
-
-    def _ctx_provider(view: Any, request: Any, *, page: Any) -> Mapping[str, Any]:  # noqa: ARG001
-        seen["page_numbers"] = [inv.number for inv in page]
-        return {}
-
-    server = _server()
-    server.register_selector_tool(
-        name="invoices.list",
-        spec=SelectorSpec(
-            kind=SelectorKind.LIST,
-            selector=_list_all_invoices,
-            output_serializer=InvoiceOutputSerializer,
-            output_serializer_context=_ctx_provider,
-        ),
-        paginate=True,
-    )
-    handle_tools_call(
-        {"name": "invoices.list", "arguments": {"page": 1, "limit": 2}},
-        _ctx(server),
-    )
-    # Provider saw only the 2-row page, not all 5 rows.
-    assert seen["page_numbers"] == ["INV-0", "INV-1"]
-
-
-@pytest.mark.django_db
-def test_paginated_page_read_is_a_single_query(django_assert_num_queries: Any) -> None:
-    """Reading ids off ``page`` reuses the queryset's result cache — the
-    renderer iterates the same object, so no second query is issued."""
-    for i in range(5):
-        Invoice.objects.create(number=f"INV-{i}", amount_cents=i)
-
-    def _ctx_provider(view: Any, request: Any, *, page: Any) -> Mapping[str, Any]:  # noqa: ARG001
-        # One batched query keyed on the page's ids.
-        ids = [inv.pk for inv in page]
-        return {"ids": list(Invoice.objects.filter(pk__in=ids).values_list("pk", flat=True))}
-
-    class _Out(drf_serializers.ModelSerializer):
-        class Meta:
-            model = Invoice
-            fields = ["id", "number"]
-
-    server = _server()
-    server.register_selector_tool(
-        name="invoices.list",
-        spec=SelectorSpec(
-            kind=SelectorKind.LIST,
-            selector=_list_all_invoices,
-            output_serializer=_Out,
-            output_serializer_context=_ctx_provider,
-        ),
-        paginate=True,
-    )
-    # count(1) + page fetch(1) + provider's batched query(1) = 3.
-    with django_assert_num_queries(3):
-        handle_tools_call(
-            {"name": "invoices.list", "arguments": {"page": 1, "limit": 2}}, _ctx(server)
-        )
-
-
-# ---------- DRF's baseline context off the HTTP path ----------
-#
-# Over HTTP every serializer carries ``get_serializer_context()`` — request /
-# format / view — so serializers read those keys unguarded. The two reported
-# consumer failures were the absence of that baseline over MCP (``KeyError:
-# 'request'``) and the provider being called positionally (``TypeError`` for a
-# provider that doesn't lead with ``view, request``).
-
-
-class _RequestReadingSerializer(drf_serializers.ModelSerializer):
-    """Reads ``self.context["request"]`` the way a real one does."""
-
-    is_editable = drf_serializers.SerializerMethodField()
-
-    class Meta:
-        model = Invoice
-        fields = ["id", "number", "is_editable"]
-
-    def get_is_editable(self, _: Invoice) -> str:
-        return str(self.context["request"].user)
-
-
-def _get_one_invoice() -> Any:
-    return Invoice.objects.all()
-
-
-@pytest.mark.django_db
-def test_selector_list_render_has_the_request_without_a_provider() -> None:
-    Invoice.objects.create(number="A", amount_cents=100)
-
-    server = _server()
-    server.register_selector_tool(
-        name="invoices.list",
-        spec=SelectorSpec(
-            kind=SelectorKind.LIST,
-            selector=_list_all_invoices,
-            output_serializer=_RequestReadingSerializer,
-        ),
-    )
-    out = handle_tools_call({"name": "invoices.list", "arguments": {}}, _ctx(server))
-    assert isinstance(out, dict)
-    assert out["structuredContent"][0]["is_editable"] == "None"
-
-
-@pytest.mark.django_db
-def test_selector_retrieve_render_has_the_request_without_a_provider() -> None:
-    Invoice.objects.create(number="A", amount_cents=100)
-
-    server = _server()
-    server.register_selector_tool(
-        name="invoices.get",
-        spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            selector=_get_one_invoice,
-            output_serializer=_RequestReadingSerializer,
-        ),
-    )
-    out = handle_tools_call({"name": "invoices.get", "arguments": {}}, _ctx(server))
-    assert isinstance(out, dict)
-    assert out["structuredContent"]["is_editable"] == "None"
-
-
-@pytest.mark.django_db
-def test_selector_paginated_render_has_the_request_without_a_provider() -> None:
-    Invoice.objects.create(number="A", amount_cents=100)
-
-    server = _server()
-    server.register_selector_tool(
-        name="invoices.page",
-        spec=SelectorSpec(
-            kind=SelectorKind.LIST,
-            selector=_list_all_invoices,
-            output_serializer=_RequestReadingSerializer,
-        ),
-        paginate=True,
-    )
-    out = handle_tools_call({"name": "invoices.page", "arguments": {}}, _ctx(server))
-    assert isinstance(out, dict)
-    assert out["structuredContent"]["items"][0]["is_editable"] == "None"
-
-
-@pytest.mark.django_db
-def test_provider_declaring_request_only_is_bound_by_name() -> None:
-    """``def provider(request, **extras)`` — valid over HTTP and through drf-pai.
-
-    It used to raise ``TypeError: takes 1 positional argument but 2 were given``
-    over MCP, because ``view`` / ``request`` were forwarded positionally.
-    """
-    Invoice.objects.create(number="A", amount_cents=100)
-    seen: dict[str, Any] = {}
-
-    class _TagSerializer(drf_serializers.ModelSerializer):
-        tag = drf_serializers.SerializerMethodField()
-
-        class Meta:
-            model = Invoice
-            fields = ["id", "tag"]
-
-        def get_tag(self, _: Invoice) -> str:
-            return self.context["tag"]
-
-    def _ctx_provider(request: Request, **extras: Any) -> Mapping[str, Any]:
-        seen["request"] = request
-        seen["extras"] = sorted(extras)
-        return {"tag": "by-name"}
-
-    server = _server()
-    server.register_selector_tool(
-        name="invoices.list",
-        spec=SelectorSpec(
-            kind=SelectorKind.LIST,
-            selector=_list_all_invoices,
-            output_serializer=_TagSerializer,
-            output_serializer_context=_ctx_provider,
-        ),
-    )
-    out = handle_tools_call({"name": "invoices.list", "arguments": {}}, _ctx(server))
-    assert isinstance(out, dict)
-    assert out["structuredContent"][0]["tag"] == "by-name"
-    assert isinstance(seen["request"], Request)
-    assert seen["extras"] == ["page", "view"]
+        _call(spec)
+
+
+def test_a_paginated_page_is_read_once(django_assert_num_queries: Any) -> None:
+    """The presenter iterates the page ``paginate_output`` fetched: a count and
+    one page read, and no second fetch of the same rows."""
+    _seed(1, 2, 3, 4, 5)
+    with django_assert_num_queries(2):
+        out = _call(_list(), {"limit": 2}, paginate=True)
+    assert [row["number"] for row in out["structuredContent"]["items"]] == ["INV-0", "INV-1"]

@@ -1,19 +1,23 @@
-"""A result with nothing to present conforms to MCP and to the advertised schema.
+"""A kernel tool's result with nothing to present conforms to MCP and to the advertised schema.
 
 MCP requires ``structuredContent`` to be an object, and a server advertising an
-``outputSchema`` MUST return structured content that conforms to it. Two
-situations present nothing: a selector tool's ``allow_none`` RETRIEVE that finds
-no row, and a single-row service tool whose output re-read selector finds none
-(dispatch materializes the re-read with ``.first()``, whatever the nested spec
-declares). One rule covers both: the result is served as ``{}``, and the
-``outputSchema`` of a tool that can present nothing admits ``{}`` beside a full
-row. Every other tool keeps a strict ``required``, because loosening it turns
-every row field optional for a client generating types from the schema.
+``outputSchema`` MUST return structured content that conforms to it. Three
+kernel declarations may present nothing: a selector tool's ``allow_none``
+RETRIEVE that finds no row, a service tool whose output re-read selector finds
+none, and a service declaring ``allow_none=True``. One rule covers them: the
+result is served as ``{}``, and the ``outputSchema`` of a tool that can present
+nothing admits ``{}`` beside a full row. Every other tool keeps a strict
+``required``, because loosening it turns every row field optional for a client
+generating types from the schema.
 
 Each entry point is driven, because each once had its own answer: the sync wire
-handler, the async one, and the in-process ``call_tool``. The HTTP viewsets are
+handler, the async one, and the in-process ``call_tool``. The HTTP views are
 driven as well, sync and async in both eras, because what a client validates is
-the schema and the result read off the wire.
+the schema and the result read off the wire. ``tests/schema/`` asks the schema of
+every declaration; this asks what each route serves against it.
+
+The tools are kernel specs presenting through ``InvoiceOutput``: a kernel
+service presents its own return through its ``presenter``.
 """
 
 from __future__ import annotations
@@ -26,12 +30,17 @@ import pytest
 from asgiref.sync import async_to_sync
 from django.http import HttpRequest
 from django.test import AsyncClient, Client, override_settings
-from django_service_specs import SelectorKind
+from django_service_specs import (
+    DataclassPresenter,
+    DataclassValidator,
+    Parameter,
+    Parameters,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+)
 from jsonschema import Draft202012Validator
-from rest_framework import serializers
-from rest_framework.permissions import AllowAny
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
@@ -41,35 +50,49 @@ from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.testing import assert_tool_result_conforms
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
+from tests.testapp.kernel_shapes import InvoiceOutput
 from tests.testapp.models import Invoice
-from tests.testapp.serializers import InvoiceOutputSerializer
 from tests.testapp.urlconf_for import urlconf_for
 
 MODERN = "2026-07-28"
 LEGACY = "2025-11-25"
+OPEN = [Unrestricted()]
+INVOICE = DataclassPresenter(InvoiceOutput)
 
 
-class _ArchiveInput(serializers.Serializer):
-    number = serializers.CharField()
+@dataclass
+class _ArchiveInput:
+    number: str
 
 
-def _invoice_by_number(*, number: str) -> Any:
-    return Invoice.objects.filter(number=number)
+def _invoice_by_number(*, number: str) -> Invoice | None:
+    return Invoice.objects.filter(number=number).first()
 
 
-def _archive(*, data: dict[str, Any]) -> Invoice:
-    invoice = Invoice.objects.get(number=data["number"])
+def _by_number(**declared: Any) -> SelectorSpec:
+    return SelectorSpec(
+        kind=SelectorKind.RETRIEVE,
+        selector=_invoice_by_number,
+        reads=Parameters([Parameter("number", "string", required=True)]),
+        presenter=INVOICE,
+        permissions=OPEN,
+        **declared,
+    )
+
+
+def _archive(*, number: str) -> Invoice:
+    invoice = Invoice.objects.get(number=number)
     invoice.sent = True
     invoice.save(update_fields=["sent"])
     return invoice
 
 
-def _unsent_only(*, instance: Invoice) -> Any:
+def _unsent_only(*, result: Invoice) -> Invoice | None:
     # The re-read filters out the row the service just changed.
-    return Invoice.objects.filter(pk=instance.pk, sent=False)
+    return Invoice.objects.filter(pk=result.pk, sent=False).first()
 
 
-def _void(*, data: dict[str, Any]) -> None:
+def _void(*, number: str) -> None:
     return None
 
 
@@ -84,111 +107,67 @@ class _AddInput:
     b: int
 
 
-class _SumOutput(serializers.Serializer):
-    result = serializers.IntegerField()
+@dataclass
+class _SumOutput:
+    result: int
 
 
-def _add(*, data: _AddInput) -> dict[str, int]:
-    return {"result": data.a + data.b}
+def _add(*, a: int, b: int) -> _SumOutput:
+    return _SumOutput(result=a + b)
 
 
-def _no_reread() -> SelectorSpec:
-    # An output spec naming only the serializer: the service's own return
-    # renders, with no selector to filter it away.
-    return SelectorSpec(kind=SelectorKind.RETRIEVE, output_serializer=InvoiceOutputSerializer)
+def _archiving(service: Any, **declared: Any) -> ServiceSpec:
+    return ServiceSpec(
+        service=service,
+        validator=DataclassValidator(_ArchiveInput),
+        permissions=OPEN,
+        **declared,
+    )
 
 
 def _server(session_store: Any = None) -> MCPServer:
     server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=session_store)
-    server.register_selector_tool(
-        name="invoices.find",
-        spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            selector=_invoice_by_number,
-            output_serializer=InvoiceOutputSerializer,
-            allow_none=True,
-            permission_classes=[AllowAny],
-        ),
+    server.register_tool(_by_number(allow_none=True), name="invoices.find", description="d")
+    server.register_tool(_by_number(), name="invoices.get", description="d")
+    reread = SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_unsent_only, presenter=INVOICE)
+    server.register_tool(
+        _archiving(_archive, output_selector_spec=reread), name="invoices.archive", description="d"
     )
-    server.register_selector_tool(
-        name="invoices.get",
-        spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            selector=_invoice_by_number,
-            output_serializer=InvoiceOutputSerializer,
-            permission_classes=[AllowAny],
-        ),
+    # The same service with no re-read: it presents the row it changed.
+    server.register_tool(
+        _archiving(_archive, presenter=INVOICE), name="invoices.send", description="d"
     )
-    archive = ServiceSpec(
-        service=_archive,
-        atomic=False,
-        input_serializer=_ArchiveInput,
-        permission_classes=[AllowAny],
-        output_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            selector=_unsent_only,
-            output_serializer=InvoiceOutputSerializer,
-        ),
+    server.register_tool(
+        _archiving(_void, presenter=INVOICE), name="invoices.void", description="d"
     )
-    server.register_service_tool(name="invoices.archive", spec=archive)
-    # The same service with no re-read selector: it returns the row it changed.
-    send = ServiceSpec(
-        service=_archive,
-        atomic=False,
-        input_serializer=_ArchiveInput,
-        permission_classes=[AllowAny],
-        output_selector_spec=_no_reread(),
+    # The remedy for the limit below: a re-read handing the service's return
+    # straight back, which makes the schema admit ``{}``.
+    passthrough = SelectorSpec(
+        kind=SelectorKind.RETRIEVE, selector=lambda *, result: result, presenter=INVOICE
     )
-    server.register_service_tool(name="invoices.send", spec=send)
-    server.register_service_tool(
-        name="invoices.void",
-        spec=ServiceSpec(
-            service=_void,
-            atomic=False,
-            input_serializer=_ArchiveInput,
-            permission_classes=[AllowAny],
-            output_selector_spec=_no_reread(),
-        ),
-    )
-    # The remedy the docs give for the limit above: a re-read selector handing
-    # the service's return straight back, which makes the schema admit ``{}``.
-    server.register_service_tool(
+    server.register_tool(
+        _archiving(_void, output_selector_spec=passthrough),
         name="invoices.void_reread",
-        spec=ServiceSpec(
-            service=_void,
-            atomic=False,
-            input_serializer=_ArchiveInput,
-            permission_classes=[AllowAny],
-            output_selector_spec=SelectorSpec(
-                kind=SelectorKind.RETRIEVE,
-                selector=lambda *, result: result,
-                output_serializer=InvoiceOutputSerializer,
-            ),
-        ),
+        description="d",
     )
     # The declaration for the same case: ``allow_none=True`` says the service
     # may present nothing, so its schema admits ``{}`` with no re-read to lean on.
-    touch = ServiceSpec(
-        service=_touch_tasks,
-        atomic=False,
-        allow_none=True,
-        permission_classes=[AllowAny],
-        output_selector_spec=_no_reread(),
+    server.register_tool(
+        ServiceSpec(service=_touch_tasks, allow_none=True, presenter=INVOICE, permissions=OPEN),
+        name="tasks.touch",
+        description="d",
     )
-    server.register_service_tool(name="tasks.touch", spec=touch)
     # django-ag-ui's typed bridge fixture, reproduced: its code-mode stub reads
     # this schema as the tool's return type.
-    server.register_service_tool(
-        name="sums.add",
-        spec=ServiceSpec(
+    server.register_tool(
+        ServiceSpec(
             service=_add,
-            atomic=False,
-            input_serializer=_AddInput,
-            permission_classes=[AllowAny],
-            output_selector_spec=SelectorSpec(
-                kind=SelectorKind.RETRIEVE, output_serializer=_SumOutput
-            ),
+            validator=DataclassValidator(_AddInput),
+            presenter=DataclassPresenter(_SumOutput),
+            permissions=OPEN,
         ),
+        name="sums.add",
+        description="d",
     )
     return server
 
@@ -324,7 +303,7 @@ def test_a_retrieve_that_cannot_present_nothing_keeps_its_schema_strict() -> Non
 
 @pytest.mark.parametrize("name", ["invoices.send", "invoices.void", "sums.add"])
 def test_a_service_with_no_output_reread_keeps_its_schema_strict(name: str) -> None:
-    # With no re-read selector the service's own return renders, so nothing
+    # With no re-read selector the service's own return presents, so nothing
     # filters a row away. ``invoices.void`` returns ``None`` regardless, and is
     # served ``{}`` against this schema: the documented limit, not admitted
     # here, because admitting it would loosen every typed service's schema.
@@ -338,7 +317,7 @@ def test_a_service_with_no_output_reread_keeps_its_schema_strict(name: str) -> N
 @_ENTRY_POINTS
 @pytest.mark.django_db(transaction=True)
 def test_an_undeclared_none_is_still_served_empty_against_a_strict_schema(call: Any) -> None:
-    # The limit the declaration answers: drf-services presents a ``None`` the
+    # The limit the declaration answers: the kernel presents a ``None`` the
     # spec does not declare rather than refusing it, so the call succeeds with
     # ``{}``, and a client validating it against the strict schema rejects it.
     server = _server()
@@ -368,7 +347,7 @@ def test_a_tool_that_can_present_nothing_moves_required_into_the_any_of(name: st
     assert Draft202012Validator(schema).is_valid({})
 
 
-# ---------- what the HTTP viewsets serve ----------
+# ---------- what the HTTP views serve ----------
 
 
 async def _awaited(response: Any) -> Any:
@@ -388,7 +367,7 @@ def _send(
 
 
 def _post(era: str, is_async: bool, method: str, params: dict[str, Any]) -> Any:
-    """One request to the mounted endpoint, in ``era``, on the chosen viewset."""
+    """One request to the mounted endpoint, in ``era``, on the chosen view."""
     client: Any = AsyncClient() if is_async else Client()
     headers: dict[str, str] = {"Mcp-Protocol-Version": era}
     body: dict[str, Any] = dict(params)

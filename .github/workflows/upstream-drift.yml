@@ -94,8 +94,8 @@ jobs:
       # The sync above installs every optional extra, which is the one install
       # shape most consumers never have. `pip install django-spec-mcp`
       # resolves the base dependencies only, and this package's whole
-      # optional-extra contract — TOON, OAuth, redis, OTel imported lazily, so a
-      # tool call never fails because an extra is absent — lives on that path.
+      # optional-extra contract — redis and OTel imported lazily, so a tool call
+      # never fails because an extra is absent — lives on that path.
       # tests.yml proves it against the committed lock in its `smoke-no-extras`
       # job; without repeating it here the drift job would report green while
       # the resolve a consumer actually gets was never built. That resolve also
@@ -121,37 +121,35 @@ jobs:
               INSTALLED_APPS=[
                   "django.contrib.contenttypes",
                   "django.contrib.auth",
-                  "rest_framework",
               ],
               DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}},
               SPEC_MCP={"ALLOWED_ORIGINS": ["*"], "SERVER_INFO": {}},
           )
           django.setup()
 
-          from rest_framework.permissions import AllowAny
+          from django_service_specs import ServiceSpec, Unrestricted
           from django_spec_mcp import MCPServer
-          from rest_framework_services.types.service_spec import ServiceSpec
 
-          # Constructing a bare server builds its own auth backend and session
-          # store defaults, and registering a tool runs the full spec
+          # Constructing a bare server builds its own session store default,
+          # and registering a tool runs the full spec
           # reflection. Both are where an upstream release that turned a lazy
           # import into a hard requirement would surface first.
           server = MCPServer(name="drift")
-          server.register_service_tool(
+          server.register_tool(
+              ServiceSpec(service=lambda: None, permissions=[Unrestricted()]),
               name="noop",
               description="Probe tool for the unpinned base install.",
-              spec=ServiceSpec(service=lambda: None, permission_classes=[AllowAny]),
           )
           assert server.tools.get("noop") is not None
 
           # Guard the guard: if this environment ever gained an extra, the
           # assertions above would pass for the wrong reason.
           try:
-              import oauth2_provider  # noqa: F401
+              import redis  # noqa: F401
           except ImportError:
               pass
           else:
-              raise SystemExit("base environment unexpectedly has oauth2_provider installed")
+              raise SystemExit("base environment unexpectedly has redis installed")
 
           print("BASE INSTALL OK")
           PY

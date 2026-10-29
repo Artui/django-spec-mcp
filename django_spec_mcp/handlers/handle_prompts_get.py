@@ -2,16 +2,17 @@ from __future__ import annotations
 
 from typing import Any
 
-from rest_framework_services import build_offline_context, resolve_callable_kwargs
+from django_service_specs import resolve_callable_kwargs
 
 from django_spec_mcp._compat.tracing import span
 from django_spec_mcp.handlers.handle_tools_call import _span_attrs
+from django_spec_mcp.handlers.judge_binding import judge_binding
+from django_spec_mcp.handlers.kernel_utils import carry_token
 from django_spec_mcp.handlers.render_prompt_messages import normalize_render_result
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import (
-    check_permissions,
     consume_rate_limits,
-    prompt_shape,
+    forbidden,
 )
 from django_spec_mcp.output.enforce_result_bytes import enforce_result_bytes
 from django_spec_mcp.protocol.types.get_prompt_result import GetPromptResult
@@ -74,22 +75,11 @@ def handle_prompts_get(
         )
 
     with span("mcp.prompts.get", attributes=_span_attrs(binding.name, context)):
-        # On the prompt's arguments as ``request.data``, its name as
-        # ``view.action`` and no query string: judged against ``{}``, a
-        # permission refusing on an argument admitted every call
-        # (``test_a_prompt_permission_reads_the_prompts_arguments``).
-        allowed, required_scopes = check_permissions(
-            binding.permissions,
-            context.http_request,
-            context.token,
-            shape=prompt_shape(binding, arguments_raw),
-        )
+        # The prompt's scope gate and its kernel checks, asked of the principal
+        # and this binding, as its listing asks them.
+        allowed, required_scopes = judge_binding(binding, context.token)
         if not allowed:
-            return JsonRpcError(
-                JsonRpcErrorCode.FORBIDDEN,
-                "Insufficient permission",
-                data={"requiredScopes": required_scopes} if required_scopes else None,
-            )
+            return forbidden(required_scopes)
 
         retry_after: int | None = consume_rate_limits(
             binding.rate_limits, context.http_request, context.token
@@ -101,15 +91,16 @@ def handle_prompts_get(
                 data={"retryAfter": retry_after},
             )
 
-        drf_request = build_offline_context(
-            context.token.user,
-            None,
-            http_request=context.http_request,
-            # A prompt renders messages, so nothing here reads
-            # ``request.query_params``. Passed anyway so the endpoint's own
-            # query string can never reach one if that changes.
-            query_params={},
-        ).request
+        # The request the kernel tool path hands a spec: the transport's own
+        # ``HttpRequest``, the resolved token on it as ``mcp_token``
+        # (``test_a_render_declaring_request_receives_the_transports_http_request``).
+        # Its ``user`` is the token's principal, and the ``user`` seed is that
+        # same principal, so a render declaring ``user`` and one reading
+        # ``request.user`` agree, an anonymous caller included
+        # (``test_user_and_request_user_agree_for_a_token_naming_no_one``). Its
+        # query string is the endpoint's: a render reads the prompt's arguments
+        # by name, never off the request.
+        request = carry_token(context.http_request, context.token)
         # The transport's seeds are applied *after* the client-supplied
         # arguments, so an argument named ``user`` or ``request`` shadows
         # nothing — the precedence ``RESERVED_POOL_SEEDS`` enforces on the
@@ -118,8 +109,8 @@ def handle_prompts_get(
         # authenticated principal, never a value the caller chose.
         pool: dict[str, Any] = {
             **arguments_raw,
-            "request": drf_request,
-            "user": context.token.user,
+            "request": request,
+            "user": request.user,
         }
         kwargs: dict[str, Any] = resolve_callable_kwargs(binding.render, pool)
         raw: Any = binding.render(**kwargs)

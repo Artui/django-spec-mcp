@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import pytest
 from django.contrib.auth.models import AnonymousUser
 from django.http import HttpRequest
 
@@ -38,9 +37,3 @@ def test_www_authenticate_challenge_with_error_and_scope() -> None:
     out = AllowAnyBackend().www_authenticate_challenge(scopes=["a", "b"], error="invalid_token")
     assert 'error="invalid_token"' in out
     assert 'scope="a b"' in out
-
-
-def test_authorization_server_metadata_raises_not_implemented() -> None:
-    """AllowAny doesn't host an authorization server — the contrib mount uses this signal."""
-    with pytest.raises(NotImplementedError, match="doesn't host"):
-        AllowAnyBackend().authorization_server_metadata()

@@ -8,95 +8,106 @@ Take an existing service and expose it as an MCP tool in under five minutes.
 pip install django-spec-mcp
 ```
 
-If you don't already have `djangorestframework-services` configured, install it
-too — `django-spec-mcp` registers `ServiceSpec` instances directly, with
-no DRF view layer involved.
-
-```bash
-pip install djangorestframework djangorestframework-services
-```
+That brings in `django-service-specs`, the kernel this package serves: every
+tool and resource is one of its specs. Nothing else is needed for a first tool.
 
 ## 2. Define a service
 
-A service is a regular Python callable that names the kwargs it wants. Nothing
-about MCP is leaking in here — this same callable can serve an HTTP endpoint and
-the MCP transport simultaneously.
+A service is a regular Python callable that names the keywords it wants. Nothing
+about MCP is leaking in here — the kernel hands it each validated argument by
+name, and the same callable can be served by any other transport on the kernel.
 
 ```python title="invoices/services.py"
 from invoices.models import Invoice
 
 
-def create_invoice(*, data: dict) -> Invoice:
-    """Create a new invoice from validated input data."""
-    return Invoice.objects.create(number=data["number"], amount_cents=data["amount_cents"])
+def create_invoice(*, number: str, amount_cents: int) -> Invoice:
+    """Create a new invoice from the validated arguments."""
+    return Invoice.objects.create(number=number, amount_cents=amount_cents)
 ```
 
-## 3. Add input/output serializers
+## 3. Describe its input and output
 
-Use any DRF `Serializer`. They drive both validation (input) and the JSON Schema
-that `tools/list` advertises.
+A `Validator` checks the arguments and a `Presenter` renders the result. Both
+drive the JSON Schema `tools/list` advertises: the validator the
+`inputSchema`, the presenter the `outputSchema`. A dataclass is the shortest
+way to state either; a Django form, through `FormValidator`, states rules a
+dataclass cannot, such as `max_length`.
 
-```python title="invoices/serializers.py"
-from rest_framework import serializers
-from invoices.models import Invoice
-
-
-class InvoiceInputSerializer(serializers.Serializer):
-    number = serializers.CharField(max_length=32)
-    amount_cents = serializers.IntegerField(min_value=0)
+```python title="invoices/shapes.py"
+from dataclasses import dataclass
 
 
-class InvoiceOutputSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Invoice
-        fields = ["id", "number", "amount_cents", "sent"]
+@dataclass
+class InvoiceInput:
+    number: str
+    amount_cents: int
+
+
+@dataclass
+class InvoiceOutput:
+    id: int
+    number: str
+    amount_cents: int
+    sent: bool
 ```
 
 ## 4. Wire the MCP server
 
 ```python title="invoices/mcp.py"
-from django_service_specs import SelectorKind
-from rest_framework_services.types.selector_spec import SelectorSpec
-from rest_framework_services.types.service_spec import ServiceSpec
+from django_service_specs import (
+    DataclassPresenter,
+    DataclassValidator,
+    ServiceSpec,
+    Unrestricted,
+)
+
 from django_spec_mcp import MCPServer
-
-from invoices.serializers import InvoiceInputSerializer, InvoiceOutputSerializer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from invoices.services import create_invoice
+from invoices.shapes import InvoiceInput, InvoiceOutput
 
-server = MCPServer(name="invoices")
+# Dev only: AllowAnyBackend accepts every caller. See step 6.
+server = MCPServer(name="invoices", auth_backend=AllowAnyBackend())
 
-server.register_service_tool(
-    name="invoices.create",
-    spec=ServiceSpec(
+server.register_tool(
+    ServiceSpec(
         service=create_invoice,
-        input_serializer=InvoiceInputSerializer,
-        output_selector_spec=SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            output_serializer=InvoiceOutputSerializer,
-        ),
+        validator=DataclassValidator(InvoiceInput),
+        presenter=DataclassPresenter(InvoiceOutput),
+        permissions=[Unrestricted()],
     ),
+    name="invoices.create",
     description="Create a new invoice.",
 )
 ```
 
-`ServiceSpec`'s output pipeline lives under `output_selector_spec` —
-a `SelectorSpec` describing how to render the mutation result. Use
-`SelectorKind.RETRIEVE` for a single-object result and
-`SelectorKind.LIST` when the service returns a list. The decorator
-form (below) accepts a flat `output_serializer=` shortcut and builds
-the nested spec for you.
+`register_tool` takes the spec positionally and the MCP knobs by keyword; the
+spec's class says what kind of tool it is, a `ServiceSpec` a mutation and a
+`SelectorSpec` a read. The service's arguments sit at the top level of the
+call's `arguments`, as the kernel's schema advertises them.
 
-You can also use the decorator form — both register the same `ToolBinding`:
+`permissions` is required: a spec declaring none is refused at registration,
+so an omission is an error rather than an open tool. `Unrestricted()` says
+"deliberately open" out loud; swap it for a real kernel `PermissionCheck` (see
+[Authentication](auth.md#who-may-call-a-tool)) in anything real.
+
+A read is a `SelectorSpec`, registered the same way:
 
 ```python
-@server.service_tool(
-    name="invoices.create",
-    input_serializer=InvoiceInputSerializer,
-    output_serializer=InvoiceOutputSerializer,
+from django_service_specs import Parameter, Parameters, SelectorKind, SelectorSpec
+
+server.register_tool(
+    SelectorSpec(
+        kind=SelectorKind.RETRIEVE,
+        selector=get_invoice,  # def get_invoice(*, pk): ...
+        reads=Parameters([Parameter("pk", "integer", required=True)]),
+        presenter=DataclassPresenter(InvoiceOutput),
+        permissions=[Unrestricted()],
+    ),
+    name="invoices.get",
+    description="Fetch one invoice by id.",
 )
-def create_invoice(*, data):
-    """Create a new invoice from validated input data."""
-    return Invoice.objects.create(number=data["number"], amount_cents=data["amount_cents"])
 ```
 
 ## 5. Mount the URLs
@@ -164,9 +175,8 @@ curl http://localhost:8000/mcp/ \
   }'
 ```
 
-The default auth backend is `DjangoOAuthToolkitBackend`, which requires the
-`[oauth]` extra and refuses unauthenticated requests. For local development,
-swap in `AllowAnyBackend` explicitly with
-`MCPServer(auth_backend=AllowAnyBackend())`. Before going to production, leave
-the OAuth backend in place (or plug in your own) and set an `ALLOWED_ORIGINS`
-allowlist — see [Authentication](auth.md) for the recipe.
+The server above passes `AllowAnyBackend`, which accepts every caller and is
+for local development only. A server built with no `auth_backend=` cannot be
+mounted: `urls` raises `ImproperlyConfigured`. Before going to production,
+write a backend that verifies your tokens, and set an `ALLOWED_ORIGINS` allowlist — see
+[Authentication](auth.md) for the recipe.

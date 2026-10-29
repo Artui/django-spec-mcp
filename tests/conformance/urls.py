@@ -1,4 +1,4 @@
-"""URL conf for the conformance suite — the full surface, in one place.
+"""URL conf for the conformance suite's kernel server.
 
 Mounted via ``@pytest.mark.urls("tests.conformance.urls")`` on conformance tests
 so each test's Django client can drive the actual URL resolution rather than

@@ -16,9 +16,8 @@ from django_spec_mcp.registry.prompt_registry import PromptRegistry
 from django_spec_mcp.registry.resource_registry import ResourceRegistry
 from django_spec_mcp.registry.tool_registry import ToolRegistry
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
-from django_spec_mcp.transport.streamable_http_viewset import (
-    STREAMABLE_HTTP_ACTION_MAP,
-    StreamableHttpViewSet,
+from django_spec_mcp.transport.streamable_http_view import (
+    StreamableHttpView,
     _reject_awaitable_token,
 )
 
@@ -57,8 +56,7 @@ def test_unauthenticated_response_uses_backend_challenge() -> None:
         content_type="application/json",
     )
 
-    view = StreamableHttpViewSet.as_view(
-        STREAMABLE_HTTP_ACTION_MAP,
+    view = StreamableHttpView.as_view(
         tools=ToolRegistry(),
         resources=ResourceRegistry(),
         auth_backend=_DenyAllBackend(),
@@ -117,8 +115,7 @@ def test_async_auth_backend_on_sync_transport_is_refused() -> None:
     caller: the sync view cannot await, so the coroutine sailed through the
     ``token is None`` gate on its truthiness alone.
     """
-    view = StreamableHttpViewSet.as_view(
-        STREAMABLE_HTTP_ACTION_MAP,
+    view = StreamableHttpView.as_view(
         tools=ToolRegistry(),
         resources=ResourceRegistry(),
         auth_backend=_AsyncAuthBackend(),
@@ -195,8 +192,7 @@ class _AsyncSessionStore(InMemorySessionStore):
 
 
 def _view_with_store(store: Any) -> Any:
-    return StreamableHttpViewSet.as_view(
-        STREAMABLE_HTTP_ACTION_MAP,
+    return StreamableHttpView.as_view(
         tools=ToolRegistry(),
         resources=ResourceRegistry(),
         prompts=PromptRegistry(),

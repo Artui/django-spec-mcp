@@ -5,16 +5,26 @@ from dataclasses import dataclass
 from itertools import islice
 from typing import Any
 
-from django_service_specs import RESERVED_POOL_SEEDS
-from rest_framework_services import build_offline_context, resolve_callable_kwargs
-from rest_framework_services.dispatch.utils import DROPPED_EDGE_SEEDS
+from django_service_specs import RESERVED_POOL_SEEDS, NotPermitted, resolve_callable_kwargs
 
 from django_spec_mcp._compat.tracing import span
 from django_spec_mcp.handlers.handle_tools_call import _span_attrs
+from django_spec_mcp.handlers.judge_binding import judge_binding
+from django_spec_mcp.handlers.kernel_utils import (
+    admits_without_arguments,
+    call_context,
+    carry_token,
+    principal_of,
+    resource_refusal,
+)
 from django_spec_mcp.handlers.types.context import MCPCallContext
-from django_spec_mcp.handlers.utils import check_permissions, consume_rate_limits
+from django_spec_mcp.handlers.types.kernel_refusal_scene import KernelRefusalScene
+from django_spec_mcp.handlers.utils import consume_rate_limits
 from django_spec_mcp.protocol.types.completion import Completion
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
+from django_spec_mcp.registry.types.prompt_binding import PromptBinding
+from django_spec_mcp.registry.types.resource_binding import ResourceBinding
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from django_spec_mcp.types.max_completion_values import MAX_COMPLETION_VALUES
 
@@ -87,15 +97,19 @@ def handle_completion_complete(
         "mcp.completion.argument": argument_name,
     }
     with span("mcp.completion.complete", attributes=attributes):
-        allowed, required_scopes = check_permissions(
-            target.permissions, context.http_request, context.token
-        )
+        allowed, required_scopes = judge_binding(target.binding, context.token)
         if not allowed:
             return JsonRpcError(
                 JsonRpcErrorCode.FORBIDDEN,
                 "Insufficient permission",
                 data={"requiredScopes": required_scopes} if required_scopes else None,
             )
+
+        # Before the charge, where the read asks the spec's checks too
+        # (``test_a_kernel_resources_spec_is_asked_before_its_rate_limit``).
+        refused: JsonRpcError | None = _refused_by_the_spec(target, context)
+        if refused is not None:
+            return refused
 
         retry_after: int | None = consume_rate_limits(
             target.rate_limits, context.http_request, context.token
@@ -107,37 +121,31 @@ def handle_completion_complete(
                 data={"retryAfter": retry_after},
             )
 
-        drf_request = build_offline_context(
-            context.token.user,
-            None,
-            http_request=context.http_request,
-            # Same reasoning as ``prompts/get``: nothing here reads the query
-            # string, and an empty mapping guarantees the endpoint's own can
-            # never leak into a completer if that changes.
-            query_params={},
-        ).request
+        # The request the kernel tool path hands a spec: the transport's own
+        # ``HttpRequest``, the resolved token on it as ``mcp_token``
+        # (``test_a_completer_declaring_request_receives_the_transports_http_request``).
+        # Its ``user`` is the token's principal, and the ``user`` seed is that
+        # same principal, an anonymous caller included
+        # (``test_a_completers_user_and_request_user_agree_for_a_token_naming_no_one``).
+        # Its query string is the endpoint's: a completer reads what the client
+        # typed from ``value`` and ``arguments``, never from the request.
+        request = carry_token(context.http_request, context.token)
         # Every dispatcher-owned name is dropped from the client's siblings
         # before the spread, then the transport's own seeds are applied on top.
         # Re-seeding by hand covered only the names this handler happens to
         # supply, so a sibling called ``instance`` or ``collection`` — reserved
         # everywhere else, seeded nowhere here — still reached a completer under
         # a name the rest of the package treats as dispatcher-owned. Stripping
-        # tracks ``RESERVED_POOL_SEEDS`` instead of a hand-picked subset of it,
-        # with drf-services' ``DROPPED_EDGE_SEEDS`` beside it: ``request`` and
-        # ``serializer`` left the kernel's set, and drf-services still drops a
-        # caller's key of either name
-        # (``test_a_sibling_named_as_a_name_drf_services_drops_never_reaches_the_completer``).
+        # tracks ``RESERVED_POOL_SEEDS`` instead of a hand-picked subset of it.
+        # ``request`` is no kernel seed, and needs no strip: the seed below is
+        # written over a sibling of that name.
         # ``arguments`` stays the client's mapping verbatim: it is documented as
         # the siblings the client resolved, and a completer reading it knows it
         # is reading caller input.
         pool: dict[str, Any] = {
-            **{
-                key: v
-                for key, v in resolved_siblings.items()
-                if key not in RESERVED_POOL_SEEDS | DROPPED_EDGE_SEEDS
-            },
-            "request": drf_request,
-            "user": context.token.user,
+            **{key: v for key, v in resolved_siblings.items() if key not in RESERVED_POOL_SEEDS},
+            "request": request,
+            "user": request.user,
             "value": value,
             "arguments": resolved_siblings,
         }
@@ -157,9 +165,12 @@ class _CompletionTarget:
     """``prompt`` or ``resource`` — used to label errors and the span."""
 
     name: str
-    permissions: tuple[Any, ...]
+    binding: PromptBinding | ResourceBinding
+    """The prompt or resource itself, which its checks are handed as the spec."""
     rate_limits: tuple[Any, ...]
     completions: dict[str, Callable[..., Any]]
+    kernel: KernelResourceBinding | None = None
+    """The kernel resource completed, whose spec's own checks answer too; else ``None``."""
 
     @property
     def label(self) -> str:
@@ -186,7 +197,7 @@ def _resolve_ref(ref: Any, context: MCPCallContext) -> _CompletionTarget | JsonR
         return _CompletionTarget(
             kind="prompt",
             name=name,
-            permissions=prompt.permissions,
+            binding=prompt,
             rate_limits=prompt.rate_limits,
             completions=prompt.completions,
         )
@@ -207,14 +218,54 @@ def _resolve_ref(ref: Any, context: MCPCallContext) -> _CompletionTarget | JsonR
         return _CompletionTarget(
             kind="resource",
             name=resource.name,
-            permissions=resource.permissions,
+            binding=resource,
             rate_limits=resource.rate_limits,
             completions=resource.completions,
+            kernel=resource if isinstance(resource, KernelResourceBinding) else None,
         )
 
     return JsonRpcError(
         JsonRpcErrorCode.INVALID_PARAMS,
         f"Unsupported completion ref type: {ref_type!r}. Expected 'ref/prompt' or 'ref/resource'.",
+    )
+
+
+def _refused_by_the_spec(target: _CompletionTarget, context: MCPCallContext) -> JsonRpcError | None:
+    """The refusal a kernel resource's spec answers its completion with, or ``None``.
+
+    A kernel resource binding's ``permissions`` hold only its scope gate, since
+    its spec's checks are the kernel's and ``dispatch`` asks them at the read.
+    A completion dispatches nothing, so without this the scope gate alone
+    answered it, and a spec refusing the caller still listed which values exist
+    (``test_a_kernel_resources_completion_asks_its_spec_permissions``). Asked
+    before the rate limit, where the read asks them (``admit_kernel_read``).
+
+    A completion names a template rather than a URI, so it has no arguments,
+    and is judged as the listing judges the spec, through the same
+    ``admits_without_arguments``: a check scoping by a variable decides on
+    nothing and refuses, whether it guards against ``None`` and answers no
+    (``test_a_kernel_resources_completion_is_judged_on_no_arguments``) or
+    indexes it and raises
+    (``test_a_check_raising_on_no_arguments_refuses_the_completion_as_the_read_refuses``),
+    and a check raising a ``ServiceError`` refuses it as it hides the template
+    (``test_a_check_raising_a_service_error_refuses_the_completion_as_the_listing``).
+    A configuration error is raised, as the listing and the read raise it
+    (``test_a_misconfigured_check_fails_the_completion_as_the_read``).
+    """
+    binding = target.kernel
+    if binding is None:
+        return None
+    if admits_without_arguments(
+        binding,
+        principal_of(context.token.user),
+        config=context.config,
+        pool_seeds=context.pool_seeds,
+        call_context=call_context(carry_token(context.http_request, context.token), binding.name),
+    ):
+        return None
+    return resource_refusal(
+        NotPermitted(),
+        KernelRefusalScene(arguments={}, config=context.config, conventions=context.conventions),
     )
 
 

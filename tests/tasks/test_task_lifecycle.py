@@ -3,6 +3,12 @@
 The three functions that own a task's life: ``create_task`` on the request
 path, ``transition_task`` wherever a status changes, and ``run_task`` in the
 worker.
+
+Asked of kernel tools registered with a ``task_policy`` (``policy_server``
+and tools each test registers), and without a spec where the question names
+none: the store, the transitions, the worker token, the store being durable
+before the hand-off, and ``run_task`` on a task naming no live tool or on a
+server with no store.
 """
 
 from __future__ import annotations
@@ -12,9 +18,20 @@ from typing import Any
 
 import pytest
 from django.contrib.auth.models import AnonymousUser
+from django_service_specs import (
+    DEFAULT_POOL_SEEDS,
+    PermissionCheck,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+)
 
-from django_spec_mcp import MCPServer
+from django_spec_mcp import MCPServer, TaskPolicy
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.protocol.types.task import Task
 from django_spec_mcp.tasks.build_worker_token import build_worker_token
 from django_spec_mcp.tasks.create_task import create_task
@@ -22,15 +39,13 @@ from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from django_spec_mcp.tasks.transition_task import transition_task
 from django_spec_mcp.tasks.types.task_record import TaskRecord
 from django_spec_mcp.types.task_status import TaskStatus
-from tests.tasks.conftest import BrokenExecutor, RecordingExecutor, slow_service
-
-
-def _register(server: MCPServer, name: str, service: Any, **kwargs: Any) -> None:
-    from rest_framework_services.types.service_spec import ServiceSpec
-
-    server.register_service_tool(
-        name=name, description="x", spec=ServiceSpec(service=service, atomic=False), **kwargs
-    )
+from tests.tasks.conftest import (
+    BrokenExecutor,
+    RecordingExecutor,
+    context,
+    done,
+    register_kernel_tool,
+)
 
 
 def _create(store: Any, executor: Any, **kwargs: Any) -> Task:
@@ -46,20 +61,6 @@ def _create(store: Any, executor: Any, **kwargs: Any) -> Task:
 
 
 # ----- create_task -----
-
-
-def test_the_task_is_durable_before_the_executor_is_called(
-    store: InMemoryTaskStore, executor: RecordingExecutor
-) -> None:
-    """Normative, and the one ordering that actually matters.
-
-    The spec: a server MUST NOT return a task handle until a ``tasks/get`` for
-    that id would resolve. A worker on another machine can pick the task up the
-    instant it is queued, so "write after queueing" is a race that hands out an
-    id nothing can find.
-    """
-    _create(store, executor)
-    assert executor.seen_in_store == [True]
 
 
 def test_the_handle_carries_what_the_client_needs_to_poll(
@@ -84,7 +85,7 @@ def test_the_authorization_context_is_stored_not_just_the_principal(
     store: InMemoryTaskStore, executor: RecordingExecutor
 ) -> None:
     """Without the scopes, the worker rebuilds a token that proves nothing and
-    every ``ScopeRequired`` binding denies work it had already authorized."""
+    every binding with ``scopes=`` denies work it had already authorized."""
     task: Task = _create(
         store, executor, token=TokenInfo(user=None, scopes=("a", "b"), audience="aud")
     )
@@ -162,48 +163,142 @@ def test_a_real_transition_moves_the_timestamp(
 # ----- run_task -----
 
 
+def _ask(server: MCPServer, name: str) -> str:
+    """Call ``name`` as a client declaring the extension, and return the task id."""
+    handle: Any = handle_tools_call({"name": name, "arguments": {}}, context(server))
+    assert handle["resultType"] == "task", handle
+    return handle["taskId"]
+
+
 @pytest.mark.django_db
 def test_running_a_task_completes_it_with_the_tool_result(
-    server: MCPServer, store: InMemoryTaskStore, executor: RecordingExecutor
+    policy_server: MCPServer, store: InMemoryTaskStore
 ) -> None:
-    task: Task = _create(store, executor)
-    server.run_task(task.task_id)
-    record: TaskRecord = store.get(task.task_id)
+    task_id = _ask(policy_server, "tasks.optional")
+    assert store.get(task_id).status is TaskStatus.WORKING
+    policy_server.run_task(task_id)
+    record: TaskRecord = store.get(task_id)
     assert record.status is TaskStatus.COMPLETED
     assert record.task.result["structuredContent"] == {"done": "yes"}
 
 
 @pytest.mark.django_db
-def test_a_redelivered_task_runs_once(
-    server: MCPServer, store: InMemoryTaskStore, executor: RecordingExecutor
+def test_a_required_tool_runs_as_a_task_too(
+    policy_server: MCPServer, store: InMemoryTaskStore
 ) -> None:
+    """The worker's run is the only place a ``REQUIRED`` tool's work can happen,
+    so its replay must not be asked for a task again."""
+    task_id = _ask(policy_server, "tasks.required")
+    policy_server.run_task(task_id)
+    record: TaskRecord = store.get(task_id)
+    assert record.status is TaskStatus.COMPLETED, record.task.error
+    assert record.task.result["structuredContent"] == {"done": "yes"}
+
+
+@pytest.mark.django_db
+def test_a_selector_tool_runs_as_a_task(
+    store: InMemoryTaskStore, executor: RecordingExecutor
+) -> None:
+    """A selector takes a ``task_policy`` as a service does, and its worker
+    presents the row the inline call would."""
+    server = MCPServer(
+        name="tasks-selector",
+        auth_backend=AllowAnyBackend(),
+        task_store=store,
+        task_executor=executor,
+    )
+    server.register_tool(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=lambda: {"row": "one"},
+            permissions=[Unrestricted()],
+        ),
+        name="tasks.row",
+        description="x",
+        task_policy=TaskPolicy.OPTIONAL,
+    )
+    task_id = _ask(server, "tasks.row")
+    server.run_task(task_id)
+    record: TaskRecord = store.get(task_id)
+    assert record.status is TaskStatus.COMPLETED
+    assert record.task.result["structuredContent"] == {"row": "one"}
+
+
+class _Switch(PermissionCheck):
+    """Admits while ``admits`` holds, counting how often it was asked."""
+
+    def __init__(self) -> None:
+        self.admits = True
+        self.asked = 0
+
+    def has_permission(self, principal: Any, spec: Any) -> bool:
+        self.asked += 1
+        return self.admits
+
+
+def _gated(store: InMemoryTaskStore, executor: RecordingExecutor) -> tuple[MCPServer, _Switch]:
+    check = _Switch()
+    server = MCPServer(
+        name="tasks-spec-gated",
+        auth_backend=AllowAnyBackend(),
+        task_store=store,
+        task_executor=executor,
+    )
+    server.register_tool(
+        ServiceSpec(service=done, permissions=[check]),
+        name="tasks.gated",
+        description="x",
+        task_policy=TaskPolicy.OPTIONAL,
+    )
+    return server, check
+
+
+@pytest.mark.django_db
+def test_a_caller_the_spec_refuses_is_given_no_task(
+    store: InMemoryTaskStore, executor: RecordingExecutor
+) -> None:
+    """The spec's own ``permissions`` are asked before anything durable exists,
+    as the inline call asks them, so a refused caller queues nothing."""
+    server, check = _gated(store, executor)
+    check.admits = False
+    result = handle_tools_call({"name": "tasks.gated", "arguments": {}}, context(server))
+    assert isinstance(result, JsonRpcError) and result.code == -32006
+    assert executor.enqueued == []
+
+
+@pytest.mark.django_db
+def test_the_worker_asks_the_spec_again(
+    store: InMemoryTaskStore, executor: RecordingExecutor
+) -> None:
+    """Admitted when the task was created and refused by the time it runs: the
+    worker's ``dispatch`` asks the spec's permissions afresh, and the refusal
+    fails the task rather than running the operation."""
+    server, check = _gated(store, executor)
+    task_id = _ask(server, "tasks.gated")
+    asked_at_creation = check.asked
+    check.admits = False
+    server.run_task(task_id)
+    record: TaskRecord = store.get(task_id)
+    assert check.asked > asked_at_creation
+    assert record.status is TaskStatus.FAILED
+    assert record.task.error["code"] == -32006
+
+
+@pytest.mark.django_db
+def test_a_redelivered_task_runs_once(server: MCPServer, store: InMemoryTaskStore) -> None:
     """Queues deliver at least once. Running a mutation twice because the
     broker retried would be a data bug with no trace."""
     calls: list[int] = []
 
-    def counting(**_: Any) -> dict[str, str]:
+    def counting() -> dict[str, str]:
         calls.append(1)
         return {"n": str(len(calls))}
 
-    _register(server, "tasks.counting", counting)
-    task: Task = _create(store, executor, tool_name="tasks.counting")
-    server.run_task(task.task_id)
-    server.run_task(task.task_id)
+    register_kernel_tool(server, "tasks.counting", counting, task_policy=TaskPolicy.OPTIONAL)
+    task_id = _ask(server, "tasks.counting")
+    server.run_task(task_id)
+    server.run_task(task_id)
     assert calls == [1]
-
-
-@pytest.mark.django_db
-def test_running_an_unknown_task_is_a_no_op(server: MCPServer) -> None:
-    server.run_task("never-existed")
-
-
-@pytest.mark.django_db
-def test_running_a_task_that_never_reached_the_queue_is_a_no_op(
-    server: MCPServer, store: InMemoryTaskStore
-) -> None:
-    task: Task = _create(store, BrokenExecutor())
-    server.run_task(task.task_id)
-    assert store.get(task.task_id).status is TaskStatus.FAILED
 
 
 @pytest.mark.django_db
@@ -220,25 +315,49 @@ def test_a_protocol_error_becomes_a_failed_task(
 
 
 @pytest.mark.django_db
+def test_a_refusal_the_worker_meets_keeps_its_data_on_the_record(
+    server: MCPServer, store: InMemoryTaskStore
+) -> None:
+    """A JSON-RPC error carrying ``data`` keeps it: the worker's replay of a
+    call whose token lost a scope is refused with the scopes it needed, and the
+    client polling the task is the one who has to read them."""
+    register_kernel_tool(
+        server, "tasks.gated", done, task_policy=TaskPolicy.OPTIONAL, scopes=("things:write",)
+    )
+    handle: Any = handle_tools_call(
+        {"name": "tasks.gated", "arguments": {}}, context(server, scopes=("things:write",))
+    )
+    record: TaskRecord = store.get(handle["taskId"])
+    store.save(replace(record, scopes=()))
+    server.run_task(handle["taskId"])
+    failed: TaskRecord = store.get(handle["taskId"])
+    assert failed.status is TaskStatus.FAILED
+    assert failed.task.error["code"] == -32006
+    assert failed.task.error["data"] == {"requiredScopes": ["things:write"]}
+
+
+@pytest.mark.django_db
 def test_an_unhandled_exception_fails_the_task_and_still_propagates(
-    server: MCPServer, store: InMemoryTaskStore, executor: RecordingExecutor
+    server: MCPServer, store: InMemoryTaskStore
 ) -> None:
     """Failing the task stops the client polling forever; re-raising lets the
     queue consumer record the traceback an operator needs."""
 
-    def explode(**_: Any) -> Any:
+    def explode() -> Any:
         raise RuntimeError("boom")
 
-    _register(server, "tasks.explode", explode)
-    task: Task = _create(store, executor, tool_name="tasks.explode")
+    register_kernel_tool(server, "tasks.explode", explode, task_policy=TaskPolicy.OPTIONAL)
+    task_id = _ask(server, "tasks.explode")
     with pytest.raises(RuntimeError, match="boom"):
-        server.run_task(task.task_id)
-    assert store.get(task.task_id).status is TaskStatus.FAILED
+        server.run_task(task_id)
+    record: TaskRecord = store.get(task_id)
+    assert record.status is TaskStatus.FAILED
+    assert record.task.status_message == "The task raised an unhandled exception: boom"
 
 
 @pytest.mark.django_db
 def test_a_worker_does_not_charge_the_rate_limit_a_second_time(
-    server: MCPServer, store: InMemoryTaskStore, executor: RecordingExecutor
+    server: MCPServer, store: InMemoryTaskStore
 ) -> None:
     """The limit was consumed when the client asked. Charging again on replay
     would bill one client call twice and halve every configured quota."""
@@ -249,22 +368,37 @@ def test_a_worker_does_not_charge_the_rate_limit_a_second_time(
             consumed.append(1)
             return None
 
-    _register(server, "tasks.limited", slow_service, rate_limits=[_Limiter()])
-    task: Task = _create(store, executor, tool_name="tasks.limited")
-    server.run_task(task.task_id)
-    assert consumed == []
+    register_kernel_tool(
+        server, "tasks.limited", done, task_policy=TaskPolicy.OPTIONAL, rate_limits=[_Limiter()]
+    )
+    task_id = _ask(server, "tasks.limited")
+    assert consumed == [1]
+    server.run_task(task_id)
+    assert consumed == [1]
+    assert store.get(task_id).status is TaskStatus.COMPLETED
 
 
-def test_run_task_on_a_server_with_no_store_refuses_loudly() -> None:
-    """Silence here would look like success: the job would finish and the
-    client would poll a handle forever."""
-    from django.core.exceptions import ImproperlyConfigured
+@pytest.mark.django_db
+def test_a_task_worker_hands_the_seeds_to_the_tool_it_runs(
+    store: InMemoryTaskStore, executor: RecordingExecutor
+) -> None:
+    """The worker's context carries the server's ``pool_seeds``, so a seed the
+    inline call fills is filled off the request path too."""
 
-    from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+    def whoami(*, tenant: str) -> dict[str, str]:
+        return {"tenant": tenant}
 
-    bare = MCPServer(name="bare", auth_backend=AllowAnyBackend())
-    with pytest.raises(ImproperlyConfigured, match="no task store"):
-        bare.run_task("anything")
+    server = MCPServer(
+        name="tasks-seeds",
+        auth_backend=AllowAnyBackend(),
+        task_store=store,
+        task_executor=executor,
+        pool_seeds=DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme"),
+    )
+    register_kernel_tool(server, "tenant.whoami", whoami, task_policy=TaskPolicy.OPTIONAL)
+    task_id = _ask(server, "tenant.whoami")
+    server.run_task(task_id)
+    assert store.get(task_id).task.result["structuredContent"] == {"tenant": "acme"}
 
 
 # ----- build_worker_token -----
@@ -417,3 +551,43 @@ def test_with_task_leaves_the_original_untouched() -> None:
     assert record.status is TaskStatus.WORKING
     assert changed.status is TaskStatus.COMPLETED
     assert replace(changed, enqueued=True).to_wire() is changed.task
+
+
+def test_the_task_is_durable_before_the_executor_is_called(
+    store: InMemoryTaskStore, executor: RecordingExecutor
+) -> None:
+    """Normative, and the one ordering that actually matters.
+
+    The spec: a server MUST NOT return a task handle until a ``tasks/get`` for
+    that id would resolve. A worker on another machine can pick the task up the
+    instant it is queued, so "write after queueing" is a race that hands out an
+    id nothing can find.
+    """
+    _create(store, executor)
+    assert executor.seen_in_store == [True]
+
+
+@pytest.mark.django_db
+def test_running_an_unknown_task_is_a_no_op(server: MCPServer) -> None:
+    server.run_task("never-existed")
+
+
+@pytest.mark.django_db
+def test_running_a_task_that_never_reached_the_queue_is_a_no_op(
+    server: MCPServer, store: InMemoryTaskStore
+) -> None:
+    task: Task = _create(store, BrokenExecutor())
+    server.run_task(task.task_id)
+    assert store.get(task.task_id).status is TaskStatus.FAILED
+
+
+def test_run_task_on_a_server_with_no_store_refuses_loudly() -> None:
+    """Silence here would look like success: the job would finish and the
+    client would poll a handle forever."""
+    from django.core.exceptions import ImproperlyConfigured
+
+    from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+
+    bare = MCPServer(name="bare", auth_backend=AllowAnyBackend())
+    with pytest.raises(ImproperlyConfigured, match="no task store"):
+        bare.run_task("anything")

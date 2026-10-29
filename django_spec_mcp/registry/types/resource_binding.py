@@ -4,9 +4,10 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Generic, TypeVar
 
-from django_service_specs import UNSET, SelectorKind, UnsetType
+from django_service_specs import UNSET, PermissionCheck, UnsetType
 
 from django_spec_mcp.protocol.types.icon import Icon
+from django_spec_mcp.registry.types.utils import binding_checks, scope_names
 from django_spec_mcp.types.resource_encoding import ResourceEncoding
 
 ResultT = TypeVar("ResultT")
@@ -14,21 +15,25 @@ ResultT = TypeVar("ResultT")
 
 @dataclass(frozen=True)
 class ResourceBinding(Generic[ResultT]):
-    """All wiring for a single MCP resource (or resource template).
+    """All wiring for a single MCP view: a resource read by calling a selector.
 
-    A resource is a selector callable plus a URI template. The MCP server
-    invokes the selector directly via ``resolve_callable_kwargs`` +
-    ``run_selector`` — there is no view or viewset in the dispatch path.
+    A view is a selector callable plus a URI. ``register_ui_resource`` builds
+    one for an MCP Apps UI resource, and a kernel spec is a
+    ``KernelResourceBinding`` instead. The MCP server invokes the selector
+    directly via ``resolve_callable_kwargs`` + ``run_selector`` over the
+    kernel's pool and the URI-template variables, and ``mime_type`` advertises
+    the type the body will carry. ``annotations`` and ``meta`` are emitted
+    verbatim on the listing entry, and ``meta`` also on the ``contents`` block
+    of ``resources/read``.
 
-    ``output_serializer`` is what ``resources/read`` renders the selector's
-    return value through, and ``mime_type`` advertises the type that body will
-    carry. ``kwargs_provider`` mirrors ``SelectorSpec.kwargs``: when set, the
-    handler invokes it once per request and merges the returned dict into the
-    kwarg pool, passing a synthesised
-    ``OfflineServiceView`` whose ``view.kwargs``
-    holds the URI-template variables and whose ``view.action`` is the binding
-    name. ``annotations`` and ``meta`` are emitted verbatim on the listing
-    entry, and ``meta`` also on the ``contents`` block of ``resources/read``.
+    One built by hand and passed straight to ``server.resources.register`` is
+    registered unchecked: the registrars' refusals (an undeclared permission
+    under ``REQUIRE_TOOL_PERMISSIONS``, a template variable naming a seed or
+    one of the kernel's ``CALL_SEEDS``, a completer for no variable) are not asked, and no kernel spec stands behind
+    it to refuse an unguarded call, so it carries its own ``permissions`` and
+    ``scopes``. A
+    bare callable meant to be served with those checks is a ``RETRIEVE``
+    ``SelectorSpec`` registered with ``register_resource``.
 
     The generic parameter is purely informational, letting callers pin the
     selector's return type for type-checker help.
@@ -38,14 +43,6 @@ class ResourceBinding(Generic[ResultT]):
     uri_template: str
     description: str | None
     selector: Callable[..., ResultT]
-    kind: SelectorKind
-    """Pulled out of ``SelectorSpec.kind`` by the adapter, so the binding does
-    not carry a reference to the whole spec. ``LIST`` invokes the output
-    serializer with ``many=True``, ``RETRIEVE`` (the common case for
-    URI-template resources) with ``many=False``. Resources have no post-fetch
-    pipeline, so both kinds are accepted unconditionally."""
-
-    output_serializer: type | None = None
     mime_type: str = "application/json"
     encoding: ResourceEncoding = ResourceEncoding.JSON
     """How the selector's value becomes the ``resources/read`` body. Declared rather
@@ -53,10 +50,23 @@ class ResourceBinding(Generic[ResultT]):
     changes the encoding. See
     [`ResourceEncoding`][django_spec_mcp.types.ResourceEncoding]."""
 
-    permissions: tuple[Any, ...] = ()
+    permissions: tuple[PermissionCheck, ...] = ()
+    """The kernel ``PermissionCheck``s a caller must pass, every one of them.
+
+    A view is not a spec, so nothing dispatches it: each check is asked
+    ``has_permission(principal, binding)`` with this binding as the spec
+    (``handlers.judge_binding``), at ``resources/list``, ``resources/read``, a
+    completion and a subscription's grant alike. Held to the kernel's rule for
+    a spec's (``registry.types.utils.binding_checks``), but for one case: an
+    empty sequence here is no checks, the field's default, and only
+    ``register_ui_resource`` refuses an explicit ``[]``."""
+    scopes: tuple[str, ...] | None = None
+    """The OAuth scopes a caller's token must carry, every one of them, asked
+    before ``permissions``. ``None`` is no scope gate; a bare string is one scope,
+    and ``()`` is refused, as on ``KernelToolBinding.scopes``."""
     rate_limits: tuple[Any, ...] = ()
     annotations: dict[str, Any] = field(default_factory=dict)
-    # Free-form for the reason given on ``ToolBinding.meta``.
+    # Free-form for the reason given on ``KernelToolBinding.meta``.
     meta: dict[str, Any] = field(default_factory=dict)
     title: str | None = None
     completions: dict[str, Callable[..., Any]] = field(default_factory=dict)
@@ -80,14 +90,15 @@ class ResourceBinding(Generic[ResultT]):
     """Display icons, emitted in this resource's listing entry. Purely
     presentational; nothing in dispatch reads them."""
 
-    # Loosely typed on purpose, so providers typed against the upstream
-    # ``SelectorSpec.kwargs`` field (which uses generic ``ExtraT`` bounds) are
-    # accepted without contravariance friction.
-    kwargs_provider: Callable[..., Any] | None = None
     always_listed: bool = False
     """Keep this resource in ``resources/list`` (or ``resources/templates/list``) even
-    when ``FILTER_LISTINGS_BY_PERMISSIONS`` would drop it — same semantics as
-    [`ToolBinding.always_listed`][django_spec_mcp.registry.types.tool_binding.ToolBinding.always_listed]."""
+    when ``FILTER_LISTINGS_BY_PERMISSIONS`` would drop it, as a tool's
+    ``always_listed`` keeps it in ``tools/list``."""
+
+    def __post_init__(self) -> None:
+        label = f"Resource {self.name!r}"
+        object.__setattr__(self, "scopes", scope_names(label, self.scopes))
+        object.__setattr__(self, "permissions", binding_checks(label, self.permissions or None))
 
     @property
     def is_template(self) -> bool:
