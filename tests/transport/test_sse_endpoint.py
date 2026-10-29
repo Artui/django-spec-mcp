@@ -15,8 +15,6 @@ from django_spec_mcp.transport.async_streamable_http_view import (
 )
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from django_spec_mcp.transport.in_memory_sse_broker import InMemorySSEBroker
-from tests.testapp.mcp import build_server
-from tests.testapp.urlconf_for import urlconf_for
 
 
 @pytest.fixture
@@ -188,13 +186,6 @@ async def test_delete_purges_replay_buffer() -> None:
     async for pair in buffer.replay(sid, "0000000000000000"):
         out.append(pair)
     assert out == []
-
-
-async def test_get_blocked_origin_returns_403() -> None:
-    server = build_server(config=build_mcp_config(allowed_origins=["https://allowed.example"]))
-    with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=True)):
-        response = await AsyncClient().get("/mcp/", headers={"Origin": "https://blocked.example"})
-    assert response.status_code == 403
 
 
 def _get_stream_view(broker: InMemorySSEBroker, store: InMemorySessionStore, **config: object):

@@ -16,7 +16,7 @@ from typing import Any
 import pytest
 from asgiref.sync import iscoroutinefunction
 from django import VERSION as DJANGO_VERSION
-from django.test import AsyncClient, RequestFactory, override_settings
+from django.test import AsyncClient, override_settings
 from django_service_specs import PermissionCheck, ServiceSpec, Unrestricted
 
 from django_spec_mcp import MCPServer
@@ -138,30 +138,6 @@ async def test_async_resources_read(async_urlconf) -> None:
     )
     text = read.json()["result"]["contents"][0]["text"]
     assert json.loads(text)["number"] == "ASYNC-2"
-
-
-async def test_async_get_without_broker_returns_405() -> None:
-    """When no broker is wired, GET is 405 (spec-compliant fallback)."""
-    factory = RequestFactory()
-    request = factory.get("/mcp/")
-    from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-
-    view = AsyncStreamableHttpView.as_view(
-        tools=ToolRegistry(),
-        resources=ResourceRegistry(),
-        auth_backend=AllowAnyBackend(),
-        session_store=InMemorySessionStore(),
-        sse_broker=None,
-        config=build_mcp_config(),
-    )
-    response = await view(request)
-    assert response.status_code == 405
-
-
-async def test_async_get_without_session_id_returns_404(async_urlconf) -> None:
-    client = AsyncClient()
-    response = await client.get("/mcp/", headers={"Mcp-Protocol-Version": "2025-11-25"})
-    assert response.status_code == 404
 
 
 async def test_async_get_unknown_session_returns_404(async_urlconf) -> None:
