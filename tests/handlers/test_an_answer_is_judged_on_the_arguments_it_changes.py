@@ -44,6 +44,7 @@ from tests.utils import RefusingRateLimit
 pytestmark = pytest.mark.django_db(transaction=True)
 
 _MODERN = "2026-07-28"
+_ASYNC = pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
 
 
 @dataclass
@@ -132,7 +133,7 @@ async def _handle(server: MCPServer, params: dict[str, Any], *, is_async: bool) 
     return await sync_to_async(handle_tools_call)(params, _ctx(server))
 
 
-@pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
+@_ASYNC
 async def test_an_answer_changing_a_value_the_permission_reads_is_refused(
     is_async: bool,
 ) -> None:
@@ -153,7 +154,7 @@ async def test_an_answer_changing_a_value_the_permission_reads_is_refused(
     assert ran == []
 
 
-@pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
+@_ASYNC
 async def test_an_answer_naming_the_admitted_value_runs_on_it(is_async: bool) -> None:
     # The other half: the check reads the merged arguments rather than
     # refusing every answered call, so the test above holds what it was shown.
@@ -190,7 +191,7 @@ async def test_a_streamed_answer_changing_a_value_the_permission_reads_is_refuse
     [({"project": "7"}, {"project": "8"}), ({"project": "8"}, None)],
     ids=["answered", "plain"],
 )
-@pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
+@_ASYNC
 async def test_a_caller_the_spec_refuses_is_not_charged(
     sent: dict[str, Any], answer: dict[str, Any] | None, is_async: bool
 ) -> None:

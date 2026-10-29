@@ -1063,7 +1063,7 @@ async def test_an_admitted_reader_of_a_malformed_variable_is_charged_and_told_wh
     assert limit.consumed == 1
 
 
-@pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
+@_ASYNC
 def test_an_admitted_reader_of_a_malformed_variable_is_told_which_over_http(
     is_async: bool, client: Client
 ) -> None:
