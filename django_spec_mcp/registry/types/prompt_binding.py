@@ -46,7 +46,7 @@ class PromptBinding:
     and ``()`` is refused, as on ``KernelToolBinding.scopes``."""
     rate_limits: tuple[Any, ...] = ()
     annotations: dict[str, Any] = field(default_factory=dict)
-    # Free-form for the reason given on ``ToolBinding.meta``.
+    # Free-form for the reason given on ``KernelToolBinding.meta``.
     meta: dict[str, Any] = field(default_factory=dict)
     title: str | None = None
     completions: dict[str, Callable[..., Any]] = field(default_factory=dict)
@@ -66,7 +66,7 @@ class PromptBinding:
     always_listed: bool = False
     """Keep this prompt in ``prompts/list`` even when ``FILTER_LISTINGS_BY_PERMISSIONS``
     would hide it — same semantics as
-    [`ToolBinding.always_listed`][django_spec_mcp.registry.types.tool_binding.ToolBinding.always_listed]."""
+    [`KernelToolBinding.always_listed`][django_spec_mcp.registry.types.kernel_tool_binding.KernelToolBinding.always_listed]."""
 
     def __post_init__(self) -> None:
         label = f"Prompt {self.name!r}"

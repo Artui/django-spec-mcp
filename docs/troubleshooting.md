@@ -92,11 +92,9 @@ this section applies to you.
 
 ### "its kernel spec declares no permissions"
 
-A tool or resource must declare permissions on its spec. The endpoints are
-plain Django views, so a project's `REST_FRAMEWORK` default permission classes
-**do not reach MCP**, and a spec with none would ship as an open tool. Declare
-the checks on the spec, `[Unrestricted()]` for an operation open to every
-caller:
+A tool or resource must declare permissions on its spec, or it would ship as
+an open tool. Declare the checks on the spec, `[Unrestricted()]` for an
+operation open to every caller:
 
 ```python
 from django_service_specs import ServiceSpec, Unrestricted
@@ -172,11 +170,12 @@ row by its URI, and the URI template's variables are the spec's reads. A `LIST`
 selector is refused with `ImproperlyConfigured`; register it as a selector tool,
 which pages it.
 
-### "permissions belong to the selector= form"
+### "got an unexpected keyword argument 'permissions'"
 
-A kernel spec declares its own presenter and permissions, so `permissions=`,
-`mime_type=` and `encoding=` beside a spec passed positionally are refused with a `TypeError`. Declare the checks on the spec,
-and add a `scopes=` gate at registration if the resource needs one.
+`register_resource` takes no `permissions=`: a kernel spec declares its own,
+and they are the resource's guard, so passing one is Python's `TypeError`.
+Declare the checks on the spec, and add a `scopes=` gate at registration if the
+resource needs one.
 
 ## A tool result is too large for the client
 

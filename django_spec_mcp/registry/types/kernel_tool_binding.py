@@ -98,6 +98,14 @@ class KernelToolBinding:
     max_result_bytes: int | None | UnsetType = UNSET
     dispatch_timeout: float | None | UnsetType = UNSET
     always_listed: bool = False
+    """Keep this tool in ``tools/list`` whatever would otherwise leave it out:
+    ``FILTER_LISTINGS_BY_PERMISSIONS`` dropping it because its spec's checks
+    refuse the caller, or an operation-scope condition in the spec's
+    ``affordances`` that is unmet right now, which leaves a tool out with or
+    without that setting (``test_always_listed_keeps_an_unavailable_tool``). A
+    discovery aid for a tool the caller can see but not run: the condition is
+    not asked at list time at all, and ``tools/call`` still refuses the call
+    (``test_an_always_listed_tool_still_refuses_a_call_failing_its_shape``)."""
     rate_limits: tuple[Any, ...] = ()
     scopes: tuple[str, ...] | None = None
     """The OAuth scopes a caller's token must carry, every one of them.
@@ -113,11 +121,19 @@ class KernelToolBinding:
     ``spec_input_schema`` so the advertised schema is closed exactly when the
     call refuses an undeclared key."""
     server_arguments: ServerArguments = field(default_factory=ServerArguments)
-    """See ``ToolBinding.server_arguments``. Applied by the same shell step
-    (``handlers.utils.apply_tool_server_arguments``) and left out of the
-    advertised ``inputSchema``."""
+    """Declared parameters the server answers for, so no caller does.
+
+    The kernel's [`ServerArguments`][django_service_specs.ServerArguments],
+    given as ``server_arguments=`` at registration. Its ``values`` are supplied
+    on every call and outrank the caller's; its ``withheld`` names are taken
+    from no one, so the callable's own default answers. Each is left out of the
+    advertised ``inputSchema``, and the caller's value for it is dropped before
+    anything reads the arguments (``handlers.utils.apply_tool_server_arguments``).
+    Checked against the spec when the binding is registered
+    (``ToolRegistry.register``)."""
     task_policy: TaskPolicy = TaskPolicy.FORBIDDEN
-    """See ``ToolBinding.task_policy``. Read by ``maybe_create_task``, which asks
+    """Whether a call is answered with a task handle instead of a result. See
+    [`TaskPolicy`][django_spec_mcp.types.TaskPolicy]. Read by ``maybe_create_task``, which asks
     a kernel spec's own checks before it creates the task; the worker runs the
     call, under either policy, through the same ``dispatch`` an inline call takes."""
     unguarded: bool = field(default=False, init=False)

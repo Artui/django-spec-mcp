@@ -163,15 +163,6 @@ backend that needs no setup implements nothing and is left alone.
 
 ## Who may call a tool
 
-!!! warning "`REST_FRAMEWORK` settings do not reach `/mcp/`"
-    The endpoints and the protected-resource metadata are plain Django views,
-    so nothing in a project's `REST_FRAMEWORK` setting applies to them: not its
-    default permission or authentication classes, not its throttles, renderers
-    or `EXCEPTION_HANDLER`. What gates an MCP call is the auth backend above,
-    the spec's own `permissions`, the `scopes=` gate at registration, and the
-    `rate_limits=` of each tool, resource and prompt
-    ([Add rate limiting](recipes/rate-limiting.md)).
-
 A tool or resource is guarded by its spec's `permissions`: a list of kernel
 [`PermissionCheck`][django_service_specs.PermissionCheck] instances, the same
 checks every other transport on the kernel asks. Each is asked through the
@@ -289,9 +280,11 @@ server.register_prompt(
 )
 ```
 
-The same judgement answers `prompts/list`, `prompts/get`, `resources/list`,
-`resources/read`, `completion/complete` and a subscription, so a caller is
-never shown a prompt or view it would then be refused.
+The same judgement answers `prompts/get`, `resources/read`,
+`completion/complete` and a subscription. With `FILTER_LISTINGS_BY_PERMISSIONS`
+on, it answers `prompts/list` and `resources/list` too, so a caller is never
+shown a prompt or view it would then be refused; with the setting off, the
+default, the listings show every prompt and view.
 
 Registration holds the list to the kernel's rule for a spec's `permissions`,
 through the kernel's own `check_permissions`: a bare string or anything else

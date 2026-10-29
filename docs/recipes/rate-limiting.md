@@ -6,9 +6,7 @@ is the suggested retry-after-in-seconds when the limit has been hit, or
 `None` to allow the call.
 
 `rate_limits=` on `register_tool`, `register_resource` and `register_prompt`
-is what limits an MCP call. The endpoints are plain Django views, so a
-project's `REST_FRAMEWORK` throttles (`DEFAULT_THROTTLE_CLASSES` and the rest)
-never reach `/mcp/` or the protected-resource metadata.
+is what limits an MCP call.
 
 The shipped `FixedWindowRateLimit` is backed by `django.core.cache` and is
 the right choice for most Django deployments — the cache is already shared
