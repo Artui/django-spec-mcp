@@ -165,7 +165,15 @@ def test_an_already_expired_absolute_deadline_does_not_write_a_zero_timeout() ->
     assert store.get("t1") is not None
 
 
-def test_an_unreadable_entry_reads_as_a_task_that_does_not_exist() -> None:
+@pytest.mark.parametrize(
+    "entry",
+    [
+        pytest.param({"taskId": "t1", "status": "not-a-status"}, id="an-unknown-status"),
+        pytest.param({"status": "working"}, id="a-missing-field"),
+        pytest.param("clobbered", id="not-a-dict"),
+    ],
+)
+def test_an_unreadable_entry_reads_as_a_task_that_does_not_exist(entry: Any) -> None:
     """Written by another version, or by something else sharing the cache.
 
     ``-32602`` is the honest answer — the same one an expired task gets — and
@@ -174,23 +182,7 @@ def test_an_unreadable_entry_reads_as_a_task_that_does_not_exist() -> None:
     cache.clear()
     store = DjangoCacheTaskStore()
     store.create(_record())
-    cache.set(_key("t1"), {"taskId": "t1", "status": "not-a-status"})
-    assert store.get("t1") is None
-
-
-def test_a_missing_field_is_also_unreadable_rather_than_a_crash() -> None:
-    cache.clear()
-    store = DjangoCacheTaskStore()
-    store.create(_record())
-    cache.set(_key("t1"), {"status": "working"})
-    assert store.get("t1") is None
-
-
-def test_a_non_dict_entry_is_unreadable() -> None:
-    cache.clear()
-    store = DjangoCacheTaskStore()
-    store.create(_record())
-    cache.set(_key("t1"), "clobbered")
+    cache.set(_key("t1"), entry)
     assert store.get("t1") is None
 
 
@@ -205,18 +197,18 @@ def test_two_servers_in_one_project_cannot_see_each_others_tasks() -> None:
     assert a.get("t1") is not None
 
 
-def test_a_free_form_server_name_still_produces_a_usable_key() -> None:
-    """``name`` is consumer-supplied prose; memcached rejects spaces and caps
-    length. Hashing it is key hygiene, not secrecy."""
+@pytest.mark.parametrize(
+    "namespace",
+    [
+        # ``name`` is consumer-supplied prose; memcached rejects spaces and caps
+        # length. Hashing it is key hygiene, not secrecy.
+        pytest.param("My Invoicing Server ✨", id="a-free-form-server-name"),
+        pytest.param(None, id="no-namespace"),
+    ],
+)
+def test_a_store_produces_a_usable_key_under_any_namespace(namespace: str | None) -> None:
     cache.clear()
-    store = DjangoCacheTaskStore(namespace="My Invoicing Server ✨")
-    store.create(_record())
-    assert store.get("t1") is not None
-
-
-def test_a_store_built_without_a_namespace_works() -> None:
-    cache.clear()
-    store = DjangoCacheTaskStore()
+    store = DjangoCacheTaskStore(namespace=namespace)
     store.create(_record())
     assert store.get("t1") is not None
 
