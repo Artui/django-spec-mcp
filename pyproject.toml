@@ -38,18 +38,18 @@ classifiers = [
 dependencies = [
     "django>=4.2",
     # The kernel this package serves, and the one it imports its own names from.
-    # 0.19.0 is the floor, and it is a hard one: registration refuses a kernel
-    # spec through its ``check_seeds``, a kernel tool words a missing argument
-    # off ``InvalidArguments.missing``, keeps its grant for a refused row by
-    # ``after_authorize``, and its listing reads ``provider_reached``, all first
-    # public in 0.19.0 and imported at module level, so below it the server does
-    # not import. 0.19.0 also refuses a read named ``request`` or ``view`` when
-    # the spec is built, which is why ``register_resource`` reserves ``request``
-    # itself only for a URI-template variable. The pydantic-ai package's floor
-    # moves with this one: the two routes reach one spec, and with only one
-    # raised the same selector can be a not-found on one route and an error on
-    # the other.
-    "django-service-specs>=0.19.0",
+    # 0.20.0 is the floor, and it is a hard one: a prompt's and a view's checks
+    # are held to the kernel's rule through ``check_permissions`` and their
+    # answers read through ``sync_answer``, both first exported from the root in
+    # 0.20.0 and imported at module level, so below it the server does not
+    # import. The same holds for what 0.19.0 made public and this package reads:
+    # ``check_seeds``, ``InvalidArguments.missing``, ``after_authorize``,
+    # ``provider_reached`` and ``CALL_SEEDS``, which ``register_resource``
+    # reserves for a URI-template variable. The pydantic-ai package's floor moves
+    # with this one whenever a raise changes what the kernel refuses: the two
+    # routes reach one spec, and with only one raised the same selector can be a
+    # not-found on one route and an error on the other.
+    "django-service-specs>=0.20.0",
 ]
 
 [project.optional-dependencies]

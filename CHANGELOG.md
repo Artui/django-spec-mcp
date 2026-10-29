@@ -247,9 +247,11 @@ carries; releases up to 0.54.0 are in
   answers `post`, `get` and `delete` (`get` alone on the metadata view) by its
   own method, and the function `as_view` returns carries Django's `view_class`
   and no `actions` or `cls`.
-- **`django-service-specs` 0.19.0 is the floor.** Its root holds every kernel name
-  this package reads, among them the `check_seeds` registration asks and the
-  `InvalidArguments.missing` a missing-argument message is worded from. It
+- **`django-service-specs` 0.20.0 is the floor.** Its root holds every kernel name
+  this package reads, among them the `check_seeds` registration asks, the
+  `InvalidArguments.missing` a missing-argument message is worded from, and the
+  `check_permissions` and `sync_answer` a prompt's or a view's checks are held
+  to. It
   reserves `shapes` as a pool name, so a `PoolSeeds` entry named `shapes` is
   refused when it is built, as one named `user` is.
 - **The package is `django-spec-mcp`, imported as `django_spec_mcp`.** Every
