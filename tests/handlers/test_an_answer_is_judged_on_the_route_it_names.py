@@ -179,19 +179,44 @@ async def rows() -> tuple[Invoice, Invoice]:
 _ASYNC = pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
 
 
+@pytest.mark.parametrize(
+    ("sent", "answered", "admitted"),
+    [
+        ("acme", "beta", False),
+        ("beta", "acme", True),
+        (None, "beta", False),
+        (None, "acme", True),
+    ],
+    ids=[
+        "answered-over-admitted",
+        "answered-over-refused",
+        "lookup-left-out-refused",
+        "lookup-left-out-admitted",
+    ],
+)
 @_ASYNC
-async def test_an_answer_naming_a_row_the_caller_may_not_touch_is_refused(
-    rows: tuple[Invoice, Invoice], is_async: bool
+async def test_an_answer_is_judged_on_the_row_it_names(
+    rows: tuple[Invoice, Invoice], sent: str | None, answered: str, admitted: bool, is_async: bool
 ) -> None:
-    acme, beta = rows
+    # The row the retry answers with is the one judged and run on, whichever the
+    # first call named, or whether it left the lookup out: refused on the
+    # ``beta`` row, run on the ``acme`` one.
+    pks = {"acme": rows[0].pk, "beta": rows[1].pk}
     ran: list[int] = []
+    arguments: dict[str, Any] = {"note": "x"}
+    if sent is not None:
+        arguments["pk"] = pks[sent]
 
     out = await _answer(
-        _server(_NotBeta(), ran), {"pk": acme.pk, "note": "x"}, {"pk": beta.pk}, is_async=is_async
+        _server(_NotBeta(), ran), arguments, {"pk": pks[answered]}, is_async=is_async
     )
 
-    assert _forbidden(out), out
-    assert ran == []
+    if admitted:
+        assert out["structuredContent"] == {"pk": pks[answered], "note": "x"}
+        assert ran == [pks[answered]]
+    else:
+        assert _forbidden(out), out
+        assert ran == []
 
 
 @_ASYNC
@@ -230,23 +255,6 @@ async def test_an_answer_naming_a_row_the_caller_may_not_touch_is_refused_over_h
 
 
 @_ASYNC
-async def test_an_answer_naming_a_row_the_caller_may_touch_runs_on_it(
-    rows: tuple[Invoice, Invoice], is_async: bool
-) -> None:
-    # The other half: answered over the refused row, the admitted one is the
-    # one the service runs on.
-    acme, beta = rows
-    ran: list[int] = []
-
-    out = await _answer(
-        _server(_NotBeta(), ran), {"pk": beta.pk, "note": "x"}, {"pk": acme.pk}, is_async=is_async
-    )
-
-    assert out["structuredContent"] == {"pk": acme.pk, "note": "x"}
-    assert ran == [acme.pk]
-
-
-@_ASYNC
 async def test_an_answer_cannot_tell_an_existing_target_from_a_missing_one(
     rows: tuple[Invoice, Invoice], is_async: bool
 ) -> None:
@@ -263,22 +271,6 @@ async def test_an_answer_cannot_tell_an_existing_target_from_a_missing_one(
     assert _forbidden(existing), existing
     assert _forbidden(missing), missing
     assert ran == []
-
-
-@_ASYNC
-async def test_an_answer_filling_the_lookup_left_out_is_judged_on_the_row_it_names(
-    rows: tuple[Invoice, Invoice], is_async: bool
-) -> None:
-    acme, beta = rows
-    ran: list[int] = []
-    server = _server(_NotBeta(), ran)
-
-    refused = await _answer(server, {"note": "x"}, {"pk": beta.pk}, is_async=is_async)
-    admitted = await _answer(server, {"note": "x"}, {"pk": acme.pk}, is_async=is_async)
-
-    assert _forbidden(refused), refused
-    assert admitted["structuredContent"] == {"pk": acme.pk, "note": "x"}
-    assert ran == [acme.pk]
 
 
 @_ASYNC

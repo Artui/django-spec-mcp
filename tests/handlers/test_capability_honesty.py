@@ -128,30 +128,23 @@ def test_a_modern_caller_is_told_about_the_pushes() -> None:
 
 
 def test_a_legacy_caller_is_not() -> None:
-    """The bug this closes. Same server, same broker — the difference is only
-    who is asking, and a legacy client has no method to receive any of it."""
+    """Same server, same broker — the difference is only
+    who is asking, and a legacy client has no method to receive any of it.
+    Suppressing the flags must not suppress the capability: a legacy client
+    still has resources to read, and ``{}`` means supported."""
     caps = build_capabilities(_context(_pushing_server()), modern=False)
     assert caps.resources == {}
 
 
-def test_the_registries_themselves_are_unaffected() -> None:
-    """Suppressing the flags must not suppress the capability. A legacy client
-    still has resources to read — ``{}`` means supported."""
-    caps = build_capabilities(_context(_pushing_server()), modern=False)
-    assert caps.resources == {}
-    assert caps.resources is not None
-
-
-def test_a_legacy_caller_is_not_offered_extensions() -> None:
+@pytest.mark.parametrize("modern", [False, True], ids=["legacy", "modern"])
+def test_extensions_are_offered_to_a_modern_caller_alone(modern: bool) -> None:
     """Not a field on the legacy ``ServerCapabilities`` at all — extension
     negotiation arrived with ``2026-07-28`` — and the tasks path is unreachable
     for a legacy client anyway, since the extension must be declared per
     request."""
-    assert build_capabilities(_full_context(_full_server()), modern=False).extensions is None
+    caps = build_capabilities(_full_context(_full_server()), modern=modern)
 
-
-def test_a_modern_caller_is() -> None:
-    assert build_capabilities(_full_context(_full_server()), modern=True).extensions is not None
+    assert (caps.extensions is not None) is modern
 
 
 # ---------- how each handler decides ----------

@@ -108,17 +108,6 @@ async def _call(server: MCPServer, arguments: dict[str, Any], *, is_async: bool)
     return await sync_to_async(handle_tools_call)(params, context)
 
 
-@routes
-async def test_the_service_receives_the_resolved_row(is_async: bool) -> None:
-    invoice = await Invoice.objects.acreate(number="orig")
-
-    out = await _call(_server(), {"pk": invoice.pk, "number": "new"}, is_async=is_async)
-
-    assert "isError" not in out, out
-    await invoice.arefresh_from_db()
-    assert invoice.number == "new"
-
-
 def test_a_lookup_key_the_validator_also_declares_is_refused_at_registration() -> None:
     # A body field cannot name the row the target lookup resolves. The spec
     # itself builds; registering it asks its parameters, which refuse the pair.
@@ -148,11 +137,14 @@ async def test_a_missing_row_is_a_tool_level_not_found(selector: Any, is_async: 
 
 
 @routes
-async def test_a_non_queryset_return_is_used_as_it_is(is_async: bool) -> None:
+@pytest.mark.parametrize(
+    "selector", [_invoice_by_pk, _strict_get], ids=["queryset", "non-queryset-used-as-it-is"]
+)
+async def test_the_service_receives_the_resolved_row(selector: Any, is_async: bool) -> None:
     invoice = await Invoice.objects.acreate(number="orig")
 
     out = await _call(
-        _server(instance_selector_spec=_lookup(_strict_get)),
+        _server(instance_selector_spec=_lookup(selector)),
         {"pk": invoice.pk, "number": "new"},
         is_async=is_async,
     )

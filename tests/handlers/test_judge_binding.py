@@ -404,19 +404,6 @@ def test_a_ui_resource_refuses_what_is_not_a_check() -> None:
     )
 
 
-def test_an_answer_still_to_be_awaited_is_refused_not_read_as_a_pass() -> None:
-    server = _server()
-    server.register_prompt(name="p", render=lambda: "hi", permissions=[_HandsBackACoroutine()])
-
-    with pytest.raises(ImproperlyConfigured) as raised:
-        handle_prompts_get({"name": "p"}, _ctx(server, ALICE))
-    assert str(raised.value) == (
-        "_HandsBackACoroutine.has_permission answered with an awaitable (coroutine) where a "
-        "bool was asked for. A permission check is sync-only and is never awaited, so the "
-        "call is refused rather than allowed; declare the method with def."
-    )
-
-
 class _HandsBackAnAsyncGenerator(PermissionCheck):
     """A plain ``def`` whose answer is an async generator: truthy, and not awaitable."""
 
@@ -427,20 +414,36 @@ class _HandsBackAnAsyncGenerator(PermissionCheck):
         return later()
 
 
-def test_an_async_generator_answer_is_refused_not_read_as_a_pass() -> None:
+_COROUTINE_REFUSAL = (
+    "_HandsBackACoroutine.has_permission answered with an awaitable (coroutine) where a "
+    "bool was asked for. A permission check is sync-only and is never awaited, so the "
+    "call is refused rather than allowed; declare the method with def."
+)
+
+
+@pytest.mark.parametrize(
+    ("check", "message"),
+    [
+        (_HandsBackACoroutine(), _COROUTINE_REFUSAL),
+        (
+            _HandsBackAnAsyncGenerator(),
+            "_HandsBackAnAsyncGenerator.has_permission answered with an awaitable "
+            "(async_generator) where a bool was asked for. A permission check is sync-only and "
+            "is never awaited, so the call is refused rather than allowed; declare the method "
+            "with def.",
+        ),
+    ],
+    ids=["coroutine", "async-generator"],
+)
+def test_an_answer_still_to_be_awaited_is_refused_not_read_as_a_pass(
+    check: PermissionCheck, message: str
+) -> None:
     server = _server()
-    server.register_prompt(
-        name="p", render=lambda: "hi", permissions=[_HandsBackAnAsyncGenerator()]
-    )
+    server.register_prompt(name="p", render=lambda: "hi", permissions=[check])
 
     with pytest.raises(ImproperlyConfigured) as raised:
         handle_prompts_get({"name": "p"}, _ctx(server, ALICE))
-    assert str(raised.value) == (
-        "_HandsBackAnAsyncGenerator.has_permission answered with an awaitable "
-        "(async_generator) where a bool was asked for. A permission check is sync-only and "
-        "is never awaited, so the call is refused rather than allowed; declare the method "
-        "with def."
-    )
+    assert str(raised.value) == message
 
 
 # ---------- a check that raises, in a filtered listing ----------
@@ -454,8 +457,8 @@ class _ReadsAMissingKey(PermissionCheck):
 
 
 def test_a_prompt_check_that_raises_hides_that_prompt_and_no_other() -> None:
-    # The listing failed whole, answered -32603, where the kernel arm hides
-    # only the binding whose check raised.
+    # A listing must not fail whole (-32603) for one check that raises: only the
+    # binding whose check raised is hidden, as the kernel arm hides it.
     server = _server()
     server.register_prompt(name="open", render=lambda: "hi", permissions=[Unrestricted()])
     server.register_prompt(name="broken", render=lambda: "hi", permissions=[_ReadsAMissingKey()])
@@ -485,8 +488,4 @@ def test_a_check_misconfigured_at_call_time_still_fails_the_listing() -> None:
 
     with pytest.raises(ImproperlyConfigured) as raised:
         handle_prompts_list(None, _ctx(server, ALICE))
-    assert str(raised.value) == (
-        "_HandsBackACoroutine.has_permission answered with an awaitable (coroutine) where a "
-        "bool was asked for. A permission check is sync-only and is never awaited, so the "
-        "call is refused rather than allowed; declare the method with def."
-    )
+    assert str(raised.value) == _COROUTINE_REFUSAL
