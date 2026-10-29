@@ -430,9 +430,8 @@ def test_a_check_raising_on_no_arguments_refuses_the_completion_as_the_read_refu
     keyed_caller: KernelClient,
 ) -> None:
     # A check that indexes ``arguments`` raises ``TypeError`` on the ``None`` a
-    # completion hands it. That was an internal error (HTTP 500, -32603) where a
-    # read the check refuses answers -32006; it is the same refusal now, on the
-    # same HTTP status.
+    # completion hands it. That is the refusal (-32006, the same HTTP status) a
+    # read the check refuses answers, not an internal error (HTTP 500, -32603).
     completed = keyed_caller.post("completion/complete", _INVOICE_PK)
     read = keyed_caller.post("resources/read", {"uri": "invoices://2"})
 

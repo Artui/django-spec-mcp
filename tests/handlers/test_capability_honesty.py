@@ -128,7 +128,7 @@ def test_a_modern_caller_is_told_about_the_pushes() -> None:
 
 
 def test_a_legacy_caller_is_not() -> None:
-    """The bug this closes. Same server, same broker — the difference is only
+    """Same server, same broker — the difference is only
     who is asking, and a legacy client has no method to receive any of it.
     Suppressing the flags must not suppress the capability: a legacy client
     still has resources to read, and ``{}`` means supported."""

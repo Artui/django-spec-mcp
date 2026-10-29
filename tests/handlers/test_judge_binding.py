@@ -457,8 +457,8 @@ class _ReadsAMissingKey(PermissionCheck):
 
 
 def test_a_prompt_check_that_raises_hides_that_prompt_and_no_other() -> None:
-    # The listing failed whole, answered -32603, where the kernel arm hides
-    # only the binding whose check raised.
+    # A listing must not fail whole (-32603) for one check that raises: only the
+    # binding whose check raised is hidden, as the kernel arm hides it.
     server = _server()
     server.register_prompt(name="open", render=lambda: "hi", permissions=[Unrestricted()])
     server.register_prompt(name="broken", render=lambda: "hi", permissions=[_ReadsAMissingKey()])

@@ -1096,7 +1096,6 @@ def test_an_admitted_reader_of_a_malformed_variable_is_told_which_over_http(
     assert response.status_code == 200, body
     assert body["error"]["code"] == -32602, body
     assert body["error"]["message"] == "Invalid arguments"
-    # Not the backstop's answer, which is what this read used to get.
     assert body["error"]["message"] != INTERNAL_ERROR_MESSAGE
     assert body["error"]["data"]["detail"]["pk"], body
     assert limit.consumed == 1
