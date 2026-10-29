@@ -62,19 +62,23 @@ def test_no_example_installs_drf(project: str, settings_module: str, mcp_module:
     assert "rest_framework" not in settings_file.with_suffix(".py").read_text()
 
 
-@pytest.mark.parametrize(("project", "settings_module", "mcp_module"), _EXAMPLES)
-def test_example_build_server(project: str, settings_module: str, mcp_module: str) -> None:
-    root = _EXAMPLES_DIR / project
-    code = f"import django; django.setup()\nimport {mcp_module} as m\nm.build_server()"
-    env = {**os.environ, "DJANGO_SETTINGS_MODULE": settings_module}
+def _run_in_example(project: str, code: str, *args: str) -> str:
+    """Run ``code`` in ``project``'s own interpreter and settings; return its stdout."""
     result = subprocess.run(
-        [sys.executable, "-c", code],
-        cwd=root,
-        env=env,
+        [sys.executable, "-c", code, *args],
+        cwd=_EXAMPLES_DIR / project,
+        env={**os.environ, "DJANGO_SETTINGS_MODULE": f"{project}.settings"},
         capture_output=True,
         text=True,
     )
     assert result.returncode == 0, result.stderr
+    return result.stdout
+
+
+@pytest.mark.parametrize(("project", "settings_module", "mcp_module"), _EXAMPLES)
+def test_example_build_server(project: str, settings_module: str, mcp_module: str) -> None:
+    code = f"import django; django.setup()\nimport {mcp_module} as m\nm.build_server()"
+    _run_in_example(project, code)
 
 
 # Runs inside the invoicing project: an in-memory database, three invoices, and
@@ -150,15 +154,7 @@ def test_invoicing_field_selection_is_per_item_and_refuses_the_envelope() -> Non
     shape's choices before the selector runs. The FilterSet's filters and its
     ordering narrow and sort the same page.
     """
-    result = subprocess.run(
-        [sys.executable, "-c", _INVOICING_FIELD_SELECTION],
-        cwd=_EXAMPLES_DIR / "invoicing",
-        env={**os.environ, "DJANGO_SETTINGS_MODULE": "invoicing.settings"},
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0, result.stderr
-    replies = json.loads(result.stdout)
+    replies = json.loads(_run_in_example("invoicing", _INVOICING_FIELD_SELECTION))
 
     rows = replies["rows"]
     assert rows["status"] == 200
@@ -266,15 +262,7 @@ def test_invoicing_demonstrates_lookup_empty_result_idempotency_and_seeds() -> N
     dropped; and ``invoices.create`` answers refused arguments with a
     ``validation_error`` result, not a JSON-RPC ``-32602``.
     """
-    result = subprocess.run(
-        [sys.executable, "-c", _INVOICING_LOOKUP_EMPTY_IDEMPOTENT_SEEDS],
-        cwd=_EXAMPLES_DIR / "invoicing",
-        env={**os.environ, "DJANGO_SETTINGS_MODULE": "invoicing.settings"},
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0, result.stderr
-    replies = json.loads(result.stdout)
+    replies = json.loads(_run_in_example("invoicing", _INVOICING_LOOKUP_EMPTY_IDEMPOTENT_SEEDS))
     tools = replies["tools"]
 
     set_amount = tools["invoices.set_amount"]
@@ -372,15 +360,7 @@ def test_invoicing_demonstrates_a_closed_spread_schema_and_a_declared_empty_resu
     ``allow_none=True`` with no output re-read, so its ``outputSchema`` admits
     the ``{}`` that a credit settling the invoice is served as.
     """
-    result = subprocess.run(
-        [sys.executable, "-c", _INVOICING_SPREAD_CLOSED_AND_EMPTY],
-        cwd=_EXAMPLES_DIR / "invoicing",
-        env={**os.environ, "DJANGO_SETTINGS_MODULE": "invoicing.settings"},
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0, result.stderr
-    replies = json.loads(result.stdout)
+    replies = json.loads(_run_in_example("invoicing", _INVOICING_SPREAD_CLOSED_AND_EMPTY))
 
     input_schema = replies["tool"]["inputSchema"]
     assert set(input_schema["properties"]) == {"number", "credit_cents"}
@@ -434,15 +414,7 @@ def test_invoicing_serves_its_resource_prompt_and_send_tool() -> None:
     are, renders from the database; and
     marking an invoice sent twice is a ``service_error`` result the second time.
     """
-    result = subprocess.run(
-        [sys.executable, "-c", _INVOICING_RESOURCE_PROMPT_AND_SEND],
-        cwd=_EXAMPLES_DIR / "invoicing",
-        env={**os.environ, "DJANGO_SETTINGS_MODULE": "invoicing.settings"},
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0, result.stderr
-    replies = json.loads(result.stdout)
+    replies = json.loads(_run_in_example("invoicing", _INVOICING_RESOURCE_PROMPT_AND_SEND))
     pk = replies["pk"]
 
     [contents] = replies["read"]["contents"]
@@ -563,15 +535,7 @@ def test_invoicing_authenticates_bearer_tokens_and_gates_its_prompt_on_a_scope()
     that token still calls a tool and reads the resource, which the scope does
     not gate; the clerk's token renders the prompt.
     """
-    result = subprocess.run(
-        [sys.executable, "-c", _INVOICING_AUTH],
-        cwd=_EXAMPLES_DIR / "invoicing",
-        env={**os.environ, "DJANGO_SETTINGS_MODULE": "invoicing.settings"},
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0, result.stderr
-    replies = json.loads(result.stdout)
+    replies = json.loads(_run_in_example("invoicing", _INVOICING_AUTH))
     pointer = "http://localhost:8000/mcp/.well-known/oauth-protected-resource"
 
     # The transport answers both alike, ``invalid_token`` included.
@@ -710,15 +674,7 @@ def test_job_status_starts_a_job_and_serves_its_status(tmp_path: Path) -> None:
     ``status`` narrows the list and its ``created`` ordering sorts it; and a
     job that does not exist is a missing resource.
     """
-    result = subprocess.run(
-        [sys.executable, "-c", _JOB_STATUS, str(tmp_path / "jobs.sqlite3")],
-        cwd=_EXAMPLES_DIR / "job_status",
-        env={**os.environ, "DJANGO_SETTINGS_MODULE": "job_status.settings"},
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0, result.stderr
-    replies = json.loads(result.stdout)
+    replies = json.loads(_run_in_example("job_status", _JOB_STATUS, str(tmp_path / "jobs.sqlite3")))
 
     started = replies["started"]["structuredContent"]
     assert started["status"] == "queued"
