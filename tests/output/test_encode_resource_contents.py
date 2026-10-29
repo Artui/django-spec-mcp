@@ -122,11 +122,6 @@ def _server(
     return server
 
 
-@pytest.fixture(params=[False, True], ids=["sync", "async"])
-def is_async(request: pytest.FixtureRequest) -> bool:
-    return request.param
-
-
 def _read(server: MCPServer, uri: str, *, is_async: bool, **config: Any) -> Any:
     context = server._call_context(user=None)
     if config:

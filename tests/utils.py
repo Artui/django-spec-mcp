@@ -35,6 +35,25 @@ def tool_error(out: Any) -> dict[str, Any]:
     return json.loads(out["content"][0]["text"])["error"]
 
 
+def plain_context(server: MCPServer, **overrides: Any) -> MCPCallContext:
+    """An anonymous legacy-era context carrying only ``server``'s three registries.
+
+    For a test that calls one handler directly and needs nothing the server's
+    view would add (tasks, subscriptions, its config); ``overrides`` replace any
+    field. ``call_context`` is the fuller one.
+    """
+    base: dict[str, Any] = {
+        "http_request": HttpRequest(),
+        "token": TokenInfo(user=None),
+        "tools": server.tools,
+        "resources": server.resources,
+        "prompts": server.prompts,
+        "protocol_version": "2025-11-25",
+    }
+    base.update(overrides)
+    return MCPCallContext(**base)
+
+
 def call_context(server: MCPServer, **overrides: Any) -> MCPCallContext:
     """A context for calling ``server``'s handlers in process, as an anonymous caller.
 

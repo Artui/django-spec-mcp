@@ -16,7 +16,6 @@ from typing import Any
 
 import pytest
 from asgiref.sync import async_to_sync
-from django.http import HttpRequest
 from django_service_specs import (
     Parameter,
     Parameters,
@@ -33,13 +32,13 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 
 from django_spec_mcp import MCPServer, PromptArgument
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_prompts_get import handle_prompts_get
 from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
+from tests.utils import plain_context
 
 
 @pytest.fixture
@@ -65,16 +64,8 @@ def _server() -> MCPServer:
     return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore())
 
 
-def _ctx(server: MCPServer) -> Any:
-    return MCPCallContext(
-        http_request=HttpRequest(),
-        token=TokenInfo(user=None),
-        tools=server.tools,
-        resources=server.resources,
-        prompts=server.prompts,
-        protocol_version="2025-11-25",
-        session_id="sess-42",
-    )
+def _ctx(server: MCPServer) -> MCPCallContext:
+    return plain_context(server, session_id="sess-42")
 
 
 OPEN = [Unrestricted()]
