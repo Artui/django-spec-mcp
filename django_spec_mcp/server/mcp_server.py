@@ -815,22 +815,10 @@ class MCPServer:
         if request is None:
             http_request.user = user
             http_request.method = "POST"
-        return MCPCallContext(
-            http_request=http_request,
-            token=TokenInfo(user=user, scopes=tuple(scopes or ())),
-            tools=self._tools,
-            resources=self._resources,
-            prompts=self._prompts,
-            protocol_version=self._config.protocol_versions[0],
+        return self._context(
+            http_request,
+            TokenInfo(user=user, scopes=tuple(scopes or ())),
             session_id=session_id,
-            server_info=self._server_info,
-            instructions=self.description,
-            config=self._config,
-            tasks=self._task_store,
-            task_executor=self._task_executor,
-            subscriptions=self._subscription_broker,
-            pool_seeds=self._pool_seeds,
-            conventions=self._conventions,
         )
 
     def run_task(self, task_id: str) -> None:
@@ -881,6 +869,23 @@ class MCPServer:
         http_request.method = "POST"
         token: TokenInfo = build_worker_token(record)
         http_request.user = token.user
+        return self._context(http_request, token, enforce_rate_limits=False, in_task_worker=True)
+
+    def _context(
+        self,
+        http_request: HttpRequest,
+        token: TokenInfo,
+        *,
+        session_id: str | None = None,
+        enforce_rate_limits: bool = True,
+        in_task_worker: bool = False,
+    ) -> MCPCallContext:
+        """The context an in-process call or a task runs under: this server's half, around a caller's.
+
+        Only the request, the token and the three knobs above differ between
+        ``_call_context`` and ``_worker_context``; everything else is this
+        server's, read the same way for both.
+        """
         return MCPCallContext(
             http_request=http_request,
             token=token,
@@ -888,6 +893,7 @@ class MCPServer:
             resources=self._resources,
             prompts=self._prompts,
             protocol_version=self._config.protocol_versions[0],
+            session_id=session_id,
             server_info=self._server_info,
             instructions=self.description,
             config=self._config,
@@ -896,8 +902,8 @@ class MCPServer:
             subscriptions=self._subscription_broker,
             pool_seeds=self._pool_seeds,
             conventions=self._conventions,
-            enforce_rate_limits=False,
-            in_task_worker=True,
+            enforce_rate_limits=enforce_rate_limits,
+            in_task_worker=in_task_worker,
         )
 
     async def notify_resource_updated(self, uri: str) -> int:
