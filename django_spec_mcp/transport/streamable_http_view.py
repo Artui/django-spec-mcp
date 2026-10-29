@@ -45,7 +45,7 @@ from django_spec_mcp.transport.utils import (
     is_raised_denial,
     legacy_result_response,
     modern_era_requested,
-    modern_refusal,
+    modern_header_refusal,
     modern_result_response,
     not_acceptable,
     origin_refusal,
@@ -60,7 +60,6 @@ from django_spec_mcp.transport.utils import (
 )
 from django_spec_mcp.transport.validate_modern_request import (
     VERSION_HEADER,
-    validate_modern_request,
 )
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from django_spec_mcp.types.sessionless_methods import SESSIONLESS_METHODS
@@ -318,16 +317,11 @@ class StreamableHttpView(View):
         a legacy one, so gating it on credentials would break era detection for
         anonymous probes.
         """
-        if isinstance(message, JsonRpcRequest):
-            invalid: JsonRpcError | None = validate_modern_request(
-                method=message.method,
-                params=params_dict(message.params),
-                metadata=metadata,
-                headers=http_request.headers,
-                supported_versions=self._require_config().modern_protocol_versions,
-            )
-            if invalid is not None:
-                return modern_refusal(invalid, message.id)
+        refused: JsonResponse | None = modern_header_refusal(
+            http_request, message, metadata, self._require_config()
+        )
+        if refused is not None:
+            return refused
 
         token = self._authenticate(http_request)
         if token is None:

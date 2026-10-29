@@ -23,7 +23,11 @@ from django_spec_mcp.protocol.types.json_rpc_message import JsonRpcMessage
 from django_spec_mcp.protocol.types.json_rpc_request import JsonRpcRequest
 from django_spec_mcp.protocol.types.json_rpc_response import JsonRpcResponse
 from django_spec_mcp.transport.origin_validation import is_origin_allowed
-from django_spec_mcp.transport.validate_modern_request import VERSION_HEADER
+from django_spec_mcp.transport.types.request_metadata import RequestMetadata
+from django_spec_mcp.transport.validate_modern_request import (
+    VERSION_HEADER,
+    validate_modern_request,
+)
 from django_spec_mcp.types.internal_error_message import INTERNAL_ERROR_MESSAGE
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from django_spec_mcp.types.mcp_error_header import MCP_ERROR_HEADER
@@ -455,6 +459,32 @@ def modern_refusal(error: JsonRpcError, request_id: Any) -> JsonResponse:
     )
 
 
+def modern_header_refusal(
+    http_request: HttpRequest,
+    message: JsonRpcMessage,
+    metadata: RequestMetadata,
+    config: MCPConfig,
+) -> JsonResponse | None:
+    """The refusal for a modern request whose headers disagree with its body, else ``None``.
+
+    Only a request is checked: a notification carries no method headers. Why
+    the views ask this before authenticating is on ``StreamableHttpView``'s
+    modern path.
+    """
+    if not isinstance(message, JsonRpcRequest):
+        return None
+    invalid: JsonRpcError | None = validate_modern_request(
+        method=message.method,
+        params=params_dict(message.params),
+        metadata=metadata,
+        headers=http_request.headers,
+        supported_versions=config.modern_protocol_versions,
+    )
+    if invalid is None:
+        return None
+    return modern_refusal(invalid, message.id)
+
+
 def challenged_error_response(
     error: JsonRpcError, *, request_id: Any, status: int, backend: MCPAuthBackend
 ) -> JsonResponse:
@@ -505,6 +535,7 @@ __all__ = [
     "is_raised_denial",
     "legacy_result_response",
     "modern_era_requested",
+    "modern_header_refusal",
     "modern_error_status",
     "modern_refusal",
     "modern_result_response",
