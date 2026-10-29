@@ -8,10 +8,10 @@ Rules are non-negotiable unless flagged as a heuristic.
 1. **One exported class or function per file.** File name = `snake_case` of the symbol.
    `MCPServer` → `mcp_server.py`; `runs_on_kernel` → `runs_on_kernel.py`,
    or live in a sibling `utils.py` if used by several files in the same package.
-   There is no exception. The package's enums and shared constants (`OutputFormat`,
-   `JsonRpcErrorCode`, `JSONRPC_VERSION`, the reserved-key sets and the rest) live
-   one per file in the root `types/` package, `OutputFormat` in
-   `types/output_format.py`, and a new one goes there the same way. **`types/`
+   There is no exception. The package's enums and shared constants (`JsonRpcErrorCode`,
+   `ToolContentKind`, `JSONRPC_VERSION`, the reserved-key sets and the rest) live
+   one per file in the root `types/` package, `JsonRpcErrorCode` in
+   `types/json_rpc_error_code.py`, and a new one goes there the same way. **`types/`
    imports nothing else in the package**, so every subpackage can read it without
    a cycle, and `tests/types/test_types_imports.py` holds that.
 2. **Private helpers used in only one file** stay there with a leading `_`.
@@ -19,7 +19,7 @@ Rules are non-negotiable unless flagged as a heuristic.
    are allowed in `utils.py` if they are internal infrastructure.
 4. **Top-level imports only.** No function-local / lazy imports unless a circular import
    is genuine and documented inline at the import site, or the dependency is optional
-   (e.g. `python-toon`) — those imports go inside the function body
+   (e.g. `redis`) — those imports go inside the function body
    with a clear `ImportError` message.
 5. **Full type annotations on every function and method signature.** `Any` is allowed
    only at Django ORM and wire boundaries (e.g. `request.user`, `queryset` items,
@@ -267,9 +267,6 @@ Change a rule here and change the config with it, or they drift apart again.
 
 ## Boundaries
 
-- The TOON encoder imports `python-toon` lazily and falls back to JSON with a warning
-  if the extra is missing — a tool call must never fail because the optional extra is
-  absent.
 - The `transport/` layer must not import from `server/` (one-way dependency: server
   composes transport, never the other way).
 - Nothing in the package imports `rest_framework`, `rest_framework_services` or
@@ -383,6 +380,3 @@ emit wrong compare links.
   missing/empty origin against an empty allowlist.
 - `MCP-Session-Id` and `MCP-Protocol-Version` are required headers post-`initialize`;
   missing → 400/404 as per spec, not silent acceptance.
-- `structuredContent` is always JSON; only the `content[0]` text payload varies by
-  `OutputFormat`. TOON output is wrapped in a fenced code block with a leading
-  `# format: toon` marker.

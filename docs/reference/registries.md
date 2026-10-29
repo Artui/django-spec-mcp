@@ -32,10 +32,10 @@ each item in `items`, never to the envelope — and its description in the
 ::: django_spec_mcp.registry.types.resource_binding.ResourceBinding
 ::: django_spec_mcp.registry.resource_registry.ResourceRegistry
 
-A URI-template variable may not take a name `resources/read` seeds itself;
-registration refuses one that does.
+A URI-template variable may not take a name the server fills for the read: a
+pool seed, the kernel's `RESERVED_POOL_SEEDS`, or its `CALL_SEEDS` (`request`
+and `view`, the call's own). Registration refuses one that does.
 
-::: django_spec_mcp.types.RESOURCE_EDGE_SEEDS
 ::: django_spec_mcp.types.ResourceEncoding
 ::: django_spec_mcp.registry.types.prompt_binding.PromptBinding
 ::: django_spec_mcp.registry.prompt_registry.PromptRegistry

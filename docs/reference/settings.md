@@ -97,7 +97,6 @@ it wrong is a cross-tenant disclosure with a cache in front of it.
 
 | Key | Default | What it does |
 |---|---|---|
-| `DEFAULT_OUTPUT_FORMAT` | `"json"` | Format of a tool result's human-readable `content[0]` text for tools that don't set one: `"json"`, `"toon"`, or `"auto"` (TOON for uniform lists, JSON otherwise). `structuredContent` is always JSON. Per-tool `output_format=` wins. See [Ship TOON for large lists](../recipes/toon-output.md). |
 | `INCLUDE_STRUCTURED_CONTENT` | `True` | Emit `structuredContent` on tool results. |
 | `INCLUDE_OUTPUT_SCHEMA` | `True` | Advertise `outputSchema` on tool definitions. |
 | `INCLUDE_VALIDATION_VALUE` | `False` | Include the offending `arguments` dict under `value` in validation errors: beside `detail` in a `tools/call` `validation_error` result's `error` object, and in the `-32602` `data` that `prompts/get` and a kernel `resources/read` answer (for a read, the URI's variables as sent). Off by default — that dict can carry PII or secrets, which would then flow back to the client and into its logs. |

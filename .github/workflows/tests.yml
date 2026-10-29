@@ -241,18 +241,16 @@ jobs:
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           enable-cache: true
-      - name: Install base only (no [toon], no dev group)
+      - name: Install base only (no extras, no dev group)
         run: |
           uv venv --python 3.13 .venv-smoke
           # ``uv venv`` doesn't include pip by default; use ``uv pip install``
           # against the smoke env to do an editable install with no optional
           # extras and no dev group.
           uv pip install --python .venv-smoke/bin/python -e .
-      - name: Confirm import + server build + TOON fallback
+      - name: Confirm import + server build + lazy optional imports
         run: |
           .venv-smoke/bin/python - <<'PY'
-          import warnings
-
           import django
           from django.conf import settings
 
@@ -276,7 +274,6 @@ jobs:
           from django.core.exceptions import ImproperlyConfigured
 
           from django_spec_mcp import MCPServer
-          from django_spec_mcp.output.encode_toon import encode_toon
           from django_spec_mcp.transport.django_cache_session_store import (
               DjangoCacheSessionStore,
           )
@@ -302,13 +299,6 @@ jobs:
               raise SystemExit("mounting a server with no auth backend should be refused")
           except ImproperlyConfigured:
               pass
-
-          with warnings.catch_warnings(record=True) as caught:
-              warnings.simplefilter("always")
-              encode_toon({"a": 1})
-              assert any("python-toon" in str(item.message) for item in caught), (
-                  "Expected TOON fallback warning when extra is missing"
-              )
 
           # Guard the guard: if the smoke env ever gained the extra, everything
           # below would pass for the wrong reason.

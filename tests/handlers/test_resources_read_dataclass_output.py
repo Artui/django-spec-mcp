@@ -275,33 +275,40 @@ def test_the_variables_a_provider_fills_are_listed_sorted() -> None:
     assert "['bay', 'lane', 'mid', 'yard', 'zone']" in str(raised.value)
 
 
-def test_a_variable_a_reflected_read_the_server_fills_is_refused() -> None:
-    """A read named ``view`` and marked ``reflected`` is declared, and dispatch fills it from
-    the call and refuses a caller's argument of its name, so a ``{view}`` variable would
-    be answered ``Unknown argument.`` at every read."""
+@pytest.mark.parametrize(
+    "reads",
+    [
+        Parameters([Parameter("pk", "integer", required=True)]),
+        Parameters(
+            [
+                Parameter("pk", "integer", required=True),
+                Parameter("view", "string", reflected=True),
+            ]
+        ),
+    ],
+    ids=["no-read-of-it", "a-reflected-read"],
+)
+def test_a_variable_named_view_is_refused_as_the_call_s_own(reads: Parameters) -> None:
+    """``view``, like ``request``, is one of the kernel's ``CALL_SEEDS``: dispatch fills it
+    from the call on every mount, so a URI segment of that name could never be the read's.
+    It is refused by the reserved check, whatever the spec declares. Before the kernel's
+    set was read, a spec with no read of it was told the variable was undeclared and one
+    with a reflected read that the server fills it, so the whole message is asserted: it
+    names which check answers."""
     server = MCPServer(name="t", auth_backend=AllowAnyBackend())
     with pytest.raises(ImproperlyConfigured) as raised:
         server.register_resource(
             SelectorSpec(
-                kind=SelectorKind.RETRIEVE,
-                selector=_invoice,
-                reads=Parameters(
-                    [
-                        Parameter("pk", "integer", required=True),
-                        Parameter("view", "string", reflected=True),
-                    ]
-                ),
-                permissions=OPEN,
+                kind=SelectorKind.RETRIEVE, selector=_invoice, reads=reads, permissions=OPEN
             ),
             name="bad",
             uri_template="bad://{pk}/{view}",
         )
-    message = str(raised.value)
-    assert "Resource 'bad'" in message
-    assert "['view']" in message
-    assert "server fills" in message
-    # Declared, so not the other clause.
-    assert "not among" not in message
+    assert str(raised.value) == (
+        "Resource 'bad': uri_template variable name(s) ['view'] collide with reserved "
+        "transport keys ['call_context', 'collection', 'data', 'instance', 'progress', "
+        "'queryset', 'request', 'result', 'shapes', 'user', 'view']. Rename them."
+    )
 
 
 def test_a_variable_a_provider_always_fills_is_refused() -> None:

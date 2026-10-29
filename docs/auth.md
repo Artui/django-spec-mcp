@@ -308,7 +308,7 @@ one — a view is a template rendered with no context, a literal document, or a
 zero-argument callable, none of which can read the caller's data.
 
 That third source is caller-blind **because registration enforces it**: a
-`selector=` declaring any fillable parameter is refused, since the read path
+`render=` declaring any fillable parameter is refused, since the read path
 resolves every binding's callable against a pool carrying `request` and
 `user`. Without that refusal the exemption would be unsound for one of its
 three cases — a caller-aware view registered unguarded, served into a document

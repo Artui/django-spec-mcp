@@ -89,13 +89,13 @@ class TestRead:
 
     def test_a_view_whose_source_returns_a_non_string_is_a_clean_error(self) -> None:
         """Not a transport-level 500 — the client gets a JSON-RPC error."""
-        server = _server(html=None, selector=lambda: {"oops": True})
+        server = _server(html=None, render=lambda: {"oops": True})
         out = handle_resources_read({"uri": URI}, _ctx(server))
 
         assert out.code == JsonRpcErrorCode.INTERNAL_ERROR
 
     async def test_the_async_transport_reports_that_error_too(self) -> None:
-        server = _server(html=None, selector=lambda: {"oops": True})
+        server = _server(html=None, render=lambda: {"oops": True})
         out = await handle_resources_read_async({"uri": URI}, _ctx(server))
 
         assert out.code == JsonRpcErrorCode.INTERNAL_ERROR
@@ -213,7 +213,7 @@ _SOURCES: dict[str, dict[str, Any]] = {
     "html": {},
     "template_name": {"html": None, "template_name": "mcp_ui/view.html"},
     "body_template_name": {"html": None, "body_template_name": "mcp_ui/body.html"},
-    "selector": {"html": None, "selector": lambda: VIEW},
+    "render": {"html": None, "render": lambda: VIEW},
 }
 
 

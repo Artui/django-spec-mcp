@@ -29,7 +29,6 @@ from django_spec_mcp.schema.utils import end_sentence
 from django_spec_mcp.types.cache_scope import CacheScope
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from django_spec_mcp.types.modern_protocol_versions import MODERN_PROTOCOL_VERSIONS
-from django_spec_mcp.types.output_format import OutputFormat
 
 logger = get_logger(__name__)
 
@@ -83,37 +82,6 @@ def apply_tool_server_arguments(binding: Any, arguments: dict[str, Any]) -> dict
             ", ".join(dropped),
         )
     return applied
-
-
-def validate_output_format(params: dict[str, Any]) -> JsonRpcError | None:
-    """Reject a client-supplied ``outputFormat`` naming a format this server cannot render.
-
-    ``outputFormat`` is a client-facing knob, so an unrecognised value is a bad
-    parameter and belongs in a ``-32602`` envelope. Left unchecked it reaches
-    ``OutputFormat.coerce`` at the *end* of dispatch, where the ``ValueError``
-    it raises is mapped by nothing and surfaces as a bare HTTP 500 — after the
-    tool has already run and any mutation has committed, so the caller cannot
-    tell whether retrying would apply the write twice.
-
-    Called once at the entry of each ``tools/call`` handler, ahead of task
-    creation and dispatch, which is what makes the coercions further down the
-    three dispatch paths safe. ``None`` means "nothing to object to"; a falsy
-    value is passed over because the dispatch paths read the knob as
-    ``params.get("outputFormat") or binding.output_format``, i.e. treat it as
-    unsupplied.
-    """
-    requested: Any = params.get("outputFormat")
-    if not requested:
-        return None
-    try:
-        OutputFormat.coerce(requested)
-    except ValueError:
-        supported: str = ", ".join(repr(member.value) for member in OutputFormat)
-        return JsonRpcError(
-            JsonRpcErrorCode.INVALID_PARAMS,
-            f"'outputFormat' must be one of {supported}; got {requested!r}",
-        )
-    return None
 
 
 def scope_verdict(scopes: tuple[str, ...] | None, token: TokenInfo) -> tuple[bool, list[str]]:
@@ -476,7 +444,6 @@ __all__ = [
     "resolve_bound",
     "run_with_deadline",
     "scope_verdict",
-    "validate_output_format",
     "validation_error_data",
     "validation_error_result",
 ]

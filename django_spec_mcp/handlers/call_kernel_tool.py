@@ -112,7 +112,7 @@ def call_kernel_tool(
     )
     if isinstance(payload, ToolResult):
         return payload
-    return tool_result(binding, payload, output_format=None, config=config)
+    return tool_result(binding, payload, config=config)
 
 
 __all__ = ["call_kernel_tool"]

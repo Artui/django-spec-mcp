@@ -61,7 +61,6 @@ from django_spec_mcp.protocol.types.tool_result import ToolResult
 from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
-from django_spec_mcp.types.output_format import OutputFormat
 
 logger = get_logger(__name__)
 
@@ -858,14 +857,8 @@ def not_found_result(binding: KernelToolBinding) -> ToolResult:
     )
 
 
-def tool_result(
-    binding: KernelToolBinding, payload: Any, *, output_format: Any, config: MCPConfig
-) -> ToolResult:
-    """The successful ``tools/call`` result for ``payload``.
-
-    ``output_format`` is the caller's ``outputFormat`` where the route takes
-    one, falling back to the binding's.
-    """
+def tool_result(binding: KernelToolBinding, payload: Any, *, config: MCPConfig) -> ToolResult:
+    """The successful ``tools/call`` result for ``payload``."""
     _emit_output_schema, emit_structured_content = resolve_structured_output(
         include_output_schema_override=binding.include_output_schema,
         include_structured_content_override=binding.include_structured_content,
@@ -875,7 +868,6 @@ def tool_result(
     )
     return build_tool_result(
         payload,
-        output_format=OutputFormat.coerce(output_format or binding.output_format),
         include_structured_content=emit_structured_content,
         content_kind=binding.content_kind,
         content_mime_type=binding.content_mime_type,

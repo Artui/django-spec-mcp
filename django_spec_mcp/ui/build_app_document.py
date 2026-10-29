@@ -52,7 +52,7 @@ def build_app_document(body: str, *, title: str, diagnostics: bool | None = None
     which renders a Django template into ``body``. It is public because the other
     content sources deserve the same shell: a project assembling its markup some
     other way can wrap the result and pass it as ``html=`` or return it from a
-    ``selector=``.
+    ``render=``.
 
     Three properties are structural rather than advisory, because each of them
     cost a consumer at least one debugging round:

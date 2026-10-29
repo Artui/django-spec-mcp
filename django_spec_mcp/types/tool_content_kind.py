@@ -19,8 +19,8 @@ class ToolContentKind(str, Enum):
     remains available for a caller building blocks by hand.
 
     Attributes:
-        TEXT: One text block rendered per the binding's ``OutputFormat``,
-            mirrored in ``structuredContent``. The default.
+        TEXT: One text block carrying the payload as JSON, mirrored in
+            ``structuredContent``. The default.
         IMAGE: The payload is the media itself — ``bytes``, or a ``str``
             already in base64. Carries **no** ``structuredContent``: binary is
             not JSON, and an ``outputSchema`` over it would describe a shape

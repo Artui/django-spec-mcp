@@ -86,9 +86,7 @@ def run_kernel_tool(
     )
     if isinstance(payload, ToolResult):
         return payload.to_dict()
-    return tool_result(
-        binding, payload, output_format=params.get("outputFormat"), config=context.config
-    ).to_dict()
+    return tool_result(binding, payload, config=context.config).to_dict()
 
 
 __all__ = ["run_kernel_tool"]

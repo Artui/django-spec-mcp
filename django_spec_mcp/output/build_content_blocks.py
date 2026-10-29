@@ -50,8 +50,7 @@ def build_content_blocks(
 
     ``TEXT`` never reaches this function;
     [`build_tool_result`][django_spec_mcp.output.tool_result.build_tool_result]
-    handles it directly, along with the ``OutputFormat`` rendering only text blocks
-    have."""
+    handles it directly, encoding the payload as JSON."""
     if content_kind is ToolContentKind.RESOURCE_LINK:
         return _resource_links(payload)
     # IMAGE / AUDIO — the payload is the media itself.

@@ -187,12 +187,19 @@ def test_a_server_argument_reaches_the_service(mount: None, client: Client) -> N
     assert body["result"]["structuredContent"] == {"tenant": "acme"}
 
 
-def test_the_callers_output_format_is_honoured(mount: None, client: Client) -> None:
+def test_a_callers_output_format_is_not_read(mount: None, client: Client) -> None:
+    """Over the wire as in the handler: the text block is JSON whatever is asked for,
+    and a format the server never knew is not refused."""
     caller = _caller(client)
     body = caller.post(
-        "tools/call", {"name": "invoices.list", "arguments": {}, "outputFormat": "json"}
+        "tools/call", {"name": "invoices.list", "arguments": {}, "outputFormat": "xml"}
     ).json()
-    assert body["result"]["structuredContent"]["items"] == []
+    assert body["result"]["content"] == [
+        {
+            "type": "text",
+            "text": '{\n  "hasNext": false,\n  "items": [],\n  "page": 1,\n  "totalPages": 1\n}',
+        }
+    ]
 
 
 def test_a_denied_resource_read_is_insufficient_permission(mount: None, client: Client) -> None:
