@@ -83,7 +83,7 @@ def test_server_name_is_not_shadowed_by_the_server_info_setting(multi_urlconf) -
     """An explicit ``name=`` outranks ``SERVER_INFO``.
 
     ``conftest_settings`` configures ``SERVER_INFO['name']``, which would win
-    unconditionally if the setting were read before the argument.
+    unconditionally if it outranked the argument.
     """
     result = _initialize(Client(), INTERNAL).json()["result"]
     assert result["serverInfo"]["name"] == "internal-mcp"
