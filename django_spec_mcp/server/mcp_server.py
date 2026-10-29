@@ -1093,8 +1093,9 @@ class MCPServer:
         # a provider always fills is replaced
         # (``test_a_variable_a_provider_always_fills_is_refused``). A reflected
         # read is owned too, but only under a name a seed or ``CALL_SEEDS``
-        # holds, and each of those was refused above. ``server_owned_keys`` is the kernel's list of
-        # the server's names, the one ``admitted_arguments`` subtracts for a tool.
+        # holds, and each of those was refused above. ``server_owned_keys`` is
+        # the kernel's list of the server's names, the one ``admitted_arguments``
+        # subtracts for a tool.
         owned = server_owned_keys(spec, pool_seeds=self._pool_seeds)
         undeclared = sorted(set(template_variables) - spec.parameters().names())
         filled = sorted(set(template_variables) & owned)
@@ -1572,8 +1573,8 @@ def _refuse_pagination_named_reads(binding: KernelToolBinding) -> None:
 
     The read pipeline owns both names on a tool that paginates: the listing
     advertises them as the page and its size, and the call takes them from the
-    arguments before the selector runs, so a read of either name registered,
-    was advertised as the pipeline's integer and never received the caller's
+    arguments before the selector runs, so a read of either name would be
+    advertised as the pipeline's integer and never receive the caller's
     value. Only under ``paginate=True``: an unpaginated LIST tool hands either
     name to its selector as any read
     (``test_an_unpaginated_list_tools_pagination_named_read_reaches_the_selector``).
