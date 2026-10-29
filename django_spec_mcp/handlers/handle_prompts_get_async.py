@@ -13,6 +13,7 @@ from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import (
     consume_rate_limits,
     forbidden,
+    rate_limited,
     span_attrs,
 )
 from django_spec_mcp.output.enforce_result_bytes import enforce_result_bytes
@@ -76,11 +77,7 @@ async def handle_prompts_get_async(
             consume_rate_limits, binding.rate_limits, context.http_request, context.token
         )
         if retry_after is not None:
-            return JsonRpcError(
-                JsonRpcErrorCode.RATE_LIMITED,
-                "Rate limit exceeded",
-                data={"retryAfter": retry_after},
-            )
+            return rate_limited(retry_after)
 
         # See the sync sibling: the transport's own ``HttpRequest``, carrying
         # the token, and the seeds land *after* the client-supplied arguments,

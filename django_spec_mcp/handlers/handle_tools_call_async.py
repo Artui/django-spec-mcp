@@ -24,6 +24,7 @@ from django_spec_mcp.handlers.utils import (
     enforce_result_ceiling,
     forbidden,
     judge_tool_permissions,
+    rate_limited,
     resolve_bound,
     run_with_deadline,
     span_attrs,
@@ -154,14 +155,7 @@ async def _dispatch_tool_call_async(
             context.token,
         )
         if retry_after is not None:
-            return (
-                JsonRpcError(
-                    JsonRpcErrorCode.RATE_LIMITED,
-                    "Rate limit exceeded",
-                    data={"retryAfter": retry_after},
-                ),
-                arguments_raw,
-            )
+            return rate_limited(retry_after), arguments_raw
 
         if prior.refused_with is not None:
             return refusal_result(prior.refused_with), arguments_raw

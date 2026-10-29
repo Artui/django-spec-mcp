@@ -162,6 +162,16 @@ def consume_rate_limits(
     return None
 
 
+def rate_limited(retry_after: int) -> JsonRpcError:
+    """The error every method answers when ``consume_rate_limits`` denied it,
+    with the seconds to wait as ``retryAfter``."""
+    return JsonRpcError(
+        JsonRpcErrorCode.RATE_LIMITED,
+        "Rate limit exceeded",
+        data={"retryAfter": retry_after},
+    )
+
+
 def effective_rate_limits(binding: Any, context: MCPCallContext) -> tuple[Any, ...]:
     """A tool binding's rate limiters, or none when this dispatch must not charge.
 
@@ -452,6 +462,7 @@ __all__ = [
     "enforce_result_ceiling",
     "judge_tool_permissions",
     "missing_arguments_message",
+    "rate_limited",
     "render_convention",
     "rendering_refusal_result",
     "resolve_bound",

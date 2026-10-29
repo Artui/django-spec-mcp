@@ -20,6 +20,7 @@ from django_spec_mcp.handlers.utils import (
     enforce_result_ceiling,
     forbidden,
     judge_tool_permissions,
+    rate_limited,
     resolve_bound,
     span_attrs,
 )
@@ -161,14 +162,7 @@ def _dispatch_tool_call(
             effective_rate_limits(binding, context), context.http_request, context.token
         )
         if retry_after is not None:
-            return (
-                JsonRpcError(
-                    JsonRpcErrorCode.RATE_LIMITED,
-                    "Rate limit exceeded",
-                    data={"retryAfter": retry_after},
-                ),
-                arguments_raw,
-            )
+            return rate_limited(retry_after), arguments_raw
 
         # Charged, as before: a declined answer is a call the client made
         # (``test_a_caller_declining_the_question_is_charged_once``).

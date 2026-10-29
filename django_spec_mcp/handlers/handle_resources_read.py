@@ -13,6 +13,7 @@ from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import (
     consume_rate_limits,
     forbidden,
+    rate_limited,
     resolve_bound,
     resource_cache_hints,
     resource_not_found_code,
@@ -88,11 +89,7 @@ def handle_resources_read(
             binding.rate_limits, context.http_request, context.token
         )
         if retry_after is not None:
-            return JsonRpcError(
-                JsonRpcErrorCode.RATE_LIMITED,
-                "Rate limit exceeded",
-                data={"retryAfter": retry_after},
-            )
+            return rate_limited(retry_after)
 
         # A kernel resource reads through the kernel from here, the scope gate,
         # its spec's checks and the rate limits above having answered for it.

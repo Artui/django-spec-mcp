@@ -12,6 +12,7 @@ from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import (
     consume_rate_limits,
     forbidden,
+    rate_limited,
     span_attrs,
 )
 from django_spec_mcp.output.enforce_result_bytes import enforce_result_bytes
@@ -85,11 +86,7 @@ def handle_prompts_get(
             binding.rate_limits, context.http_request, context.token
         )
         if retry_after is not None:
-            return JsonRpcError(
-                JsonRpcErrorCode.RATE_LIMITED,
-                "Rate limit exceeded",
-                data={"retryAfter": retry_after},
-            )
+            return rate_limited(retry_after)
 
         # The request the kernel tool path hands a spec: the transport's own
         # ``HttpRequest``, the resolved token on it as ``mcp_token``

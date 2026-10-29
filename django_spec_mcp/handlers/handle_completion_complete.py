@@ -18,7 +18,7 @@ from django_spec_mcp.handlers.kernel_utils import (
 )
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.types.kernel_refusal_scene import KernelRefusalScene
-from django_spec_mcp.handlers.utils import consume_rate_limits, span_attrs
+from django_spec_mcp.handlers.utils import consume_rate_limits, rate_limited, span_attrs
 from django_spec_mcp.protocol.types.completion import Completion
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
@@ -114,11 +114,7 @@ def handle_completion_complete(
             target.rate_limits, context.http_request, context.token
         )
         if retry_after is not None:
-            return JsonRpcError(
-                JsonRpcErrorCode.RATE_LIMITED,
-                "Rate limit exceeded",
-                data={"retryAfter": retry_after},
-            )
+            return rate_limited(retry_after)
 
         # The request the kernel tool path hands a spec: the transport's own
         # ``HttpRequest``, the resolved token on it as ``mcp_token``
