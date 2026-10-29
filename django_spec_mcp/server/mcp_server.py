@@ -1466,26 +1466,7 @@ class MCPServer:
         when running under ASGI to get non-blocking dispatch for the I/O-bound
         handlers.
         """
-        view = StreamableHttpView.as_view(
-            tools=self._tools,
-            resources=self._resources,
-            prompts=self._prompts,
-            auth_backend=self._auth_backend,
-            session_store=self._session_store,
-            task_store=self._task_store,
-            task_executor=self._task_executor,
-            # Without this a tool's ``invalidates=`` announcements are silently
-            # dropped on WSGI: the view has nowhere to publish them, and a
-            # dropped announcement looks exactly like a tool that changed nothing.
-            # ``async_urls`` has always passed it.
-            subscription_broker=self._subscription_broker,
-            pool_seeds=self._pool_seeds,
-            conventions=self._conventions,
-            server_info=self._server_info,
-            instructions=self.description,
-            config=self._config,
-        )
-        return self._urls_with_view(view)
+        return self._urls_with_view(StreamableHttpView)
 
     @property
     def async_urls(self) -> tuple[list[URLPattern], str, str]:
@@ -1498,7 +1479,21 @@ class MCPServer:
         fully sync stack still works; async-native ones are detected by
         signature and called directly.
         """
-        view = AsyncStreamableHttpView.as_view(
+        return self._urls_with_view(
+            AsyncStreamableHttpView,
+            sse_broker=self._sse_broker,
+            sse_replay_buffer=self._sse_replay_buffer,
+        )
+
+    def _urls_with_view(
+        self, view_class: type[StreamableHttpView | AsyncStreamableHttpView], **extra: Any
+    ) -> tuple[list[URLPattern], str, str]:
+        # The collaborators both endpoints take; ``extra`` is what only the async
+        # one streams with. ``subscription_broker`` is on both: without it a
+        # tool's ``invalidates=`` announcements are silently dropped on WSGI,
+        # where the view has nowhere to publish them, and a dropped announcement
+        # looks exactly like a tool that changed nothing.
+        view = view_class.as_view(
             tools=self._tools,
             resources=self._resources,
             prompts=self._prompts,
@@ -1509,21 +1504,18 @@ class MCPServer:
             subscription_broker=self._subscription_broker,
             pool_seeds=self._pool_seeds,
             conventions=self._conventions,
-            sse_broker=self._sse_broker,
-            sse_replay_buffer=self._sse_replay_buffer,
             server_info=self._server_info,
             instructions=self.description,
             config=self._config,
+            **extra,
         )
-        return self._urls_with_view(view)
-
-    def _urls_with_view(self, view: Any) -> tuple[list[URLPattern], str, str]:
         # Mounting is where the auth backend stops being optional: from here on
         # every request reaches ``authenticate``. Both ``urls`` and
-        # ``async_urls`` land here, so one check covers them (the two
-        # ``..._without_a_backend_refuses_by_name`` tests). There is no default
-        # to fall back to: this package ships no backend that verifies tokens,
-        # and one that answers every caller would serve a mount nobody secured.
+        # ``async_urls`` land here, so one check covers them
+        # (``test_mounting_without_a_backend_refuses_by_name``, one case each).
+        # There is no default to fall back to: this package ships no backend
+        # that verifies tokens, and one that answers every caller would serve a
+        # mount nobody secured.
         if self._auth_backend is None:
             raise ImproperlyConfigured(
                 f"MCPServer {self.name!r} is mounted with no auth_backend=. Every request "
