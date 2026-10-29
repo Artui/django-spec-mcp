@@ -122,8 +122,10 @@ def judge_tool_permissions(
 def forbidden(required_scopes: list[str]) -> JsonRpcError:
     """The ``-32006`` for a caller a binding's ``permissions`` deny.
 
-    Every route answers the scope gate this way: both ``tools/call`` handlers,
-    the streamed call's pre-flight and a task's creation.
+    Every route answers its scope gate this way, naming the scopes in
+    ``requiredScopes``. A denial from inside the kernel's dispatch is the same
+    error with no scopes (``forbidden([])``), since the scope gate answered
+    before dispatch was reached.
     """
     return JsonRpcError(
         JsonRpcErrorCode.FORBIDDEN,
