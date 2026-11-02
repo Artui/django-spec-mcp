@@ -11,6 +11,43 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-11-02
+
+### Changed
+
+- **A resource URI its template splits more than one way is refused, not guessed at.**
+  Each `{var}` matches one or more characters other than `/`, so where the text between
+  two variables also occurs inside a value, `things://{a}-{b}` fits `things://1-2-3` as
+  `a="1-2", b="3"` and as `a="1", b="2-3"`, and a read used to pick the first silently.
+  `resources/read` now answers such a URI `-32602` in every protocol version, naming the
+  template and two of its splits with the URI in `data`, and a subscription leaves it out
+  of the granted set. Nothing is refused at registration: the template keeps serving every
+  URI it splits one way (`files://{name}.{ext}` still serves `files://report.pdf`).
+  `ResourceRegistry.resolve` raises `ValueError` for such a URI. Templates now match the
+  whole URI, so a concrete URI no longer matches with a trailing newline appended.
+
+### Fixed
+
+- **A streamed `tools/call` asks the spec's checks once, and resolves each seed a check
+  names once.** The stream's pre-flight made the kernel admission and discarded it, so the
+  handler admitted the call a second time: the checks ran twice and a registered seed one
+  of them names resolved twice. The pre-flight now hands its admission to the handler,
+  which runs the call under it, as a plain call does. A retry that carries answers
+  (`inputResponses` or `requestState`) changes the arguments the checks were asked on, so
+  it is admitted afresh. A denied call is still a `403` with its `WWW-Authenticate`
+  challenge. This corrects the 0.2.0 note that a call streaming progress resolves the seed
+  once more.
+
+- **A question an `AdditionalInputRequired` asks is checked against the parameters the
+  call itself declares.** From `django-service-specs` 0.23.0 a Validator may declare
+  `parameters(self, *, call_context=None)`, and dispatch validates under the call's
+  context. The names a client may answer under were read from the parameters asked with
+  no context, so a Validator that leaves a name out inside a call was asked for that name
+  anyway, and the answer was then refused as an unknown argument. The question is now
+  answered as an internal error (`-32603`), as one for an undeclared name is. A resource read and
+  a watch likewise read the URI's variables under the call's own context; registration
+  and the advertised input schema still ask without one, as the kernel's own schema does.
+
 ## [0.2.0] — 2026-11-02
 
 ### Changed
@@ -551,6 +588,7 @@ carries; releases up to 0.54.0 are in
   running. The worker's run now enters below that decision. A client that did
   not declare the extension is still refused `-32021` by a `REQUIRED` tool.
 
-[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Artui/django-spec-mcp/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Artui/django-spec-mcp/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Artui/django-spec-mcp/compare/v0.0.0...v0.1.0
