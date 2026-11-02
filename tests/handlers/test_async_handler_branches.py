@@ -181,7 +181,7 @@ async def test_an_async_output_selector_reshapes_the_result() -> None:
         ServiceSpec(
             service=lambda: {"raw": True},
             output_selector_spec=SelectorSpec(
-                kind=SelectorKind.RETRIEVE, selector=shape, permissions=OPEN
+                kind=SelectorKind.RETRIEVE, selector=shape, permissions=None
             ),
             permissions=OPEN,
             atomic=False,

@@ -37,8 +37,10 @@ def run_kernel_tool(
     server arguments, judged the scope gate, merged a retry's answers, asked
     the spec's checks (``admit_kernel_call``) and charged the rate limits, so
     this is only the call: the kernel's ``dispatch`` under ``admission``, the
-    principal, grant and call context the checks were asked with, so a call
-    whose arguments passed the shape check is not asked again (a call whose
+    principal, grant and call context the checks were asked with, and the
+    values of the seeds they name (``test_a_wire_tool_call_resolves_a_checks_seed_once``),
+    so a call whose arguments passed the shape check is not asked again and
+    resolves those seeds no second time (a call whose
     arguments failed it is counted in ``admit_kernel_call``), a refusal
     answered through ``KERNEL_REFUSALS``, a ``not_found`` worded by
     ``not_found_result``, and the presented value as the tool result.
@@ -50,6 +52,7 @@ def run_kernel_tool(
             binding.spec,
             principal=admission.principal,
             grant=admission.grant,
+            seeds=admission.seeds,
             arguments=dispatched,
             pool_seeds=context.pool_seeds,
             unknown_arguments=binding.unknown_arguments,

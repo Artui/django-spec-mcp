@@ -382,15 +382,15 @@ wheels = [
 
 [[package]]
 name = "django-service-specs"
-version = "0.20.0"
+version = "0.23.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "django" },
     { name = "typing-extensions" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/33/c6/ef2aabba656bc6d5bd8a9a8d86b65e41158c8001ea4f170dd5332f310bc2/django_service_specs-0.20.0.tar.gz", hash = "sha256:1f3ab9207daf7c36a536cc6ed5efb11a9f3eb0f94d48a0f37391757f7992c5c6", size = 1067439, upload-time = "2026-10-29T12:54:04.51Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/42/f0/a381dcfc31a187c5c828b4352d9a4ca6ceaba9850e0d8f53832a7145c1cc/django_service_specs-0.23.0.tar.gz", hash = "sha256:66ae717fb11544f3e682cf4acfaede870e9cdb5c8cce90a12aba991a78184e29", size = 1158203, upload-time = "2026-11-02T15:05:51.407Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3d/3d/8b8ba888adb4db2e00fdda7d016931e716c0d88106c48910da85af6337eb/django_service_specs-0.20.0-py3-none-any.whl", hash = "sha256:96ca1c82f0e69f1784d948ec393a256b16fc191e8058b81443539e7be1be5e3f", size = 473448, upload-time = "2026-10-29T12:54:02.597Z" },
+    { url = "https://files.pythonhosted.org/packages/c1/55/9394ae7e94906b4d748a00ebf47771a652f5d7ec6fbad7a144e3126e860d/django_service_specs-0.23.0-py3-none-any.whl", hash = "sha256:47444d917333f75bb8d2d7bf2cbe6e6c44ce43acd888490faad1b840d79b4d73", size = 509812, upload-time = "2026-11-02T15:05:49.728Z" },
 ]
 
 [[package]]
@@ -441,7 +441,7 @@ docs = [
 [package.metadata]
 requires-dist = [
     { name = "django", specifier = ">=4.2" },
-    { name = "django-service-specs", specifier = ">=0.20.0" },
+    { name = "django-service-specs", specifier = ">=0.23.0" },
     { name = "jsonschema", extras = ["format-nongpl"], marker = "extra == 'test'", specifier = ">=4.0.1" },
     { name = "opentelemetry-api", marker = "extra == 'otel'", specifier = ">=1.27" },
     { name = "redis", marker = "extra == 'redis'", specifier = ">=5.0.1" },

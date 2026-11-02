@@ -203,7 +203,7 @@ def test_a_write_whose_instance_selector_raises_http404_is_not_found_unrun() -> 
             atomic=False,
             permissions=OPEN,
             instance_selector_spec=SelectorSpec(
-                kind=SelectorKind.RETRIEVE, selector=missing, reads=PK, permissions=OPEN
+                kind=SelectorKind.RETRIEVE, selector=missing, reads=PK, permissions=None
             ),
         ),
         name="things.update",

@@ -50,6 +50,7 @@ async def run_kernel_tool_async(
             binding.spec,
             principal=admission.principal,
             grant=admission.grant,
+            seeds=admission.seeds,
             arguments=dispatched,
             pool_seeds=context.pool_seeds,
             unknown_arguments=binding.unknown_arguments,

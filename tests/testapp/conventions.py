@@ -96,7 +96,7 @@ def conventions_server(
                 kind=SelectorKind.RETRIEVE,
                 selector=_by_pk,
                 reads=Parameters([Parameter("pk", "integer", required=True)]),
-                permissions=OPEN,
+                permissions=None,
             ),
             validator=DataclassValidator(_Rename),
             presenter=DataclassPresenter(_Row),

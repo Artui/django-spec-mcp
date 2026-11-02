@@ -38,7 +38,14 @@ classifiers = [
 dependencies = [
     "django>=4.2",
     # The kernel this package serves, and the one it imports its own names from.
-    # 0.20.0 is the floor, and it is a hard one: a prompt's and a view's checks
+    # 0.23.0 is the floor: from 0.22.0 a ``ServiceSpec`` refuses a nested
+    # selector seat that declares ``permissions``, so a spec the docs show is
+    # built the same way on every kernel the package allows, and from 0.23.0
+    # ``check_seeds`` reads a precondition's, a condition's and the other
+    # callables' signatures, so ``register_tool`` refuses at registration a spec
+    # naming a seed nothing fills, which 0.22.0 let register and failed on every
+    # call. ``tests/test_kernel_floor.py`` holds both. Under that, 0.20.0
+    # is a hard limit: a prompt's and a view's checks
     # are held to the kernel's rule through ``check_permissions`` and their
     # answers read through ``sync_answer``, both first exported from the root in
     # 0.20.0 and imported at module level, so below it the server does not
@@ -49,7 +56,7 @@ dependencies = [
     # with this one whenever a raise changes what the kernel refuses: the two
     # routes reach one spec, and with only one raised the same selector can be a
     # not-found on one route and an error on the other.
-    "django-service-specs>=0.20.0",
+    "django-service-specs>=0.23.0",
 ]
 
 [project.optional-dependencies]
@@ -219,7 +226,7 @@ root = ["./django_spec_mcp"]
 # block under a new dated heading. Run via `uvx bump-my-version` (no
 # permanent dependency added to the project).
 [tool.bumpversion]
-current_version = "0.1.0"
+current_version = "0.2.0"
 allow_dirty = false
 commit = false
 tag = false

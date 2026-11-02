@@ -182,7 +182,7 @@ def test_an_output_selector_reshapes_the_result(handle: Handle) -> None:
             output_selector_spec=SelectorSpec(
                 kind=SelectorKind.RETRIEVE,
                 selector=lambda *, result: {"shaped": result["raw"]},
-                permissions=OPEN,
+                permissions=None,
             ),
             permissions=OPEN,
             atomic=False,

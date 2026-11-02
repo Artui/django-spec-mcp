@@ -11,6 +11,47 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-11-02
+
+### Changed
+
+- **Requires `django-service-specs` 0.23.0.** The floor moves from 0.20.0, and the
+  kernel's `ServiceSpec` now refuses, when it is built, a nested selector seat
+  (`instance_selector_spec`, `collection_selector_spec` or `output_selector_spec`)
+  whose `SelectorSpec` declares `permissions`: the service's own `permissions`
+  decide the call, so a seat declares none. From 0.23.0 `check_seeds` also reads the
+  signatures of a spec's preconditions, affordance conditions, output selector and
+  `extend_queryset`, so `register_tool` refuses, with `ImproperlyConfigured` at
+  registration, a spec whose callable names a seed nothing fills (a precondition
+  `def _check(*, frozen)` with no `frozen` seed registered); such a spec already
+  failed on every call. The kernel's changelog for 0.21.0 to 0.23.0 lists the rest,
+  among them that a `parameters` override on a `ServiceSpec` or `SelectorSpec`
+  subclass must accept `call_context`, and that the kernel's translation catalog
+  loads only when `"django_service_specs"` is in `INSTALLED_APPS` (it runs unlisted).
+- **A registered seed a spec's check names resolves once per call.** A check
+  method may name a seed in the server's `pool_seeds=` as a keyword. The server
+  asks a kernel spec's checks before it charges the call, through the kernel's
+  `check_call`, and now hands the values those checks were offered on to
+  `dispatch` as `seeds=`. So the check and the service or selector see one
+  object, and the seed's resolver runs once rather than twice. This holds on
+  `tools/call` and `resources/read` on both endpoints, on `call_tool` and
+  `acall_tool`, and on a task's worker. A call streaming progress resolves it
+  once more, in the pre-flight that asks the checks before the stream opens,
+  and a task-mode call once when the task is created and once in its worker.
+  A call whose arguments fail their shape, a `many` call with a refused row,
+  and a check raising a refusal that is no denial are answered as before and
+  hand dispatch no values, since its grant there is not the one the checks
+  returned. A failed shape still
+  resolves the seed once, for the judgment on no arguments; a refused row and
+  a refusal that is no denial resolve it twice, as dispatch asks the checks
+  again.
+- **A `many` tool's rows ask only what the caller must send.** The `inputSchema` is
+  the kernel's `spec_caller_input_schema`, so a row field a typed `input_data`
+  always fills is no longer offered, one it may fill (declinable, or any field
+  beside an untyped `input_data`) is no longer required, and a row left requiring
+  nothing writes no `required`. The top level is unchanged: what the server fills
+  is withheld and what a provider may fill is relaxed, as before.
+
 ## [0.1.0] — 2026-10-29
 
 ### Added
@@ -510,5 +551,6 @@ carries; releases up to 0.54.0 are in
   running. The worker's run now enters below that decision. A client that did
   not declare the extension is still refused `-32021` by a `REQUIRED` tool.
 
-[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Artui/django-spec-mcp/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Artui/django-spec-mcp/compare/v0.0.0...v0.1.0

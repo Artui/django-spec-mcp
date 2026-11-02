@@ -44,7 +44,7 @@ def _server() -> MCPServer:
             service=lambda: Invoice.objects.get(),
             permissions=OPEN,
             output_selector_spec=order_selector_spec(
-                SelectorKind.RETRIEVE, selector=lambda *, result: result
+                SelectorKind.RETRIEVE, selector=lambda *, result: result, permissions=None
             ),
         ),
         name="place_order",

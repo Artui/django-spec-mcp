@@ -489,12 +489,12 @@ def _rows() -> list[dict[str, int]]:
     [
         {
             "instance_selector_spec": SelectorSpec(
-                kind=SelectorKind.RETRIEVE, selector=_one_row, permissions=[Unrestricted()]
+                kind=SelectorKind.RETRIEVE, selector=_one_row, permissions=None
             )
         },
         {
             "collection_selector_spec": SelectorSpec(
-                kind=SelectorKind.LIST, selector=_rows, permissions=[Unrestricted()]
+                kind=SelectorKind.LIST, selector=_rows, permissions=None
             )
         },
     ],

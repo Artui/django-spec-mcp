@@ -17,6 +17,7 @@ from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import (
     DEFAULT_PAGE_SIZE,
+    CallSeeds,
     DispatchError,
     DispatchResult,
     Grant,
@@ -98,11 +99,26 @@ class KernelAdmission:
     the checks' own, so a call whose arguments pass is not asked again
     (``test_a_check_is_asked_once_per_call``), or what dispatch would have
     been handed without this step, for a call whose shape check answers first.
+
+    ``seeds`` are the values of the registered seeds the spec's checks name,
+    as ``check_call`` resolved them for those checks, handed to dispatch as
+    ``seeds=`` beside the grant, so the run takes them as they are: each
+    resolves once per call, and the check and the service or selector see one
+    object (``tests/handlers/test_a_seed_a_check_names_resolves_once.py``).
+    The carrier is bound by identity to the spec, ``principal``,
+    ``call_context`` and the server's ``pool_seeds``, which is why every
+    dispatch site hands this admission's own objects. ``None`` wherever
+    ``grant`` is not the checks' own, since dispatch takes ``seeds=`` only
+    beside the grant its prelude returned
+    (``test_a_call_failing_its_shape_carries_no_seeds_and_is_answered_as_before``).
+    An admission belongs to one call: it is never stored, copied or handed to
+    a task's worker, and the carrier refuses to be pickled.
     """
 
     principal: Any
     grant: Grant | None
     call_context: dict[str, Any]
+    seeds: CallSeeds | None
 
 
 @dataclass(frozen=True)
@@ -599,8 +615,10 @@ def admit_kernel_call(
     context = call_context(request, binding.name)
     unchecked = unguarded_grant(binding, principal, config)
     keywords: dict[str, Any] = {"pool_seeds": pool_seeds, "call_context": context}
+    grant: Grant | None
+    seeds: CallSeeds | None
     try:
-        _checked, grant = check_call(
+        checked = check_call(
             binding.spec,
             principal=principal,
             arguments=arguments,
@@ -608,6 +626,8 @@ def admit_kernel_call(
             unknown_arguments=unknown_arguments,
             **keywords,
         )
+        _arguments, grant = checked
+        seeds = checked.seeds
     except _DENIALS:
         raise
     except InvalidArguments as refusal:
@@ -615,7 +635,11 @@ def admit_kernel_call(
             binding, principal, config=config, pool_seeds=pool_seeds, call_context=context
         ):
             raise NotPermitted() from None
-        grant = unchecked
+        # The grant is not the checks' own, and dispatch takes ``seeds=`` only
+        # beside that one, so no carrier goes with it; a refused row's dispatch
+        # resolves the seeds again as it asks the checks again
+        # (test_a_many_call_with_a_refused_row_carries_no_seeds_and_is_answered_as_before).
+        grant, seeds = unchecked, None
     except (DispatchError, ServiceError):
         # A refusal that is no denial, such as a ``ServiceError`` a check or a
         # seed's resolver raises: dispatch raises it again and the call's own
@@ -623,8 +647,8 @@ def admit_kernel_call(
         # it (``test_a_service_error_a_check_raises_streams_the_plain_calls_answer``).
         # One arc to coverage, each kind held by its case of
         # ``test_a_check_raising_a_refusal_that_is_no_denial_is_answered_as_before``.
-        grant = unchecked
-    return KernelAdmission(principal=principal, grant=grant, call_context=context)
+        grant, seeds = unchecked, None
+    return KernelAdmission(principal=principal, grant=grant, call_context=context, seeds=seeds)
 
 
 def admit_kernel_tool_call(
