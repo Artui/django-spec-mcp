@@ -53,7 +53,7 @@ from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
-from django_spec_mcp.transport.progress_dispatch import preflight_permissions
+from django_spec_mcp.transport.progress_dispatch import preflight_admission
 from django_spec_mcp.transport.response_stream import (
     _stream,
     _StreamReporter,
@@ -844,7 +844,7 @@ def test_preflight_stands_aside_for_everything_it_cannot_speak_for() -> None:
         protocol_version=MODERN,
         config=server.config,
     )
-    assert preflight_permissions("resources/read", {"uri": "x://y"}, context) is None
-    assert preflight_permissions("tools/call", "not-a-dict", context) is None
-    assert preflight_permissions("tools/call", {"name": 7}, context) is None
-    assert preflight_permissions("tools/call", {"name": "nope"}, context) is None
+    assert preflight_admission("resources/read", {"uri": "x://y"}, context) is None
+    assert preflight_admission("tools/call", "not-a-dict", context) is None
+    assert preflight_admission("tools/call", {"name": 7}, context) is None
+    assert preflight_admission("tools/call", {"name": "nope"}, context) is None
