@@ -1014,6 +1014,7 @@ def tool_refusal_scene(
     prior: ResolvedInput,
     context: MCPCallContext,
     otel_span: Any,
+    dispatch_context: dict[str, Any],
 ) -> KernelRefusalScene:
     """The scene a ``tools/call`` refusal is answered in, on either transport:
     the call's arguments and wording, its span, and the round a request for
@@ -1027,12 +1028,16 @@ def tool_refusal_scene(
         # (``test_a_kernel_selector_ignores_a_round_trip``).
         input_round=None
         if binding.is_selector
-        else KernelInputRound(prior, context, admitted_arguments(binding, context.pool_seeds)),
+        else KernelInputRound(
+            prior, context, admitted_arguments(binding, context.pool_seeds, dispatch_context)
+        ),
         span=otel_span,
     )
 
 
-def admitted_arguments(binding: KernelToolBinding, pool_seeds: PoolSeeds) -> frozenset[str]:
+def admitted_arguments(
+    binding: KernelToolBinding, pool_seeds: PoolSeeds, dispatch_context: dict[str, Any]
+) -> frozenset[str]:
     """The argument names a client may answer an ``AdditionalInputRequired`` under.
 
     The spec's parameters less every name the server fills, since an answer comes
@@ -1050,7 +1055,7 @@ def admitted_arguments(binding: KernelToolBinding, pool_seeds: PoolSeeds) -> fro
     parameters), ``test_a_field_the_server_fills_is_not_admitted`` (the server
     arguments) and ``test_a_key_a_provider_fills_is_not_admitted`` (the owned keys).
     """
-    return frozenset(binding.spec.parameters().names()) - (
+    return frozenset(binding.spec.parameters(call_context=dispatch_context).names()) - (
         binding.server_arguments.names() | server_owned_keys(binding.spec, pool_seeds=pool_seeds)
     )
 

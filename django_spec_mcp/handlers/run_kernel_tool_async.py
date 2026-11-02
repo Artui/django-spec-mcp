@@ -44,7 +44,9 @@ async def run_kernel_tool_async(
     presented value as the tool result.
     """
     dispatched, page = page_request(binding, arguments, context.config)
-    scene = tool_refusal_scene(binding, arguments, prior, context, otel_span)
+    scene = tool_refusal_scene(
+        binding, arguments, prior, context, otel_span, admission.call_context
+    )
     try:
         result = await adispatch(
             binding.spec,
