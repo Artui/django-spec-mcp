@@ -25,7 +25,10 @@ carries; releases up to 0.54.0 are in
   `dispatch` as `seeds=`. So the check and the service or selector see one
   object, and the seed's resolver runs once rather than twice. This holds on
   `tools/call` and `resources/read` on both endpoints, on `call_tool` and
-  `acall_tool`, and on a task's worker. A call whose arguments fail their
+  `acall_tool`, and on a task's worker. A call streaming progress resolves it
+  once more, in the pre-flight that asks the checks before the stream opens,
+  and a task-mode call once when the task is created and once in its worker.
+  A call whose arguments fail their
   shape, a `many` call with a refused row, and a check raising a refusal that
   is no denial are answered as before and hand dispatch no values, since its
   grant there is not the one the checks returned. A failed shape still
