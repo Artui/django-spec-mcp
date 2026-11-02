@@ -45,12 +45,13 @@ from django_service_specs import (
     Unrestricted,
 )
 
-from django_spec_mcp import MCPServer
+from django_spec_mcp import MCPServer, TaskPolicy
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.auth_backend import MCPAuthBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from django_spec_mcp.transport.progress_dispatch import preflight_permissions
 from django_spec_mcp.transport.response_stream import (
@@ -59,6 +60,7 @@ from django_spec_mcp.transport.response_stream import (
     build_response_stream,
 )
 from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
+from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
 from tests.testapp.auth_backend import HeaderAuthBackend
 from tests.testapp.urlconf_for import urlconf_for
 
@@ -533,6 +535,68 @@ async def test_a_streamed_call_resolves_a_checks_seed_once() -> None:
     assert len(checked) == 1, checked
     assert checked[0] is resolved[0]
     assert ran == [resolved[0]]
+
+
+@pytest.mark.django_db(transaction=True)
+async def test_a_streamed_task_call_is_the_exception_resolving_a_seed_twice_before_the_worker() -> (
+    None
+):
+    """The documented exception to the test above: a call that streams progress
+    and also runs as a task.
+
+    The pre-flight admits it (1); the call then reaches ``maybe_create_task``,
+    which admits it again without the pre-flight's admission (2); the worker
+    resolves once more, on its own. This pins the two before the worker, not a
+    wish: a follow-up lets task creation take the pre-flight's admission, and
+    the count here becomes 1 when it does. The plain task call is 1 at
+    creation (``tests/tasks/test_a_task_resolves_a_checks_seed_once.py``).
+    """
+    resolved: list[_Tenant] = []
+    enqueued: list[str] = []
+
+    class _Executor:
+        def enqueue(self, task_id: str) -> None:
+            enqueued.append(task_id)
+
+    def resolve() -> _Tenant:
+        tenant = _Tenant()
+        resolved.append(tenant)
+        return tenant
+
+    server = MCPServer(
+        name="p",
+        auth_backend=AllowAnyBackend(),
+        session_store=InMemorySessionStore(),
+        task_store=InMemoryTaskStore(),
+        task_executor=_Executor(),
+        pool_seeds=DEFAULT_POOL_SEEDS.extend(tenant=resolve),
+    )
+    server.register_tool(
+        ServiceSpec(
+            service=lambda *, tenant: {"tenant": "seen"},  # noqa: ARG005
+            permissions=[_NamesTenant([])],
+            atomic=False,
+        ),
+        name="p.task",
+        task_policy=TaskPolicy.OPTIONAL,
+    )
+
+    response = await _post(
+        server,
+        name="p.task",
+        extra={
+            "_meta": {
+                **_meta(),
+                "io.modelcontextprotocol/clientCapabilities": {
+                    "extensions": {TASKS_EXTENSION_ID: {}}
+                },
+            }
+        },
+    )
+
+    assert (await _answer(response))["result"]["resultType"] == "task"
+    assert len(enqueued) == 1, enqueued
+    assert len(resolved) == 2, resolved
 
 
 class _RecordsTenant(PermissionCheck):

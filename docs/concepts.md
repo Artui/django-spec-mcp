@@ -237,9 +237,10 @@ raises for a caller fails that caller's whole listing, not only its calls.
   `tools/call`. Some calls differ: a streamed retry carrying
   `inputResponses` is admitted afresh, since the answers change the arguments
   the checks are asked on; a task-mode call resolves it once at task creation
-  and once in the worker; and the three answers admission falls back from
-  resolve it 1 time (a call failing its shape), 2 times (a `many` call with a
-  refused row) and 2 times (a refusal that is no denial, such as a
+  and once in the worker, and a task-mode call that also streams progress resolves it
+  once in the pre-flight, once at task creation and once in the worker; and the three
+  answers admission falls back from resolve it 1 time (a call failing its shape), 2 times
+  (a `many` call with a refused row) and 2 times (a refusal that is no denial, such as a
   `ServiceNotFound` a check raises).
 - **One set per mount, with no per-call or per-tool override.** What varies per
   call belongs in the resolver; a mount needing different seeds is a second

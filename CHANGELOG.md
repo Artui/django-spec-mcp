@@ -29,14 +29,17 @@ carries; releases up to 0.54.0 are in
 ### Fixed
 
 - **A streamed `tools/call` asks the spec's checks once, and resolves each seed a check
-  names once.** The stream's pre-flight made the kernel admission and discarded it, so the
-  handler admitted the call a second time: the checks ran twice and a registered seed one
-  of them names resolved twice. The pre-flight now hands its admission to the handler,
-  which runs the call under it, as a plain call does. A retry that carries answers
+  names once, unless it also runs as a task.** The stream's pre-flight made the kernel
+  admission and discarded it, so the handler admitted the call a second time: the checks
+  ran twice and a registered seed one of them names resolved twice. The pre-flight now
+  hands its admission to the handler, which runs the call under it, as a plain call does.
+  A retry that carries answers
   (`inputResponses` or `requestState`) changes the arguments the checks were asked on, so
   it is admitted afresh. A denied call is still a `403` with its `WWW-Authenticate`
   challenge. This corrects the 0.2.0 note that a call streaming progress resolves the seed
-  once more.
+  once more, except for a streamed call that runs as a task: task creation admits it again
+  without the pre-flight's admission, so a seed a check names resolves once in the
+  pre-flight, once at task creation, and once in the worker.
 
 - **A question an `AdditionalInputRequired` asks is checked against the parameters the
   call itself declares.** From `django-service-specs` 0.23.0 a Validator may declare
