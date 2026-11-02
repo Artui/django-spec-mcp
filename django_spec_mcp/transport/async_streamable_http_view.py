@@ -20,6 +20,8 @@ from django_spec_mcp.auth.principal_for_token import principal_for_token
 from django_spec_mcp.auth.types.auth_backend import MCPAuthBackend
 from django_spec_mcp.config.types.mcp_config import MCPConfig
 from django_spec_mcp.handlers.async_dispatch import adispatch
+from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
+from django_spec_mcp.handlers.kernel_utils import KernelAdmission
 from django_spec_mcp.handlers.tasks_utils import (
     declares_tasks_extension,
     missing_capability_error,
@@ -46,7 +48,7 @@ from django_spec_mcp.tasks.types.task_store import TaskStore
 from django_spec_mcp.transport.negotiate_protocol_version import negotiate_protocol_version
 from django_spec_mcp.transport.progress_dispatch import (
     can_report_progress,
-    preflight_permissions,
+    preflight_admission,
     progress_token,
     stream_with_progress,
 )
@@ -514,18 +516,22 @@ class AsyncStreamableHttpView(View):
             return None
 
         # Before the stream opens, while a status can still be chosen. See
-        # ``preflight_permissions`` for why this one check moves out here.
-        denied: JsonRpcError | None = await acall(
-            preflight_permissions, message.method, params, context
+        # ``preflight_admission`` for why this one check moves out here.
+        outcome: JsonRpcError | KernelAdmission | None = await acall(
+            preflight_admission, message.method, params, context
         )
-        if denied is not None:
+        if isinstance(outcome, JsonRpcError):
             return challenged_error_response(
-                denied, request_id=message.id, status=403, backend=self._require_auth_backend()
+                outcome, request_id=message.id, status=403, backend=self._require_auth_backend()
             )
+        admission: KernelAdmission | None = outcome
 
         def dispatch_with(reporter: ProgressReporter) -> Any:
-            return adispatch(
-                message.method, params, dataclasses.replace(context, progress=reporter)
+            # ``can_report_progress`` let only ``tools/call`` through, which the
+            # router sends straight to this handler, so calling it here is the
+            # same dispatch with the pre-flight's admission handed along.
+            return handle_tools_call_async(
+                params, dataclasses.replace(context, progress=reporter), admission=admission
             )
 
         return stream_with_progress(

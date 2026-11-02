@@ -12,7 +12,7 @@ from django_spec_mcp.handlers.input_dispatch import (
     refusal_result,
 )
 from django_spec_mcp.handlers.invalidation_dispatch import announce_invalidations_async
-from django_spec_mcp.handlers.kernel_utils import admit_kernel_tool_call
+from django_spec_mcp.handlers.kernel_utils import KernelAdmission, admit_kernel_tool_call
 from django_spec_mcp.handlers.resolve_call_input import resolve_call_input
 from django_spec_mcp.handlers.run_kernel_tool_async import run_kernel_tool_async
 from django_spec_mcp.handlers.task_dispatch import maybe_create_task
@@ -39,6 +39,8 @@ from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 async def handle_tools_call_async(
     params: dict[str, Any] | None,
     context: MCPCallContext,
+    *,
+    admission: KernelAdmission | None = None,
 ) -> dict[str, Any] | JsonRpcError:
     """Async sibling of ``handle_tools_call``.
 
@@ -47,6 +49,12 @@ async def handle_tools_call_async(
     loop. The transport shell — the binding's scope gate and rate limits,
     ``structuredContent`` — stays here, its blocking parts
     through ``acall``.
+
+    ``admission`` is the one a streamed call's pre-flight already made, for the
+    arguments the client sent. It is reused only when no retry answer was merged
+    into them, and the spec's checks are asked afresh otherwise, so each resolves
+    its seeds once per call. Only the transport's stream hands one in; the
+    default asks the checks here, as every other caller expects.
     """
     if not isinstance(params, dict):
         return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, "tools/call params must be an object")
@@ -69,7 +77,7 @@ async def handle_tools_call_async(
 
     try:
         dispatched, ran_with = await run_with_deadline(
-            _dispatch_tool_call_async(binding, params, arguments_raw, context),
+            _dispatch_tool_call_async(binding, params, arguments_raw, context, admission),
             resolve_bound(binding.dispatch_timeout, context.config.dispatch_timeout),
         )
     except asyncio.TimeoutError:  # noqa: UP041 — 3.10 keeps this distinct from builtins
@@ -99,13 +107,15 @@ async def _dispatch_tool_call_async(
     params: dict[str, Any],
     arguments_raw: dict[str, Any],
     context: MCPCallContext,
+    preflight: KernelAdmission | None,
 ) -> tuple[dict[str, Any] | JsonRpcError, dict[str, Any]]:
     """Dispatch a resolved binding; return the result and its arguments.
 
     Split out of ``handle_tools_call_async`` so one deadline covers the
     whole dispatch — permissions, rate limits, the spec run and rendering — and
     one size check sees the finished result. The arguments returned are the
-    ones the tool ran with, as in the sync sibling.
+    ones the tool ran with, as in the sync sibling. ``preflight`` is the
+    admission a streamed call's pre-flight made, if any.
     """
     with span("mcp.tools.call", attributes=span_attrs(binding.name, context)) as otel_span:
         # See the sync sibling: the binding's scope gate, before a retry's
@@ -124,7 +134,16 @@ async def _dispatch_tool_call_async(
         # See the sync sibling: the spec's own checks, on the arguments the
         # tool will run with and before the charge, off the loop because a
         # check may query.
-        admission = await acall(admit_kernel_tool_call, binding, arguments_raw, context)
+        # A pre-flight's admission was made on what the client sent, so it
+        # stands only while nothing was merged in
+        # (``test_a_streamed_retry_with_merged_answers_is_admitted_afresh``);
+        # reusing it keeps one resolution of each seed a check names, and the
+        # call context the carrier is bound to by identity.
+        admission: KernelAdmission | JsonRpcError
+        if preflight is not None and not prior.carried:
+            admission = preflight
+        else:
+            admission = await acall(admit_kernel_tool_call, binding, arguments_raw, context)
         if isinstance(admission, JsonRpcError):
             return admission, arguments_raw
 

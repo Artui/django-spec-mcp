@@ -6,7 +6,7 @@ from typing import Any
 from django.http import StreamingHttpResponse
 from django_service_specs import ProgressReporter, apply_server_arguments
 
-from django_spec_mcp.handlers.kernel_utils import admit_kernel_tool_call
+from django_spec_mcp.handlers.kernel_utils import KernelAdmission, admit_kernel_tool_call
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import forbidden, judge_tool_permissions
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
@@ -59,6 +59,18 @@ def can_report_progress(method: str, params: Any, context: MCPCallContext) -> bo
 
 
 def preflight_permissions(method: str, params: Any, context: MCPCallContext) -> JsonRpcError | None:
+    """The denial ``preflight_admission`` answers, or ``None`` when there is none.
+
+    For a caller that wants only the question, not the admission that answers
+    it for a call that is not refused.
+    """
+    outcome = preflight_admission(method, params, context)
+    return outcome if isinstance(outcome, JsonRpcError) else None
+
+
+def preflight_admission(
+    method: str, params: Any, context: MCPCallContext
+) -> JsonRpcError | KernelAdmission | None:
     """Run a tool's permission stack *before* deciding to stream.
 
     A ``StreamingHttpResponse`` commits its status before the dispatch runs, so
@@ -73,8 +85,11 @@ def preflight_permissions(method: str, params: Any, context: MCPCallContext) -> 
     and buy nothing — a rate-limit rejection is already a ``200`` with the
     detail in the body.
 
-    Returns ``None`` when there is nothing to deny: only ``tools/call`` has a
-    binding to check here. That narrowness is safe **because**
+    Returns the denial, or the ``KernelAdmission`` the spec's checks made for a
+    call they admit, which the streamed dispatch runs under rather than asking
+    them again (``test_a_streamed_call_resolves_a_checks_seed_once``). ``None``
+    when there is nothing to deny and nothing admitted: only ``tools/call`` has
+    a binding to check here. That narrowness is safe **because**
     ``can_report_progress`` refuses to stream anything this cannot speak
     for — changing one without the other reopens the hole.
     """
@@ -93,13 +108,16 @@ def preflight_permissions(method: str, params: Any, context: MCPCallContext) -> 
         return forbidden(required_scopes)
     arguments: Any = params.get("arguments")
     sent: dict[str, Any] = arguments if isinstance(arguments, dict) else {}
-    if _kernel_refuses(binding, sent, context):
+    admitted = _kernel_admission(binding, sent, context)
+    if isinstance(admitted, JsonRpcError):
         return JsonRpcError(JsonRpcErrorCode.FORBIDDEN, "Insufficient permission")
-    return None
+    return admitted
 
 
-def _kernel_refuses(binding: Any, arguments: dict[str, Any], context: MCPCallContext) -> bool:
-    """Whether the kernel spec's own checks deny this call.
+def _kernel_admission(
+    binding: Any, arguments: dict[str, Any], context: MCPCallContext
+) -> KernelAdmission | JsonRpcError:
+    """The kernel spec's own checks on this call: its admission, or the denial.
 
     A kernel binding's ``permissions`` hold only its ``scopes=`` gate, which
     ``judge_tool_permissions`` has judged. The handler asks the spec's checks
@@ -139,19 +157,21 @@ def _kernel_refuses(binding: Any, arguments: dict[str, Any], context: MCPCallCon
     here. Any other refusal is left to the handler, which answers it in the
     stream as it would without one
     (``test_a_refusal_that_is_not_a_denial_is_left_to_the_handler``).
-    Arguments a retry's answers would merge in are not seen here: the handler
-    judges those again. So when the arguments pass the shape check the checks are
-    asked twice for a streamed call, here and in the handler, and once for a
-    plain one; ``adispatch`` runs under the handler's grant and asks them no
-    third time
-    (``test_a_streamed_call_asks_the_spec_once_more_than_a_plain_one``). A
-    call failing it is asked here as ``admit_kernel_call`` counts, so an
-    admitted ``many`` call with a refused row is asked three times streamed,
-    once here and twice in the handler
+    Arguments a retry's answers would merge in are not seen here, so the
+    handler reuses this admission only when nothing was merged
+    (``test_a_streamed_retry_with_merged_answers_is_admitted_afresh``) and
+    otherwise judges them again. A reused admission is the one the checks and the
+    run share, so a call whose arguments pass the shape check is asked once,
+    here, and ``adispatch`` runs under its grant, its seeds and its call context
+    (``test_a_streamed_call_asks_the_spec_as_often_as_a_plain_one``,
+    ``test_a_streamed_call_resolves_a_checks_seed_once``). A call failing the
+    shape check is asked here as ``admit_kernel_call`` counts, so an admitted
+    ``many`` call with a refused row is asked twice streamed, once here and once
+    in the run
     (``test_a_many_call_with_a_refused_row_is_asked_by_its_prelude_and_by_dispatch``).
     """
     laid: dict[str, Any] = apply_server_arguments(binding.spec, arguments, binding.server_arguments)
-    return isinstance(admit_kernel_tool_call(binding, laid, context), JsonRpcError)
+    return admit_kernel_tool_call(binding, laid, context)
 
 
 def _tool_binding(params: dict[str, Any], context: MCPCallContext) -> Any:

@@ -1377,10 +1377,14 @@ rather than to a stream, and the client polls for them.
     permission stack therefore runs once at the transport before the stream is
     opened, so a denied call still gets `403` and a `WWW-Authenticate`
     challenge. That stack is the tool's `scopes=` gate and the spec's own
-    checks, through the kernel's `check_call`; the handler asks the spec's
-    checks once more before it charges the call. Rate limits stay inside the
-    handler: consuming one is not idempotent, and a rate-limit rejection was
-    already a `200` with the detail in the body.
+    checks, through the kernel's `check_call`. The admission it makes is
+    handed to the handler, which runs the call under it: the spec's checks are
+    asked once for a streamed call, as for a plain one, and a seed a check names
+    resolves once, so the check and the service see the same object. A retry that
+    carries answers (`inputResponses` or `requestState`) changes the arguments
+    the checks were asked on, so the handler asks them afresh for that call.
+    Rate limits stay inside the handler: consuming one is not idempotent, and a
+    rate-limit rejection was already a `200` with the detail in the body.
 
 ## Server-pushed notifications: subscriptions
 
