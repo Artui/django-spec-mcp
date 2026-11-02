@@ -11,6 +11,8 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-11-02
+
 ### Changed
 
 - **A tool linked to a view by a URI its template splits more than one way names the tool.**
@@ -611,7 +613,8 @@ carries; releases up to 0.54.0 are in
   running. The worker's run now enters below that decision. A client that did
   not declare the extension is still refused `-32021` by a `REQUIRED` tool.
 
-[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/Artui/django-spec-mcp/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Artui/django-spec-mcp/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Artui/django-spec-mcp/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Artui/django-spec-mcp/compare/v0.0.0...v0.1.0
