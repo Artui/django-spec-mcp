@@ -19,8 +19,10 @@ carries; releases up to 0.54.0 are in
   `register_tool(ui=UIToolMeta(resource_uri=...))` resolves the URI at registration, and
   with a view registered at `ui://{a}-{b}` a link to `ui://x-y-z` raised the registry's
   ambiguity message, which does not say which tool asked. It now raises
-  `Tool 'name' links to 'ui://x-y-z', which a registered view's URI template splits more
-  than one way`, with the registry's message in the parentheses and as `__cause__`.
+  `Tool 'name' links to 'ui://x-y-z', which a registered resource's URI template splits
+  more than one way`, with the registry's message in the parentheses and as `__cause__`,
+  and ends by advising to name the view by its exact URI. The template may be a data
+  resource's as well as a view's, since the link resolves against every registered one.
 
 ### Fixed
 
