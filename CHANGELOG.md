@@ -11,6 +11,15 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+### Changed
+
+- **A tool linked to a view by a URI its template splits more than one way names the tool.**
+  `register_tool(ui=UIToolMeta(resource_uri=...))` resolves the URI at registration, and
+  with a view registered at `ui://{a}-{b}` a link to `ui://x-y-z` raised the registry's
+  ambiguity message, which does not say which tool asked. It now raises
+  `Tool 'name' links to 'ui://x-y-z', which a registered view's URI template splits more
+  than one way`, with the registry's message in the parentheses and as `__cause__`.
+
 ## [0.3.0] — 2026-11-02
 
 ### Changed

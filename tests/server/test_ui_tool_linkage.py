@@ -145,6 +145,19 @@ class TestRefusedLinks:
         with pytest.raises(ValueError, match="not a view registered on this server"):
             _link(_server(), ui=UIToolMeta(resource_uri="ui://typo.html"))
 
+    def test_a_uri_a_view_template_splits_two_ways(self) -> None:
+        """The registry's refusal names a URI and a template but no tool, and
+        the author of the registration needs the tool: it is what to fix."""
+        server = _server()
+        server.register_ui_resource(name="pair", uri="ui://{a}-{b}", html="<h1>Pair</h1>")
+
+        with pytest.raises(ValueError, match="list_invoices") as raised:
+            _link(server, ui=UIToolMeta(resource_uri="ui://x-y-z"))
+
+        assert "'ui://x-y-z'" in str(raised.value)
+        assert isinstance(raised.value.__cause__, ValueError)
+        assert "Ambiguous resource URI" in str(raised.value.__cause__)
+
     def test_a_data_resource_is_not_a_view(self) -> None:
         server = _server()
         server.register_resource(
