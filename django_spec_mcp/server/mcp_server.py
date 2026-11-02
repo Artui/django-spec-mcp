@@ -312,8 +312,8 @@ class MCPServer:
 
         ``spec`` is a ``django_service_specs`` spec, and its class says which kind
         of tool this is. A service tool's arguments are the spec's parameters at
-        the top level of ``arguments``, as the kernel's ``spec_input_schema``
-        advertises them; a selector tool reads, and a ``LIST`` one paginates
+        the top level of ``arguments``, as the kernel's
+        ``spec_caller_input_schema`` advertises them; a selector tool reads, and a ``LIST`` one paginates
         under ``paginate=True``. The call runs through the kernel's ``dispatch``
         / ``adispatch``, which asks the spec's own ``permissions`` of the
         principal the auth backend resolved for the request.
