@@ -1970,8 +1970,10 @@ acts on. It allows by default, because most checks are class-level only.
 <code>has_scope_permission(principal, spec, scope)</code> is the same question for a call
 that resolves no single row: the set a bulk call acts on or a collection
 reads, and <code>None</code> for a create. A kernel spec's checks are asked once on a
-plain call, and on a streamed call once in its pre-flight and once more when
-the call runs, when its arguments pass the kernel's argument check.</p>
+plain call and on a streamed one alike, when its arguments pass the kernel's
+argument check: a streamed call is asked once, in its pre-flight, and runs under
+that answer. A streamed retry carrying answers is asked again when it runs, since
+the answers change the arguments the checks see.</p>
 <p>A resource read runs the same <code>dispatch</code>, so its spec's checks see the row the
 URI names. <code>completion/complete</code> on a resource template names the template
 rather than a URI, so the spec's checks are asked on no arguments, and a check
