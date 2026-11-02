@@ -1,25 +1,15 @@
 from __future__ import annotations
 
-import hashlib
-import importlib
 import json
 from collections.abc import AsyncIterator
 from typing import Any
 
+from django_spec_mcp._compat.utils import namespace_digest, resolve_async_redis
 
-def _resolve_async_redis() -> Any:
-    """Load ``redis.asyncio.Redis`` when the optional extra is present."""
-    try:
-        return importlib.import_module("redis.asyncio").Redis
-    except ImportError:  # pragma: no cover - exercised by the no-extras smoke job
-        return None
-
-
-AsyncRedis: Any = _resolve_async_redis()
+AsyncRedis: Any = resolve_async_redis()
 
 
 _DEFAULT_KEY_PREFIX: str = "spec-mcp:sse-replay"
-_NAMESPACE_DIGEST_CHARS: int = 12
 # A stream is only worth keeping while its session could still reconnect to it,
 # and the session store's own idle window is that horizon.
 _DEFAULT_TTL_SECONDS: int = 60 * 60 * 24
@@ -96,7 +86,7 @@ class RedisSSEReplayBuffer:
         self._client: Any = client
         self._max_events: int = max_events
         self._prefix: str = (
-            key_prefix if namespace is None else f"{key_prefix}:{_digest(namespace)}"
+            key_prefix if namespace is None else f"{key_prefix}:{namespace_digest(namespace)}"
         )
         self._ttl_seconds: int | None = ttl_seconds
 
@@ -147,11 +137,6 @@ class RedisSSEReplayBuffer:
 
     async def forget(self, session_id: str) -> None:
         await self._client.delete(self._key(session_id))
-
-
-def _digest(namespace: str) -> str:
-    """Hash a free-form server name into something a Redis key can hold."""
-    return hashlib.sha256(namespace.encode("utf-8")).hexdigest()[:_NAMESPACE_DIGEST_CHARS]
 
 
 __all__ = ["RedisSSEReplayBuffer"]

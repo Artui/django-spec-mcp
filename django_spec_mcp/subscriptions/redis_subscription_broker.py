@@ -2,30 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import hashlib
-import importlib
 import json
 from typing import Any
 
+from django_spec_mcp._compat.utils import namespace_digest, resolve_async_redis
 
-def _resolve_async_redis() -> Any:
-    """Resolve ``redis.asyncio.Redis`` without making it an import-time dependency.
-
-    ``redis`` is an optional extra, so importing this module must work without
-    it — the ``ImportError`` fires only when a consumer constructs a broker.
-    Resolved through ``importlib`` so the binding stays plain ``Any`` and the
-    type checker does not narrow it to the imported class.
-    """
-    try:
-        return importlib.import_module("redis.asyncio").Redis
-    except ImportError:  # pragma: no cover - exercised by the no-extras smoke job
-        return None
-
-
-AsyncRedis: Any = _resolve_async_redis()
+AsyncRedis: Any = resolve_async_redis()
 
 _DEFAULT_CHANNEL_PREFIX: str = "spec-mcp:sub"
-_NAMESPACE_DIGEST_CHARS: int = 12
 
 
 class RedisSubscriptionBroker:
@@ -84,7 +68,9 @@ class RedisSubscriptionBroker:
             )
         self._client: Any = client
         self._prefix: str = (
-            channel_prefix if namespace is None else f"{channel_prefix}:{_digest(namespace)}"
+            channel_prefix
+            if namespace is None
+            else f"{channel_prefix}:{namespace_digest(namespace)}"
         )
         self._tasks: dict[int, asyncio.Task[None]] = {}
         self._pubsubs: dict[int, tuple[Any, list[str]]] = {}
@@ -164,11 +150,6 @@ class RedisSubscriptionBroker:
             if isinstance(data, bytes | bytearray):  # pragma: no branch - always bytes
                 data = data.decode()
             await queue.put(json.loads(data))
-
-
-def _digest(namespace: str) -> str:
-    """Hash a free-form server name into something a channel name can hold."""
-    return hashlib.sha256(namespace.encode("utf-8")).hexdigest()[:_NAMESPACE_DIGEST_CHARS]
 
 
 __all__ = ["RedisSubscriptionBroker"]

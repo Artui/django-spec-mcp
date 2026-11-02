@@ -1,18 +1,17 @@
 from __future__ import annotations
 
-import hashlib
 import time
 from typing import Any
 
 from django.core.cache import cache
 
+from django_spec_mcp._compat.utils import namespace_digest
 from django_spec_mcp.protocol.types.task import Task
 from django_spec_mcp.tasks.types.task_record import TaskRecord
 from django_spec_mcp.tasks.utils import is_wellformed_task_id
 from django_spec_mcp.types.task_status import TaskStatus
 
 _KEY_PREFIX: str = "spec-mcp:task:"
-_NAMESPACE_DIGEST_CHARS: int = 12
 # Used when a task declares no TTL: Django's cache API has no "never expire"
 # every backend honours identically, and a task nobody polls would otherwise
 # occupy the cache forever.
@@ -53,7 +52,7 @@ class DjangoCacheTaskStore:
 
     def __init__(self, *, namespace: str | None = None) -> None:
         self._prefix: str = (
-            _KEY_PREFIX if namespace is None else f"{_KEY_PREFIX}{_digest(namespace)}:"
+            _KEY_PREFIX if namespace is None else f"{_KEY_PREFIX}{namespace_digest(namespace)}:"
         )
 
     def _key(self, task_id: str) -> str:
@@ -158,10 +157,6 @@ def _deserialize(raw: dict[str, Any]) -> TaskRecord | None:
         )
     except (KeyError, ValueError, TypeError):
         return None
-
-
-def _digest(namespace: str) -> str:
-    return hashlib.sha256(namespace.encode("utf-8")).hexdigest()[:_NAMESPACE_DIGEST_CHARS]
 
 
 __all__ = ["DjangoCacheTaskStore"]
