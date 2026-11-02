@@ -24,8 +24,8 @@ carries; releases up to 0.54.0 are in
   `def _check(*, frozen)` with no `frozen` seed registered); such a spec already
   failed on every call. The kernel's changelog for 0.21.0 to 0.23.0 lists the rest,
   among them that a `parameters` override on a `ServiceSpec` or `SelectorSpec`
-  subclass must accept `call_context`, and that a translated refusal needs
-  `"django_service_specs"` in `INSTALLED_APPS`.
+  subclass must accept `call_context`, and that the kernel's translation catalog
+  loads only when `"django_service_specs"` is in `INSTALLED_APPS` (it runs unlisted).
 
 ## [0.1.0] — 2026-10-29
 

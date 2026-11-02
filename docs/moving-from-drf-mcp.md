@@ -57,8 +57,9 @@ decide the call, so a seat leaves `permissions` at its default, `None`.
 `register_tool` also refuses, with `ImproperlyConfigured` at registration, a spec
 whose precondition or condition names a seed nothing fills, which already failed on
 every call. The kernel's changelog for 0.21.0 to 0.23.0 has the rest: a `parameters`
-override on a spec subclass must accept `call_context`, and a translated refusal
-needs `"django_service_specs"` in `INSTALLED_APPS`.
+override on a spec subclass must accept `call_context`, and the kernel's translation
+catalog loads only when `"django_service_specs"` is in `INSTALLED_APPS` (it runs
+unlisted).
 
 djangorestframework, djangorestframework-services and
 djangorestframework-dataclasses are no longer dependencies, and nothing in the
