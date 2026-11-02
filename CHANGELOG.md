@@ -11,6 +11,14 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+### Changed
+
+- **Requires `django-service-specs` 0.23.0.** The floor moves from 0.20.0, and the
+  kernel's `ServiceSpec` now refuses, when it is built, a nested selector seat
+  (`instance_selector_spec`, `collection_selector_spec` or `output_selector_spec`)
+  whose `SelectorSpec` declares `permissions`: the service's own `permissions`
+  decide the call, so a seat declares none.
+
 ## [0.1.0] — 2026-10-29
 
 ### Added

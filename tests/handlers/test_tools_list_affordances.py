@@ -79,7 +79,7 @@ def _order_service(**overrides: Any) -> ServiceSpec:
         "service": lambda: {"number": "A-1"},
         "permissions": [Unrestricted()],
         "output_selector_spec": order_selector_spec(
-            SelectorKind.RETRIEVE, selector=lambda result: result
+            SelectorKind.RETRIEVE, selector=lambda result: result, permissions=None
         ),
         **overrides,
     }
@@ -142,7 +142,7 @@ def test_a_service_s_own_affordances_are_not_advertised() -> None:
                 kind=SelectorKind.RETRIEVE,
                 selector=lambda result: result,
                 presenter=DataclassPresenter(Order),
-                permissions=[Unrestricted()],
+                permissions=None,
             ),
         ),
         # Its ``books_closed`` condition is unmet, which on its own would leave
@@ -188,7 +188,10 @@ def test_a_spec_without_affordances_advertises_exactly_what_it_did_before(
         name="place_order",
         spec=_order_service(
             output_selector_spec=order_selector_spec(
-                SelectorKind.RETRIEVE, selector=lambda result: result, affordances=None
+                SelectorKind.RETRIEVE,
+                selector=lambda result: result,
+                affordances=None,
+                permissions=None,
             )
         ),
     )
