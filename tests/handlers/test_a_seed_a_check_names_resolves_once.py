@@ -294,9 +294,13 @@ def test_a_call_failing_its_shape_carries_no_seeds_and_is_answered_as_before() -
     server = _fallback_server(witness, _NamesTenant(witness))
 
     assert _admit(server, "get", {}).seeds is None
+    witness.resolved.clear()
 
     out = handle_tools_call({"name": "get", "arguments": {}}, _context(server))
     assert tool_error(out)["detail"] == {"pk": ["This field is required."]}, out
+    # Resolved once, for the judgment on no arguments; dispatch refuses the
+    # shape before it asks the checks, so it resolves nothing.
+    assert len(witness.resolved) == 1, witness.resolved
 
 
 @pytest.mark.django_db
@@ -306,23 +310,31 @@ def test_a_many_call_with_a_refused_row_carries_no_seeds_and_is_answered_as_befo
     rows = {"items": [{"number": "A-1", "amount_cents": "x"}]}
 
     assert _admit(server, "bulk", rows).seeds is None
+    witness.resolved.clear()
 
     out = handle_tools_call({"name": "bulk", "arguments": rows}, _context(server))
     assert tool_error(out)["detail"] == {
         "items": {"0": {"amount_cents": ["Expected an integer."]}}
     }, out
+    # Resolved by the prelude and again by dispatch, which asks the checks
+    # again before it reports the row.
+    assert len(witness.resolved) == 2, witness.resolved
 
 
 @pytest.mark.django_db
 def test_a_refusal_that_is_no_denial_carries_no_seeds_and_is_answered_as_before() -> None:
-    server = _fallback_server(_Witness(), _RaisesNotFound())
+    witness = _Witness()
+    server = _fallback_server(witness, _RaisesNotFound())
 
     assert _admit(server, "get", {"pk": 1}).seeds is None
+    witness.resolved.clear()
 
     out = handle_tools_call({"name": "get", "arguments": {"pk": 1}}, _context(server))
     error = tool_error(out)
     assert error["type"] == "service_error", error
     assert "No such tenant." in str(error)
+    # Resolved by the prelude and again by dispatch, which raises the refusal again.
+    assert len(witness.resolved) == 2, witness.resolved
 
 
 @pytest.mark.django_db(transaction=True)

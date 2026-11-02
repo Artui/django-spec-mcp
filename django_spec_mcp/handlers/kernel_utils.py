@@ -635,8 +635,10 @@ def admit_kernel_call(
             binding, principal, config=config, pool_seeds=pool_seeds, call_context=context
         ):
             raise NotPermitted() from None
-        # Dispatch asks the checks again here, resolving their seeds itself,
-        # so no carrier goes with a grant that is not the checks' own.
+        # The grant is not the checks' own, and dispatch takes ``seeds=`` only
+        # beside that one, so no carrier goes with it; a refused row's dispatch
+        # resolves the seeds again as it asks the checks again
+        # (test_a_many_call_with_a_refused_row_carries_no_seeds_and_is_answered_as_before).
         grant, seeds = unchecked, None
     except (DispatchError, ServiceError):
         # A refusal that is no denial, such as a ``ServiceError`` a check or a

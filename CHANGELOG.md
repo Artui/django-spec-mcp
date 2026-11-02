@@ -27,8 +27,11 @@ carries; releases up to 0.54.0 are in
   `tools/call` and `resources/read` on both endpoints, on `call_tool` and
   `acall_tool`, and on a task's worker. A call whose arguments fail their
   shape, a `many` call with a refused row, and a check raising a refusal that
-  is no denial are answered as before: dispatch asks the checks again there,
-  resolving the seeds itself.
+  is no denial are answered as before and hand dispatch no values, since its
+  grant there is not the one the checks returned. A failed shape still
+  resolves the seed once, for the judgment on no arguments; a refused row and
+  a refusal that is no denial resolve it twice, as dispatch asks the checks
+  again.
 
 ## [0.1.0] — 2026-10-29
 
