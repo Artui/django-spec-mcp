@@ -44,7 +44,9 @@ def read_kernel_resource(
             principal=admission.principal,
             grant=admission.grant,
             seeds=admission.seeds,
-            arguments=coerce_flat(binding.spec.parameters(), variables),
+            arguments=coerce_flat(
+                binding.spec.parameters(call_context=admission.call_context), variables
+            ),
             pool_seeds=context.pool_seeds,
             call_context=admission.call_context,
         )

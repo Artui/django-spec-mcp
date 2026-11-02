@@ -53,7 +53,7 @@ from django_spec_mcp.handlers.handle_resources_read_async import handle_resource
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.is_binding_listable import is_binding_listable
-from django_spec_mcp.handlers.kernel_utils import resource_refusal
+from django_spec_mcp.handlers.kernel_utils import KernelAdmission, resource_refusal
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.types.kernel_refusal_scene import KernelRefusalScene
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
@@ -62,7 +62,7 @@ from django_spec_mcp.schema.types.agent_conventions import AgentConventions
 from django_spec_mcp.server.utils import UnguardedToolWarning
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
-from django_spec_mcp.transport.progress_dispatch import preflight_permissions
+from django_spec_mcp.transport.progress_dispatch import preflight_admission, preflight_permissions
 from django_spec_mcp.types.internal_error_message import INTERNAL_ERROR_MESSAGE
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from django_spec_mcp.types.task_policy import TaskPolicy
@@ -486,15 +486,19 @@ def _issue(*, data: list[_Line]) -> list[_Line]:
     return list(data)
 
 
-@pytest.mark.parametrize(("streamed", "asks"), [(False, 2), (True, 3)], ids=["plain", "streamed"])
-@_ASYNC
+@pytest.mark.parametrize(
+    ("streamed", "is_async"),
+    [(False, False), (False, True), (True, True)],
+    ids=["plain-sync", "plain-async", "streamed"],
+)
 async def test_a_many_call_with_a_refused_row_is_asked_by_its_prelude_and_by_dispatch(
-    streamed: bool, asks: int, is_async: bool
+    streamed: bool, is_async: bool
 ) -> None:
     # ``check_call`` asks the checks before it raises the first row's refusal,
     # which hands back no grant, and dispatch, which is what reports the
     # second row's Validator refusal beside it, asks again. The answer is
-    # dispatch's, both rows named. A stream's pre-flight asks once more.
+    # dispatch's, both rows named. A stream's pre-flight is that prelude: the
+    # handler runs under its admission and asks no more than a plain call.
     check = _Counted(admits=True)
     server = _bare_server()
     server.register_tool(
@@ -509,14 +513,14 @@ async def test_a_many_call_with_a_refused_row_is_asked_by_its_prelude_and_by_dis
     rows = [{"number": "A-1", "amount_cents": "x"}, {"number": "A-2", "amount_cents": -5}]
     if streamed:
         params = {"name": "get", "arguments": {"items": rows}}
-        assert (
-            await sync_to_async(preflight_permissions)("tools/call", params, _ctx(server)) is None
-        )
-
-    out = await _call(server, {"items": rows}, is_async=is_async)
+        admission = await sync_to_async(preflight_admission)("tools/call", params, _ctx(server))
+        assert isinstance(admission, KernelAdmission)
+        out = await handle_tools_call_async(params, _ctx(server), admission=admission)
+    else:
+        out = await _call(server, {"items": rows}, is_async=is_async)
 
     assert sorted(tool_error(out)["detail"]["items"]) == ["0", "1"], out
-    assert check.asked == asks
+    assert check.asked == 2
 
 
 class _TenantOne(PermissionCheck):

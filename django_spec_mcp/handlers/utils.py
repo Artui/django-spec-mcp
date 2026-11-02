@@ -483,7 +483,8 @@ def resolve_resource_read(
 ) -> tuple[ResourceBinding[Any], dict[str, str], str] | JsonRpcError:
     """The ``resources/read`` request both transports start from: the binding
     its URI resolves to, the URI-template variables and the URI, or the
-    protocol error a malformed request or an unknown URI gets."""
+    protocol error a malformed request, an unknown URI or an ambiguous one
+    gets."""
     if not isinstance(params, dict):
         return JsonRpcError(
             JsonRpcErrorCode.INVALID_PARAMS, "resources/read params must be an object"
@@ -494,7 +495,13 @@ def resolve_resource_read(
             JsonRpcErrorCode.INVALID_PARAMS, "'uri' is required and must be a string"
         )
 
-    resolved = context.resources.resolve(uri)
+    try:
+        resolved = context.resources.resolve(uri)
+    except ValueError as exc:
+        # A URI its template splits more than one way. ``-32602`` in both
+        # eras, not the not-found code: the resource exists, the request
+        # does not say which of its arguments the client meant.
+        return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, str(exc), data={"uri": uri})
     if resolved is None:
         # ``-32002`` with the URI echoed in ``data`` is the spec's own worked
         # example, so a client special-casing resource not-found finds both

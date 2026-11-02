@@ -45,12 +45,13 @@ from django_service_specs import (
     Unrestricted,
 )
 
-from django_spec_mcp import MCPServer
+from django_spec_mcp import MCPServer, TaskPolicy
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.auth_backend import MCPAuthBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from django_spec_mcp.transport.progress_dispatch import preflight_permissions
 from django_spec_mcp.transport.response_stream import (
@@ -58,6 +59,8 @@ from django_spec_mcp.transport.response_stream import (
     _StreamReporter,
     build_response_stream,
 )
+from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
+from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
 from tests.testapp.auth_backend import HeaderAuthBackend
 from tests.testapp.urlconf_for import urlconf_for
 
@@ -161,11 +164,13 @@ async def _post(
     modern: bool = True,
     arguments: dict[str, Any] | None = None,
     headers: dict[str, str] | None = None,
+    extra: dict[str, Any] | None = None,
 ) -> Any:
     params: dict[str, Any] = {
         "name": name,
         "arguments": arguments or {},
         "_meta": _meta(token, modern=modern),
+        **(extra or {}),
     }
     sent: dict[str, str] = {"Mcp-Protocol-Version": MODERN if modern else LEGACY}
     if modern:
@@ -464,13 +469,10 @@ class _Counted(PermissionCheck):
 
 
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize(("token", "asked"), [("abc123", 2), (None, 1)], ids=["streamed", "plain"])
-async def test_a_streamed_call_asks_the_spec_once_more_than_a_plain_one(
-    token: Any, asked: int
-) -> None:
-    """Once by the pre-flight, before a stream commits its status, and once by the
-    handler, before the charge; ``adispatch`` runs under the handler's grant and
-    asks nothing again."""
+@pytest.mark.parametrize("token", ["abc123", None], ids=["streamed", "plain"])
+async def test_a_streamed_call_asks_the_spec_as_often_as_a_plain_one(token: Any) -> None:
+    """Once, by the pre-flight, before a stream commits its status; the handler
+    and ``adispatch`` run under that admission and ask nothing again."""
     check = _Counted()
     server = _bare()
     server.register_tool(ServiceSpec(service=lambda: {}, permissions=[check]), name="p.counted")
@@ -478,7 +480,162 @@ async def test_a_streamed_call_asks_the_spec_once_more_than_a_plain_one(
     response = await _post(server, name="p.counted", token=token)
 
     assert (await _answer(response))["result"]["structuredContent"] == {}
-    assert check.asked == asked
+    assert check.asked == 1
+
+
+class _Tenant:
+    """A seed's value: a fresh object per resolve, so two resolves are two objects."""
+
+
+class _NamesTenant(PermissionCheck):
+    """Admits every caller, recording the ``tenant`` seed it is handed."""
+
+    def __init__(self, checked: list[Any]) -> None:
+        self.checked = checked
+
+    def has_permission(self, principal: Any, spec: Any, *, tenant: Any) -> bool:
+        self.checked.append(tenant)
+        return True
+
+
+@pytest.mark.django_db(transaction=True)
+async def test_a_streamed_call_resolves_a_checks_seed_once() -> None:
+    """The handler dispatches under the pre-flight's admission, so the seed the
+    check names resolves once, and the check and the service see one object,
+    as on a plain call
+    (``tests/handlers/test_a_seed_a_check_names_resolves_once.py``)."""
+    resolved: list[_Tenant] = []
+    checked: list[Any] = []
+    ran: list[Any] = []
+
+    def resolve() -> _Tenant:
+        tenant = _Tenant()
+        resolved.append(tenant)
+        return tenant
+
+    def whoami(*, tenant: Any) -> dict[str, str]:
+        ran.append(tenant)
+        return {"tenant": "seen"}
+
+    server = MCPServer(
+        name="p",
+        auth_backend=AllowAnyBackend(),
+        session_store=InMemorySessionStore(),
+        pool_seeds=DEFAULT_POOL_SEEDS.extend(tenant=resolve),
+    )
+    server.register_tool(
+        ServiceSpec(service=whoami, permissions=[_NamesTenant(checked)]), name="p.whoami"
+    )
+
+    response = await _post(server, name="p.whoami")
+
+    assert response["Content-Type"] == "text/event-stream"
+    assert (await _answer(response))["result"]["structuredContent"] == {"tenant": "seen"}
+    assert len(resolved) == 1, resolved
+    assert len(checked) == 1, checked
+    assert checked[0] is resolved[0]
+    assert ran == [resolved[0]]
+
+
+@pytest.mark.django_db(transaction=True)
+async def test_a_streamed_task_call_is_the_exception_resolving_a_seed_twice_before_the_worker() -> (
+    None
+):
+    """The documented exception to the test above: a call that streams progress
+    and also runs as a task.
+
+    The pre-flight admits it (1); the call then reaches ``maybe_create_task``,
+    which admits it again without the pre-flight's admission (2); the worker
+    resolves once more, on its own. This pins the two before the worker, not a
+    wish: a follow-up lets task creation take the pre-flight's admission, and
+    the count here becomes 1 when it does. The plain task call is 1 at
+    creation (``tests/tasks/test_a_task_resolves_a_checks_seed_once.py``).
+    """
+    resolved: list[_Tenant] = []
+    enqueued: list[str] = []
+
+    class _Executor:
+        def enqueue(self, task_id: str) -> None:
+            enqueued.append(task_id)
+
+    def resolve() -> _Tenant:
+        tenant = _Tenant()
+        resolved.append(tenant)
+        return tenant
+
+    server = MCPServer(
+        name="p",
+        auth_backend=AllowAnyBackend(),
+        session_store=InMemorySessionStore(),
+        task_store=InMemoryTaskStore(),
+        task_executor=_Executor(),
+        pool_seeds=DEFAULT_POOL_SEEDS.extend(tenant=resolve),
+    )
+    server.register_tool(
+        ServiceSpec(
+            service=lambda *, tenant: {"tenant": "seen"},  # noqa: ARG005
+            permissions=[_NamesTenant([])],
+            atomic=False,
+        ),
+        name="p.task",
+        task_policy=TaskPolicy.OPTIONAL,
+    )
+
+    response = await _post(
+        server,
+        name="p.task",
+        extra={
+            "_meta": {
+                **_meta(),
+                "io.modelcontextprotocol/clientCapabilities": {
+                    "extensions": {TASKS_EXTENSION_ID: {}}
+                },
+            }
+        },
+    )
+
+    assert (await _answer(response))["result"]["resultType"] == "task"
+    assert len(enqueued) == 1, enqueued
+    assert len(resolved) == 2, resolved
+
+
+class _RecordsTenant(PermissionCheck):
+    """Admits every caller, recording the ``tenant`` argument it is asked on."""
+
+    def __init__(self) -> None:
+        self.asked: list[Any] = []
+
+    def has_permission(self, principal: Any, spec: Any, *, arguments: Any) -> bool:
+        self.asked.append(arguments.get("tenant"))
+        return True
+
+
+@pytest.mark.django_db(transaction=True)
+async def test_a_streamed_retry_with_merged_answers_is_admitted_afresh() -> None:
+    """The pre-flight never sees a retry's answers, so its admission is not the
+    call's: the handler asks the checks again on the arguments with the answers
+    merged in, and the service runs on those."""
+    check = _RecordsTenant()
+    server = _bare()
+    server.register_tool(
+        ServiceSpec(
+            service=lambda *, tenant: {"tenant": tenant},
+            validator=DataclassValidator(_Tenanted),
+            permissions=[check],
+        ),
+        name="p.answered",
+    )
+    answer = {ELICITATION_KEY: {"action": "accept", "content": {"tenant": "acme"}}}
+
+    response = await _post(
+        server,
+        name="p.answered",
+        arguments={"tenant": "globex"},
+        extra={"inputResponses": answer},
+    )
+
+    assert (await _answer(response))["result"]["structuredContent"] == {"tenant": "acme"}
+    assert check.asked == ["globex", "acme"]
 
 
 @pytest.mark.django_db(transaction=True)

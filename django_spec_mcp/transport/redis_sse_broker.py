@@ -2,23 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import importlib
 import json
 from typing import Any
 
+from django_spec_mcp._compat.utils import resolve_async_redis
 
 # ``redis`` is an optional extra, so importing this module without it must not
 # crash the package; the ImportError fires only when a consumer constructs a
-# ``RedisSSEBroker``. Resolved through ``importlib`` so the binding stays plain
-# ``Any`` and the type checker cannot narrow it to the imported class.
-def _resolve_async_redis() -> Any:
-    try:
-        return importlib.import_module("redis.asyncio").Redis
-    except ImportError:  # pragma: no cover - exercised by the no-extras smoke job
-        return None
-
-
-AsyncRedis: Any = _resolve_async_redis()
+# ``RedisSSEBroker``.
+AsyncRedis: Any = resolve_async_redis()
 
 
 _DEFAULT_CHANNEL_PREFIX: str = "spec-mcp:sse"

@@ -230,6 +230,18 @@ raises for a caller fails that caller's whole listing, not only its calls.
   default registers, since the seed is always supplied. A read named after a
   seed, and a URI-template variable named after one, are refused, since the
   argument and the seed would meet in one pool.
+- **A seed a check names resolves once per call.** The check and the service
+  or selector see one object, so a resolver that hands out a fresh value each
+  time is asked once, on a `tools/call` over the sync or the async view, on
+  `resources/read`, on `call_tool` / `acall_tool`, and on a streamed
+  `tools/call`. Some calls differ: a streamed retry carrying
+  `inputResponses` is admitted afresh, since the answers change the arguments
+  the checks are asked on; a task-mode call resolves it once at task creation
+  and once in the worker, and a task-mode call that also streams progress resolves it
+  once in the pre-flight, once at task creation and once in the worker; and the three
+  answers admission falls back from resolve it 1 time (a call failing its shape), 2 times
+  (a `many` call with a refused row) and 2 times (a refusal that is no denial, such as a
+  `ServiceNotFound` a check raises).
 - **One set per mount, with no per-call or per-tool override.** What varies per
   call belongs in the resolver; a mount needing different seeds is a second
   `MCPServer`.
@@ -1187,6 +1199,27 @@ it to the read's type, so `invoices://7` reaches `get_invoice` as `pk=7` and
 Concrete URIs (no placeholders) appear in `resources/list`; templated ones
 appear in `resources/templates/list` so clients can fill them in.
 
+### How a URI is split into variables
+
+A URI must match its template whole. Each `{var}` takes one or more
+characters other than `/`, and the literal text around it (`-` in
+`things://{a}-{b}`, `.` in `files://{name}.{ext}`) decides where it ends. So
+`things://1-2` reads as `a="1"`, `b="2"`, and `files://report.pdf` as
+`name="report"`, `ext="pdf"`.
+
+When that literal text also occurs inside a value, the URI fits the template
+more than one way: `things://1-2-3` is `a="1-2", b="3"` or `a="1", b="2-3"`,
+and `files://a.tar.gz` is `name="a.tar", ext="gz"` or
+`name="a", ext="tar.gz"`. The server does not pick one. A `resources/read` of
+such a URI is answered `-32602`, with a message naming the template and two
+of its splits and the URI in `data`, in every protocol version (an unknown URI is
+`-32002` under `2025-11-25`, so the two stay apart there). A subscription
+naming it leaves it out of the granted set, as it does a URI the caller may not
+read. Nothing is refused at registration: the same template keeps serving
+every URI it splits one way, `things://1-2` and `files://report.pdf` among
+them. A template whose variables are separated by a `/`, or by text a value
+never contains, cannot be read two ways.
+
 ## Non-text tool results
 
 A tool result's `content` array is the same content vocabulary — text, image,
@@ -1377,10 +1410,14 @@ rather than to a stream, and the client polls for them.
     permission stack therefore runs once at the transport before the stream is
     opened, so a denied call still gets `403` and a `WWW-Authenticate`
     challenge. That stack is the tool's `scopes=` gate and the spec's own
-    checks, through the kernel's `check_call`; the handler asks the spec's
-    checks once more before it charges the call. Rate limits stay inside the
-    handler: consuming one is not idempotent, and a rate-limit rejection was
-    already a `200` with the detail in the body.
+    checks, through the kernel's `check_call`. The admission it makes is
+    handed to the handler, which runs the call under it: the spec's checks are
+    asked once for a streamed call, as for a plain one, and a seed a check names
+    resolves once, so the check and the service see the same object. A retry that
+    carries answers (`inputResponses` or `requestState`) changes the arguments
+    the checks were asked on, so the handler asks them afresh for that call.
+    Rate limits stay inside the handler: consuming one is not idempotent, and a
+    rate-limit rejection was already a `200` with the detail in the body.
 
 ## Server-pushed notifications: subscriptions
 
