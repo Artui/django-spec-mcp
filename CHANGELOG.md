@@ -43,6 +43,12 @@ carries; releases up to 0.54.0 are in
   resolves the seed once, for the judgment on no arguments; a refused row and
   a refusal that is no denial resolve it twice, as dispatch asks the checks
   again.
+- **A `many` tool's rows ask only what the caller must send.** The `inputSchema` is
+  the kernel's `spec_caller_input_schema`, so a row field a typed `input_data`
+  always fills is no longer offered, one it may fill (declinable, or any field
+  beside an untyped `input_data`) is no longer required, and a row left requiring
+  nothing writes no `required`. The top level is unchanged: what the server fills
+  is withheld and what a provider may fill is relaxed, as before.
 
 ## [0.1.0] — 2026-10-29
 
