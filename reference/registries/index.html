@@ -1570,6 +1570,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#django_spec_mcp.registry.resource_registry.ResourceRegistry.resolve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        resolve
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#django_spec_mcp.registry.resource_registry.ResourceRegistry.by_uri_template" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2737,6 +2748,17 @@
   
     <nav class="md-nav" aria-label="ResourceRegistry">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.registry.resource_registry.ResourceRegistry.resolve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        resolve
+      
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#django_spec_mcp.registry.resource_registry.ResourceRegistry.by_uri_template" class="md-nav__link">
@@ -4462,6 +4484,18 @@ make <em>which permission stack guards a URI</em> a function of the order the tw
 were registered in — and the wrong answer is the permissive one, since the
 template is the general case. Concrete URIs are therefore tried first, and
 only then templates.</p>
+<p><strong>A URI the template splits more than one way is refused, not guessed
+at.</strong> Where the literal text between two variables also occurs inside a
+value, <code>things://{a}-{b}</code> fits <code>things://1-2-3</code> as <code>a='1-2', b='3'</code>
+and as <code>a='1', b='2-3'</code>, and either answer would hand the selector
+arguments the client may not have meant. <code>resolve</code> matches each URI with
+every variable as long as it can be and again with every variable as short
+as it can be; the first is the largest split by length in variable order,
+the second the smallest, so they agree exactly when only one split exists.
+When they differ, <code>resolve</code> raises <code>ValueError</code> naming both, and the
+callers answer it: <code>resources/read</code> with <code>-32602</code>, a subscription by
+dropping the URI. The template keeps serving every URI it splits one way
+(<code>test_the_same_template_still_serves_a_uri_it_splits_one_way</code>).</p>
 
 
 
@@ -4483,6 +4517,31 @@ only then templates.</p>
 
 
 
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.registry.resource_registry.ResourceRegistry.resolve" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">resolve</span>
+
+
+<a href="#django_spec_mcp.registry.resource_registry.ResourceRegistry.resolve" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">resolve</span><span class="p">(</span><span class="n">uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">ResourceBinding</span><span class="p">,</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The binding <code>uri</code> resolves to and the variables read from it, or
+<code>None</code> when nothing matches.</p>
+<p>Raises <code>ValueError</code> when the first template <code>uri</code> matches splits it
+more than one way (see the class docstring). The refusal stops there
+rather than trying later templates: which binding answers a URI must
+not turn on whether its values happen to repeat a template's literals.</p>
+
+
+    </div>
+
+</div>
 
 <div class="doc doc-object doc-function">
 

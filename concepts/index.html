@@ -718,6 +718,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="URI templates">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-a-uri-is-split-into-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How a URI is split into variables
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2343,6 +2360,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="URI templates">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-a-uri-is-split-into-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How a URI is split into variables
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -2954,6 +2988,18 @@ raises for a caller fails that caller's whole listing, not only its calls.
   default registers, since the seed is always supplied. A read named after a
   seed, and a URI-template variable named after one, are refused, since the
   argument and the seed would meet in one pool.</li>
+<li><strong>A seed a check names resolves once per call.</strong> The check and the service
+  or selector see one object, so a resolver that hands out a fresh value each
+  time is asked once, on a <code>tools/call</code> over the sync or the async view, on
+  <code>resources/read</code>, on <code>call_tool</code> / <code>acall_tool</code>, and on a streamed
+  <code>tools/call</code>. Some calls differ: a streamed retry carrying
+  <code>inputResponses</code> is admitted afresh, since the answers change the arguments
+  the checks are asked on; a task-mode call resolves it once at task creation
+  and once in the worker, and a task-mode call that also streams progress resolves it
+  once in the pre-flight, once at task creation and once in the worker; and the three
+  answers admission falls back from resolve it 1 time (a call failing its shape), 2 times
+  (a <code>many</code> call with a refused row) and 2 times (a refusal that is no denial, such as a
+  <code>ServiceNotFound</code> a check raises).</li>
 <li><strong>One set per mount, with no per-call or per-tool override.</strong> What varies per
   call belongs in the resolver; a mount needing different seeds is a second
   <code>MCPServer</code>.</li>
@@ -3900,6 +3946,24 @@ it to the read's type, so <code>invoices://7</code> reaches <code>get_invoice</c
 <code>invoices://x</code> is answered <code>-32602</code> "Invalid arguments".</p>
 <p>Concrete URIs (no placeholders) appear in <code>resources/list</code>; templated ones
 appear in <code>resources/templates/list</code> so clients can fill them in.</p>
+<h3 id="how-a-uri-is-split-into-variables">How a URI is split into variables<a class="headerlink" href="#how-a-uri-is-split-into-variables" title="Permanent link">&para;</a></h3>
+<p>A URI must match its template whole. Each <code>{var}</code> takes one or more
+characters other than <code>/</code>, and the literal text around it (<code>-</code> in
+<code>things://{a}-{b}</code>, <code>.</code> in <code>files://{name}.{ext}</code>) decides where it ends. So
+<code>things://1-2</code> reads as <code>a="1"</code>, <code>b="2"</code>, and <code>files://report.pdf</code> as
+<code>name="report"</code>, <code>ext="pdf"</code>.</p>
+<p>When that literal text also occurs inside a value, the URI fits the template
+more than one way: <code>things://1-2-3</code> is <code>a="1-2", b="3"</code> or <code>a="1", b="2-3"</code>,
+and <code>files://a.tar.gz</code> is <code>name="a.tar", ext="gz"</code> or
+<code>name="a", ext="tar.gz"</code>. The server does not pick one. A <code>resources/read</code> of
+such a URI is answered <code>-32602</code>, with a message naming the template and two
+of its splits and the URI in <code>data</code>, in every protocol version (an unknown URI is
+<code>-32002</code> under <code>2025-11-25</code>, so the two stay apart there). A subscription
+naming it leaves it out of the granted set, as it does a URI the caller may not
+read. Nothing is refused at registration: the same template keeps serving
+every URI it splits one way, <code>things://1-2</code> and <code>files://report.pdf</code> among
+them. A template whose variables are separated by a <code>/</code>, or by text a value
+never contains, cannot be read two ways.</p>
 <h2 id="non-text-tool-results">Non-text tool results<a class="headerlink" href="#non-text-tool-results" title="Permanent link">&para;</a></h2>
 <p>A tool result's <code>content</code> array is the same content vocabulary — text, image,
 audio, a link to a resource, or an embedded resource. A binding <em>declares</em> what
@@ -4072,10 +4136,14 @@ a <code>200</code> — losing the <code>403</code> the authorization spec makes 
 permission stack therefore runs once at the transport before the stream is
 opened, so a denied call still gets <code>403</code> and a <code>WWW-Authenticate</code>
 challenge. That stack is the tool's <code>scopes=</code> gate and the spec's own
-checks, through the kernel's <code>check_call</code>; the handler asks the spec's
-checks once more before it charges the call. Rate limits stay inside the
-handler: consuming one is not idempotent, and a rate-limit rejection was
-already a <code>200</code> with the detail in the body.</p>
+checks, through the kernel's <code>check_call</code>. The admission it makes is
+handed to the handler, which runs the call under it: the spec's checks are
+asked once for a streamed call, as for a plain one, and a seed a check names
+resolves once, so the check and the service see the same object. A retry that
+carries answers (<code>inputResponses</code> or <code>requestState</code>) changes the arguments
+the checks were asked on, so the handler asks them afresh for that call.
+Rate limits stay inside the handler: consuming one is not idempotent, and a
+rate-limit rejection was already a <code>200</code> with the detail in the body.</p>
 </div>
 <h2 id="server-pushed-notifications-subscriptions">Server-pushed notifications: subscriptions<a class="headerlink" href="#server-pushed-notifications-subscriptions" title="Permanent link">&para;</a></h2>
 <p>A client that wants to know when something changes opens <code>subscriptions/listen</code>
