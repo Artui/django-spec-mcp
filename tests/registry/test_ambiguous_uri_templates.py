@@ -158,3 +158,21 @@ def test_a_trailing_newline_is_part_of_the_value_not_a_false_ambiguity() -> None
     reg.register(_binding("reports://"))
     assert reg.resolve("invoices://7\n") == (template, {"pk": "7\n"})
     assert reg.resolve("reports://\n") is None
+
+
+def test_an_ambiguous_uri_is_refused_rather_than_handed_to_a_later_template() -> None:
+    """Which binding answers a URI must not turn on whether its values repeat a
+    template's literals, so the refusal stops at the first template that
+    matches instead of falling through to the next."""
+    reg = ResourceRegistry()
+    reg.register(_binding("things://{a}-{b}"))
+    reg.register(_binding("things://{x}"))
+    with pytest.raises(ValueError, match="things://\\{a\\}-\\{b\\}"):
+        reg.resolve("things://1-2-3")
+
+
+def test_three_variables_split_more_than_one_way_are_refused() -> None:
+    reg = ResourceRegistry()
+    reg.register(_binding("v://{a}-{b}-{c}"))
+    with pytest.raises(ValueError, match="Ambiguous resource URI 'v://1-2-3-4'"):
+        reg.resolve("v://1-2-3-4")
