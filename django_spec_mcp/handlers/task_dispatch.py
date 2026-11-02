@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from django_spec_mcp.handlers.kernel_utils import admit_kernel_tool_call
+from django_spec_mcp.handlers.kernel_utils import KernelAdmission, admit_kernel_tool_call
 from django_spec_mcp.handlers.tasks_utils import (
     declares_tasks_extension,
     missing_capability_error,
@@ -27,6 +27,8 @@ def maybe_create_task(
     binding: Any,
     arguments: dict[str, Any],
     context: MCPCallContext,
+    *,
+    admission: KernelAdmission | None = None,
 ) -> dict[str, Any] | JsonRpcError | None:
     """Answer a tool call with a task handle, if this call should get one.
 
@@ -62,6 +64,16 @@ def maybe_create_task(
     for the task is what carries the caller's address and token, and is what
     pays. Without the charge here, declaring the tasks extension would be a
     self-service exemption from every quota a task-shaped tool configures.
+
+    ``admission`` is the one a streamed call's pre-flight made, which task
+    creation takes instead of asking the spec's checks again, so a seed a check
+    names resolves once before the worker
+    (``test_a_streamed_task_call_resolves_a_checks_seed_once_before_the_worker``).
+    It is the same question: the pre-flight asks on the client's ``arguments``
+    with the binding's ``server_arguments`` laid over, as ``arguments`` is here,
+    and a retry's answers are merged into neither, since both run before the
+    merge. Only the async view hands one in; the sync ``handle_tools_call`` has
+    no pre-flight and asks here.
     """
     # A worker's run is the task this decision already made, so it runs, under
     # either policy: asked again, a ``REQUIRED`` tool's run met a worker that
@@ -106,10 +118,13 @@ def maybe_create_task(
     # plain route queued a call its worker would refuse, where the streamed
     # route's pre-flight answered ``403``
     # (``test_a_caller_the_spec_refuses_gets_no_task``). Its grant is not kept,
-    # since the worker's replay is a later call, judged again.
-    admitted = admit_kernel_tool_call(binding, arguments, context)
-    if isinstance(admitted, JsonRpcError):
-        return admitted
+    # since the worker's replay is a later call, judged again. A streamed
+    # call's pre-flight has asked already, on these arguments, and is not asked
+    # twice.
+    if admission is None:
+        admitted = admit_kernel_tool_call(binding, arguments, context)
+        if isinstance(admitted, JsonRpcError):
+            return admitted
 
     # After the permission checks and before anything durable exists: a denied
     # caller should not spend a quota, and a caller who has spent one should

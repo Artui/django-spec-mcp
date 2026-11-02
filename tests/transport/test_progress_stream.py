@@ -53,7 +53,7 @@ from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
-from django_spec_mcp.transport.progress_dispatch import preflight_permissions
+from django_spec_mcp.transport.progress_dispatch import preflight_admission
 from django_spec_mcp.transport.response_stream import (
     _stream,
     _StreamReporter,
@@ -61,6 +61,7 @@ from django_spec_mcp.transport.response_stream import (
 )
 from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
 from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
+from tests.elicitation.conftest import DeleteRows, delete_rows_kernel
 from tests.testapp.auth_backend import HeaderAuthBackend
 from tests.testapp.urlconf_for import urlconf_for
 
@@ -538,19 +539,13 @@ async def test_a_streamed_call_resolves_a_checks_seed_once() -> None:
 
 
 @pytest.mark.django_db(transaction=True)
-async def test_a_streamed_task_call_is_the_exception_resolving_a_seed_twice_before_the_worker() -> (
-    None
-):
-    """The documented exception to the test above: a call that streams progress
-    and also runs as a task.
-
-    The pre-flight admits it (1); the call then reaches ``maybe_create_task``,
-    which admits it again without the pre-flight's admission (2); the worker
-    resolves once more, on its own. This pins the two before the worker, not a
-    wish: a follow-up lets task creation take the pre-flight's admission, and
-    the count here becomes 1 when it does. The plain task call is 1 at
-    creation (``tests/tasks/test_a_task_resolves_a_checks_seed_once.py``).
-    """
+async def test_a_streamed_task_call_resolves_a_checks_seed_once_before_the_worker() -> None:
+    """A call that streams progress and also runs as a task: the pre-flight
+    admits it (1), and task creation takes that admission rather than asking
+    the spec's checks again, so the seed a check names resolves once before the
+    worker, as on a plain task call
+    (``tests/tasks/test_a_task_resolves_a_checks_seed_once.py``). The worker
+    resolves once more, on its own."""
     resolved: list[_Tenant] = []
     enqueued: list[str] = []
 
@@ -596,7 +591,7 @@ async def test_a_streamed_task_call_is_the_exception_resolving_a_seed_twice_befo
 
     assert (await _answer(response))["result"]["resultType"] == "task"
     assert len(enqueued) == 1, enqueued
-    assert len(resolved) == 2, resolved
+    assert len(resolved) == 1, resolved
 
 
 class _RecordsTenant(PermissionCheck):
@@ -636,6 +631,66 @@ async def test_a_streamed_retry_with_merged_answers_is_admitted_afresh() -> None
 
     assert (await _answer(response))["result"]["structuredContent"] == {"tenant": "acme"}
     assert check.asked == ["globex", "acme"]
+
+
+class _RecordsArguments(PermissionCheck):
+    """Admits every caller, recording the arguments it is asked on."""
+
+    def __init__(self) -> None:
+        self.asked: list[dict[str, Any]] = []
+
+    def has_permission(self, principal: Any, spec: Any, *, arguments: Any) -> bool:
+        self.asked.append(dict(arguments))
+        return True
+
+
+@pytest.mark.django_db(transaction=True)
+async def test_a_streamed_retry_carrying_only_request_state_is_admitted_afresh() -> None:
+    """A retry whose answers ride in the signed ``requestState`` alone, with no
+    ``inputResponses``, still has them merged into its arguments, so the
+    handler asks the checks on the merged arguments rather than reusing the
+    pre-flight's admission, made on what the client sent. This pins the
+    ``not prior.carried`` guard: one reading ``inputResponses`` instead reuses
+    the pre-flight admission here and the check is never asked on
+    ``confirmed``."""
+    check = _RecordsArguments()
+    server = _bare()
+    server.register_tool(
+        ServiceSpec(
+            service=delete_rows_kernel,
+            validator=DataclassValidator(DeleteRows),
+            permissions=[check],
+            atomic=False,
+        ),
+        name="p.delete",
+    )
+    meta = {**_meta(), "io.modelcontextprotocol/clientCapabilities": {"elicitation": {}}}
+    sent = {"count": 1500}
+
+    async def round_trip(**extra: Any) -> dict[str, Any]:
+        response = await _post(
+            server, name="p.delete", arguments=sent, extra={"_meta": meta, **extra}
+        )
+        assert response["Content-Type"] == "text/event-stream"
+        return (await _answer(response))["result"]
+
+    # Asks to confirm. Nothing is carried yet, so the pre-flight's admission is the call's.
+    asked = await round_trip()
+    assert asked["resultType"] == "input_required"
+    assert check.asked == [sent]
+
+    # The confirmation is answered; it asks for a reason, and signs what was carried.
+    check.asked.clear()
+    answer = {ELICITATION_KEY: {"action": "accept", "content": {"confirmed": True}}}
+    reason = await round_trip(inputResponses=answer, requestState=asked["requestState"])
+    assert reason["resultType"] == "input_required"
+    assert check.asked == [sent, {**sent, "confirmed": True}]
+
+    # The retry carries the signed state and no answer of its own.
+    check.asked.clear()
+    again = await round_trip(requestState=reason["requestState"])
+    assert again["resultType"] == "input_required"
+    assert check.asked == [sent, {**sent, "confirmed": True}]
 
 
 @pytest.mark.django_db(transaction=True)
@@ -844,7 +899,7 @@ def test_preflight_stands_aside_for_everything_it_cannot_speak_for() -> None:
         protocol_version=MODERN,
         config=server.config,
     )
-    assert preflight_permissions("resources/read", {"uri": "x://y"}, context) is None
-    assert preflight_permissions("tools/call", "not-a-dict", context) is None
-    assert preflight_permissions("tools/call", {"name": 7}, context) is None
-    assert preflight_permissions("tools/call", {"name": "nope"}, context) is None
+    assert preflight_admission("resources/read", {"uri": "x://y"}, context) is None
+    assert preflight_admission("tools/call", "not-a-dict", context) is None
+    assert preflight_admission("tools/call", {"name": 7}, context) is None
+    assert preflight_admission("tools/call", {"name": "nope"}, context) is None
