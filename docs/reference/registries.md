@@ -85,7 +85,7 @@ refuses a call naming an undeclared argument.
 
 ## Tool schemas
 
-What a kernel tool advertises, built from the kernel's own `spec_input_schema`
+What a kernel tool advertises, built from the kernel's own `spec_caller_input_schema`
 and `spec_output_schema` with the MCP binding's answers applied: the names the
 server fills itself leave the `inputSchema`, a paginated tool gains `page` and
 `limit`, and its `outputSchema` describes the page envelope. Exposed for

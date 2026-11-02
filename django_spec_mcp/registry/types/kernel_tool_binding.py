@@ -31,7 +31,7 @@ class KernelToolBinding:
     its class says which kind of tool this is: a service tool runs a mutation, a
     selector tool reads. The call goes through the kernel's ``dispatch`` /
     ``adispatch``, and the advertised schemas are the kernel's own
-    ``spec_input_schema`` / ``spec_output_schema``, so the arguments a service
+    ``spec_caller_input_schema`` / ``spec_output_schema``, so the arguments a service
     tool takes are the spec's parameters, spread at the top level of
     ``arguments`` rather than nested under a ``data`` key.
 
@@ -118,7 +118,7 @@ class KernelToolBinding:
     would read as a gate and admit every caller."""
     unknown_arguments: UnknownArguments = UnknownArguments.REJECT
     """Handed to the kernel's ``dispatch`` as ``unknown_arguments=``, and read by
-    ``spec_input_schema`` so the advertised schema is closed exactly when the
+    ``spec_caller_input_schema`` so the advertised schema is closed exactly when the
     call refuses an undeclared key."""
     server_arguments: ServerArguments = field(default_factory=ServerArguments)
     """Declared parameters the server answers for, so no caller does.

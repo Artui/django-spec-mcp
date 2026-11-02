@@ -81,7 +81,7 @@ transport what it means on any other:
   `description`.
 - **`validator`** checks a service's input. Its fields are the tool's
   arguments, spread at the top level of `arguments` as the kernel's
-  `spec_input_schema` advertises them, with no `data` key around them. A
+  `spec_caller_input_schema` advertises them, with no `data` key around them. A
   `many=True` service takes a list instead ([A list payload](#list-payload)).
 - **`presenter`** renders the result, and its output schema, through the
   kernel's `spec_output_schema`, is the tool's `outputSchema`.
@@ -133,7 +133,7 @@ transport what it means on any other:
   judged the same way. A tool registered with a `task_policy=` other than the
   default has the checks asked before its task is created, and again by the
   task's worker ([Opting a tool in](#opting-a-tool-in)).
-- **The schemas are the kernel's** `spec_input_schema` / `spec_output_schema`.
+- **The schemas are the kernel's** `spec_caller_input_schema` / `spec_output_schema`.
   `unknown_arguments=` reaches both the schema and the call, and
   [`server_arguments=`](#server-arguments) names are left out of the schema and
   filled by the server.
@@ -485,6 +485,10 @@ What a caller should know:
 - **`unknown_arguments` applies inside each item too.** Each item is checked as
   a single-item tool's arguments are, and each item's own
   `additionalProperties` says whether an undeclared key in it is refused.
+- **Each item asks only what the caller must send.** A field a typed
+  `input_data` always fills is not offered in an item, and one it may fill (a
+  declinable `X | UnsetType`, or any field beside an untyped `input_data`) is
+  offered and not required. The list itself stays required.
 - **Errors are keyed under the argument, and item errors by index.** An invalid
   second item is a `validation_error` result whose `error.detail` is
   `{"invoices": {"1": {"amount": ["Expected an integer."]}}}`. JSON object keys
@@ -702,7 +706,7 @@ shown and may send:
 
 - **`unknown_arguments=`** — how `arguments` keys the spec does not declare are
   handled. It takes the kernel's `UnknownArguments`, and the `inputSchema` is
-  the kernel's `spec_input_schema` under the same policy, so **the closed
+  the kernel's `spec_caller_input_schema` under the same policy, so **the closed
   schema is advertised exactly where the call refuses an undeclared name**.
   - `UnknownArguments.REJECT` (default) — an undeclared key is refused with an
     `isError` `validation_error` result keyed by the key's name under `detail`
