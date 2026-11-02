@@ -1187,6 +1187,27 @@ it to the read's type, so `invoices://7` reaches `get_invoice` as `pk=7` and
 Concrete URIs (no placeholders) appear in `resources/list`; templated ones
 appear in `resources/templates/list` so clients can fill them in.
 
+### How a URI is split into variables
+
+A URI must match its template whole. Each `{var}` takes one or more
+characters other than `/`, and the literal text around it (`-` in
+`things://{a}-{b}`, `.` in `files://{name}.{ext}`) decides where it ends. So
+`things://1-2` reads as `a="1"`, `b="2"`, and `files://report.pdf` as
+`name="report"`, `ext="pdf"`.
+
+When that literal text also occurs inside a value, the URI fits the template
+more than one way: `things://1-2-3` is `a="1-2", b="3"` or `a="1", b="2-3"`,
+and `files://a.tar.gz` is `name="a.tar", ext="gz"` or
+`name="a", ext="tar.gz"`. The server does not pick one. A `resources/read` of
+such a URI is answered `-32602`, with a message naming the template and two
+of its splits and the URI in `data`, in every protocol version (an unknown URI is
+`-32002` under `2025-11-25`, so the two stay apart there). A subscription
+naming it leaves it out of the granted set, as it does a URI the caller may not
+read. Nothing is refused at registration: the same template keeps serving
+every URI it splits one way, `things://1-2` and `files://report.pdf` among
+them. A template whose variables are separated by a `/`, or by text a value
+never contains, cannot be read two ways.
+
 ## Non-text tool results
 
 A tool result's `content` array is the same content vocabulary — text, image,
