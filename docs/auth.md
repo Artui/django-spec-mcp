@@ -225,7 +225,7 @@ class HasClaim(PermissionCheck):
 ```
 
 A check may ask for the call's `arguments` the same way, and for a registered
-pool seed by its name. A check is **synchronous**: one declaring an `async def`
+pool seed by its name, handed the value the run receives. A check is **synchronous**: one declaring an `async def`
 method is refused with `ImproperlyConfigured` when the spec is built, because an
 un-awaited coroutine is truthy and would allow every call.
 
