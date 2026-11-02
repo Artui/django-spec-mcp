@@ -47,9 +47,13 @@ The root still exports what it exported from `constants`, apart from four names
 that are gone: `UnknownArguments` (import it from the kernel), and
 `ArgumentBinding`, `OutputFormat` and `ToolKind`, which the sections below
 cover.
-`django-service-specs` **0.20.0** is the lowest kernel release the package
+`django-service-specs` **0.23.0** is the lowest kernel release the package
 runs on. It reserves `shapes` as a pool name, so a `PoolSeeds` entry named
 `shapes` is refused with a `ValueError` when it is built, as one named `user` is.
+A `ServiceSpec` refuses, when it is built, a nested selector seat
+(`instance_selector_spec`, `collection_selector_spec` or `output_selector_spec`)
+whose `SelectorSpec` declares `permissions`: the service's own `permissions`
+decide the call, so a seat leaves `permissions` at its default, `None`.
 
 djangorestframework, djangorestframework-services and
 djangorestframework-dataclasses are no longer dependencies, and nothing in the
