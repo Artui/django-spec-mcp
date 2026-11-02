@@ -545,6 +545,7 @@ def admit_kernel_call(
     config: MCPConfig,
     pool_seeds: PoolSeeds,
     unknown_arguments: UnknownArguments,
+    context: dict[str, Any] | None = None,
 ) -> KernelAdmission:
     """Ask a kernel spec's class-level checks about a call before the transport acts on it.
 
@@ -610,9 +611,16 @@ def admit_kernel_call(
     raised it after; on a streamed call that is still before the stream
     commits its status
     (``test_a_permission_preflight_that_raises_before_a_stream_is_a_json_rpc_error``).
+
+    ``context`` is the call's ``call_context`` when the caller has already
+    asked the spec about this call with it, as ``admit_kernel_read`` asks its
+    parameters before the variables are read; otherwise one is built from
+    ``request``. Either way that one dict is the admission's, so the checks,
+    the seeds and dispatch see what the caller saw.
     """
     principal: Any = principal_of(user)
-    context = call_context(request, binding.name)
+    if context is None:
+        context = call_context(request, binding.name)
     unchecked = unguarded_grant(binding, principal, config)
     keywords: dict[str, Any] = {"pool_seeds": pool_seeds, "call_context": context}
     grant: Grant | None
@@ -706,10 +714,17 @@ def admit_kernel_read(
     variable a URI template names is a read the spec declares: registration
     refuses a template naming another
     (``test_a_template_variable_no_read_declares_is_refused_at_registration``).
+
+    The variables are read under the parameters the call's own
+    ``call_context`` declares, the dict the admission then carries to
+    dispatch, which asks the declaration with it as it validates
+    (``test_a_read_reads_its_variables_under_the_call_context_dispatch_receives``).
     """
+    request = carry_token(context.http_request, context.token)
+    dispatched = call_context(request, binding.name)
     arguments: dict[str, Any]
     try:
-        arguments = coerce_flat(binding.spec.parameters(), variables)
+        arguments = coerce_flat(binding.spec.parameters(call_context=dispatched), variables)
     except InvalidArguments:
         arguments = dict(variables)
     try:
@@ -717,10 +732,11 @@ def admit_kernel_read(
             binding,
             arguments,
             user=context.token.user,
-            request=carry_token(context.http_request, context.token),
+            request=request,
             config=context.config,
             pool_seeds=context.pool_seeds,
             unknown_arguments=UnknownArguments.REJECT,
+            context=dispatched,
         )
     except _DENIALS as exc:
         return resource_refusal(

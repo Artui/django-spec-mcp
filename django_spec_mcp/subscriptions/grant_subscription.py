@@ -152,16 +152,17 @@ def _kernel_read_admits(
     rather than being dropped.
     """
     principal: Any = principal_of(context.token.user)
+    # One dict for the declaration and the checks, as dispatch asks both with
+    # the call's (test_a_watch_reads_its_variables_under_the_call_context_its_checks_get).
+    asked = call_context(carry_token(context.http_request, context.token), binding.name)
     try:
         check_call(
             binding.spec,
             principal=principal,
-            arguments=coerce_flat(binding.spec.parameters(), variables),
+            arguments=coerce_flat(binding.spec.parameters(call_context=asked), variables),
             grant=unguarded_grant(binding, principal, context.config),
             pool_seeds=context.pool_seeds,
-            call_context=call_context(
-                carry_token(context.http_request, context.token), binding.name
-            ),
+            call_context=asked,
         )
     except DispatchError:
         return False
