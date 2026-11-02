@@ -11,6 +11,8 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-11-02
+
 ### Changed
 
 - **Requires `django-service-specs` 0.23.0.** The floor moves from 0.20.0, and the
@@ -549,5 +551,6 @@ carries; releases up to 0.54.0 are in
   running. The worker's run now enters below that decision. A client that did
   not declare the extension is still refused `-32021` by a `REQUIRED` tool.
 
-[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Artui/django-spec-mcp/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Artui/django-spec-mcp/compare/v0.0.0...v0.1.0
