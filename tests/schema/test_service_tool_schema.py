@@ -2,8 +2,10 @@
 
 The list travels under ``spec.many_argument``, so the advertised input is an
 object with that one array property, each row the Validator's fields. The
-shape is the kernel's ``spec_input_schema``, taken rather than rebuilt; the
-spec's own ``reads`` sit beside the list, as the call takes them.
+shape is the kernel's ``spec_caller_input_schema``, taken rather than rebuilt;
+the spec's own ``reads`` sit beside the list, as the call takes them. Each row
+asks only what the caller must send: a field ``input_data`` always fills is not
+offered, and one it may fill is not required.
 
 An argument the service takes beside the list is declared as a read.
 """
@@ -20,8 +22,10 @@ from django_service_specs import (
     Parameters,
     ServiceSpec,
     Unrestricted,
+    UnsetType,
     spec_input_schema,
 )
+from typing_extensions import TypedDict
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
@@ -137,3 +141,71 @@ def test_an_untyped_input_data_leaves_a_many_specs_list_required() -> None:
     schema = _schema(spec)
 
     assert schema["required"] == ["number", "items"]
+
+
+class _Numbered(TypedDict):
+    number: str
+
+
+class _MaybeNumbered(TypedDict):
+    number: str | UnsetType
+
+
+def _numbered() -> _Numbered:
+    return {"number": "A-1"}
+
+
+def _maybe_numbered() -> _MaybeNumbered:
+    return {"number": "A-1"}
+
+
+def _row(schema: dict[str, Any]) -> dict[str, Any]:
+    return schema["properties"]["items"]["items"]
+
+
+def test_a_row_field_a_typed_input_data_fills_is_neither_offered_nor_required() -> None:
+    # ``input_data`` is merged over every row, and dispatch drops a caller's
+    # value for a field it is annotated to fill, so no row asks for it. With
+    # ``number`` gone the row requires nothing, and writes no empty ``required``.
+    row = _row(_schema(_bulk(input_data=_numbered)))
+
+    assert row["properties"] == {"amount_cents": {"type": "integer", "default": 0}}
+    assert "required" not in row
+
+
+def test_a_row_field_a_typed_input_data_may_decline_is_offered_and_not_required() -> None:
+    row = _row(_schema(_bulk(input_data=_maybe_numbered)))
+
+    assert set(row["properties"]) == {"number", "amount_cents"}
+    assert "required" not in row
+
+
+def test_beside_an_untyped_input_data_a_row_requires_nothing() -> None:
+    # A provider not annotated with a ``TypedDict`` may fill any field and fills
+    # none for certain: every field is offered, none required.
+    row = _row(_schema(_bulk(input_data=lambda: {})))
+
+    assert set(row["properties"]) == {"number", "amount_cents"}
+    assert "required" not in row
+
+
+def test_a_rows_relaxing_stays_out_of_the_top_level() -> None:
+    # The list and a read beside it are demanded of the caller whatever
+    # ``input_data`` reaches inside a row, including a read sharing a row
+    # field's name.
+    spec = _bulk(
+        service=lambda *, number, project_pk, **_: None,
+        reads=Parameters(
+            [
+                Parameter("number", "string", required=True),
+                Parameter("project_pk", "integer", required=True),
+            ]
+        ),
+        input_data=lambda: {},
+    )
+
+    schema = _schema(spec)
+
+    assert "required" not in _row(schema)
+    assert list(schema["properties"]) == ["number", "project_pk", "items"]
+    assert schema["required"] == ["number", "project_pk", "items"]
