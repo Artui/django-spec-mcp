@@ -235,13 +235,13 @@ raises for a caller fails that caller's whole listing, not only its calls.
   time is asked once, on a `tools/call` over the sync or the async view, on
   `resources/read`, on `call_tool` / `acall_tool`, and on a streamed
   `tools/call`. Some calls differ: a streamed retry carrying
-  `inputResponses` is admitted afresh, since the answers change the arguments
-  the checks are asked on; a task-mode call resolves it once before the worker, at
-  the pre-flight when it streams progress and at task creation otherwise, and once in
-  the worker; and the three
-  answers admission falls back from resolve it 1 time (a call failing its shape), 2 times
-  (a `many` call with a refused row) and 2 times (a refusal that is no denial, such as a
-  `ServiceNotFound` a check raises).
+  `inputResponses` or `requestState` is admitted afresh, since the answers
+  change the arguments the checks are asked on; a task-mode call resolves it once
+  before the worker, at the pre-flight when it streams progress and at task creation
+  otherwise, and once in the worker; and the three answers admission falls back from
+  resolve it 1 time (a call failing its shape), 2 times (a `many` call with a refused
+  row) and 2 times (a refusal that is no denial, such as a `ServiceNotFound` a check
+  raises).
 - **One set per mount, with no per-call or per-tool override.** What varies per
   call belongs in the resolver; a mount needing different seeds is a second
   `MCPServer`.

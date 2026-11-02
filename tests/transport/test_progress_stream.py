@@ -61,6 +61,7 @@ from django_spec_mcp.transport.response_stream import (
 )
 from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
 from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
+from tests.elicitation.conftest import DeleteRows, delete_rows_kernel
 from tests.testapp.auth_backend import HeaderAuthBackend
 from tests.testapp.urlconf_for import urlconf_for
 
@@ -630,6 +631,66 @@ async def test_a_streamed_retry_with_merged_answers_is_admitted_afresh() -> None
 
     assert (await _answer(response))["result"]["structuredContent"] == {"tenant": "acme"}
     assert check.asked == ["globex", "acme"]
+
+
+class _RecordsArguments(PermissionCheck):
+    """Admits every caller, recording the arguments it is asked on."""
+
+    def __init__(self) -> None:
+        self.asked: list[dict[str, Any]] = []
+
+    def has_permission(self, principal: Any, spec: Any, *, arguments: Any) -> bool:
+        self.asked.append(dict(arguments))
+        return True
+
+
+@pytest.mark.django_db(transaction=True)
+async def test_a_streamed_retry_carrying_only_request_state_is_admitted_afresh() -> None:
+    """A retry whose answers ride in the signed ``requestState`` alone, with no
+    ``inputResponses``, still has them merged into its arguments, so the
+    handler asks the checks on the merged arguments rather than reusing the
+    pre-flight's admission, made on what the client sent. This pins the
+    ``not prior.carried`` guard: one reading ``inputResponses`` instead reuses
+    the pre-flight admission here and the check is never asked on
+    ``confirmed``."""
+    check = _RecordsArguments()
+    server = _bare()
+    server.register_tool(
+        ServiceSpec(
+            service=delete_rows_kernel,
+            validator=DataclassValidator(DeleteRows),
+            permissions=[check],
+            atomic=False,
+        ),
+        name="p.delete",
+    )
+    meta = {**_meta(), "io.modelcontextprotocol/clientCapabilities": {"elicitation": {}}}
+    sent = {"count": 1500}
+
+    async def round_trip(**extra: Any) -> dict[str, Any]:
+        response = await _post(
+            server, name="p.delete", arguments=sent, extra={"_meta": meta, **extra}
+        )
+        assert response["Content-Type"] == "text/event-stream"
+        return (await _answer(response))["result"]
+
+    # Asks to confirm. Nothing is carried yet, so the pre-flight's admission is the call's.
+    asked = await round_trip()
+    assert asked["resultType"] == "input_required"
+    assert check.asked == [sent]
+
+    # The confirmation is answered; it asks for a reason, and signs what was carried.
+    check.asked.clear()
+    answer = {ELICITATION_KEY: {"action": "accept", "content": {"confirmed": True}}}
+    reason = await round_trip(inputResponses=answer, requestState=asked["requestState"])
+    assert reason["resultType"] == "input_required"
+    assert check.asked == [sent, {**sent, "confirmed": True}]
+
+    # The retry carries the signed state and no answer of its own.
+    check.asked.clear()
+    again = await round_trip(requestState=reason["requestState"])
+    assert again["resultType"] == "input_required"
+    assert check.asked == [sent, {**sent, "confirmed": True}]
 
 
 @pytest.mark.django_db(transaction=True)
