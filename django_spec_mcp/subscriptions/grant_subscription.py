@@ -104,7 +104,13 @@ def _may_watch_resource(uri: str, context: MCPCallContext) -> bool:
     template-backed URI is matched the way the reader matches it rather than by
     a second rule that could drift.
     """
-    resolved: Any = context.resources.resolve(uri)
+    try:
+        resolved: Any = context.resources.resolve(uri)
+    except ValueError:
+        # A URI its template splits more than one way: the read refuses it,
+        # so the watch is dropped like any other unreadable URI
+        # (``test_a_subscription_drops_an_ambiguous_uri_and_keeps_its_unambiguous_sibling``).
+        return False
     if resolved is None:
         return False
     binding, vars_ = resolved
