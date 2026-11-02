@@ -3460,7 +3460,7 @@ each item in <code>items</code>, never to the envelope — and its description i
 its class says which kind of tool this is: a service tool runs a mutation, a
 selector tool reads. The call goes through the kernel's <code>dispatch</code> /
 <code>adispatch</code>, and the advertised schemas are the kernel's own
-<code>spec_input_schema</code> / <code>spec_output_schema</code>, so the arguments a service
+<code>spec_caller_input_schema</code> / <code>spec_output_schema</code>, so the arguments a service
 tool takes are the spec's parameters, spread at the top level of
 <code>arguments</code> rather than nested under a <code>data</code> key.</p>
 <p>Every other field is a fact of the MCP binding rather than of the operation:
@@ -3716,7 +3716,7 @@ would read as a gate and admit every caller.</p>
     <div class="doc doc-contents ">
 
         <p>Handed to the kernel's <code>dispatch</code> as <code>unknown_arguments=</code>, and read by
-<code>spec_input_schema</code> so the advertised schema is closed exactly when the
+<code>spec_caller_input_schema</code> so the advertised schema is closed exactly when the
 call refuses an undeclared key.</p>
 
     </div>
@@ -5746,7 +5746,7 @@ refuse it too, rather than running it as <code>IGNORE</code>.</p>
     </div>
 
 </div><h2 id="tool-schemas">Tool schemas<a class="headerlink" href="#tool-schemas" title="Permanent link">&para;</a></h2>
-<p>What a kernel tool advertises, built from the kernel's own <code>spec_input_schema</code>
+<p>What a kernel tool advertises, built from the kernel's own <code>spec_caller_input_schema</code>
 and <code>spec_output_schema</code> with the MCP binding's answers applied: the names the
 server fills itself leave the <code>inputSchema</code>, a paginated tool gains <code>page</code> and
 <code>limit</code>, and its <code>outputSchema</code> describes the page envelope. Exposed for
@@ -5777,36 +5777,32 @@ admits the <code>{}</code> such a call is served as
     <div class="doc doc-contents first">
 
         <p>The <code>inputSchema</code> a kernel tool advertises.</p>
-<p>The kernel's <code>spec_input_schema</code> under the binding's <code>unknown_arguments</code>,
-so the schema is closed exactly when the call refuses an undeclared key, and
-a service tool's parameters sit at the top level as the call takes them.
-The kernel lists every parameter as declared, <code>required</code> meaning the call
-needs the value from someone, and leaves to the transport what it answers
-itself. So:</p>
+<p>The kernel's <code>spec_caller_input_schema</code> under the server's <code>pool_seeds</code>
+and the binding's <code>server_arguments</code> and <code>unknown_arguments</code>: what a
+caller must send, so the schema is closed exactly when the call refuses an
+undeclared key, and a service tool's parameters sit at the top level as the
+call takes them. The kernel withholds what the server fills and relaxes
+what a provider may fill, at the top level
+(<code>test_a_name_a_typed_provider_returns_is_not_asked_for</code>,
+<code>test_an_untyped_provider_leaves_every_read_offered_and_none_required</code>,
+<code>test_a_key_one_seat_may_decline_is_still_required_by_another</code>) and in
+each row of a <code>many</code> service, by what <code>input_data</code> reaches there
+(<code>test_a_row_field_a_typed_input_data_fills_is_neither_offered_nor_required</code>,
+<code>test_a_rows_relaxing_stays_out_of_the_top_level</code>). What it adds is the
+transport's own:</p>
 <ul>
-<li>a name the server fills whatever the caller sends is left out of
-  <code>properties</code> and <code>required</code>: the binding's <code>server_arguments</code>, and
-  the kernel's <code>server_owned_keys</code> for <code>pool_seeds</code>, which holds the
-  keys a typed <code>kwargs=</code> or <code>input_data=</code> provider always fills
-  (<code>test_a_name_a_typed_provider_returns_is_not_asked_for</code>);</li>
-<li>a parameter a provider may fill is offered and not required, because
-  dispatch does not demand it of the caller: the kernel's
-  <code>provider_reached</code>, the reader its shape check relaxes by. It names
-  the keys a typed provider always fills too, which are withheld above
-  already. Without it every such parameter is required
-  (<code>test_an_untyped_provider_leaves_every_read_offered_and_none_required</code>,
-  <code>test_a_lookup_read_beside_an_untyped_provider_is_offered_and_not_required</code>),
-  and each seat's keys are its own
-  (<code>test_a_key_one_seat_may_decline_is_still_required_by_another</code>);</li>
 <li>a paginated <code>LIST</code> tool advertises <code>page</code> and <code>limit</code>, <code>limit</code> bounded by <code>max_page_size</code>
   when there is one, and each of its <code>shapes</code> says it applies to every
   item rather than to the envelope the <code>outputSchema</code> describes, in the
   words of <code>query_param_on_pages</code> (the server's
   <code>AgentConventions.query_param_on_pages</code>, already rendered; <code>None</code>
-  leaves each shape as declared).</li>
+  leaves each shape as declared). A shape the server answers for is
+  withheld by the kernel before the sentence is laid on.</li>
 </ul>
-<p>The same reading the agent route's toolset makes of the kernel's schema, so
-one spec asks the same of a caller on both.</p>
+<p>Off a <code>many</code> spec this is the reading the agent route's toolset makes of
+the kernel's schema, so one spec asks the same of a caller on both. A
+<code>many</code> spec's rows differ until that route reads them through
+<code>spec_caller_input_schema</code> too: there they are asked as declared.</p>
 
 
     </div>

@@ -2321,8 +2321,8 @@ signature and called directly.</p>
         <p>Register a kernel spec as a tool: a <code>ServiceSpec</code> or a <code>SelectorSpec</code>.</p>
 <p><code>spec</code> is a <code>django_service_specs</code> spec, and its class says which kind
 of tool this is. A service tool's arguments are the spec's parameters at
-the top level of <code>arguments</code>, as the kernel's <code>spec_input_schema</code>
-advertises them; a selector tool reads, and a <code>LIST</code> one paginates
+the top level of <code>arguments</code>, as the kernel's
+<code>spec_caller_input_schema</code> advertises them; a selector tool reads, and a <code>LIST</code> one paginates
 under <code>paginate=True</code>. The call runs through the kernel's <code>dispatch</code>
 / <code>adispatch</code>, which asks the spec's own <code>permissions</code> of the
 principal the auth backend resolved for the request.</p>

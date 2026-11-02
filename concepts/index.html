@@ -2810,7 +2810,7 @@ transport what it means on any other:</p>
   <code>description</code>.</li>
 <li><strong><code>validator</code></strong> checks a service's input. Its fields are the tool's
   arguments, spread at the top level of <code>arguments</code> as the kernel's
-  <code>spec_input_schema</code> advertises them, with no <code>data</code> key around them. A
+  <code>spec_caller_input_schema</code> advertises them, with no <code>data</code> key around them. A
   <code>many=True</code> service takes a list instead (<a href="#list-payload">A list payload</a>).</li>
 <li><strong><code>presenter</code></strong> renders the result, and its output schema, through the
   kernel's <code>spec_output_schema</code>, is the tool's <code>outputSchema</code>.</li>
@@ -2862,7 +2862,7 @@ transport what it means on any other:</p>
   judged the same way. A tool registered with a <code>task_policy=</code> other than the
   default has the checks asked before its task is created, and again by the
   task's worker (<a href="#opting-a-tool-in">Opting a tool in</a>).</li>
-<li><strong>The schemas are the kernel's</strong> <code>spec_input_schema</code> / <code>spec_output_schema</code>.
+<li><strong>The schemas are the kernel's</strong> <code>spec_caller_input_schema</code> / <code>spec_output_schema</code>.
   <code>unknown_arguments=</code> reaches both the schema and the call, and
   <a href="#server-arguments"><code>server_arguments=</code></a> names are left out of the schema and
   filled by the server.</li>
@@ -3181,6 +3181,10 @@ spec says otherwise:</p>
 <li><strong><code>unknown_arguments</code> applies inside each item too.</strong> Each item is checked as
   a single-item tool's arguments are, and each item's own
   <code>additionalProperties</code> says whether an undeclared key in it is refused.</li>
+<li><strong>Each item asks only what the caller must send.</strong> A field a typed
+  <code>input_data</code> always fills is not offered in an item, and one it may fill (a
+  declinable <code>X | UnsetType</code>, or any field beside an untyped <code>input_data</code>) is
+  offered and not required. The list itself stays required.</li>
 <li><strong>Errors are keyed under the argument, and item errors by index.</strong> An invalid
   second item is a <code>validation_error</code> result whose <code>error.detail</code> is
   <code>{"invoices": {"1": {"amount": ["Expected an integer."]}}}</code>. JSON object keys
@@ -3413,7 +3417,7 @@ shown and may send:</p>
 <ul>
 <li><strong><code>unknown_arguments=</code></strong> — how <code>arguments</code> keys the spec does not declare are
   handled. It takes the kernel's <code>UnknownArguments</code>, and the <code>inputSchema</code> is
-  the kernel's <code>spec_input_schema</code> under the same policy, so <strong>the closed
+  the kernel's <code>spec_caller_input_schema</code> under the same policy, so <strong>the closed
   schema is advertised exactly where the call refuses an undeclared name</strong>.</li>
 <li><code>UnknownArguments.REJECT</code> (default) — an undeclared key is refused with an
     <code>isError</code> <code>validation_error</code> result keyed by the key's name under <code>detail</code>
