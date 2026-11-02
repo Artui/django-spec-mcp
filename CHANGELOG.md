@@ -27,13 +27,12 @@ carries; releases up to 0.54.0 are in
 ### Fixed
 
 - **A streamed `tools/call` that runs as a task resolves a seed a check names once before
-  the worker.** The 0.3.0 exception is gone: task creation asked the spec's checks again
-  without the pre-flight's admission, so the seed resolved in the pre-flight and again at
-  task creation. Task creation now takes the pre-flight's admission, which was made on the
-  same arguments, so a task-mode call resolves the seed once before the worker, at the
-  pre-flight when it streams and at task creation otherwise, and once in the worker.
-  `maybe_create_task` takes an optional `admission=` for it; the sync `handle_tools_call`,
-  which has no pre-flight, asks the checks as before.
+  the worker.** Task creation takes the streamed pre-flight's admission, which was made on
+  the same arguments, where it used to ask the spec's checks again without it, so the seed
+  resolved in the pre-flight and again at task creation. A task-mode call now resolves the
+  seed once before the worker, at the pre-flight when it streams and at task creation
+  otherwise, and once in the worker. The sync `handle_tools_call`, which has no
+  pre-flight, asks the checks as before.
 
 ## [0.3.0] — 2026-11-02
 

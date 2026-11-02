@@ -195,6 +195,7 @@ def stream_with_progress(
 
 __all__ = [
     "can_report_progress",
+    "preflight_admission",
     "progress_token",
     "stream_with_progress",
 ]
