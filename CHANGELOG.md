@@ -17,7 +17,15 @@ carries; releases up to 0.54.0 are in
   kernel's `ServiceSpec` now refuses, when it is built, a nested selector seat
   (`instance_selector_spec`, `collection_selector_spec` or `output_selector_spec`)
   whose `SelectorSpec` declares `permissions`: the service's own `permissions`
-  decide the call, so a seat declares none.
+  decide the call, so a seat declares none. From 0.23.0 `check_seeds` also reads the
+  signatures of a spec's preconditions, affordance conditions, output selector and
+  `extend_queryset`, so `register_tool` refuses, with `ImproperlyConfigured` at
+  registration, a spec whose callable names a seed nothing fills (a precondition
+  `def _check(*, frozen)` with no `frozen` seed registered); such a spec already
+  failed on every call. The kernel's changelog for 0.21.0 to 0.23.0 lists the rest,
+  among them that a `parameters` override on a `ServiceSpec` or `SelectorSpec`
+  subclass must accept `call_context`, and that the kernel's translation catalog
+  loads only when `"django_service_specs"` is in `INSTALLED_APPS` (it runs unlisted).
 - **A registered seed a spec's check names resolves once per call.** A check
   method may name a seed in the server's `pool_seeds=` as a keyword. The server
   asks a kernel spec's checks before it charges the call, through the kernel's
@@ -28,10 +36,10 @@ carries; releases up to 0.54.0 are in
   `acall_tool`, and on a task's worker. A call streaming progress resolves it
   once more, in the pre-flight that asks the checks before the stream opens,
   and a task-mode call once when the task is created and once in its worker.
-  A call whose arguments fail their
-  shape, a `many` call with a refused row, and a check raising a refusal that
-  is no denial are answered as before and hand dispatch no values, since its
-  grant there is not the one the checks returned. A failed shape still
+  A call whose arguments fail their shape, a `many` call with a refused row,
+  and a check raising a refusal that is no denial are answered as before and
+  hand dispatch no values, since its grant there is not the one the checks
+  returned. A failed shape still
   resolves the seed once, for the judgment on no arguments; a refused row and
   a refusal that is no denial resolve it twice, as dispatch asks the checks
   again.
