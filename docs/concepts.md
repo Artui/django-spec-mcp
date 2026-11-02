@@ -236,9 +236,9 @@ raises for a caller fails that caller's whole listing, not only its calls.
   `resources/read`, on `call_tool` / `acall_tool`, and on a streamed
   `tools/call`. Some calls differ: a streamed retry carrying
   `inputResponses` is admitted afresh, since the answers change the arguments
-  the checks are asked on; a task-mode call resolves it once at task creation
-  and once in the worker, and a task-mode call that also streams progress resolves it
-  once in the pre-flight, once at task creation and once in the worker; and the three
+  the checks are asked on; a task-mode call resolves it once before the worker, at
+  the pre-flight when it streams progress and at task creation otherwise, and once in
+  the worker; and the three
   answers admission falls back from resolve it 1 time (a call failing its shape), 2 times
   (a `many` call with a refused row) and 2 times (a refusal that is no denial, such as a
   `ServiceNotFound` a check raises).

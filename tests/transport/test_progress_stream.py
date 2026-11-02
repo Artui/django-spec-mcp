@@ -538,19 +538,13 @@ async def test_a_streamed_call_resolves_a_checks_seed_once() -> None:
 
 
 @pytest.mark.django_db(transaction=True)
-async def test_a_streamed_task_call_is_the_exception_resolving_a_seed_twice_before_the_worker() -> (
-    None
-):
-    """The documented exception to the test above: a call that streams progress
-    and also runs as a task.
-
-    The pre-flight admits it (1); the call then reaches ``maybe_create_task``,
-    which admits it again without the pre-flight's admission (2); the worker
-    resolves once more, on its own. This pins the two before the worker, not a
-    wish: a follow-up lets task creation take the pre-flight's admission, and
-    the count here becomes 1 when it does. The plain task call is 1 at
-    creation (``tests/tasks/test_a_task_resolves_a_checks_seed_once.py``).
-    """
+async def test_a_streamed_task_call_resolves_a_checks_seed_once_before_the_worker() -> None:
+    """A call that streams progress and also runs as a task: the pre-flight
+    admits it (1), and task creation takes that admission rather than asking
+    the spec's checks again, so the seed a check names resolves once before the
+    worker, as on a plain task call
+    (``tests/tasks/test_a_task_resolves_a_checks_seed_once.py``). The worker
+    resolves once more, on its own."""
     resolved: list[_Tenant] = []
     enqueued: list[str] = []
 
@@ -596,7 +590,7 @@ async def test_a_streamed_task_call_is_the_exception_resolving_a_seed_twice_befo
 
     assert (await _answer(response))["result"]["resultType"] == "task"
     assert len(enqueued) == 1, enqueued
-    assert len(resolved) == 2, resolved
+    assert len(resolved) == 1, resolved
 
 
 class _RecordsTenant(PermissionCheck):
