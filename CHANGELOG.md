@@ -18,6 +18,17 @@ carries; releases up to 0.54.0 are in
   (`instance_selector_spec`, `collection_selector_spec` or `output_selector_spec`)
   whose `SelectorSpec` declares `permissions`: the service's own `permissions`
   decide the call, so a seat declares none.
+- **A registered seed a spec's check names resolves once per call.** A check
+  method may name a seed in the server's `pool_seeds=` as a keyword. The server
+  asks a kernel spec's checks before it charges the call, through the kernel's
+  `check_call`, and now hands the values those checks were offered on to
+  `dispatch` as `seeds=`. So the check and the service or selector see one
+  object, and the seed's resolver runs once rather than twice. This holds on
+  `tools/call` and `resources/read` on both endpoints, on `call_tool` and
+  `acall_tool`, and on a task's worker. A call whose arguments fail their
+  shape, a `many` call with a refused row, and a check raising a refusal that
+  is no denial are answered as before: dispatch asks the checks again there,
+  resolving the seeds itself.
 
 ## [0.1.0] — 2026-10-29
 

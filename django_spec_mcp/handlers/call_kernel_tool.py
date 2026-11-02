@@ -43,7 +43,8 @@ def call_kernel_tool(
     (``admit_kernel_call``), so a caller they refuse is told that rather than
     which argument it left out
     (``test_call_tool_refuses_a_caller_the_spec_denies_before_the_argument_is_checked``);
-    ``dispatch`` runs under the grant they gave.
+    ``dispatch`` runs under the grant they gave, on the values of the seeds
+    they name (``test_an_in_process_call_tool_resolves_a_checks_seed_once``).
 
     A refusal the wire answers ``-32006`` is raised as it is, the
     ``NotPermitted`` or ``PrincipalUnavailable`` itself, for the caller to map
@@ -90,6 +91,7 @@ def call_kernel_tool(
             binding.spec,
             principal=admission.principal,
             grant=admission.grant,
+            seeds=admission.seeds,
             arguments=dispatched,
             pool_seeds=pool_seeds,
             unknown_arguments=binding.unknown_arguments,
