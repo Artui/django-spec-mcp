@@ -62,7 +62,7 @@ from django_spec_mcp.schema.types.agent_conventions import AgentConventions
 from django_spec_mcp.server.utils import UnguardedToolWarning
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
-from django_spec_mcp.transport.progress_dispatch import preflight_admission, preflight_permissions
+from django_spec_mcp.transport.progress_dispatch import preflight_admission
 from django_spec_mcp.types.internal_error_message import INTERNAL_ERROR_MESSAGE
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from django_spec_mcp.types.task_policy import TaskPolicy
@@ -562,7 +562,7 @@ def test_a_streamed_call_with_no_arguments_object_is_judged_on_none_sent(
     )
 
     params = {"name": "get", "arguments": arguments}
-    assert preflight_permissions("tools/call", params, _ctx(server)) is None
+    assert isinstance(preflight_admission("tools/call", params, _ctx(server)), KernelAdmission)
     assert check.seen == [{}]
 
 
@@ -617,8 +617,8 @@ async def test_a_many_call_with_a_refused_row_is_answered_on_its_checked_top_lev
     arguments = {"tenant": tenant, "items": _BAD_ROW}
     if streamed:
         params = {"name": "get", "arguments": arguments}
-        refused = await sync_to_async(preflight_permissions)("tools/call", params, _ctx(server))
-        assert (refused is None) is admitted
+        outcome = await sync_to_async(preflight_admission)("tools/call", params, _ctx(server))
+        assert isinstance(outcome, KernelAdmission if admitted else JsonRpcError)
 
     out = await _call(server, arguments, is_async=is_async)
 

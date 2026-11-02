@@ -183,7 +183,18 @@ def build_ui_tool_meta(
             "ui= alone, or drop it and hand-write the whole bundle in meta=."
         )
 
-    resolved = resources.resolve(ui.resource_uri)
+    # ``resolve`` raises ValueError for one reason only: a URI its template
+    # splits more than one way. It walks every binding, so the template can be a
+    # data resource's as well as a view's. The registry's message names neither
+    # the tool nor that the link is what asked, so say both.
+    try:
+        resolved = resources.resolve(ui.resource_uri)
+    except ValueError as exc:
+        raise ValueError(
+            f"Tool {name!r} links to {ui.resource_uri!r}, which a registered "
+            f"resource's URI template splits more than one way ({exc}). Name the "
+            "view by its exact URI."
+        ) from exc
     if resolved is None or resolved[0].mime_type != UI_RESOURCE_MIME_TYPE:
         raise ValueError(
             f"Tool {name!r} links to {ui.resource_uri!r}, which is not a view "

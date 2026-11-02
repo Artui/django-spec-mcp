@@ -318,8 +318,10 @@ acts on. It allows by default, because most checks are class-level only.
 `has_scope_permission(principal, spec, scope)` is the same question for a call
 that resolves no single row: the set a bulk call acts on or a collection
 reads, and `None` for a create. A kernel spec's checks are asked once on a
-plain call, and on a streamed call once in its pre-flight and once more when
-the call runs, when its arguments pass the kernel's argument check.
+plain call and on a streamed one alike, when its arguments pass the kernel's
+argument check: a streamed call is asked once, in its pre-flight, and runs under
+that answer. A streamed retry carrying answers is asked again when it runs, since
+the answers change the arguments the checks see.
 
 A resource read runs the same `dispatch`, so its spec's checks see the row the
 URI names. `completion/complete` on a resource template names the template

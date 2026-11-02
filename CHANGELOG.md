@@ -11,6 +11,29 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-11-02
+
+### Changed
+
+- **A tool linked to a view by a URI its template splits more than one way names the tool.**
+  `register_tool(ui=UIToolMeta(resource_uri=...))` resolves the URI at registration, and
+  with a view registered at `ui://{a}-{b}` a link to `ui://x-y-z` raised the registry's
+  ambiguity message, which does not say which tool asked. It now raises
+  `Tool 'name' links to 'ui://x-y-z', which a registered resource's URI template splits
+  more than one way`, with the registry's message in the parentheses and as `__cause__`,
+  and ends by advising to name the view by its exact URI. The template may be a data
+  resource's as well as a view's, since the link resolves against every registered one.
+
+### Fixed
+
+- **A streamed `tools/call` that runs as a task resolves a seed a check names once before
+  the worker.** Task creation takes the streamed pre-flight's admission, which was made on
+  the same arguments, where it used to ask the spec's checks again without it, so the seed
+  resolved in the pre-flight and again at task creation. A task-mode call now resolves the
+  seed once before the worker, at the pre-flight when it streams and at task creation
+  otherwise, and once in the worker. The sync `handle_tools_call`, which has no
+  pre-flight, asks the checks as before.
+
 ## [0.3.0] — 2026-11-02
 
 ### Changed
@@ -591,7 +614,8 @@ carries; releases up to 0.54.0 are in
   running. The worker's run now enters below that decision. A client that did
   not declare the extension is still refused `-32021` by a `REQUIRED` tool.
 
-[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/Artui/django-spec-mcp/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Artui/django-spec-mcp/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Artui/django-spec-mcp/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Artui/django-spec-mcp/compare/v0.0.0...v0.1.0

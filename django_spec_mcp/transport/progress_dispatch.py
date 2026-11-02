@@ -44,7 +44,7 @@ def can_report_progress(method: str, params: Any, context: MCPCallContext) -> bo
     Narrower than "the client asked", and deliberately so. Opening a stream for
     a dispatch that will never report costs a connection, buys nothing, and
     silently gives up the normative ``403``: a ``StreamingHttpResponse`` commits
-    its status before the handler runs, and ``preflight_permissions`` can
+    its status before the handler runs, and ``preflight_admission`` can
     only speak for ``tools/call``. So streaming is confined to the paths that
     actually thread a reporter — ``tools/call`` on a service or selector
     binding.
@@ -56,16 +56,6 @@ def can_report_progress(method: str, params: Any, context: MCPCallContext) -> bo
         return False
     binding = _tool_binding(params, context)
     return binding is not None
-
-
-def preflight_permissions(method: str, params: Any, context: MCPCallContext) -> JsonRpcError | None:
-    """The denial ``preflight_admission`` answers, or ``None`` when there is none.
-
-    For a caller that wants only the question, not the admission that answers
-    it for a call that is not refused.
-    """
-    outcome = preflight_admission(method, params, context)
-    return outcome if isinstance(outcome, JsonRpcError) else None
 
 
 def preflight_admission(
@@ -205,7 +195,7 @@ def stream_with_progress(
 
 __all__ = [
     "can_report_progress",
-    "preflight_permissions",
+    "preflight_admission",
     "progress_token",
     "stream_with_progress",
 ]
