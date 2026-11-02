@@ -15,6 +15,7 @@ from django_spec_mcp.types.jsonrpc_version import JSONRPC_VERSION
 from django_spec_mcp.types.max_completion_values import MAX_COMPLETION_VALUES
 from django_spec_mcp.types.mcp_error_header import MCP_ERROR_HEADER
 from django_spec_mcp.types.modern_protocol_versions import MODERN_PROTOCOL_VERSIONS
+from django_spec_mcp.types.namespace_digest_chars import NAMESPACE_DIGEST_CHARS
 from django_spec_mcp.types.notification_kind import NotificationKind
 from django_spec_mcp.types.progress_token_meta_key import PROGRESS_TOKEN_META_KEY
 from django_spec_mcp.types.protocol_version_meta_key import PROTOCOL_VERSION_META_KEY
@@ -60,6 +61,7 @@ __all__ = [
     "MAX_COMPLETION_VALUES",
     "MCP_ERROR_HEADER",
     "MODERN_PROTOCOL_VERSIONS",
+    "NAMESPACE_DIGEST_CHARS",
     "NotificationKind",
     "PROGRESS_TOKEN_META_KEY",
     "PROTOCOL_VERSION_META_KEY",

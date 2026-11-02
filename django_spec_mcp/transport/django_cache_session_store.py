@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import re
 import secrets
 import time
@@ -8,6 +7,7 @@ from dataclasses import dataclass
 
 from django.core.cache import cache
 
+from django_spec_mcp._compat.utils import namespace_digest
 from django_spec_mcp.conf import get_setting
 
 
@@ -24,10 +24,6 @@ class _Entry:
 
 
 _KEY_PREFIX: str = "spec-mcp:session:"
-# Long enough to make a collision between two servers in one process
-# implausible while keeping the key readable. Not a security boundary — the
-# namespace is a partition, not a secret.
-_NAMESPACE_DIGEST_CHARS: int = 12
 # The alphabet ``secrets.token_urlsafe`` draws from, with a ceiling well under
 # the 250-byte cache-key limit memcached enforces: the shape of every id
 # ``create`` hands out, and so the only shape worth a cache round-trip.
@@ -80,7 +76,7 @@ class DjangoCacheSessionStore:
         # Folded into the prefix once: the namespace is fixed for the store's
         # lifetime, so there is nothing to recompute on the read path.
         self._prefix: str = (
-            _KEY_PREFIX if namespace is None else f"{_KEY_PREFIX}{_digest(namespace)}:"
+            _KEY_PREFIX if namespace is None else f"{_KEY_PREFIX}{namespace_digest(namespace)}:"
         )
         self._ttl_seconds: int = (
             ttl_seconds if ttl_seconds is not None else get_setting("SESSION_TTL_SECONDS")
@@ -162,15 +158,6 @@ class DjangoCacheSessionStore:
         if not self._readable(session_id):
             return
         cache.delete(self._key(session_id))
-
-
-def _digest(namespace: str) -> str:
-    """Reduce a free-form namespace to a cache-key-safe token.
-
-    Not for secrecy — a server name is public. It only guarantees a key that is
-    well-formed on every cache backend.
-    """
-    return hashlib.sha256(namespace.encode("utf-8")).hexdigest()[:_NAMESPACE_DIGEST_CHARS]
 
 
 __all__ = ["DjangoCacheSessionStore"]
