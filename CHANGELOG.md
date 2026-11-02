@@ -17,7 +17,15 @@ carries; releases up to 0.54.0 are in
   kernel's `ServiceSpec` now refuses, when it is built, a nested selector seat
   (`instance_selector_spec`, `collection_selector_spec` or `output_selector_spec`)
   whose `SelectorSpec` declares `permissions`: the service's own `permissions`
-  decide the call, so a seat declares none.
+  decide the call, so a seat declares none. From 0.23.0 `check_seeds` also reads the
+  signatures of a spec's preconditions, affordance conditions, output selector and
+  `extend_queryset`, so `register_tool` refuses, with `ImproperlyConfigured` at
+  registration, a spec whose callable names a seed nothing fills (a precondition
+  `def _check(*, frozen)` with no `frozen` seed registered); such a spec already
+  failed on every call. The kernel's changelog for 0.21.0 to 0.23.0 lists the rest,
+  among them that a `parameters` override on a `ServiceSpec` or `SelectorSpec`
+  subclass must accept `call_context`, and that a translated refusal needs
+  `"django_service_specs"` in `INSTALLED_APPS`.
 
 ## [0.1.0] — 2026-10-29
 
