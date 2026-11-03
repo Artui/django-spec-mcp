@@ -53,10 +53,11 @@ async def handle_tools_call_async(
     ``admission`` is the one a streamed call's pre-flight already made, for the
     arguments the client sent. It is reused only when no retry answer was merged
     into them, and the spec's checks are asked afresh otherwise, so each resolves
-    its seeds once per call. Task creation takes it too, ahead of any retry's
-    answers being merged, so a streamed call that runs as a task resolves a seed
-    a check names once before the worker. Only the transport's stream hands one in;
-    the default asks the checks here, as every other caller expects.
+    its seeds once per call. Task creation takes it too, on the same terms: reused
+    while no answer was carried in, asked afresh otherwise, so a streamed call that
+    runs as a task resolves a seed a check names once before the worker. Only the
+    transport's stream hands one in; the default asks the checks here, as every
+    other caller expects.
     """
     if not isinstance(params, dict):
         return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, "tools/call params must be an object")
@@ -73,7 +74,7 @@ async def handle_tools_call_async(
     # async-unsafe (a database-backed cache raises; a check may run a query).
     as_task: dict[str, Any] | JsonRpcError | None = await sync_to_async(
         maybe_create_task, thread_sensitive=True
-    )(binding, arguments_raw, context, admission=admission)
+    )(binding, arguments_raw, context, admission=admission, params=params)
     if as_task is not None:
         return as_task
 
