@@ -11,6 +11,15 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+### Fixed
+
+- **A refusal on the task path is answered inside an `mcp.tools.call` span.** Task
+  creation opened no span, so a `tools/call` that would run as a task and was denied,
+  rate-limited or carried a declined or cancelled `inputResponses` was answered with no
+  trace, where the inline call answers each inside `mcp.tools.call`. Task creation now
+  runs from the scope gate on inside that span, sync and async; a call that becomes a
+  task is traced at its creation and again at its run in the worker.
+
 ## [0.6.0] — 2026-11-03
 
 ### Changed

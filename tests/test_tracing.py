@@ -12,11 +12,13 @@ rejection and no-OTel cases build no spec.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 from typing import Any
 
 import pytest
 from asgiref.sync import async_to_sync
 from django_service_specs import (
+    DataclassValidator,
     Parameter,
     Parameters,
     SelectorKind,
@@ -30,13 +32,19 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
-from django_spec_mcp import MCPServer, PromptArgument
+from django_spec_mcp import MCPServer, PromptArgument, TaskPolicy
 from django_spec_mcp.handlers.handle_prompts_get import handle_prompts_get
 from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
+from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
+from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
+from tests.elicitation.conftest import TOOL, DeleteRows, delete_rows_kernel
+from tests.tasks.conftest import RecordingExecutor
+from tests.tasks.conftest import context as task_context
 from tests.utils import make_server, plain_context
 
 
@@ -190,3 +198,50 @@ def test_service_error_not_recorded_by_default(
     settings.SPEC_MCP = {}
     tools_call({"name": "t.boom", "arguments": {}}, _ctx(_server_raising_service_error()))
     assert _exception_events(exporter) == []
+
+
+# ---------- the task path ----------
+
+
+def _task_server() -> MCPServer:
+    """A task-running server holding ``rows.delete`` as an optional task."""
+    store = InMemoryTaskStore()
+    server = make_server(task_store=store, task_executor=RecordingExecutor(store))
+    server.register_tool(
+        ServiceSpec(
+            service=delete_rows_kernel,
+            validator=DataclassValidator(DeleteRows),
+            permissions=OPEN,
+            atomic=False,
+        ),
+        name=TOOL,
+        task_policy=TaskPolicy.OPTIONAL,
+    )
+    return server
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("action", ["decline", "cancel"])
+def test_a_task_path_refusal_is_answered_inside_the_span(
+    exporter: InMemorySpanExporter, tools_call, action: str
+) -> None:
+    """A declined answer on the task path is answered as inline is, inside an
+    ``mcp.tools.call`` span: before, task creation opened none, so the one outcome
+    the two paths share was traced on one only."""
+    server = _task_server()
+    ctx = replace(
+        task_context(server),
+        client_capabilities={"elicitation": {}, "extensions": {TASKS_EXTENSION_ID: {}}},
+    )
+    out = tools_call(
+        {
+            "name": TOOL,
+            "arguments": {"count": 500},
+            "inputResponses": {ELICITATION_KEY: {"action": action}},
+        },
+        ctx,
+    )
+    assert out.get("isError") is True, out
+    assert server.task_executor.enqueued == []
+    (call,) = [s for s in exporter.get_finished_spans() if s.name == "mcp.tools.call"]
+    assert call.attributes["mcp.binding.name"] == TOOL

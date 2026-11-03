@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from django_spec_mcp._compat.tracing import span
 from django_spec_mcp.elicitation.types.resolved_input import ResolvedInput
 from django_spec_mcp.handlers.input_dispatch import refusal_result
 from django_spec_mcp.handlers.kernel_utils import KernelAdmission, admit_kernel_tool_call
@@ -18,10 +19,13 @@ from django_spec_mcp.handlers.utils import (
     forbidden,
     judge_tool_permissions,
     rate_limited,
+    span_attrs,
 )
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.protocol.types.task import Task
 from django_spec_mcp.tasks.create_task import create_task
+from django_spec_mcp.tasks.types.task_executor import TaskExecutor
+from django_spec_mcp.tasks.types.task_store import TaskStore
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from django_spec_mcp.types.result_type import ResultType
 from django_spec_mcp.types.task_policy import TaskPolicy
@@ -85,6 +89,12 @@ def maybe_create_task(
     task. The merged arguments stay in the record for the task's lifetime, like
     any other argument.
 
+    **From the scope gate on, it runs inside an ``mcp.tools.call`` span**, the one
+    the inline call opens around the same checks, so a denial, a refused charge or
+    a declined answer is traced whichever path answered it. A call that becomes a
+    task is traced twice: its creation here, and its run in the worker, which
+    re-enters the inline path.
+
     ``admission`` is the one a streamed call's pre-flight made, which task
     creation takes instead of asking the spec's checks again, so a seed a check
     names resolves once before the worker
@@ -129,6 +139,26 @@ def maybe_create_task(
             return missing_capability_error()
         return None
 
+    # From the scope gate on, inside the span the inline call opens, so an
+    # outcome the two paths share is traced on both: a denial, a refused charge
+    # or a declined answer here is the inline call's own answer
+    # (``test_a_task_path_refusal_is_answered_inside_the_span``). The checks
+    # before it are cheap routing, which opens no span inline either.
+    with span("mcp.tools.call", attributes=span_attrs(binding.name, context)):
+        return _admit_and_create(binding, arguments, context, admission, params, store, executor)
+
+
+def _admit_and_create(
+    binding: Any,
+    arguments: dict[str, Any],
+    context: MCPCallContext,
+    admission: KernelAdmission | None,
+    params: dict[str, Any] | None,
+    store: TaskStore,
+    executor: TaskExecutor,
+) -> dict[str, Any] | JsonRpcError:
+    """The part of ``maybe_create_task`` past the routing: the caller's checks, the
+    charge, a retry's answers, then the task."""
     # The binding's scope gate, through the helper the inline call uses.
     allowed, required_scopes = judge_tool_permissions(binding, context)
     if not allowed:
