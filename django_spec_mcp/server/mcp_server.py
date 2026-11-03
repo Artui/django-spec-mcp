@@ -1015,7 +1015,10 @@ class MCPServer:
         ``mime_type`` is advertised as given and never inferred from or checked
         against the encoding, so ``TEXT`` left at the default
         ``application/json`` serves a ``str`` that is already a JSON document as
-        it is. The result ceiling and the cache hints apply to every encoding.
+        it is. The view mime type (``UI_RESOURCE_MIME_TYPE``) with a templated
+        ``uri_template`` raises ``ValueError``, since a view must be one
+        concrete document; use ``register_ui_resource`` for a view. The result
+        ceiling and the cache hints apply to every encoding.
         A ``TEXT`` or ``BLOB`` resource is refused, naming both, beside a spec
         declaring ``affordances``, which the kernel adds to a presented object,
         or ``allow_none``, under which a missing row presents as ``None``
@@ -1549,8 +1552,10 @@ class MCPServer:
         never collide in the root namespace.
 
         Raises ``ImproperlyConfigured`` with no ``auth_backend=``, as mounting
-        does, and when the backend's ``resource`` is not an absolute URL
-        (``AllowAnyBackend`` publishes none).
+        does, when the backend's ``resource`` is not an absolute URL
+        (``AllowAnyBackend`` publishes none), when its path holds ``<`` or
+        ``>``, raw or percent-encoded, and when its percent-encoding is not
+        valid UTF-8.
         """
         backend = self._mounted_backend()
         route = ProtectedResourceMetadataView.well_known_route(
