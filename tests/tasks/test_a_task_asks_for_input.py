@@ -536,49 +536,64 @@ def test_an_answer_resumes_only_the_question_it_read(moved: str) -> None:
     assert world.executor.enqueued == [task["id"]]
 
 
-class _OvertakenAfterARead(InMemoryTaskStore):
-    """Serves one read, then a ``tasks/cancel`` (or the record's expiry) lands
-    before the caller's next call."""
+class _CountingStore(InMemoryTaskStore):
+    """Notes each read and save once ``calls`` is armed."""
 
-    def __init__(self, meanwhile: str) -> None:
+    def __init__(self) -> None:
         super().__init__()
-        self.meanwhile = meanwhile
-        self.overtake_after_a_read: str | None = None
+        self.calls: list[str] | None = None
 
     def get(self, task_id: str) -> Any:
-        record = super().get(task_id)
-        if self.overtake_after_a_read == task_id:
-            self.overtake_after_a_read = None
-            if self.meanwhile == "cancelled":
-                transition_task(self, task_id, status=TaskStatus.CANCELLED)
-            else:
-                self.delete(task_id)
-        return record
+        if self.calls is not None:
+            self.calls.append("get")
+        return super().get(task_id)
+
+    def save(self, record: Any) -> None:
+        if self.calls is not None:
+            self.calls.append("save")
+        super().save(record)
 
 
-@pytest.mark.parametrize("meanwhile", ["cancelled", "expired"])
-def test_a_task_overtaken_between_the_parks_read_and_its_save_is_kept(meanwhile: str) -> None:
-    """The park saves the round before it moves the status, so the save must not
-    be built from a read the cancel (or the expiry) has since overtaken. Fails
-    without the read directly before the save in ``_park``."""
-    store = _OvertakenAfterARead(meanwhile)
-    task: dict[str, str] = {}
+def test_the_park_reads_the_task_once_and_saves_it_once() -> None:
+    """From the service's question on, the park is one read and one save: the
+    round, the status and the question land in one record, built from the task as
+    the run left it, so the progress the service reported is kept."""
+    store = _CountingStore()
 
-    def asks(*, count: int, confirmed: bool = False, reason: str = "") -> Any:  # noqa: ARG001
-        store.overtake_after_a_read = task["id"]
+    def asks(*, count: int, progress: Any, confirmed: bool = False, reason: str = "") -> Any:  # noqa: ARG001
+        progress(1, total=2, message="Counting")
+        store.calls = []
         raise AdditionalInputRequired("Sure?", schema={"confirmed": {"type": "boolean"}})
 
     world = _World(service=asks, store=store)
-    task["id"] = world.create(500)
+    task_id = world.create(500)
 
-    world.server.run_task(task["id"])
+    world.server.run_task(task_id)
 
-    record = store.get(task["id"])
-    if meanwhile == "cancelled":
-        assert record.status is TaskStatus.CANCELLED
-        assert record.input_round == 0
-    else:
-        assert record is None
+    assert store.calls == ["get", "save"]
+    store.calls = None
+    record = store.get(task_id)
+    assert record.status is TaskStatus.INPUT_REQUIRED
+    assert record.input_round == 1
+    assert set(record.task.input_requests) == {input_request_key(1)}
+    assert (record.progress, record.total) == (1, 2)
+
+
+def test_a_transition_sets_the_round_only_when_asked_and_only_when_it_happens() -> None:
+    """``input_round`` lands with the transition it is given to; left out, the round
+    stays as it was; and a transition the terminal guard refuses sets none."""
+    world = _World()
+    task_id = world.create(5)
+
+    transition_task(world.store, task_id, status=TaskStatus.INPUT_REQUIRED, input_round=3)
+    assert world.store.get(task_id).input_round == 3
+    transition_task(world.store, task_id, status=TaskStatus.WORKING)
+    assert world.store.get(task_id).input_round == 3
+    transition_task(world.store, task_id, status=TaskStatus.CANCELLED)
+    transition_task(world.store, task_id, status=TaskStatus.INPUT_REQUIRED, input_round=4)
+
+    record = world.store.get(task_id)
+    assert (record.status, record.input_round) == (TaskStatus.CANCELLED, 3)
 
 
 def test_the_answer_is_saved_before_the_task_is_queued() -> None:
