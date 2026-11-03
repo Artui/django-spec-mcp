@@ -2168,6 +2168,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.tasks.transition_task.transition_task" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        transition_task
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -3337,6 +3348,17 @@
     <span class="md-ellipsis">
       
         InMemoryTaskStore
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.tasks.transition_task.transition_task" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        transition_task
       
     </span>
   </a>
@@ -7121,6 +7143,63 @@ use this store is its own garbage collection.</p>
 
 
   </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h2 id="django_spec_mcp.tasks.transition_task.transition_task" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">transition_task</span>
+
+
+<a href="#django_spec_mcp.tasks.transition_task.transition_task" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">transition_task</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">store</span><span class="p">:</span> <span class="n">TaskStore</span><span class="p">,</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="n">task_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="o">*</span><span class="p">,</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">status</span><span class="p">:</span> <span class="n">TaskStatus</span><span class="p">,</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>    <span class="n">status_message</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">result</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">error</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">input_requests</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">input_round</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">broker</span><span class="p">:</span> <span class="n">SubscriptionBroker</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TaskRecord</span> <span class="o">|</span> <span class="kc">None</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>Move a task to <code>status</code>, refusing to reopen a finished one.</p>
+<p>Returns the record as it now stands, or <code>None</code> if there is no such task.</p>
+<p><strong>The terminal guard is the whole reason this exists</strong> rather than each
+caller writing its own <code>store.save</code>. Two writers race by construction —
+the worker finishing the job and a <code>tasks/cancel</code> from the client — and
+no backend here locks, so without a guard a cancel landing just after
+completion would move a task from <code>completed</code> back to <code>cancelled</code> and
+tell the client its finished work never ran. The state machine is one-way:
+once <code>completed</code> / <code>failed</code> / <code>cancelled</code>, a task stays there.</p>
+<p>A refused transition is <strong>not an error</strong>: the caller asked for something
+already decided, and the record it gets back says what was decided, which is
+what a cancel-after-completion should report. Callers needing to know
+whether they won compare the returned status to the one they asked for.</p>
+<p><code>lastUpdatedAt</code> moves only on a transition that happened, so it stays an
+honest "when did this task last change".</p>
+<p><code>input_round</code> sets the record's round with the transition, in the same save,
+and <code>None</code> (the default) keeps the round as it stands, where every other
+keyword's <code>None</code> clears its field: the round counts a task's questions over
+its lifetime, and a transition that does not ask one has nothing to say about
+it. <code>0</code> sets it like any other round, and a refused transition sets none
+(<code>test_a_transition_sets_the_round_only_when_asked_and_only_when_it_happens</code>).
+A round set while a worker runs the task is overwritten when that run parks it,
+since the park records the round after the one the worker claimed
+(<code>test_a_round_set_while_the_worker_runs_is_overwritten_by_its_park</code>).</p>
+<p><code>broker</code> opts the transition into <code>notifications/tasks</code>, published only
+for a transition that <em>happened</em> — a refused one changed nothing, and
+saying otherwise would have a subscriber re-read an unmoved status.</p>
+
 
     </div>
 

@@ -4568,6 +4568,10 @@ key is never reused over a task's lifetime, and keeps the first answer.</p>
 <td>Persists <code>can_elicit</code> and <code>input_round</code> with the rest of the record. A store dropping <code>can_elicit</code> loses the declaration, so its tasks never park. A store dropping <code>input_round</code> parks every round under <code>additionalInput-1</code>, which reuses a key the spec forbids reusing and leaves <code>MAX_INPUT_ROUNDS</code> unbounded, since the round never counts up.</td>
 </tr>
 <tr>
+<td>An answer resumes only its own question</td>
+<td>An answer resumes a task only while it still waits on the round and the requests <code>tasks/update</code> read. One that a duplicate overtook, whose worker has since parked the task on the next round, leaves that question in place and queues nothing.</td>
+</tr>
+<tr>
 <td>Only the tasks the package parked</td>
 <td>A task whose one outstanding request is its round's key (<code>additionalInput-N</code>) is resumed by <code>tasks/update</code>. A task parked through <code>transition_task</code> under its own keys is answered as before: the answers are kept, and the task is <code>working</code> again once none is outstanding, with nothing queued, charged or merged.</td>
 </tr>
