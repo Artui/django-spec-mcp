@@ -1549,12 +1549,14 @@ class MCPServer:
         challenge points at. A resource whose path ends in a slash is answered
         with and without it, since the TypeScript SDK strips that slash when it
         builds the URL. The patterns are unnamed, so two servers' patterns
-        never collide in the root namespace.
+        never collide by name, but two resources that differ only by a trailing
+        slash share the stripped route, which the first server in the URLconf
+        answers: give two servers distinct paths.
 
         Raises ``ImproperlyConfigured`` with no ``auth_backend=``, as mounting
         does, when the backend's ``resource`` is not an absolute URL
-        (``AllowAnyBackend`` publishes none), when its path holds ``<`` or
-        ``>``, raw or percent-encoded, and when its percent-encoding is not
+        (``AllowAnyBackend`` publishes none), when its path holds ``<``, ``>``
+        or ``$``, raw or percent-encoded, and when its percent-encoding is not
         valid UTF-8.
         """
         backend = self._mounted_backend()

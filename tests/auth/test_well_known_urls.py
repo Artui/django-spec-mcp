@@ -19,6 +19,7 @@ from django.urls import URLPattern, path
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.protected_resource_metadata_view import ProtectedResourceMetadataView
 from django_spec_mcp.auth.types.protected_resource_metadata import ProtectedResourceMetadata
 
 
@@ -159,8 +160,9 @@ def test_the_stripped_route_is_added_only_for_a_path_that_ends_in_a_slash(
         ),
         ("https://example.test/m%20cp/", "/.well-known/oauth-protected-resource/m%20cp/"),
         ("https://example.test/m%20cp", "/.well-known/oauth-protected-resource/m%20cp"),
+        ("https://example.test/a%2Fb/mcp/", "/.well-known/oauth-protected-resource/a%2Fb/mcp/"),
     ],
-    ids=["utf8", "space", "space-no-slash"],
+    ids=["utf8", "space", "space-no-slash", "encoded-slash"],
 )
 def test_a_percent_encoded_resource_path_answers_at_its_own_location(
     resource: str, location: str
@@ -209,6 +211,51 @@ def test_a_resource_path_with_angle_brackets_is_refused_by_name(resource: str) -
 
 
 @pytest.mark.parametrize(
+    ("resource", "route"),
+    [
+        ("https://example.test/mcp/", ".well-known/oauth-protected-resource/mcp/"),
+        ("https://example.test/", ".well-known/oauth-protected-resource"),
+        ("https://example.test/caf%C3%A9/mcp/", ".well-known/oauth-protected-resource/café/mcp/"),
+        ("https://example.test/a%2Fb/mcp/", ".well-known/oauth-protected-resource/a/b/mcp/"),
+    ],
+    ids=["slash", "origin", "utf8", "encoded-slash"],
+)
+def test_the_route_is_built_from_the_decoded_path(resource: str, route: str) -> None:
+    """Pins the route string, ``%2F`` included.
+
+    The resolver matches Django's decoded ``path_info``, in which ``%2F`` is
+    already ``/``, so ``a%2Fb`` is routed as the two segments ``a/b``. The
+    decoding is deliberately not selective: a front server that rejects or
+    keeps ``%2F`` encoded makes such a resource path unreachable.
+    """
+    assert ProtectedResourceMetadataView.well_known_route(resource) == route
+
+
+@pytest.mark.parametrize(
+    "resource",
+    [
+        "https://example.test/mcp$/",
+        "https://example.test/%24/mcp/",
+        "https://example.test/a%24b/mcp/",
+        "https://example.test/mcp%24",
+        "https://example.test/$",
+    ],
+    ids=["raw-trailing", "encoded-leading", "encoded-inner", "encoded-last", "raw-only"],
+)
+def test_a_resource_path_with_a_dollar_sign_is_refused_by_name(resource: str) -> None:
+    """Django's route check reads a route ending in ``$`` as a leftover regex anchor.
+
+    ``path()`` matches ``$`` literally, but ``manage.py check`` warns
+    ``2_0.W001`` for a route that ends with one, so the resource is refused
+    where the route is built. Refused whether written raw or percent-encoded,
+    since the route is built from the decoded path: the encoded cases fail if
+    the check ran before the decoding.
+    """
+    with pytest.raises(ImproperlyConfigured, match=re.escape(f"resource {resource!r}")):
+        _server(resource).well_known_urls()
+
+
+@pytest.mark.parametrize(
     "resource",
     [
         "https://example.test/%FF/mcp/",
@@ -239,6 +286,28 @@ def test_two_servers_each_answer_at_their_own_location() -> None:
 
     assert internal_doc.json()["resource"] == "https://example.test/internal/mcp/"
     assert public_doc.json()["resource"] == "https://example.test/public/mcp/"
+
+
+def test_servers_whose_resources_differ_by_a_trailing_slash_share_the_stripped_route() -> None:
+    """The first server mounted answers the route both share.
+
+    ``https://example.test/mcp/`` and ``https://example.test/mcp`` both own
+    ``/.well-known/oauth-protected-resource/mcp``, and the resolver takes the
+    first match, so the second server's client reads the first server's
+    document and must discard it (RFC 9728 3.3: its ``resource`` is not the
+    identifier the URL was built from). The slashed route is the first server's
+    alone. Pinned so the shared route is known behaviour; the docs tell a
+    project to give two servers distinct paths.
+    """
+    slashed = _server("https://example.test/mcp/", name="slashed")
+    bare = _server("https://example.test/mcp", name="bare")
+
+    with override_settings(ROOT_URLCONF=_root_urlconf(("slashed/", slashed), ("bare/", bare))):
+        shared = Client().get("/.well-known/oauth-protected-resource/mcp")
+        slashed_only = Client().get("/.well-known/oauth-protected-resource/mcp/")
+
+    assert shared.json()["resource"] == "https://example.test/mcp/"
+    assert slashed_only.json()["resource"] == "https://example.test/mcp/"
 
 
 def test_the_root_route_is_the_metadata_view_with_its_refusals() -> None:
