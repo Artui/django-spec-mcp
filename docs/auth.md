@@ -176,7 +176,8 @@ mounted, and the challenge's pointer is built from it too. The route is built
 from the resource's path percent-decoded, as Django resolves it, so
 `https://example.com/caf%C3%A9/mcp/` answers at the encoded URL a client sends;
 a path holding `<` or `>` (raw or encoded) is refused by name, since Django
-would read it as a path converter. A resource whose path ends in a slash
+would read it as a path converter, and so is a path whose percent-encoding is
+not valid UTF-8 (`%FF`), which no request could match. A resource whose path ends in a slash
 answers with and without it (`/.well-known/oauth-protected-resource/internal/mcp/`
 and `.../internal/mcp`), because the TypeScript SDK strips that slash when it
 builds the URL, and a project without `CommonMiddleware` has no `APPEND_SLASH`

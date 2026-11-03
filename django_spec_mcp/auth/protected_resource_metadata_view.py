@@ -85,7 +85,10 @@ class ProtectedResourceMetadataView(View):
         one whose path holds ``<`` or ``>``, raw or percent-encoded: not legal
         in a URI, and Django would read ``<int:x>`` in the route as a path
         converter (``test_a_resource_path_with_angle_brackets_is_refused_by_name``,
-        whose encoded cases fail if the check ran before the decoding).
+        whose encoded cases fail if the check ran before the decoding), and so is
+        one whose percent-encoding is not valid UTF-8, which would decode to a
+        route nothing matches
+        (``test_a_resource_path_that_does_not_decode_as_utf8_is_refused_by_name``).
         """
         parts = urlsplit(resource)
         if parts.scheme not in ("http", "https") or not parts.netloc or parts.fragment:
@@ -97,7 +100,16 @@ class ProtectedResourceMetadataView(View):
             )
         # Decoded, as the resolver matches ``path_info``; the check follows the
         # decoding so ``%3C`` cannot become a converter either.
-        decoded = unquote(parts.path)
+        try:
+            decoded = unquote(parts.path, errors="strict")
+        except UnicodeDecodeError:
+            # A lenient decode would put U+FFFD in the route, which no request matches.
+            raise ImproperlyConfigured(
+                f"The protected resource metadata names the resource {resource!r}, whose path "
+                "does not percent-decode as UTF-8, so no route can match a request for it. "
+                "Return the server's canonical URL, such as 'https://example.com/mcp/', from "
+                "protected_resource_metadata()."
+            ) from None
         if "<" in decoded or ">" in decoded:
             raise ImproperlyConfigured(
                 f"The protected resource metadata names the resource {resource!r}, whose path "

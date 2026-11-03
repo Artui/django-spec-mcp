@@ -199,6 +199,25 @@ def test_a_resource_path_with_angle_brackets_is_refused_by_name(resource: str) -
         _server(resource).well_known_urls()
 
 
+@pytest.mark.parametrize(
+    "resource",
+    [
+        "https://example.test/%FF/mcp/",
+        "https://example.test/mcp%C3/",
+        "https://example.test/m%E2%82",
+    ],
+    ids=["lone-continuation", "truncated-two-byte", "truncated-three-byte"],
+)
+def test_a_resource_path_that_does_not_decode_as_utf8_is_refused_by_name(resource: str) -> None:
+    """A lenient decode would put U+FFFD in the route, which no request matches.
+
+    The location would be built and 404 silently, so the decoding is strict and
+    a path it cannot read is refused with the resource named.
+    """
+    with pytest.raises(ImproperlyConfigured, match=re.escape(f"resource {resource!r}")):
+        _server(resource).well_known_urls()
+
+
 def test_two_servers_each_answer_at_their_own_location() -> None:
     internal = _server("https://example.test/internal/mcp/", name="internal-mcp")
     public = _server("https://example.test/public/mcp/", name="public-mcp")
