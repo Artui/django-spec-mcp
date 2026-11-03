@@ -96,6 +96,109 @@ def test_the_location_is_built_from_the_resource_the_document_names(
     assert response.json()["resource"] == resource
 
 
+@pytest.mark.parametrize(
+    ("resource", "stripped"),
+    [
+        ("https://example.test/mcp/", "/.well-known/oauth-protected-resource/mcp"),
+        (
+            "https://example.test/internal/mcp/",
+            "/.well-known/oauth-protected-resource/internal/mcp",
+        ),
+        (
+            "https://example.test/caf%C3%A9/mcp/",
+            "/.well-known/oauth-protected-resource/caf%C3%A9/mcp",
+        ),
+    ],
+    ids=["slash", "nested", "encoded"],
+)
+@override_settings(MIDDLEWARE=[])
+def test_a_resource_with_a_trailing_slash_also_answers_without_it(
+    resource: str, stripped: str
+) -> None:
+    """The TypeScript SDK strips the resource's trailing slash when it builds the URL.
+
+    ``@modelcontextprotocol/sdk`` 1.29.0 asks ``/.well-known/oauth-protected-resource/mcp``
+    for ``https://example.com/mcp/``. With no ``CommonMiddleware`` there is no
+    ``APPEND_SLASH`` redirect to forgive it, so the stripped route must answer
+    itself, with the document the slashed route answers.
+    """
+    server = _server(resource)
+
+    with override_settings(ROOT_URLCONF=_root_urlconf(("mcp/", server))):
+        response = Client().get(stripped)
+        under_mount = Client().get("/mcp/.well-known/oauth-protected-resource")
+
+    assert response.status_code == 200
+    assert response.json() == under_mount.json()
+    assert response.json()["resource"] == resource
+
+
+@pytest.mark.parametrize(
+    ("resource", "routes"),
+    [
+        ("https://example.test/mcp/", 2),
+        ("https://example.test/mcp", 1),
+        ("https://example.test/", 1),
+        ("https://example.test", 1),
+    ],
+    ids=["slash", "no-slash", "origin-slash", "origin"],
+)
+def test_the_stripped_route_is_added_only_for_a_path_that_ends_in_a_slash(
+    resource: str, routes: int
+) -> None:
+    """A resource without a trailing slash, or the origin alone, has no second form."""
+    assert len(_server(resource).well_known_urls()) == routes
+
+
+@pytest.mark.parametrize(
+    ("resource", "location"),
+    [
+        (
+            "https://example.test/caf%C3%A9/mcp/",
+            "/.well-known/oauth-protected-resource/caf%C3%A9/mcp/",
+        ),
+        ("https://example.test/m%20cp/", "/.well-known/oauth-protected-resource/m%20cp/"),
+        ("https://example.test/m%20cp", "/.well-known/oauth-protected-resource/m%20cp"),
+    ],
+    ids=["utf8", "space", "space-no-slash"],
+)
+def test_a_percent_encoded_resource_path_answers_at_its_own_location(
+    resource: str, location: str
+) -> None:
+    """Django resolves the decoded ``path_info``, so the route is built from the decoded path.
+
+    A client asks for the encoded URL (RFC 9728 3.1 appends the resource's path
+    as it is written), and the resolver sees ``/café/mcp/``.
+    """
+    server = _server(resource)
+
+    with override_settings(ROOT_URLCONF=_root_urlconf(("mcp/", server))):
+        response = Client().get(location)
+
+    assert response.status_code == 200
+    assert response.json()["resource"] == resource
+
+
+@pytest.mark.parametrize(
+    "resource",
+    [
+        "https://example.test/<int:x>/mcp/",
+        "https://example.test/%3Cint:x%3E/mcp/",
+        "https://example.test/mcp>/",
+        "https://example.test/mcp%3e/",
+    ],
+    ids=["raw", "encoded", "closing-only", "encoded-lower-case"],
+)
+def test_a_resource_path_with_angle_brackets_is_refused_by_name(resource: str) -> None:
+    """Not legal in a URI, and Django would read ``<int:x>`` as a path converter.
+
+    Refused whether written raw or percent-encoded, since the route is built
+    from the decoded path and the encoded form would become a converter there.
+    """
+    with pytest.raises(ImproperlyConfigured, match=re.escape(f"resource {resource!r}")):
+        _server(resource).well_known_urls()
+
+
 def test_two_servers_each_answer_at_their_own_location() -> None:
     internal = _server("https://example.test/internal/mcp/", name="internal-mcp")
     public = _server("https://example.test/public/mcp/", name="public-mcp")

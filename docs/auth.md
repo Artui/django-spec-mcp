@@ -172,7 +172,15 @@ Its route is built from the `resource` the backend's
 uses the document only when its `resource` is the identifier it built the URL
 from (RFC 9728 3.3), so the location and the document agree by construction.
 The resource URL is the server's public URL, so it is where the server is
-mounted, and the challenge's pointer is built from it too. A server
+mounted, and the challenge's pointer is built from it too. The route is built
+from the resource's path percent-decoded, as Django resolves it, so
+`https://example.com/caf%C3%A9/mcp/` answers at the encoded URL a client sends;
+a path holding `<` or `>` (raw or encoded) is refused by name, since Django
+would read it as a path converter. A resource whose path ends in a slash
+answers with and without it (`/.well-known/oauth-protected-resource/internal/mcp/`
+and `.../internal/mcp`), because the TypeScript SDK strips that slash when it
+builds the URL, and a project without `CommonMiddleware` has no `APPEND_SLASH`
+redirect to forgive it. A server
 with no backend is refused, as mounting is, and so is a backend whose
 `resource` is not an absolute `http(s)` URL: `AllowAnyBackend` publishes none,
 so a development server has no document to place there. The pattern is
@@ -509,7 +517,7 @@ Inspector reads the protected-resource metadata, hits your authorization server'
 | --- | --- |
 | 401 with no `WWW-Authenticate` | The backend's `www_authenticate_challenge` returned an empty value. Return `bearer_challenge(...)`. |
 | 401 with `WWW-Authenticate` but no `resource_metadata` | The backend passed `resource_metadata_url=None` to `bearer_challenge`. |
-| 404 at `/.well-known/oauth-protected-resource/<path>` | The root URLconf does not add `*server.well_known_urls()`, or the backend's `resource` path is not the one the client built the URL from. |
+| 404 at `/.well-known/oauth-protected-resource/<path>` | The root URLconf does not add `*server.well_known_urls()`, or the backend's `resource` path is not the one the client built the URL from. A trailing slash on the client's URL is not the cause: both forms answer. |
 | Token verifies but every call is still 401 | The backend's audience comparison fails: the token's audience is not the server's own resource URL (or the token carries none). |
 | 403 with `error="insufficient_scope"` and `scope=` in the challenge | Token authenticated, missing one of the per-binding scopes. The body also carries JSON-RPC `-32006` with `data.requiredScopes`. |
 | 403 with no `scope=` | A spec's permission check refused the caller, or a prompt's or view's own check. RFC 6750 defines no error code for that case, so the challenge advertises nothing rather than a scope the client cannot obtain. |

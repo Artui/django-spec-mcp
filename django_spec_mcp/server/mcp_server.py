@@ -1543,7 +1543,9 @@ class MCPServer:
         its ``resource`` is the identifier the URL was built from (RFC 9728
         3.3), so a location derived from anything else could serve a document
         the client must discard. The mount's own route stays, as the URL a
-        challenge points at. The pattern is unnamed, so two servers' patterns
+        challenge points at. A resource whose path ends in a slash is answered
+        with and without it, since the TypeScript SDK strips that slash when it
+        builds the URL. The patterns are unnamed, so two servers' patterns
         never collide in the root namespace.
 
         Raises ``ImproperlyConfigured`` with no ``auth_backend=``, as mounting
@@ -1554,7 +1556,16 @@ class MCPServer:
         route = ProtectedResourceMetadataView.well_known_route(
             backend.protected_resource_metadata().resource
         )
-        return [path(route, ProtectedResourceMetadataView.as_view(auth_backend=backend))]
+        view = ProtectedResourceMetadataView.as_view(auth_backend=backend)
+        patterns = [path(route, view)]
+        # ``@modelcontextprotocol/sdk`` strips the resource's trailing slash when it
+        # builds the URL, and with no ``APPEND_SLASH`` redirect to forgive it that
+        # is a 404, so both forms answer. A resource at the origin has no route
+        # ending in a slash (the route ends at the prefix), so it gets no second
+        # one (``test_the_stripped_route_is_added_only_for_a_path_that_ends_in_a_slash``).
+        if route.endswith("/"):
+            patterns.append(path(route.removesuffix("/"), view))
+        return patterns
 
     def _mounted_backend(self) -> MCPAuthBackend:
         """The auth backend, refused when missing and checked when it can check itself.
