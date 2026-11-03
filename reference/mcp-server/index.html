@@ -1401,6 +1401,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.well_known_urls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        well_known_urls
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1925,6 +1936,17 @@
     <span class="md-ellipsis">
       
         notify
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.well_known_urls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        well_known_urls
       
     </span>
   </a>
@@ -2837,7 +2859,10 @@ pairs with <code>encoding=TEXT</code> and <code>mime_type="text/markdown"</code>
 <code>mime_type</code> is advertised as given and never inferred from or checked
 against the encoding, so <code>TEXT</code> left at the default
 <code>application/json</code> serves a <code>str</code> that is already a JSON document as
-it is. The result ceiling and the cache hints apply to every encoding.
+it is. The view mime type (<code>UI_RESOURCE_MIME_TYPE</code>) with a templated
+<code>uri_template</code> raises <code>ValueError</code>, since a view must be one
+concrete document; use <code>register_ui_resource</code> for a view. The result
+ceiling and the cache hints apply to every encoding.
 A <code>TEXT</code> or <code>BLOB</code> resource is refused, naming both, beside a spec
 declaring <code>affordances</code>, which the kernel adds to a presented object,
 or <code>allow_none</code>, under which a missing row presents as <code>None</code>
@@ -2955,6 +2980,11 @@ carries, each asked <code>has_permission(principal, binding)</code> with the vie
 <code>ResourceBinding</code> as the spec; <code>scopes</code> are the OAuth scopes the
 caller's token must carry, every one, asked first. Both gate the listing,
 the read and a subscription alike.</p>
+<p><code>uri</code> is <strong>concrete</strong>: a <code>{var}</code> in it raises <code>ValueError</code>. A host
+fetches a view once by the exact URI a tool's <code>ui=</code> link names and the
+extension defines no expansion for it, so a templated view would be a
+resource nothing can ask for. A view per report type is one registration
+per type.</p>
 
 
     </div>
@@ -3088,6 +3118,53 @@ missed before resuming live mode. Without a buffer there are no <code>id:</code>
 and resume is disabled.</p>
 <p>Multi-process deployments need an out-of-process broker to fan out
 across workers; the in-process broker only sees its own.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.server.mcp_server.MCPServer.well_known_urls" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">well_known_urls</span>
+
+
+<a href="#django_spec_mcp.server.mcp_server.MCPServer.well_known_urls" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">well_known_urls</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">URLPattern</span><span class="p">]</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The metadata document at RFC 9728's location, for the root URLConf.</p>
+<p>RFC 9728 3.1 places a resource's metadata at its origin, with the
+resource's path after the well-known prefix:
+<code>/.well-known/oauth-protected-resource/mcp/</code> for
+<code>https://example.com/mcp/</code>. The MCP authorization spec makes that the
+place a client looks when a 401 carries no <code>resource_metadata</code>.
+<code>urls</code> cannot serve it, since everything it mounts sits under the
+mount's own prefix, so a project adds these patterns beside the mount::</p>
+<div class="language-text highlight"><pre><span></span><code>urlpatterns = [
+    path(&quot;mcp/&quot;, server.urls),
+    *server.well_known_urls(),
+]
+</code></pre></div>
+<p>The location is built from the <code>resource</code> the backend's
+<code>protected_resource_metadata()</code> names, the server's public URL, and
+not from a prefix passed here: a client accepts the document only when
+its <code>resource</code> is the identifier the URL was built from (RFC 9728
+3.3), so a location derived from anything else could serve a document
+the client must discard. The mount's own route stays, as the URL a
+challenge points at. A resource whose path ends in a slash is answered
+with and without it, since the TypeScript SDK strips that slash when it
+builds the URL. The patterns are unnamed, so two servers' patterns
+never collide in the root namespace.</p>
+<p>Raises <code>ImproperlyConfigured</code> with no <code>auth_backend=</code>, as mounting
+does, when the backend's <code>resource</code> is not an absolute URL
+(<code>AllowAnyBackend</code> publishes none), when its path holds <code>&lt;</code> or
+<code>&gt;</code>, raw or percent-encoded, and when its percent-encoding is not
+valid UTF-8.</p>
 
 
     </div>

@@ -1647,8 +1647,10 @@ never in the template and never in the URI.</p>
 <p>This is also why there is no <code>ui://invoices/{pk}/detail.html</code>. The host fetches
 a view once, and the spec defines no expansion mechanism for a tool's
 <code>resource_uri</code> — so a templated view URI would be a hook no host implements.
-"A different view per report type" is just N concrete registrations. RFC 6570
-templating for ordinary <em>data</em> resources is unaffected.</p>
+<code>register_ui_resource</code> therefore refuses a <code>uri=</code> holding a <code>{var}</code> with a
+<code>ValueError</code> naming the URI, and a tool's <code>ui=</code> link to one finds no view to
+resolve to. "A different view per report type" is just N concrete registrations.
+RFC 6570 templating for ordinary <em>data</em> resources is unaffected.</p>
 <h2 id="host-gotchas-worth-knowing">Host gotchas worth knowing<a class="headerlink" href="#host-gotchas-worth-knowing" title="Permanent link">&para;</a></h2>
 <p>The bridge handles the first three. They are here because they explain what you
 are seeing when a view misbehaves, and because they are yours again the moment

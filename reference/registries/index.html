@@ -4478,8 +4478,8 @@ lookup.</p>
 from the template. <code>resolve</code> returns the binding plus the variables
 extracted from the URI.</p>
 <p><strong>Specificity, not registration order.</strong> A template's <code>{var}</code> matches any
-single segment, so <code>reports://{report_id}</code> also matches
-<code>reports://all-tenants-summary</code>. Resolving in registration order would
+single segment free of control characters, so <code>reports://{report_id}</code>
+also matches <code>reports://all-tenants-summary</code>. Resolving in registration order would
 make <em>which permission stack guards a URI</em> a function of the order the two
 were registered in — and the wrong answer is the permissive one, since the
 template is the general case. Concrete URIs are therefore tried first, and

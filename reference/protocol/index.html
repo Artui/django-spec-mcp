@@ -6714,11 +6714,15 @@ what the request path saw.</p>
           <tr class="doc-section-item">
             <td><code><span title="django_spec_mcp.tasks.types.task_record.TaskRecord.audience">audience</span></code></td>
             <td>
-                  <code><span title="str">str</span> | None</code>
+                  <code><span title="str">str</span> | <span title="collections.abc.Sequence">Sequence</span>[<span title="str">str</span>] | None</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>Rebuilds that <code>TokenInfo</code>'s audience.</p>
+                <p>Rebuilds that <code>TokenInfo</code>'s audience: one URL, or the
+several a token names, held as a tuple whatever sequence was given,
+so a store whose codec turns a tuple into a list (JSON does) hands
+back the same type
+(<code>test_the_record_holds_a_tuple_so_no_store_changes_its_kind</code>).</p>
               </div>
             </td>
           </tr>

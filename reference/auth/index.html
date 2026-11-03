@@ -1469,6 +1469,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.auth.protected_resource_metadata_view.ProtectedResourceMetadataView.well_known_route" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        well_known_route
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1793,6 +1804,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.auth.protected_resource_metadata_view.ProtectedResourceMetadataView.well_known_route" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        well_known_route
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1868,14 +1890,16 @@ handed the prompt's or view's binding as the spec, and the same <code>scopes=</c
 <p>The transport calls <code>authenticate</code> on every request; returning
 <code>None</code> signals "no valid credentials" and the transport emits a 401 whose
 <code>WWW-Authenticate</code> comes from <code>www_authenticate_challenge</code>.
-<code>protected_resource_metadata</code> powers the
-<code>/.well-known/oauth-protected-resource</code> view (RFC 9728); the PRM view
-calls <code>.to_dict()</code> on the returned dataclass for the wire shape.</p>
+<code>protected_resource_metadata</code> powers the RFC 9728 view, under the mount
+and, through <code>MCPServer.well_known_urls</code>, at the well-known location its
+<code>resource</code> defines; the view calls <code>.to_dict()</code> on the returned
+dataclass for the wire shape.</p>
 <p>The backend is the resource server's half of OAuth: the authorization
 server that issues the tokens publishes its own metadata, so nothing here
 describes it.</p>
-<p>Backends MUST be safe to instantiate without arguments — settings-driven
-configuration belongs inside the backend's own module.</p>
+<p>The project constructs its backend, with whatever the backend needs, and
+passes the instance to the server as <code>auth_backend=</code>; the package never
+constructs one, so a backend's <code>__init__</code> may require any arguments.</p>
 
 
 
@@ -1968,12 +1992,15 @@ configuration belongs inside the backend's own module.</p>
           <tr class="doc-section-item">
             <td><code><span title="django_spec_mcp.auth.types.token_info.TokenInfo.audience">audience</span></code></td>
             <td>
-                  <code><span title="str">str</span> | None</code>
+                  <code><span title="str">str</span> | <span title="collections.abc.Sequence">Sequence</span>[<span title="str">str</span>] | None</code>
             </td>
             <td>
               <div class="doc-md-description">
-                <p>The <code>aud</code> claim. RFC 8707 requires it to match the
-canonical <code>/mcp</code> URL; backends own that comparison.</p>
+                <p>The resource or resources the token was issued for: a JWT's
+<code>aud</code>, which may be an array, or django-oauth-toolkit's
+<code>resource</code> list. RFC 8707 requires this server's canonical URL to
+be among them; backends own that comparison, through
+<code>audience_matches</code>.</p>
               </div>
             </td>
           </tr>
@@ -2042,7 +2069,7 @@ claims dict — for advanced use cases.</p>
 <p>Deliberately a <strong>second</strong> protocol rather than a method on
 :class:<code>~django_spec_mcp.auth.types.auth_backend.MCPAuthBackend</code>. Adding
 it there would make it required, and a backend already written against the
-four-method protocol would stop satisfying it -- so the one thing this
+three-method protocol would stop satisfying it -- so the one thing this
 exists to prevent, a transport mounted with a backend that cannot run,
 would be bought by breaking every backend anyone has already written.</p>
 <p>Structural and runtime-checkable, so a backend opts in by having the method
@@ -2056,7 +2083,8 @@ not when the server object is built: an in-process server -- <code>call_tool</co
 authenticates anything, so requiring a backend's optional dependency to
 <em>construct</em> one would refuse a supported deployment. Mounting is the
 earliest point at which the requirement is real, and it is still startup:
-<code>server.urls</code> runs while the URLConf is imported, so <code>manage.py check</code>
+<code>server.urls</code> and <code>server.well_known_urls()</code> run while the URLConf is
+imported, each asking before it reads the backend, so <code>manage.py check</code>
 reaches it and a missing dependency is a refusal at boot rather than a 500
 on the first request.</p>
 <p><code>check_configuration</code> raises -- <code>ImproperlyConfigured</code>, naming what is
@@ -2155,7 +2183,9 @@ comparison RFC 8707 asks for, and builds its 401 challenge with
 
 
 <a href="#django_spec_mcp.auth.audience.audience_matches" class="headerlink" title="Permanent link">&para;</a></h2>
-<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">audience_matches</span><span class="p">(</span><span class="n">token_audience</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="n">expected</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">audience_matches</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">token_audience</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="n">expected</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents first">
@@ -2166,6 +2196,16 @@ binding happens upstream, e.g. at a gateway). Otherwise the comparison is
 exact — token audiences are URLs, not patterns — and a token carrying no
 audience is rejected rather than accepted, which is the whole point of
 configuring the canonical URL.</p>
+<p>A token may name several resources: a JWT <code>aud</code> may be an array (RFC 7519
+4.1.3), and django-oauth-toolkit stores <code>AccessToken.resource</code> as a list.
+A sequence matches when <code>expected</code> is one of its members, each compared
+exactly, and an empty one matches nothing. A <code>str</code> is checked first
+because it is itself a <code>Sequence[str]</code>, and membership in a string is a
+substring test (<code>test_no_partial_match_for_safety</code>). The members are
+compared one by one rather than with <code>in</code>, since <code>in</code> is a substring test
+on a <code>UserString</code> and raises <code>TypeError</code> on <code>bytes</code>, which would turn a
+401 into a 500 (<code>test_a_user_string_member_is_no_substring_match</code>,
+<code>test_a_bytes_audience_is_rejected_not_raised</code>).</p>
 
 
     </div>
@@ -2490,7 +2530,9 @@ payloads to the user see a meaningful message rather than an empty body.</p>
 
 </div><h2 id="protected-resource-metadata-rfc-9728">Protected Resource Metadata (RFC 9728)<a class="headerlink" href="#protected-resource-metadata-rfc-9728" title="Permanent link">&para;</a></h2>
 <p>The view serving the document is a plain Django view, mounted under the
-server's URLs as <code>protected-resource-metadata</code>.</p>
+server's URLs as <code>protected-resource-metadata</code>, and at RFC 9728's location by
+<code>MCPServer.well_known_urls()</code> in the root URLconf
+(<a href="../../auth/#where-a-client-finds-the-metadata">Where a client finds the metadata</a>).</p>
 
 
 <div class="doc doc-object doc-class">
@@ -2511,8 +2553,14 @@ server's URLs as <code>protected-resource-metadata</code>.</p>
 
 
         <p>RFC 9728 OAuth 2.0 Protected Resource Metadata endpoint.</p>
-<p>Mounted at <code>/.well-known/oauth-protected-resource</code> by
-<a class="autorefs autorefs-internal" title="MCPServer" href="../mcp-server/#django_spec_mcp.server.mcp_server.MCPServer"><code>MCPServer</code></a>. A plain Django view
+<p><a class="autorefs autorefs-internal" title="MCPServer" href="../mcp-server/#django_spec_mcp.server.mcp_server.MCPServer"><code>MCPServer</code></a> mounts it in two
+places. <code>server.urls</code> mounts it under the server's own prefix, at
+<code>&lt;mount&gt;.well-known/oauth-protected-resource</code>, the URL a backend's
+<code>WWW-Authenticate</code> challenge points at. <code>server.well_known_urls()</code>
+mounts it at RFC 9728 3.1's location, the origin with the resource's path
+after the well-known prefix (<code>/.well-known/oauth-protected-resource/mcp/</code>
+for <code>https://example.com/mcp/</code>), which a project adds to its root URLConf
+and where a client looks when a challenge carries no pointer. A plain Django view
 answering <code>GET</code>, wired as
 <code>ProtectedResourceMetadataView.as_view(auth_backend=...)</code>; <code>HEAD</code> takes
 the same handler and <code>OPTIONS</code> names the methods. The payload comes from the instance-scoped
@@ -2562,6 +2610,54 @@ The answer is always JSON, because the payload shape is RFC-defined, and an
         <p>Build the view function, opted out of CSRF and of the login redirect.</p>
 <p>The opt-outs are set as attributes, as the MCP endpoint's are, because
 the middleware reads them off the resolved callable.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.auth.protected_resource_metadata_view.ProtectedResourceMetadataView.well_known_route" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">well_known_route</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-staticmethod"><code>staticmethod</code></small>
+  </span>
+
+<a href="#django_spec_mcp.auth.protected_resource_metadata_view.ProtectedResourceMetadataView.well_known_route" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">well_known_route</span><span class="p">(</span><span class="n">resource</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The root-URLConf route RFC 9728 3.1 places <code>resource</code>'s metadata at.</p>
+<p>The well-known prefix goes between the host and the resource's path,
+and a terminating slash right after the host is dropped, so
+<code>https://example.com/mcp/</code> answers at
+<code>.well-known/oauth-protected-resource/mcp/</code> and <code>https://example.com/</code>
+at <code>.well-known/oauth-protected-resource</code>. A query is left out of the
+route, since the resolver matches the path alone, and the path is
+percent-decoded, since the resolver matches the decoded <code>path_info</code>:
+<code>https://example.com/caf%C3%A9/mcp/</code> answers at
+<code>.well-known/oauth-protected-resource/café/mcp/</code>, the URL a client
+sends in its encoded form. Built from the
+identifier the document names, the location cannot disagree with it,
+which is what a client checks (RFC 9728 3.3: the <code>resource</code> it reads
+must be the identifier it built the URL from).</p>
+<p>A resource that is not an absolute <code>http(s)</code> URL with a host and no
+fragment (RFC 9728 1.2) is refused with <code>ImproperlyConfigured</code>, since
+no location can be built from it. Each condition has its case in
+<code>test_a_resource_that_is_not_an_absolute_url_is_refused_by_name</code>. So is
+one whose path holds <code>&lt;</code> or <code>&gt;</code>, raw or percent-encoded: not legal
+in a URI, and Django would read <code>&lt;int:x&gt;</code> in the route as a path
+converter (<code>test_a_resource_path_with_angle_brackets_is_refused_by_name</code>,
+whose encoded cases fail if the check ran before the decoding), and so is
+one whose percent-encoding is not valid UTF-8, which would decode to a
+route nothing matches
+(<code>test_a_resource_path_that_does_not_decode_as_utf8_is_refused_by_name</code>).</p>
 
 
     </div>

@@ -467,6 +467,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Writing your own backend">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#where-a-client-finds-the-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where a client finds the metadata
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1521,6 +1538,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Writing your own backend">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#where-a-client-finds-the-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where a client finds the metadata
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1688,9 +1722,9 @@ to discover your authorization server, and <code>AllowAnyBackend</code> for deve
 <td><code>None</code> (no checks; <code>[]</code> is refused, as on a spec); a prompt with neither these nor <code>scopes=</code> is refused</td>
 </tr>
 <tr>
-<td><code>/.well-known/oauth-protected-resource</code></td>
+<td><code>.well-known/oauth-protected-resource</code> under the mount, and <code>server.well_known_urls()</code> at the origin</td>
 <td>RFC 9728 metadata</td>
-<td>served from backend's <code>protected_resource_metadata()</code></td>
+<td>served from backend's <code>protected_resource_metadata()</code>; the origin's route only when the root URLconf adds it</td>
 </tr>
 </tbody>
 </table>
@@ -1740,7 +1774,7 @@ authorization server you may not run or answer every caller, so
 </tr>
 <tr>
 <td><code>protected_resource_metadata()</code></td>
-<td>The RFC 9728 document served at <code>.well-known/oauth-protected-resource</code>: the resource's URL and the authorization servers that issue tokens for it</td>
+<td>The RFC 9728 document served at <code>.well-known/oauth-protected-resource</code> under the mount and, through <code>well_known_urls()</code>, at the origin: the resource's URL and the authorization servers that issue tokens for it</td>
 </tr>
 <tr>
 <td><code>www_authenticate_challenge(scopes=, error=)</code></td>
@@ -1774,27 +1808,28 @@ URL:</p>
 </span><span id="__span-1-21"><a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a>        <span class="n">info</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_verify</span><span class="p">(</span><span class="n">raw</span><span class="p">)</span>
 </span><span id="__span-1-22"><a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a>        <span class="c1"># The audience MUST: a token issued for another resource on the same</span>
 </span><span id="__span-1-23"><a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a>        <span class="c1"># authorization server verifies fine and must still be refused here.</span>
-</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>        <span class="k">if</span> <span class="n">info</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">audience_matches</span><span class="p">(</span><span class="n">info</span><span class="o">.</span><span class="n">audience</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resource_url</span><span class="p">):</span>
-</span><span id="__span-1-25"><a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a>            <span class="k">return</span> <span class="kc">None</span>
-</span><span id="__span-1-26"><a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a>        <span class="k">return</span> <span class="n">info</span>
-</span><span id="__span-1-27"><a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a>
-</span><span id="__span-1-28"><a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">protected_resource_metadata</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ProtectedResourceMetadata</span><span class="p">:</span>
-</span><span id="__span-1-29"><a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a>        <span class="k">return</span> <span class="n">ProtectedResourceMetadata</span><span class="p">(</span>
-</span><span id="__span-1-30"><a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a>            <span class="n">resource</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_resource_url</span><span class="p">,</span>
-</span><span id="__span-1-31"><a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a>            <span class="n">authorization_servers</span><span class="o">=</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_authorization_server</span><span class="p">],</span>
-</span><span id="__span-1-32"><a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a>            <span class="n">scopes_supported</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_scopes_supported</span><span class="p">),</span>
-</span><span id="__span-1-33"><a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a>        <span class="p">)</span>
-</span><span id="__span-1-34"><a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a>
-</span><span id="__span-1-35"><a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">www_authenticate_challenge</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">scopes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">error</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-</span><span id="__span-1-36"><a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a>        <span class="c1"># The server mounts its metadata view under its own URL, so the pointer</span>
-</span><span id="__span-1-37"><a id="__codelineno-1-37" name="__codelineno-1-37" href="#__codelineno-1-37"></a>        <span class="c1"># a client follows to find the authorization server is derived from it.</span>
-</span><span id="__span-1-38"><a id="__codelineno-1-38" name="__codelineno-1-38" href="#__codelineno-1-38"></a>        <span class="k">return</span> <span class="n">bearer_challenge</span><span class="p">(</span>
-</span><span id="__span-1-39"><a id="__codelineno-1-39" name="__codelineno-1-39" href="#__codelineno-1-39"></a>            <span class="n">resource_metadata_url</span><span class="o">=</span><span class="p">(</span>
-</span><span id="__span-1-40"><a id="__codelineno-1-40" name="__codelineno-1-40" href="#__codelineno-1-40"></a>                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_resource_url</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">/.well-known/oauth-protected-resource&quot;</span>
-</span><span id="__span-1-41"><a id="__codelineno-1-41" name="__codelineno-1-41" href="#__codelineno-1-41"></a>            <span class="p">),</span>
-</span><span id="__span-1-42"><a id="__codelineno-1-42" name="__codelineno-1-42" href="#__codelineno-1-42"></a>            <span class="n">scopes</span><span class="o">=</span><span class="n">scopes</span><span class="p">,</span>
-</span><span id="__span-1-43"><a id="__codelineno-1-43" name="__codelineno-1-43" href="#__codelineno-1-43"></a>            <span class="n">error</span><span class="o">=</span><span class="n">error</span><span class="p">,</span>
-</span><span id="__span-1-44"><a id="__codelineno-1-44" name="__codelineno-1-44" href="#__codelineno-1-44"></a>        <span class="p">)</span>
+</span><span id="__span-1-24"><a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a>        <span class="c1"># ``info.audience`` is the token&#39;s as it carries it, one URL or a list.</span>
+</span><span id="__span-1-25"><a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a>        <span class="k">if</span> <span class="n">info</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">audience_matches</span><span class="p">(</span><span class="n">info</span><span class="o">.</span><span class="n">audience</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resource_url</span><span class="p">):</span>
+</span><span id="__span-1-26"><a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a>            <span class="k">return</span> <span class="kc">None</span>
+</span><span id="__span-1-27"><a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a>        <span class="k">return</span> <span class="n">info</span>
+</span><span id="__span-1-28"><a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a>
+</span><span id="__span-1-29"><a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">protected_resource_metadata</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ProtectedResourceMetadata</span><span class="p">:</span>
+</span><span id="__span-1-30"><a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a>        <span class="k">return</span> <span class="n">ProtectedResourceMetadata</span><span class="p">(</span>
+</span><span id="__span-1-31"><a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a>            <span class="n">resource</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_resource_url</span><span class="p">,</span>
+</span><span id="__span-1-32"><a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a>            <span class="n">authorization_servers</span><span class="o">=</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_authorization_server</span><span class="p">],</span>
+</span><span id="__span-1-33"><a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a>            <span class="n">scopes_supported</span><span class="o">=</span><span class="nb">list</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_scopes_supported</span><span class="p">),</span>
+</span><span id="__span-1-34"><a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a>        <span class="p">)</span>
+</span><span id="__span-1-35"><a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a>
+</span><span id="__span-1-36"><a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">www_authenticate_challenge</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">scopes</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">error</span><span class="o">=</span><span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+</span><span id="__span-1-37"><a id="__codelineno-1-37" name="__codelineno-1-37" href="#__codelineno-1-37"></a>        <span class="c1"># The server mounts its metadata view under its own URL, so the pointer</span>
+</span><span id="__span-1-38"><a id="__codelineno-1-38" name="__codelineno-1-38" href="#__codelineno-1-38"></a>        <span class="c1"># a client follows to find the authorization server is derived from it.</span>
+</span><span id="__span-1-39"><a id="__codelineno-1-39" name="__codelineno-1-39" href="#__codelineno-1-39"></a>        <span class="k">return</span> <span class="n">bearer_challenge</span><span class="p">(</span>
+</span><span id="__span-1-40"><a id="__codelineno-1-40" name="__codelineno-1-40" href="#__codelineno-1-40"></a>            <span class="n">resource_metadata_url</span><span class="o">=</span><span class="p">(</span>
+</span><span id="__span-1-41"><a id="__codelineno-1-41" name="__codelineno-1-41" href="#__codelineno-1-41"></a>                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_resource_url</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s1">&#39;/&#39;</span><span class="p">)</span><span class="si">}</span><span class="s2">/.well-known/oauth-protected-resource&quot;</span>
+</span><span id="__span-1-42"><a id="__codelineno-1-42" name="__codelineno-1-42" href="#__codelineno-1-42"></a>            <span class="p">),</span>
+</span><span id="__span-1-43"><a id="__codelineno-1-43" name="__codelineno-1-43" href="#__codelineno-1-43"></a>            <span class="n">scopes</span><span class="o">=</span><span class="n">scopes</span><span class="p">,</span>
+</span><span id="__span-1-44"><a id="__codelineno-1-44" name="__codelineno-1-44" href="#__codelineno-1-44"></a>            <span class="n">error</span><span class="o">=</span><span class="n">error</span><span class="p">,</span>
+</span><span id="__span-1-45"><a id="__codelineno-1-45" name="__codelineno-1-45" href="#__codelineno-1-45"></a>        <span class="p">)</span>
 </span></code></pre></div>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_spec_mcp</span><span class="w"> </span><span class="kn">import</span> <span class="n">MCPServer</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
@@ -1817,9 +1852,54 @@ on either side. Pass the URL the server's <code>protected-resource-metadata</cod
 answers at (<code>https://example.com/internal/mcp/.well-known/oauth-protected-resource</code>
 for a server whose resource URL is <code>https://example.com/internal/mcp/</code>), or
 <code>None</code> when the backend publishes no metadata.</p>
+<h3 id="where-a-client-finds-the-metadata">Where a client finds the metadata<a class="headerlink" href="#where-a-client-finds-the-metadata" title="Permanent link">&para;</a></h3>
+<p>A client looks for the RFC 9728 document in two places, in this order:</p>
+<ol>
+<li><strong>The challenge's pointer.</strong> A 401's <code>WWW-Authenticate</code> carries
+   <code>resource_metadata</code>, the URL the backend passed to <code>bearer_challenge</code>. The
+   route <code>server.urls</code> mounts answers it, under the mount:
+   <code>/internal/mcp/.well-known/oauth-protected-resource</code>.</li>
+<li><strong>The well-known location.</strong> When a challenge carries no pointer, the MCP
+   authorization spec has the client build the URL RFC 9728 3.1 defines: the
+   server's origin, then <code>/.well-known/oauth-protected-resource</code>, then the
+   resource's path. For <code>https://example.com/internal/mcp/</code> that is
+   <code>/.well-known/oauth-protected-resource/internal/mcp/</code>.</li>
+</ol>
+<p>The mount's own route cannot answer the second, because everything
+<code>server.urls</code> mounts sits under the mount's prefix, and the well-known location
+starts at the origin. <code>server.well_known_urls()</code> returns the patterns for it,
+which go in the <strong>root</strong> URLconf, beside the mount:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">urlpatterns</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="n">path</span><span class="p">(</span><span class="s2">&quot;internal/mcp/&quot;</span><span class="p">,</span> <span class="n">server</span><span class="o">.</span><span class="n">urls</span><span class="p">),</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="o">*</span><span class="n">server</span><span class="o">.</span><span class="n">well_known_urls</span><span class="p">(),</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="p">]</span>
+</span></code></pre></div>
+<p>Its route is built from the <code>resource</code> the backend's
+<code>protected_resource_metadata()</code> names, not from the mount's prefix. A client
+uses the document only when its <code>resource</code> is the identifier it built the URL
+from (RFC 9728 3.3), so the location and the document agree by construction.
+The resource URL is the server's public URL, so it is where the server is
+mounted, and the challenge's pointer is built from it too. The route is built
+from the resource's path percent-decoded, as Django resolves it, so
+<code>https://example.com/caf%C3%A9/mcp/</code> answers at the encoded URL a client sends;
+a path holding <code>&lt;</code> or <code>&gt;</code> (raw or encoded) is refused by name, since Django
+would read it as a path converter, and so is a path whose percent-encoding is
+not valid UTF-8 (<code>%FF</code>), which no request could match. A resource whose path ends in a slash
+answers with and without it (<code>/.well-known/oauth-protected-resource/internal/mcp/</code>
+and <code>.../internal/mcp</code>), because the TypeScript SDK strips that slash when it
+builds the URL, and a project without <code>CommonMiddleware</code> has no <code>APPEND_SLASH</code>
+redirect to forgive it. A server
+with no backend is refused, as mounting is, and so is a backend whose
+<code>resource</code> is not an absolute <code>http(s)</code> URL: <code>AllowAnyBackend</code> publishes none,
+so a development server has no document to place there. The patterns are
+unnamed, so several servers' patterns sit in one root URLconf without
+colliding. A project served under a path prefix (<code>SCRIPT_NAME</code>) has its
+well-known location outside Django's reach, at the origin's root, and routes it
+at the front server instead.</p>
 <p>Mounting is where a backend becomes load-bearing, so a backend may check itself
 there: one that implements <code>check_configuration()</code> (the <code>SelfChecking</code>
-protocol) is asked once when <code>server.urls</code> or <code>server.async_urls</code> is read, and
+protocol) is asked when <code>server.urls</code>, <code>server.async_urls</code> or
+<code>server.well_known_urls()</code> is read, before anything else reads the backend, and
 raising <code>ImproperlyConfigured</code> from it surfaces while the URLconf is imported,
 which <code>manage.py check</code> reaches, rather than as a 500 on the first request. A
 backend that needs no setup implements nothing and is left alone.</p>
@@ -1828,7 +1908,7 @@ backend that needs no setup implements nothing and is left alone.</p>
 <p><code>SERVER_INFO["name"]</code> / <code>["version"]</code> are the <strong>fallback</strong> for a server
 built without <code>name=</code> / <code>version=</code>. Prefer the constructor — it is the only
 way to give two servers in one project distinct identities:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">MCPServer</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;internal&quot;</span><span class="p">,</span> <span class="n">version</span><span class="o">=</span><span class="s2">&quot;2.0.0&quot;</span><span class="p">,</span> <span class="n">url_namespace</span><span class="o">=</span><span class="s2">&quot;internal-mcp&quot;</span><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">MCPServer</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;internal&quot;</span><span class="p">,</span> <span class="n">version</span><span class="o">=</span><span class="s2">&quot;2.0.0&quot;</span><span class="p">,</span> <span class="n">url_namespace</span><span class="o">=</span><span class="s2">&quot;internal-mcp&quot;</span><span class="p">)</span>
 </span></code></pre></div>
 </div>
 <h2 id="who-may-call-a-tool">Who may call a tool<a class="headerlink" href="#who-may-call-a-tool" title="Permanent link">&para;</a></h2>
@@ -1847,23 +1927,23 @@ with no permission check. A <code>scopes=</code> gate does not count as a guard 
 way. See <a href="../concepts/#kernel-specs">Kernel specs</a>.</p>
 <p>A check is a subclass with a <code>has_permission(principal, spec)</code> method. A Django
 permission is a few lines:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_service_specs</span><span class="w"> </span><span class="kn">import</span> <span class="n">PermissionCheck</span><span class="p">,</span> <span class="n">ServiceSpec</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
-</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">HasDjangoPerm</span><span class="p">(</span><span class="n">PermissionCheck</span><span class="p">):</span>
-</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">codename</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">codename</span> <span class="o">=</span> <span class="n">codename</span>
-</span><span id="__span-4-7"><a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>
-</span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">has_permission</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">principal</span><span class="p">,</span> <span class="n">spec</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-</span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>        <span class="k">return</span> <span class="n">principal</span><span class="o">.</span><span class="n">has_perm</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">codename</span><span class="p">)</span>
-</span><span id="__span-4-10"><a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a>
-</span><span id="__span-4-11"><a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>
-</span><span id="__span-4-12"><a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="n">server</span><span class="o">.</span><span class="n">register_tool</span><span class="p">(</span>
-</span><span id="__span-4-13"><a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a>    <span class="n">ServiceSpec</span><span class="p">(</span><span class="n">service</span><span class="o">=</span><span class="n">refund_invoice</span><span class="p">,</span> <span class="n">permissions</span><span class="o">=</span><span class="p">[</span><span class="n">HasDjangoPerm</span><span class="p">(</span><span class="s2">&quot;invoices.refund_invoice&quot;</span><span class="p">)]),</span>
-</span><span id="__span-4-14"><a id="__codelineno-4-14" name="__codelineno-4-14" href="#__codelineno-4-14"></a>    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;invoices.refund&quot;</span><span class="p">,</span>
-</span><span id="__span-4-15"><a id="__codelineno-4-15" name="__codelineno-4-15" href="#__codelineno-4-15"></a>    <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Refund an invoice.&quot;</span><span class="p">,</span>
-</span><span id="__span-4-16"><a id="__codelineno-4-16" name="__codelineno-4-16" href="#__codelineno-4-16"></a>    <span class="n">scopes</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;invoices:write&quot;</span><span class="p">,),</span>
-</span><span id="__span-4-17"><a id="__codelineno-4-17" name="__codelineno-4-17" href="#__codelineno-4-17"></a><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_service_specs</span><span class="w"> </span><span class="kn">import</span> <span class="n">PermissionCheck</span><span class="p">,</span> <span class="n">ServiceSpec</span>
+</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">HasDjangoPerm</span><span class="p">(</span><span class="n">PermissionCheck</span><span class="p">):</span>
+</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">codename</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">codename</span> <span class="o">=</span> <span class="n">codename</span>
+</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>
+</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">has_permission</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">principal</span><span class="p">,</span> <span class="n">spec</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>        <span class="k">return</span> <span class="n">principal</span><span class="o">.</span><span class="n">has_perm</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">codename</span><span class="p">)</span>
+</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>
+</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>
+</span><span id="__span-5-12"><a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="n">server</span><span class="o">.</span><span class="n">register_tool</span><span class="p">(</span>
+</span><span id="__span-5-13"><a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a>    <span class="n">ServiceSpec</span><span class="p">(</span><span class="n">service</span><span class="o">=</span><span class="n">refund_invoice</span><span class="p">,</span> <span class="n">permissions</span><span class="o">=</span><span class="p">[</span><span class="n">HasDjangoPerm</span><span class="p">(</span><span class="s2">&quot;invoices.refund_invoice&quot;</span><span class="p">)]),</span>
+</span><span id="__span-5-14"><a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a>    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;invoices.refund&quot;</span><span class="p">,</span>
+</span><span id="__span-5-15"><a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a>    <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Refund an invoice.&quot;</span><span class="p">,</span>
+</span><span id="__span-5-16"><a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a>    <span class="n">scopes</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;invoices:write&quot;</span><span class="p">,),</span>
+</span><span id="__span-5-17"><a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="p">)</span>
 </span></code></pre></div>
 <p>A check refusing the caller is answered <code>-32006</code> "Insufficient permission"
 with HTTP 403. The challenge names no <code>scope</code>, because no scope the client could
@@ -1877,17 +1957,17 @@ in-process <code>call_tool</code> or <code>acall_tool</code> is not over HTTP: i
 <code>None</code>, or a request whose <code>mcp_token</code>, when it has one, carries the <code>scopes=</code>
 the call passed and <code>raw=None</code>. So a check reading the token decides for itself
 what an in-process call means, and never tells one apart by <code>request is None</code>:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_service_specs</span><span class="w"> </span><span class="kn">import</span> <span class="n">PermissionCheck</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
-</span><span id="__span-5-3"><a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
-</span><span id="__span-5-4"><a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">HasClaim</span><span class="p">(</span><span class="n">PermissionCheck</span><span class="p">):</span>
-</span><span id="__span-5-5"><a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">claim</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="__span-5-6"><a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">claim</span> <span class="o">=</span> <span class="n">claim</span>
-</span><span id="__span-5-7"><a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>
-</span><span id="__span-5-8"><a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">has_permission</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">principal</span><span class="p">,</span> <span class="n">spec</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">call_context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-</span><span id="__span-5-9"><a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a>        <span class="n">request</span> <span class="o">=</span> <span class="n">call_context</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;request&quot;</span><span class="p">)</span>
-</span><span id="__span-5-10"><a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>        <span class="n">token</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="s2">&quot;mcp_token&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-</span><span id="__span-5-11"><a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a>        <span class="k">return</span> <span class="n">token</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">claim</span> <span class="ow">in</span> <span class="p">(</span><span class="n">token</span><span class="o">.</span><span class="n">raw</span> <span class="ow">or</span> <span class="p">{})</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_service_specs</span><span class="w"> </span><span class="kn">import</span> <span class="n">PermissionCheck</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
+</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
+</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">HasClaim</span><span class="p">(</span><span class="n">PermissionCheck</span><span class="p">):</span>
+</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">claim</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">claim</span> <span class="o">=</span> <span class="n">claim</span>
+</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>
+</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">has_permission</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">principal</span><span class="p">,</span> <span class="n">spec</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">call_context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>        <span class="n">request</span> <span class="o">=</span> <span class="n">call_context</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;request&quot;</span><span class="p">)</span>
+</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>        <span class="n">token</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">request</span><span class="p">,</span> <span class="s2">&quot;mcp_token&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>        <span class="k">return</span> <span class="n">token</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">claim</span> <span class="ow">in</span> <span class="p">(</span><span class="n">token</span><span class="o">.</span><span class="n">raw</span> <span class="ow">or</span> <span class="p">{})</span>
 </span></code></pre></div>
 <p>A check may ask for the call's <code>arguments</code> the same way, and for a registered
 pool seed by its name, handed the value the run receives. A check is <strong>synchronous</strong>: one declaring an <code>async def</code>
@@ -1915,22 +1995,22 @@ refusal ending it. A check is asked <code>has_permission(principal, binding)</co
 <code>principal</code> is the token's user, an <code>AnonymousUser</code> when it has none, and
 <code>binding</code> is the prompt's or view's binding standing where a spec would, so a
 check can read its <code>name</code>.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_service_specs</span><span class="w"> </span><span class="kn">import</span> <span class="n">PermissionCheck</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">IsStaff</span><span class="p">(</span><span class="n">PermissionCheck</span><span class="p">):</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>    <span class="n">message</span> <span class="o">=</span> <span class="s2">&quot;Staff only.&quot;</span>
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">has_permission</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">principal</span><span class="p">,</span> <span class="n">spec</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>        <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">principal</span><span class="o">.</span><span class="n">is_staff</span><span class="p">)</span>
-</span><span id="__span-6-9"><a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>
-</span><span id="__span-6-10"><a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>
-</span><span id="__span-6-11"><a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="n">server</span><span class="o">.</span><span class="n">register_prompt</span><span class="p">(</span>
-</span><span id="__span-6-12"><a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;summarise-ledger&quot;</span><span class="p">,</span>
-</span><span id="__span-6-13"><a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a>    <span class="n">render</span><span class="o">=</span><span class="n">render_summary</span><span class="p">,</span>
-</span><span id="__span-6-14"><a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a>    <span class="n">permissions</span><span class="o">=</span><span class="p">[</span><span class="n">IsStaff</span><span class="p">()],</span>
-</span><span id="__span-6-15"><a id="__codelineno-6-15" name="__codelineno-6-15" href="#__codelineno-6-15"></a>    <span class="n">scopes</span><span class="o">=</span><span class="s2">&quot;ledger:read&quot;</span><span class="p">,</span>
-</span><span id="__span-6-16"><a id="__codelineno-6-16" name="__codelineno-6-16" href="#__codelineno-6-16"></a><span class="p">)</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">django_service_specs</span><span class="w"> </span><span class="kn">import</span> <span class="n">PermissionCheck</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>
+</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
+</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="k">class</span><span class="w"> </span><span class="nc">IsStaff</span><span class="p">(</span><span class="n">PermissionCheck</span><span class="p">):</span>
+</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    <span class="n">message</span> <span class="o">=</span> <span class="s2">&quot;Staff only.&quot;</span>
+</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>
+</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">has_permission</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">principal</span><span class="p">,</span> <span class="n">spec</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>        <span class="k">return</span> <span class="nb">bool</span><span class="p">(</span><span class="n">principal</span><span class="o">.</span><span class="n">is_staff</span><span class="p">)</span>
+</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>
+</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>
+</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="n">server</span><span class="o">.</span><span class="n">register_prompt</span><span class="p">(</span>
+</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;summarise-ledger&quot;</span><span class="p">,</span>
+</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>    <span class="n">render</span><span class="o">=</span><span class="n">render_summary</span><span class="p">,</span>
+</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>    <span class="n">permissions</span><span class="o">=</span><span class="p">[</span><span class="n">IsStaff</span><span class="p">()],</span>
+</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>    <span class="n">scopes</span><span class="o">=</span><span class="s2">&quot;ledger:read&quot;</span><span class="p">,</span>
+</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="p">)</span>
 </span></code></pre></div>
 <p>The same judgement answers <code>prompts/get</code>, <code>resources/read</code>,
 <code>completion/complete</code> and a subscription. With <code>FILTER_LISTINGS_BY_PERMISSIONS</code>
@@ -2013,11 +2093,16 @@ the audience lives (a JWT <code>aud</code> claim, an introspection response, a c
 token row). <code>TokenInfo.audience</code> carries it out, and <code>audience_matches</code> is the
 comparison, as the worked backend above calls it:</p>
 <ul>
-<li><code>audience_matches(token_audience, expected)</code> is exact equality. Token audiences
-  are URLs, not patterns, and a prefix or substring match is unsafe: a token
-  bound to <code>…/mcp</code> would otherwise satisfy a server expecting <code>…/mcp-admin</code>.</li>
-<li>A token that carries <strong>no</strong> audience is rejected when an <code>expected</code> URL is
-  given, which is the point of configuring one.</li>
+<li>A token may name <strong>several</strong> resources. A JWT's <code>aud</code> may be an array
+  (RFC 7519 4.1.3), and django-oauth-toolkit stores <code>AccessToken.resource</code> as a
+  list. <code>TokenInfo.audience</code> takes one URL or a sequence of them, so a backend
+  hands the token's on as it is (<code>TokenInfo(audience=token.resource, ...)</code>),
+  and <code>audience_matches</code> is true when <code>expected</code> is one of them.</li>
+<li>Each comparison is exact equality. Token audiences are URLs, not patterns,
+  and a prefix or substring match is unsafe: a token bound to <code>…/mcp</code> would
+  otherwise satisfy a server expecting <code>…/mcp-admin</code>.</li>
+<li>A token that carries <strong>no</strong> audience, <code>None</code> or an empty list, is rejected
+  when an <code>expected</code> URL is given, which is the point of configuring one.</li>
 <li><code>expected=None</code> disables the check, for a deployment whose gateway already
   binds the token upstream.</li>
 </ul>
@@ -2031,33 +2116,45 @@ here. Before you require it, check that the clients you serve send RFC 8707's
 <code>resource</code> parameter on the authorize and token requests, because a token that
 carries none is rejected.</p>
 </div>
+<p><strong>A verifier's own audience rule may be looser than the MUST.</strong>
+django-oauth-toolkit 3.4 is one: <code>AccessToken.allows_audience</code> treats a token
+whose <code>resource</code> list is empty as unrestricted, allowed for any audience, and
+the default <code>RESOURCE_SERVER_TOKEN_RESOURCE_VALIDATOR</code>,
+<code>validate_resource_as_url_prefix</code>, matches by prefix, so a token bound to
+<code>https://example.com/</code> passes for <code>https://example.com/mcp/</code>. A backend that
+verifies through it still calls <code>audience_matches</code> afterwards, with the
+token's <code>resource</code> list and the server's own URL, and that call is what refuses
+both tokens.</p>
 <p>Each server needs its <strong>own</strong> canonical URL. RFC 8707 binds a token to <em>a</em>
 resource, and that binding is what stops a token issued for one resource being
 replayed against another; two servers sharing one URL defeat it:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># urls.py</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">common</span> <span class="o">=</span> <span class="p">{</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>    <span class="s2">&quot;authorization_server&quot;</span><span class="p">:</span> <span class="s2">&quot;https://idp.example.com&quot;</span><span class="p">,</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>    <span class="s2">&quot;scopes_supported&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;invoices:read&quot;</span><span class="p">],</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>    <span class="s2">&quot;verify&quot;</span><span class="p">:</span> <span class="n">verify_access_token</span><span class="p">,</span>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="p">}</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="n">internal</span> <span class="o">=</span> <span class="n">MCPServer</span><span class="p">(</span>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;internal-mcp&quot;</span><span class="p">,</span>
-</span><span id="__span-7-9"><a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>    <span class="n">auth_backend</span><span class="o">=</span><span class="n">BearerBackend</span><span class="p">(</span><span class="n">resource_url</span><span class="o">=</span><span class="s2">&quot;https://example.com/internal/mcp/&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">common</span><span class="p">),</span>
-</span><span id="__span-7-10"><a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>    <span class="n">url_namespace</span><span class="o">=</span><span class="s2">&quot;internal-mcp&quot;</span><span class="p">,</span>
-</span><span id="__span-7-11"><a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="p">)</span>
-</span><span id="__span-7-12"><a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="n">public</span> <span class="o">=</span> <span class="n">MCPServer</span><span class="p">(</span>
-</span><span id="__span-7-13"><a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;public-mcp&quot;</span><span class="p">,</span>
-</span><span id="__span-7-14"><a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>    <span class="n">auth_backend</span><span class="o">=</span><span class="n">BearerBackend</span><span class="p">(</span><span class="n">resource_url</span><span class="o">=</span><span class="s2">&quot;https://example.com/public/mcp/&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">common</span><span class="p">),</span>
-</span><span id="__span-7-15"><a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>    <span class="n">url_namespace</span><span class="o">=</span><span class="s2">&quot;public-mcp&quot;</span><span class="p">,</span>
-</span><span id="__span-7-16"><a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="p">)</span>
-</span><span id="__span-7-17"><a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a>
-</span><span id="__span-7-18"><a id="__codelineno-7-18" name="__codelineno-7-18" href="#__codelineno-7-18"></a><span class="n">urlpatterns</span> <span class="o">=</span> <span class="p">[</span>
-</span><span id="__span-7-19"><a id="__codelineno-7-19" name="__codelineno-7-19" href="#__codelineno-7-19"></a>    <span class="n">path</span><span class="p">(</span><span class="s2">&quot;internal/mcp/&quot;</span><span class="p">,</span> <span class="n">internal</span><span class="o">.</span><span class="n">urls</span><span class="p">),</span>
-</span><span id="__span-7-20"><a id="__codelineno-7-20" name="__codelineno-7-20" href="#__codelineno-7-20"></a>    <span class="n">path</span><span class="p">(</span><span class="s2">&quot;public/mcp/&quot;</span><span class="p">,</span> <span class="n">public</span><span class="o">.</span><span class="n">urls</span><span class="p">),</span>
-</span><span id="__span-7-21"><a id="__codelineno-7-21" name="__codelineno-7-21" href="#__codelineno-7-21"></a><span class="p">]</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="c1"># urls.py</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">common</span> <span class="o">=</span> <span class="p">{</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>    <span class="s2">&quot;authorization_server&quot;</span><span class="p">:</span> <span class="s2">&quot;https://idp.example.com&quot;</span><span class="p">,</span>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>    <span class="s2">&quot;scopes_supported&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;invoices:read&quot;</span><span class="p">],</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>    <span class="s2">&quot;verify&quot;</span><span class="p">:</span> <span class="n">verify_access_token</span><span class="p">,</span>
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="p">}</span>
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="n">internal</span> <span class="o">=</span> <span class="n">MCPServer</span><span class="p">(</span>
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;internal-mcp&quot;</span><span class="p">,</span>
+</span><span id="__span-8-9"><a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>    <span class="n">auth_backend</span><span class="o">=</span><span class="n">BearerBackend</span><span class="p">(</span><span class="n">resource_url</span><span class="o">=</span><span class="s2">&quot;https://example.com/internal/mcp/&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">common</span><span class="p">),</span>
+</span><span id="__span-8-10"><a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a>    <span class="n">url_namespace</span><span class="o">=</span><span class="s2">&quot;internal-mcp&quot;</span><span class="p">,</span>
+</span><span id="__span-8-11"><a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="p">)</span>
+</span><span id="__span-8-12"><a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="n">public</span> <span class="o">=</span> <span class="n">MCPServer</span><span class="p">(</span>
+</span><span id="__span-8-13"><a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;public-mcp&quot;</span><span class="p">,</span>
+</span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a>    <span class="n">auth_backend</span><span class="o">=</span><span class="n">BearerBackend</span><span class="p">(</span><span class="n">resource_url</span><span class="o">=</span><span class="s2">&quot;https://example.com/public/mcp/&quot;</span><span class="p">,</span> <span class="o">**</span><span class="n">common</span><span class="p">),</span>
+</span><span id="__span-8-15"><a id="__codelineno-8-15" name="__codelineno-8-15" href="#__codelineno-8-15"></a>    <span class="n">url_namespace</span><span class="o">=</span><span class="s2">&quot;public-mcp&quot;</span><span class="p">,</span>
+</span><span id="__span-8-16"><a id="__codelineno-8-16" name="__codelineno-8-16" href="#__codelineno-8-16"></a><span class="p">)</span>
+</span><span id="__span-8-17"><a id="__codelineno-8-17" name="__codelineno-8-17" href="#__codelineno-8-17"></a>
+</span><span id="__span-8-18"><a id="__codelineno-8-18" name="__codelineno-8-18" href="#__codelineno-8-18"></a><span class="n">urlpatterns</span> <span class="o">=</span> <span class="p">[</span>
+</span><span id="__span-8-19"><a id="__codelineno-8-19" name="__codelineno-8-19" href="#__codelineno-8-19"></a>    <span class="n">path</span><span class="p">(</span><span class="s2">&quot;internal/mcp/&quot;</span><span class="p">,</span> <span class="n">internal</span><span class="o">.</span><span class="n">urls</span><span class="p">),</span>
+</span><span id="__span-8-20"><a id="__codelineno-8-20" name="__codelineno-8-20" href="#__codelineno-8-20"></a>    <span class="n">path</span><span class="p">(</span><span class="s2">&quot;public/mcp/&quot;</span><span class="p">,</span> <span class="n">public</span><span class="o">.</span><span class="n">urls</span><span class="p">),</span>
+</span><span id="__span-8-21"><a id="__codelineno-8-21" name="__codelineno-8-21" href="#__codelineno-8-21"></a>    <span class="o">*</span><span class="n">internal</span><span class="o">.</span><span class="n">well_known_urls</span><span class="p">(),</span>
+</span><span id="__span-8-22"><a id="__codelineno-8-22" name="__codelineno-8-22" href="#__codelineno-8-22"></a>    <span class="o">*</span><span class="n">public</span><span class="o">.</span><span class="n">well_known_urls</span><span class="p">(),</span>
+</span><span id="__span-8-23"><a id="__codelineno-8-23" name="__codelineno-8-23" href="#__codelineno-8-23"></a><span class="p">]</span>
 </span></code></pre></div>
-<p>A token minted for <code>public-mcp</code> is now rejected by <code>internal-mcp</code>, and each
-server's <code>WWW-Authenticate</code> challenge points at <strong>its own</strong> metadata endpoint.</p>
+<p>A token minted for <code>public-mcp</code> is now rejected by <code>internal-mcp</code>, each
+server's <code>WWW-Authenticate</code> challenge points at <strong>its own</strong> metadata endpoint,
+and each document answers at its own well-known location.</p>
 <h3 id="if-you-are-writing-a-resource-server-against-the-official-mcp-sdk">If you are writing a resource server against the official <code>mcp</code> SDK<a class="headerlink" href="#if-you-are-writing-a-resource-server-against-the-official-mcp-sdk" title="Permanent link">&para;</a></h3>
 <div class="admonition danger">
 <p class="admonition-title">The SDK publishes the metadata for you and never validates the audience</p>
@@ -2077,7 +2174,7 @@ verifiers do not. If you are writing your own verifier anywhere, validate the
 audience in it.</p>
 </div>
 <h2 id="try-it-with-mcp-inspector">Try it with mcp-inspector<a class="headerlink" href="#try-it-with-mcp-inspector" title="Permanent link">&para;</a></h2>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>npx<span class="w"> </span>@modelcontextprotocol/inspector<span class="w"> </span>--url<span class="w"> </span>http://localhost:8000/mcp/
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>npx<span class="w"> </span>@modelcontextprotocol/inspector<span class="w"> </span>--url<span class="w"> </span>http://localhost:8000/mcp/
 </span></code></pre></div>
 <p>Inspector reads the protected-resource metadata, hits your authorization server's metadata, walks the auth flow, and exercises
 <code>tools/list</code> + <code>tools/call</code>. Common failure modes and where to look:</p>
@@ -2096,6 +2193,10 @@ audience in it.</p>
 <tr>
 <td>401 with <code>WWW-Authenticate</code> but no <code>resource_metadata</code></td>
 <td>The backend passed <code>resource_metadata_url=None</code> to <code>bearer_challenge</code>.</td>
+</tr>
+<tr>
+<td>404 at <code>/.well-known/oauth-protected-resource/&lt;path&gt;</code></td>
+<td>The root URLconf does not add <code>*server.well_known_urls()</code>, or the backend's <code>resource</code> path is not the one the client built the URL from. A trailing slash on the client's URL is not the cause: both forms answer.</td>
 </tr>
 <tr>
 <td>Token verifies but every call is still 401</td>

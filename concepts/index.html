@@ -3948,10 +3948,17 @@ it to the read's type, so <code>invoices://7</code> reaches <code>get_invoice</c
 appear in <code>resources/templates/list</code> so clients can fill them in.</p>
 <h3 id="how-a-uri-is-split-into-variables">How a URI is split into variables<a class="headerlink" href="#how-a-uri-is-split-into-variables" title="Permanent link">&para;</a></h3>
 <p>A URI must match its template whole. Each <code>{var}</code> takes one or more
-characters other than <code>/</code>, and the literal text around it (<code>-</code> in
+characters other than <code>/</code> and other than control characters (the C0 range, <code>DEL</code>
+and the C1 range, a newline and a tab among them), and the literal text around it (<code>-</code> in
 <code>things://{a}-{b}</code>, <code>.</code> in <code>files://{name}.{ext}</code>) decides where it ends. So
 <code>things://1-2</code> reads as <code>a="1"</code>, <code>b="2"</code>, and <code>files://report.pdf</code> as
 <code>name="report"</code>, <code>ext="pdf"</code>.</p>
+<p>A URI holding a control character matches no template, so <code>invoices://7\n</code> is
+not <code>pk="7\n"</code>: it is an unknown resource, answered as any other unknown URI
+is (<code>-32602</code> under <code>2026-07-28</code>, <code>-32002</code> under <code>2025-11-25</code>), on the sync and
+the async path alike, and a subscription naming it leaves it out of the
+granted set. A concrete URI is equal to itself alone, so <code>reports://\n</code> does
+not reach a concrete <code>reports://</code> binding either.</p>
 <p>When that literal text also occurs inside a value, the URI fits the template
 more than one way: <code>things://1-2-3</code> is <code>a="1-2", b="3"</code> or <code>a="1", b="2-3"</code>,
 and <code>files://a.tar.gz</code> is <code>name="a.tar", ext="gz"</code> or
@@ -4769,6 +4776,8 @@ content source: <code>template_name=</code> (a Django template, the idiomatic ch
 registration, because the read path would fill it from a pool carrying
 <code>request</code> and <code>user</code>, and a view that varies by caller is exactly what the
 exemption below assumes cannot exist).</p>
+<p>A view's <code>uri=</code> is concrete: a <code>{var}</code> in it raises <code>ValueError</code>, because a host
+fetches a view once by the exact URI a tool names and expands nothing.</p>
 <p>Views are <strong>unguarded by default</strong>. The MCP session is already authenticated,
 a view is a static asset rather than tenant data, and hosts may prefetch one
 before any tool call. Pass <code>permissions=</code> or <code>scopes=</code> if your project wants otherwise.</p>
@@ -4794,8 +4803,8 @@ it instead of showing raw JSON:</p>
 second serialisation path — and a <code>tools/call</code> the view makes comes back
 through the ordinary endpoint, inheriting your auth backend, the spec's
 permissions, the tool's <code>scopes=</code> and its rate limits unchanged.</p>
-<p>Three ways a link can be wrong all fail the same way at runtime — a view that
-silently never renders — so all three are refused at registration:</p>
+<p>Four ways a link can be wrong all fail the same way at runtime — a view that
+silently never renders — so all four are refused at registration:</p>
 <table>
 <thead>
 <tr>
@@ -4815,6 +4824,10 @@ silently never renders — so all three are refused at registration:</p>
 <tr>
 <td>Both <code>ui=</code> and a <code>"ui"</code> key in <code>meta=</code></td>
 <td>Both write the same <code>_meta</code> key, so one would quietly overwrite the other.</td>
+</tr>
+<tr>
+<td><code>resource_uri</code> fits a data resource's URI template more than one way</td>
+<td>Neither <code>register_ui_resource</code> nor the registry takes a templated view, so the ambiguity can only come from a <em>data</em> resource's template (<code>things://{a}-{b}</code> splits <code>things://x-y-z</code> as <code>x</code>/<code>y-z</code> or <code>x-y</code>/<code>z</code>). Name the view by its exact URI.</td>
 </tr>
 </tbody>
 </table>
@@ -5150,8 +5163,9 @@ own authorization server behind.</p>
   every call; a backend returns <code>None</code> for a caller it cannot authenticate, and
   that produces a spec-mandated 401 with a <code>WWW-Authenticate</code> header built from
   <code>www_authenticate_challenge(...)</code>. The
-  <code>/.well-known/oauth-protected-resource</code> view delegates its payload to the
-  backend's <code>protected_resource_metadata()</code>.</li>
+  protected-resource metadata view, under the mount and at RFC 9728's location
+  through <code>well_known_urls()</code>, delegates its payload to the backend's
+  <code>protected_resource_metadata()</code>.</li>
 <li><strong>The spec's own <code>permissions</code>.</strong> A tool or a resource is guarded by its
   kernel spec's <code>PermissionCheck</code>s, asked of the token's principal
   (<a href="#how-a-tool-is-called">How a tool is called</a>). A refusal is

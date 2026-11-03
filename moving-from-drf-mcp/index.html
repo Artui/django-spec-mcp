@@ -2006,7 +2006,10 @@ the same payload in <code>structuredContent</code>.</p>
 </tbody>
 </table>
 <p><code>as_view</code> takes only the collaborators as keyword arguments, with no routing
-map. A project mounting <code>server.urls</code> or <code>server.async_urls</code> needs no change.</p>
+map; the metadata view's one collaborator is <code>auth_backend=</code>. A project mounting
+<code>server.urls</code> or <code>server.async_urls</code> needs no change, and one that mounted the
+metadata view by hand at the origin can use <code>server.well_known_urls()</code> instead
+(<a href="../auth/#where-a-client-finds-the-metadata">Where a client finds the metadata</a>).</p>
 <p>A few answers change, which matters to a test suite that pins them:</p>
 <ul>
 <li><code>OPTIONS</code> answers <code>200</code> with <code>Allow</code> and an empty body, where it served DRF's
