@@ -147,19 +147,6 @@ class TestRefusedLinks:
         with pytest.raises(ValueError, match="not a view registered on this server"):
             _link(_server(), ui=UIToolMeta(resource_uri="ui://typo.html"))
 
-    def test_a_uri_a_view_template_splits_two_ways(self) -> None:
-        """The registry's refusal names a URI and a template but no tool, and
-        the author of the registration needs the tool: it is what to fix."""
-        server = _server()
-        server.register_ui_resource(name="pair", uri="ui://{a}-{b}", html="<h1>Pair</h1>")
-
-        with pytest.raises(ValueError, match="list_invoices") as raised:
-            _link(server, ui=UIToolMeta(resource_uri="ui://x-y-z"))
-
-        assert "'ui://x-y-z'" in str(raised.value)
-        assert isinstance(raised.value.__cause__, ValueError)
-        assert "Ambiguous resource URI" in str(raised.value.__cause__)
-
     def test_a_uri_a_data_resources_template_splits_two_ways(self) -> None:
         """``resolve`` walks every binding, so the ambiguous template can be a
         data resource's: the message must not call it a view's."""
@@ -190,12 +177,11 @@ class TestRefusedLinks:
         assert "Name the view by its exact URI" in str(raised.value)
         assert isinstance(raised.value.__cause__, ValueError)
 
-    def test_a_templated_view_uri_is_linkable_when_it_splits_one_way(self) -> None:
-        """The message advises, it does not claim templated views are unsupported."""
-        server = _server()
-        server.register_ui_resource(name="pair", uri="ui://{a}-{b}", html="<h1>Pair</h1>")
-
-        _link(server, ui=UIToolMeta(resource_uri="ui://x-y"))
+    def test_a_templated_uri_names_no_view(self) -> None:
+        """``register_ui_resource`` refuses a ``{var}`` uri, so no view answers to
+        a templated link: it meets the dangling-reference refusal."""
+        with pytest.raises(ValueError, match="not a view registered on this server"):
+            _link(_server(), ui=UIToolMeta(resource_uri="ui://invoices/{pk}.html"))
 
     def test_a_data_resource_is_not_a_view(self) -> None:
         server = _server()

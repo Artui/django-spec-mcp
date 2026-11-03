@@ -1211,7 +1211,24 @@ class MCPServer:
         carries, each asked ``has_permission(principal, binding)`` with the view's
         ``ResourceBinding`` as the spec; ``scopes`` are the OAuth scopes the
         caller's token must carry, every one, asked first. Both gate the listing,
-        the read and a subscription alike."""
+        the read and a subscription alike.
+
+        ``uri`` is **concrete**: a ``{var}`` in it raises ``ValueError``. A host
+        fetches a view once by the exact URI a tool's ``ui=`` link names and the
+        extension defines no expansion for it, so a templated view would be a
+        resource nothing can ask for. A view per report type is one registration
+        per type."""
+        # ``is_template`` on the binding is ``"{" in uri``; the same test, asked
+        # before the content source is judged so the URI is what the author is told
+        # about. ``test_a_templated_view_uri_is_refused`` fails without it.
+        if "{" in uri:
+            raise ValueError(
+                f"register_ui_resource({name!r}) got the templated uri={uri!r}. A "
+                "view's URI must be concrete: a host fetches a view once by the "
+                "exact URI a tool's ui= link names and expands nothing, so a "
+                "{var} names a view no host can ask for. Register one view per "
+                "URI."
+            )
         binding = ui_view_to_resource(
             name=name,
             uri=uri,

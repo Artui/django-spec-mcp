@@ -2001,6 +2001,9 @@ registration, because the read path would fill it from a pool carrying
 `request` and `user`, and a view that varies by caller is exactly what the
 exemption below assumes cannot exist).
 
+A view's `uri=` is concrete: a `{var}` in it raises `ValueError`, because a host
+fetches a view once by the exact URI a tool names and expands nothing.
+
 Views are **unguarded by default**. The MCP session is already authenticated,
 a view is a static asset rather than tenant data, and hosts may prefetch one
 before any tool call. Pass `permissions=` or `scopes=` if your project wants otherwise.
@@ -2031,14 +2034,15 @@ second serialisation path — and a `tools/call` the view makes comes back
 through the ordinary endpoint, inheriting your auth backend, the spec's
 permissions, the tool's `scopes=` and its rate limits unchanged.
 
-Three ways a link can be wrong all fail the same way at runtime — a view that
-silently never renders — so all three are refused at registration:
+Four ways a link can be wrong all fail the same way at runtime — a view that
+silently never renders — so all four are refused at registration:
 
 | Mistake | Why it's caught |
 | --- | --- |
 | `resource_uri` names no view on this server | The host resolves it against the same server, so a typo reaches it as a dangling reference. Register the view **before** the tool that links to it. |
 | The tool has `include_structured_content=False` | That *is* the render payload; the view would come up blank. Checked against the effective value, so a project that turned it off globally is caught too. |
 | Both `ui=` and a `"ui"` key in `meta=` | Both write the same `_meta` key, so one would quietly overwrite the other. |
+| `resource_uri` fits a data resource's URI template more than one way | A view's own URI is always concrete, so the ambiguity can only come from a *data* resource's template (`things://{a}-{b}` splits `things://x-y-z` as `x`/`y-z` or `x-y`/`z`). Name the view by its exact URI. |
 
 `visibility` declares who may call the tool — `UIVisibility.MODEL`, `APP`, or
 both. It is **host-enforced**: a host is required not to offer the model a tool

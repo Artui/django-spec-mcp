@@ -164,15 +164,18 @@ def build_ui_tool_meta(
     Empty dict when the tool declares no link, so the caller can hand the
     result to ``merge_meta`` unconditionally.
 
-    Three ways a link can be wrong, each of which would otherwise fail at
-    runtime as a view that silently never renders, so all three raise here:
+    Four ways a link can be wrong, each of which would otherwise fail at
+    runtime as a view that silently never renders, so all four raise here:
     ``ui=`` and a ``"ui"`` key in ``meta=`` together (same ``_meta`` key, so
     one would quietly win); a ``resource_uri`` naming no view on this server
     (a host resolves it against the server it read the tool from, so a view
-    must be registered *before* the tool linking to it); and a tool not
-    emitting ``structuredContent``, the payload a view renders from — checked
-    against the effective value, so a project that turned it off globally is
-    caught too.
+    must be registered *before* the tool linking to it, and a templated URI
+    names none, since ``register_ui_resource`` refuses one); a
+    ``resource_uri`` that a *data* resource's URI template splits more than one
+    way, which is the only route to the registry's ambiguity refusal now that
+    a view's URI is always concrete; and a tool not emitting
+    ``structuredContent``, the payload a view renders from — checked against
+    the effective value, so a project that turned it off globally is caught too.
     """
     if ui is None:
         return {}
