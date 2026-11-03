@@ -77,6 +77,15 @@ def test_the_in_process_call_context_takes_no_session_id() -> None:
         server._call_context(user=None, **extra)
 
 
+def test_the_server_context_takes_no_session_id() -> None:
+    """Fails while ``_context`` still accepts ``session_id``: the worker and the in-process
+    entry points never pass one, and the HTTP views build their context with their own method."""
+    server = _server()
+    extra: dict[str, Any] = {"session_id": "sess-7"}
+    with pytest.raises(TypeError, match="session_id"):
+        server._context(HttpRequest(), TokenInfo(user=None, scopes=()), **extra)
+
+
 @pytest.mark.django_db
 def test_a_call_without_a_session_carries_no_session_attribute(
     exporter: InMemorySpanExporter,

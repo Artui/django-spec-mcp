@@ -868,7 +868,6 @@ class MCPServer:
         http_request: HttpRequest,
         token: TokenInfo,
         *,
-        session_id: str | None = None,
         enforce_rate_limits: bool = True,
         in_task_worker: bool = False,
     ) -> MCPCallContext:
@@ -881,7 +880,6 @@ class MCPServer:
             resources=self._resources,
             prompts=self._prompts,
             protocol_version=self._config.protocol_versions[0],
-            session_id=session_id,
             server_info=self._server_info,
             instructions=self.description,
             config=self._config,
