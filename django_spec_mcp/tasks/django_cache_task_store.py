@@ -117,6 +117,8 @@ def _serialize(record: TaskRecord) -> dict[str, Any]:
         "inputResponses": record.input_responses,
         "progress": record.progress,
         "total": record.total,
+        "canElicit": record.can_elicit,
+        "inputRound": record.input_round,
     }
 
 
@@ -154,6 +156,10 @@ def _deserialize(raw: dict[str, Any]) -> TaskRecord | None:
             input_responses=raw.get("inputResponses") or {},
             progress=raw.get("progress"),
             total=raw.get("total"),
+            # Absent from a record written before input_required parking: such a
+            # task never parks, and has asked nothing.
+            can_elicit=bool(raw.get("canElicit")),
+            input_round=int(raw.get("inputRound") or 0),
         )
     except (KeyError, ValueError, TypeError):
         return None

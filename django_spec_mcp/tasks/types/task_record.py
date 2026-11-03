@@ -49,7 +49,9 @@ class TaskRecord:
             back the same type
             (``test_the_record_holds_a_tuple_so_no_store_changes_its_kind``).
         enqueued: Whether the task reached the executor, so a worker cannot be
-            tricked into running it twice.
+            tricked into running it twice. A worker clears it as it claims the
+            task, so a task waiting for input is not claimable until
+            ``tasks/update`` queues it again.
     """
 
     task: Task
@@ -88,6 +90,30 @@ class TaskRecord:
     The spec requires the server never to reuse a key over a task's lifetime, so
     a key appearing here is answered for good and a later request picks a new
     one."""
+
+    can_elicit: bool = False
+    """Whether the request that created the task declared form elicitation.
+
+    Capabilities are per request, and the worker serves no client, so this is the
+    only record of whether the client can be asked. It gates parking: a worker whose
+    service raises ``AdditionalInputRequired`` moves the task to ``input_required``
+    only when this is true, and otherwise completes it with the ``isError`` result
+    the inline call gives a client that cannot be asked. ``False`` is also what a
+    record written before the field existed reads as, so such a task never parks
+    (``test_a_record_in_the_0_6_0_shape_still_loads``)."""
+
+    input_round: int = 0
+    """How many questions the task has asked, and so the round the worker's next
+    run is on.
+
+    Kept on the record rather than in a signed ``requestState``: the inline
+    exchange signs it because it travels through the client, while a task's lives
+    here, and a signature would expire with ``INPUT_REQUEST_TTL_SECONDS`` though the
+    task waits for its own TTL
+    (``test_an_answer_long_after_the_question_still_completes_the_task``). It bounds
+    the exchange by ``MAX_INPUT_ROUNDS``, as the inline round counter does, and
+    names each question's key (``input_request_key``), which the spec forbids
+    reusing over the task's lifetime."""
 
     def __post_init__(self) -> None:
         # A ``str`` is a sequence too, so it is excluded first, or one URL would

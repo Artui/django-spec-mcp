@@ -7,6 +7,8 @@ import secrets
 
 from django.utils import timezone
 
+from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
+
 # The spec requires ids a third party cannot enumerate or guess, and that is
 # load-bearing here in a way it is not for a session: with no ``tasks/list`` and
 # no session to scope a lookup by, unguessability *is* the containment boundary
@@ -41,6 +43,16 @@ def is_wellformed_task_id(task_id: str) -> bool:
     return bool(_TASK_ID_SHAPE.match(task_id))
 
 
+def input_request_key(round_: int) -> str:
+    """The ``inputRequests`` key of a task's ``round_``-th question (from 1).
+
+    The spec forbids a server reusing a key over a task's lifetime, and
+    ``tasks/update`` accumulates answers by key, so a task asking twice under the
+    inline exchange's one fixed key would read its first answer as the second's.
+    """
+    return f"{ELICITATION_KEY}-{round_}"
+
+
 def now_iso() -> str:
     """Current time as the ISO 8601 string the wire format wants.
 
@@ -51,4 +63,4 @@ def now_iso() -> str:
     return timezone.now().isoformat()
 
 
-__all__ = ["is_wellformed_task_id", "new_task_id", "now_iso"]
+__all__ = ["input_request_key", "is_wellformed_task_id", "new_task_id", "now_iso"]

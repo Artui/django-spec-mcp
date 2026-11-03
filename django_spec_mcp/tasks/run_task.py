@@ -4,13 +4,22 @@ from collections.abc import Callable
 from dataclasses import replace
 from typing import Any
 
+from django_spec_mcp.auth.principal_for_token import principal_for_token
+from django_spec_mcp.elicitation.fingerprint_request import fingerprint_request
+from django_spec_mcp.elicitation.sign_request_state import sign_request_state
+from django_spec_mcp.elicitation.types.request_state import RequestState
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
+from django_spec_mcp.handlers.input_dispatch import TOOLS_CALL_METHOD
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.subscriptions.types.subscription_broker import SubscriptionBroker
 from django_spec_mcp.tasks.report_task_progress import report_task_progress
 from django_spec_mcp.tasks.transition_task import transition_task
 from django_spec_mcp.tasks.types.task_record import TaskRecord
 from django_spec_mcp.tasks.types.task_store import TaskStore
+from django_spec_mcp.tasks.utils import input_request_key
+from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
+from django_spec_mcp.types.result_type import ResultType
 from django_spec_mcp.types.task_status import TaskStatus
 
 
@@ -52,6 +61,17 @@ def run_task(
     protocol faults with no protocol response left to carry them. A tool-level
     failure is *not*: it arrives as an ordinary result carrying ``isError:
     true`` and the task is ``completed``, as the spec requires.
+
+    **A service that asks parks the task.** When the creating request declared
+    form elicitation (``TaskRecord.can_elicit``), the replay runs under that
+    declaration, so ``AdditionalInputRequired`` comes back as the inline
+    ``input_required`` result rather than an ``isError`` one. The task then moves
+    to ``input_required`` with that result's question under a key of its own
+    (``input_request_key``), and waits, unclaimed, for ``tasks/update`` to merge
+    the answer into its arguments and queue it again. Each run after an answer
+    is the next round, carried in a ``requestState`` signed here for this replay
+    alone, so the inline round budget (``MAX_INPUT_ROUNDS``) bounds the exchange
+    and its last question becomes the inline ``isError`` result.
     """
     record: TaskRecord | None = store.get(task_id)
     if record is None or not record.enqueued or record.status.is_terminal:
@@ -69,10 +89,12 @@ def run_task(
     # The broker travels on the context so the worker publishes to the same
     # server's subscribers — there is no request here to carry it.
     broker = context.subscriptions
+    if record.can_elicit:
+        # The creating request's declaration, which is all ``ask_for_input``
+        # reads: a worker serves no client, so its context declares nothing.
+        context = replace(context, client_capabilities={"elicitation": {}})
     try:
-        result: Any = handle_tools_call(
-            {"name": record.tool_name, "arguments": record.arguments}, context
-        )
+        result: Any = handle_tools_call(_replay(record, context), context)
     except Exception as exc:  # noqa: BLE001 — the worker's last line of defence
         # Without this the exception propagates into the queue consumer, the
         # task stays ``working``, and the client polls a handle that resolves
@@ -96,7 +118,63 @@ def run_task(
             broker=broker,
         )
         return
+    if isinstance(result, dict) and result.get("resultType") == ResultType.INPUT_REQUIRED.value:
+        _park(store, task_id, result, broker)
+        return
     transition_task(store, task_id, status=TaskStatus.COMPLETED, result=result, broker=broker)
+
+
+def _replay(record: TaskRecord, context: MCPCallContext) -> dict[str, Any]:
+    """The ``tools/call`` a run replays: the recorded call, and past a first
+    question the round it is on.
+
+    The round reaches the budget check the only way the inline call's does, in a
+    ``requestState``, signed here for this replay rather than stored: a stored one
+    would expire with ``INPUT_REQUEST_TTL_SECONDS`` while the task waited. It
+    carries no answers, since ``tasks/update`` merged them into the arguments, and
+    binds the arguments as recorded, which the replay presents again.
+    """
+    params: dict[str, Any] = {"name": record.tool_name, "arguments": record.arguments}
+    if record.input_round:
+        state = RequestState(
+            principal=principal_for_token(context.token),
+            fingerprint=fingerprint_request(
+                TOOLS_CALL_METHOD, {"name": record.tool_name, "arguments": record.arguments}
+            ),
+            round=record.input_round,
+        )
+        params["requestState"] = sign_request_state(state)
+    return params
+
+
+def _park(
+    store: TaskStore,
+    task_id: str,
+    result: dict[str, Any],
+    broker: SubscriptionBroker | None,
+) -> None:
+    """Move a task whose service asked to ``input_required``, its question under
+    the next round's key.
+
+    Re-read rather than taken from the claim, so progress the run reported is
+    kept, and the round is saved before the status moves, so a ``tasks/update``
+    landing in between reads the key the question is filed under. A task
+    cancelled while it ran stays cancelled (``transition_task``).
+    """
+    current: TaskRecord | None = store.get(task_id)
+    if current is None or current.status.is_terminal:
+        return
+    # ``ask_for_input`` asked this run's question as the round after the one
+    # the replay carried.
+    asked: int = current.input_round + 1
+    store.save(replace(current, input_round=asked))
+    transition_task(
+        store,
+        task_id,
+        status=TaskStatus.INPUT_REQUIRED,
+        input_requests={input_request_key(asked): result["inputRequests"][ELICITATION_KEY]},
+        broker=broker,
+    )
 
 
 __all__ = ["run_task"]

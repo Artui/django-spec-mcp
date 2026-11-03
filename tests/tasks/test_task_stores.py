@@ -256,6 +256,8 @@ def _distinct_record() -> TaskRecord:
         input_responses={"q": "a"},
         progress=42.0,
         total=100.0,
+        can_elicit=True,
+        input_round=3,
     )
 
 
@@ -320,6 +322,49 @@ def test_the_cache_codec_preserves_every_field() -> None:
         assert getattr(loaded, f.name) == getattr(original, f.name), f"lost TaskRecord.{f.name}"
     for f in dataclasses.fields(original.task):
         assert getattr(loaded.task, f.name) == getattr(original.task, f.name), f"lost Task.{f.name}"
+
+
+# The keys ``DjangoCacheTaskStore`` wrote in 0.6.0, the last release before a
+# task could ask for input, copied from that release's ``_serialize``: a cache
+# holds a record for its TTL, so one written then is read by this release.
+_A_0_6_0_RECORD: dict[str, Any] = {
+    "taskId": "upgrade-1",
+    "status": "working",
+    "createdAt": "2026-11-03T00:00:00Z",
+    "lastUpdatedAt": "2026-11-03T00:00:01Z",
+    "ttlMs": 60000,
+    "pollIntervalMs": 500,
+    "statusMessage": None,
+    "result": None,
+    "error": None,
+    "inputRequests": None,
+    "toolName": "tool",
+    "arguments": {"a": 1},
+    "principalId": "anonymous",
+    "userPk": None,
+    "scopes": ["read"],
+    "audience": None,
+    "enqueued": True,
+    "inputResponses": {},
+    "progress": None,
+    "total": None,
+    "expiresAt": None,
+}
+
+
+def test_a_record_in_the_0_6_0_shape_still_loads() -> None:
+    """A record written before ``can_elicit`` and ``input_round`` existed loads as a
+    task that cannot ask and has asked nothing, so it runs as it would have."""
+    store = DjangoCacheTaskStore(namespace="upgrade")
+    cache.set(store._key("upgrade-1"), dict(_A_0_6_0_RECORD))
+
+    loaded = store.get("upgrade-1")
+
+    assert loaded is not None
+    assert loaded.arguments == {"a": 1}
+    assert loaded.enqueued is True
+    assert loaded.can_elicit is False
+    assert loaded.input_round == 0
 
 
 # ----- ids that could not be ours -----

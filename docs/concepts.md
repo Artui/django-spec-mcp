@@ -1733,19 +1733,55 @@ the spec, or the registration distinguishes the two paths.
 | | |
 |---|---|
 | Permissions run **twice** | Once before the task is created, so a denied call never reaches the queue and still gets its `403`; once again in the worker, against the same rebuilt token. The task stores the caller's scopes for exactly this reason. |
-| Rate limits run **once** | Consuming a quota is a side effect, so it is charged when the client asks and not again on replay. Charging both would halve every configured limit. |
+| Rate limits run **once** per request | Consuming a quota is a side effect, so it is charged when the client asks and not again on replay. Charging both would halve every configured limit. An answer to a task that asked is a request too, and pays for its round, as an inline retry does. |
 | A tool error is `completed`, not `failed` | The spec is explicit. A `ServiceError` produces a well-formed result carrying `isError: true`, and that is a task that finished. `failed` means the task machinery broke. |
 | There is no `tasks/list` | Deliberate in the spec: without sessions there is nothing to scope a listing by. Ids are high-entropy and ownership is checked on top — an id belonging to someone else answers exactly as one that never existed. |
 | A queue that is down fails the *task* | The record is already durable when `enqueue` raises, so the handle comes back with `status: "failed"` and the reason in `statusMessage`. The client finds out through the channel it was already using. |
 | Redelivery runs the work once | Queues deliver at least once; a task is claimed as the worker starts. Best-effort, not a lock — an idempotent service is still the right thing to write. |
 
-A worker never asks the user: it has no client to ask, so a service that raises
-`AdditionalInputRequired` there degrades to an `isError` result carrying
-`requestedInput`, and the task is `completed`. What a task can do is *receive* a
-retry's answers. When a `tools/call` that carries `inputResponses` runs as a task,
-the answers are merged into the arguments before the task is created, as they are
-inline, with or without a valid `requestState`, so the worker runs with them. They
-are ordinary arguments from then on and stay in the task's record for its TTL.
+A retry's answers reach a task. When a `tools/call` that carries `inputResponses`
+runs as a task, the answers are merged into the arguments before the task is
+created, as they are inline, with or without a valid `requestState`, so the worker
+runs with them. They are ordinary arguments from then on and stay in the task's
+record for its TTL.
+
+### A task that asks
+
+A service that raises `AdditionalInputRequired` inside a task asks through the
+task, when the request that created it declared form elicitation. The worker
+moves the task to `input_required`, its question in `inputRequests`:
+
+```json
+{"taskId": "…", "status": "input_required",
+ "inputRequests": {"additionalInput-1": {"method": "elicitation/create",
+   "params": {"mode": "form", "message": "9412 rows match. Confirm to proceed.",
+              "requestedSchema": {"type": "object",
+                                  "properties": {"confirmed": {"type": "boolean"}},
+                                  "required": ["confirmed"]}}}}}
+```
+
+The client answers with `tasks/update`, under the key it was asked under:
+
+```json
+{"taskId": "…",
+ "inputResponses": {"additionalInput-1": {"action": "accept",
+                                           "content": {"confirmed": true}}}}
+```
+
+The answer is merged into the task's arguments, as a retry's answers are at task
+creation, and the task goes back to `working` and to the queue. The worker runs
+the service again from the top with it, which is what an inline retry does. A
+service asking a second question parks the task again under a new key, since a
+key is never reused over a task's lifetime, and keeps the first answer.
+
+| | |
+|---|---|
+| The answer is admitted like the call | `tasks/update` asks the tool's scope gate and the spec's permissions on the merged arguments, then charges the rate limits once for the round. A caller refused or over its limit gets the error, and the task keeps waiting with nothing of the answer kept. |
+| A declined answer ends the task | `decline` or `cancel` completes the task with the inline refusal (`input_declined` / `input_cancelled`) as its result, and the service does not run again. |
+| `MAX_INPUT_ROUNDS` bounds it | Counted on the task as inline, so the question past the budget is the `isError` result below, and the task is `completed`. |
+| The wait is the task's, not the form's | A task waits for its TTL. The round is kept on the task record, not in a signed `requestState`, so an answer after `INPUT_REQUEST_TTL_SECONDS` still resumes it. |
+| A client that cannot be asked | A task created by a request that did not declare form elicitation is never parked: the question degrades to the `isError` result carrying `requestedInput`, and the task is `completed`. A task created before this release reads as one of these. |
+| A custom `TaskStore` | Persists `can_elicit` and `input_round` with the rest of the record. A store dropping them loses the declaration, and its tasks never park. |
 
 ## Asking the user: elicitation
 
@@ -1873,7 +1909,9 @@ result carrying the service's message **and the schema**:
 
 A model reading that can simply pass `confirmed: true` on its next call, which
 is the same outcome by a shorter route. This is what a legacy-era client sees, a
-URL-only client, and a task worker replaying a call with nobody at the other end.
+URL-only client, and a task whose creating request declared neither (a task
+created by one that declared forms asks through the task, see
+[A task that asks](#a-task-that-asks)).
 
 Which of the two a real client gets is decided by its MCP SDK, not by anything
 you configure — [Connect a Pydantic-AI agent](recipes/pydantic-ai-client.md)

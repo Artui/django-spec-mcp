@@ -11,6 +11,27 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+### Added
+
+- **A task whose service asks for input waits for the answer.** A service raising
+  `AdditionalInputRequired` inside a task completed it with an `isError`
+  `input_required` result, and nothing ever moved a task to `input_required`, so
+  `tasks/update` was unreachable. When the request that created the task declared form
+  elicitation, the worker now parks the task in `input_required` with the question in
+  `inputRequests`, under a key of its own per question (`additionalInput-1`,
+  `additionalInput-2`). `tasks/update` answering it merges the answer into the task's
+  arguments as a retry's answers merge at task creation, asks the tool's scope gate
+  and the spec's permissions on the merged arguments, charges the rate limits once for
+  the round, and queues the task again; the worker re-runs the service with the
+  answer. A caller refused or over its limit gets the error and the task keeps
+  waiting; a declined or cancelled answer completes the task with the inline refusal.
+  `MAX_INPUT_ROUNDS` bounds the exchange as inline, and the round is kept on the task,
+  so an answer arriving after `INPUT_REQUEST_TTL_SECONDS` still resumes it. A task
+  created by a request that did not declare form elicitation, or before this release,
+  completes as before. `TaskRecord` gains `can_elicit` and `input_round`, which
+  `DjangoCacheTaskStore` persists; a custom `TaskStore` should persist them too, or
+  its tasks never park.
+
 ### Fixed
 
 - **A refusal on the task path is answered inside an `mcp.tools.call` span.** Task

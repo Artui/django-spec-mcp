@@ -35,6 +35,7 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 from django_spec_mcp import MCPServer, PromptArgument, TaskPolicy
 from django_spec_mcp.handlers.handle_prompts_get import handle_prompts_get
 from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
+from django_spec_mcp.handlers.handle_tasks_update import handle_tasks_update
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.types.context import MCPCallContext
@@ -243,5 +244,26 @@ def test_a_task_path_refusal_is_answered_inside_the_span(
     )
     assert out.get("isError") is True, out
     assert server.task_executor.enqueued == []
+    (call,) = [s for s in exporter.get_finished_spans() if s.name == "mcp.tools.call"]
+    assert call.attributes["mcp.binding.name"] == TOOL
+
+
+@pytest.mark.django_db(transaction=True)
+def test_an_answer_refused_on_a_waiting_task_is_traced(exporter: InMemorySpanExporter) -> None:
+    """An answer to a waiting task meets task creation's checks, inside its span."""
+    server = _task_server()
+    ctx = replace(
+        task_context(server),
+        client_capabilities={"elicitation": {}, "extensions": {TASKS_EXTENSION_ID: {}}},
+    )
+    handle: Any = handle_tools_call({"name": TOOL, "arguments": {"count": 500}}, ctx)
+    server.run_task(handle["taskId"])
+    (key,) = server.task_store.get(handle["taskId"]).task.input_requests
+    exporter.clear()
+
+    handle_tasks_update(
+        {"taskId": handle["taskId"], "inputResponses": {key: {"action": "decline"}}}, ctx
+    )
+
     (call,) = [s for s in exporter.get_finished_spans() if s.name == "mcp.tools.call"]
     assert call.attributes["mcp.binding.name"] == TOOL

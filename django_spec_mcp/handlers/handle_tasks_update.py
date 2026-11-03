@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
+from django_spec_mcp._compat.tracing import span
+from django_spec_mcp.handlers.admit_task_call import admit_task_call
 from django_spec_mcp.handlers.tasks_utils import (
     declares_tasks_extension,
     missing_capability_error,
@@ -10,10 +12,15 @@ from django_spec_mcp.handlers.tasks_utils import (
     resolve_task_id,
 )
 from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.handlers.utils import span_attrs
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.subscriptions.publish_after_task import publish_task_status
+from django_spec_mcp.tasks.resume_task import resume_task
+from django_spec_mcp.tasks.transition_task import transition_task
 from django_spec_mcp.tasks.types.task_record import TaskRecord
+from django_spec_mcp.tasks.types.task_store import TaskStore
 from django_spec_mcp.tasks.utils import now_iso
+from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from django_spec_mcp.types.task_status import TaskStatus
 
@@ -35,7 +42,13 @@ def handle_tasks_update(
       the whole call over.
     - **A partial set is accepted**, so answers accumulate rather than replace.
     - **Only when nothing is left outstanding** does the task go back to
-      ``working``; until then the next ``tasks/get`` shows what is still wanted.
+      ``working``, queued again for its worker; until then the next ``tasks/get``
+      shows what is still wanted.
+
+    **The answer resumes the task as a retry would resume the call.** It merges
+    into the task's arguments, under the checks and the charge task creation asks
+    (``_resume``), and the worker runs the service again from the top with it, as
+    an inline retry does.
 
     **Updating a task that is not waiting for input is refused.** The keys are
     the correlation, and a task in ``working`` has none outstanding, so every
@@ -77,16 +90,69 @@ def handle_tasks_update(
     merged: dict[str, Any] = {**record.input_responses, **accepted}
     remaining: dict[str, Any] = {k: v for k, v in outstanding.items() if k not in merged}
 
-    updated: TaskRecord = replace(record, input_responses=merged).with_task(
-        status=TaskStatus.WORKING if not remaining else TaskStatus.INPUT_REQUIRED,
-        input_requests=remaining or None,
-        last_updated_at=now_iso(),
-        status_message=None if not remaining else record.task.status_message,
+    if remaining:
+        waiting: TaskRecord = replace(record, input_responses=merged).with_task(
+            input_requests=remaining,
+            last_updated_at=now_iso(),
+        )
+        store.save(waiting)
+        publish_task_status(context.subscriptions, waiting)
+        return {}
+    return _resume(store, replace(record, input_responses=merged), accepted, context)
+
+
+def _resume(
+    store: TaskStore,
+    record: TaskRecord,
+    answered: dict[str, Any],
+    context: MCPCallContext,
+) -> dict[str, Any] | JsonRpcError:
+    """Merge the answer into the task's arguments and queue it again.
+
+    The answer is handed to ``admit_task_call`` as a retry's ``inputResponses``,
+    under the key the inline exchange files it under, with the recorded arguments
+    as the call's: so it merges as an answer carried into task creation does, the
+    binding's ``server_arguments`` laid over it, and the scope gate, the spec's
+    checks on the merged arguments and the charge are asked of this request as
+    they were of the one that created the task. The worker charges nothing, so
+    this is where the round the client answers pays, as an inline retry does
+    (``test_each_answering_round_is_charged_once``).
+
+    A denial or a refused charge is this request's answer, and the task keeps
+    waiting with nothing of the answer kept, so the client can answer again
+    (``test_a_refused_charge_leaves_the_task_waiting``). A declined or cancelled
+    answer ends the task with the inline refusal as its result. A tool no longer
+    registered merges nothing: the task is queued as it stands, and its worker
+    answers the unknown tool as any run would.
+    """
+    binding: Any = context.tools.get(record.tool_name)
+    arguments: dict[str, Any] = record.arguments
+    if binding is not None:
+        # The one key a parked task waits on (``run_task``); its answer is the
+        # inline exchange's, so it is read under the inline key.
+        answer: Any = next(iter(answered.values()), None)
+        params: dict[str, Any] = {"inputResponses": {ELICITATION_KEY: answer}}
+        # Inside the span task creation opens, for the same checks and the same
+        # refusals (``test_an_answer_refused_on_a_waiting_task_is_traced``).
+        with span("mcp.tools.call", attributes=span_attrs(binding.name, context)):
+            refusal, arguments = admit_task_call(binding, arguments, context, params=params)
+        if isinstance(refusal, JsonRpcError):
+            return refusal
+        if refusal is not None:
+            transition_task(
+                store,
+                record.task_id,
+                status=TaskStatus.COMPLETED,
+                result=refusal,
+                broker=context.subscriptions,
+            )
+            return {}
+    resume_task(
+        store,
+        context.task_executor,
+        replace(record, arguments=arguments),
+        broker=context.subscriptions,
     )
-    store.save(updated)
-    # Answering changes the task's status, so a subscriber watching it hears,
-    # exactly as it would for any other transition.
-    publish_task_status(context.subscriptions, updated)
     return {}
 
 
