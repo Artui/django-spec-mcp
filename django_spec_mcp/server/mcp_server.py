@@ -851,7 +851,9 @@ class MCPServer:
         record (see ``build_worker_token``), the registries, config and stores
         from this server.
 
-        ``client_capabilities`` is empty, since the worker serves no client.
+        ``client_capabilities`` is empty, since the worker serves no client;
+        ``run_task`` lays the creating request's elicitation declaration over it
+        when the record kept one (``TaskRecord.can_elicit``).
         ``in_task_worker`` is what keeps the run from becoming another task:
         ``maybe_create_task`` lets it through under either policy, so a
         ``REQUIRED`` tool's task runs rather than being refused for a

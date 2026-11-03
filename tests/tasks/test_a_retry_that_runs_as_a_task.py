@@ -45,7 +45,6 @@ from django_spec_mcp.types.task_status import TaskStatus
 from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
 from tests.elicitation.conftest import TOOL, DeleteRows, delete_rows_kernel
 from tests.tasks.conftest import RecordingExecutor, context
-from tests.utils import tool_error
 
 _ROUTES = pytest.mark.parametrize("route", ["sync", "async", "streamed"])
 _ANSWER: dict[str, Any] = {
@@ -237,12 +236,11 @@ async def test_a_junk_state_with_no_answers_stores_the_arguments_as_sent(route: 
 
     record = await world.run(handle)
     assert record.arguments == {"count": 500}
-    # A worker asks nobody: the service's question degrades to an error result, and
-    # the task is still ``completed``, not ``failed``.
-    assert record.status is TaskStatus.COMPLETED
-    error = tool_error(record.task.result)
-    assert error["type"] == "input_required"
-    assert error["requestedInput"] == {"confirmed": {"type": "boolean"}}
+    # Nothing was merged, so the service asks, and the creating request declared
+    # forms: the task waits for the answer rather than failing.
+    assert record.status is TaskStatus.INPUT_REQUIRED
+    ((request),) = record.task.input_requests.values()
+    assert request["params"]["requestedSchema"]["properties"] == {"confirmed": {"type": "boolean"}}
 
 
 @_ROUTES
@@ -384,7 +382,7 @@ async def test_a_call_that_gets_no_task_never_has_its_answers_resolved_for_one(
         calls.append(args)
         return real(*args)
 
-    monkeypatch.setattr("django_spec_mcp.handlers.task_dispatch.resolve_call_input", spy)
+    monkeypatch.setattr("django_spec_mcp.handlers.admit_task_call.resolve_call_input", spy)
     world = _World(
         policy=TaskPolicy.FORBIDDEN if case == "forbidden" else TaskPolicy.OPTIONAL,
         **({"scopes": ("rows:delete",)} if case == "scope-denied" else {}),

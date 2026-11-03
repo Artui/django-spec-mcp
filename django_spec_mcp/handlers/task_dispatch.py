@@ -2,23 +2,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from django_spec_mcp.elicitation.types.resolved_input import ResolvedInput
-from django_spec_mcp.handlers.input_dispatch import refusal_result
-from django_spec_mcp.handlers.kernel_utils import KernelAdmission, admit_kernel_tool_call
-from django_spec_mcp.handlers.resolve_call_input import resolve_call_input
+from django_spec_mcp._compat.tracing import span
+from django_spec_mcp.elicitation.can_ask_client import can_ask_client
+from django_spec_mcp.handlers.admit_task_call import admit_task_call
+from django_spec_mcp.handlers.kernel_utils import KernelAdmission
 from django_spec_mcp.handlers.tasks_utils import (
     declares_tasks_extension,
     missing_capability_error,
 )
 from django_spec_mcp.handlers.types.context import MCPCallContext
-from django_spec_mcp.handlers.utils import (
-    apply_tool_server_arguments,
-    consume_rate_limits,
-    effective_rate_limits,
-    forbidden,
-    judge_tool_permissions,
-    rate_limited,
-)
+from django_spec_mcp.handlers.utils import span_attrs
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.protocol.types.task import Task
 from django_spec_mcp.tasks.create_task import create_task
@@ -85,6 +78,12 @@ def maybe_create_task(
     task. The merged arguments stay in the record for the task's lifetime, like
     any other argument.
 
+    **From the scope gate on, it runs inside an ``mcp.tools.call`` span**, the one
+    the inline call opens around the same checks, so a denial, a refused charge or
+    a declined answer is traced whichever path answered it. A call that becomes a
+    task is traced twice: its creation here, and its run in the worker, which
+    re-enters the inline path.
+
     ``admission`` is the one a streamed call's pre-flight made, which task
     creation takes instead of asking the spec's checks again, so a seed a check
     names resolves once before the worker
@@ -129,67 +128,31 @@ def maybe_create_task(
             return missing_capability_error()
         return None
 
-    # The binding's scope gate, through the helper the inline call uses.
-    allowed, required_scopes = judge_tool_permissions(binding, context)
-    if not allowed:
-        return forbidden(required_scopes)
-
-    # A retry's answers become ordinary arguments here, as inline: the record
-    # below holds them, since the worker reads nothing else
-    # (``test_a_retry_that_runs_as_a_task_stores_and_runs_its_answer``). Applied
-    # again over what the answers produced, since the merge takes any key
-    # (``test_an_answer_cannot_replace_a_bound_value_in_a_task``).
-    prior: ResolvedInput | None = None
-    if params is not None:
-        prior = resolve_call_input(binding, params, arguments, context)
-        arguments = apply_tool_server_arguments(binding, prior.arguments)
-
-    # The spec's own checks, which the binding's ``permissions`` above do not
-    # hold, as the inline call asks them before its charge: without this the
-    # plain route queued a call its worker would refuse, where the streamed
-    # route's pre-flight answered ``403``
-    # (``test_a_caller_the_spec_refuses_gets_no_task``). Asked on the merged
-    # arguments, so an answer that names a route is the one judged
-    # (``test_a_caller_refused_on_the_merged_arguments_gets_no_task``). Its grant is
-    # not kept, since the worker's replay is a later call, judged again. A
-    # streamed call's pre-flight has asked already, on the arguments as sent,
-    # and is not asked twice unless answers were carried in. Each part has the
-    # test that fails without it: with the whole parenthesised disjunct gone,
-    # ``test_a_streamed_task_retry_is_admitted_afresh`` (the carried answers are
-    # never judged); with only ``bool(prior.carried)`` gone,
-    # ``test_a_streamed_task_call_with_nothing_carried_is_not_asked_twice`` (a
-    # call carrying nothing is asked again); with only ``prior is not None``
-    # gone, a direct call with no ``params``
-    # (``test_a_pre_flight_admission_stands_when_no_call_is_handed_in``) reads
-    # ``carried`` off ``None``.
-    if admission is None or (prior is not None and bool(prior.carried)):
-        admitted = admit_kernel_tool_call(binding, arguments, context)
-        if isinstance(admitted, JsonRpcError):
-            return admitted
-
-    # After the permission checks and before anything durable exists: a denied
-    # caller should not spend a quota, and a caller who has spent one should
-    # not be told so only once a record has been written and queued.
-    retry_after: int | None = consume_rate_limits(
-        effective_rate_limits(binding, context), context.http_request, context.token
-    )
-    if retry_after is not None:
-        return rate_limited(retry_after)
-
-    # After the charge, as inline: a declined answer is a call the client made
-    # (``test_a_declined_answer_creates_no_task_and_is_charged_once``).
-    if prior is not None and prior.refused_with is not None:
-        return refusal_result(prior.refused_with)
-
-    task: Task = create_task(
-        store=store,
-        executor=executor,
-        tool_name=binding.name,
-        arguments=arguments,
-        token=context.token,
-        ttl_ms=context.config.task_ttl_ms,
-        poll_interval_ms=context.config.task_poll_interval_ms,
-    )
+    # From the scope gate on, inside the span the inline call opens, so an
+    # outcome the two paths share is traced on both: a denial, a refused charge
+    # or a declined answer here is the inline call's own answer
+    # (``test_a_task_path_refusal_is_answered_inside_the_span``). The checks
+    # before it are cheap routing, which opens no span inline either.
+    with span("mcp.tools.call", attributes=span_attrs(binding.name, context)):
+        answer, arguments = admit_task_call(
+            binding, arguments, context, admission=admission, params=params
+        )
+        if answer is not None:
+            return answer
+        task: Task = create_task(
+            store=store,
+            executor=executor,
+            tool_name=binding.name,
+            arguments=arguments,
+            token=context.token,
+            ttl_ms=context.config.task_ttl_ms,
+            poll_interval_ms=context.config.task_poll_interval_ms,
+            # Recorded, since the worker has no request to read it from: it is
+            # what lets the worker park the task rather than complete it with an
+            # ``isError`` result when the service asks
+            # (``test_a_client_that_cannot_be_asked_gets_the_result_it_gets_today``).
+            can_elicit=can_ask_client(context.client_capabilities),
+        )
     # ``resultType`` is set explicitly and only here: the envelope stamps
     # ``complete`` on anything that has not declared itself, and the spec
     # forbids ``task`` on any result other than this one.

@@ -11,6 +11,45 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-11-03
+
+### Added
+
+- **A task whose service asks for input waits for the answer.** A service raising
+  `AdditionalInputRequired` inside a task completed it with an `isError`
+  `input_required` result, and nothing ever moved a task to `input_required`, so
+  `tasks/update` was unreachable. When the request that created the task declared form
+  elicitation, the worker now parks the task in `input_required` with the question in
+  `inputRequests`, under a key of its own per question (`additionalInput-1`,
+  `additionalInput-2`). `tasks/update` answering it merges the answer into the task's
+  arguments as a retry's answers merge at task creation, asks the tool's scope gate
+  and the spec's permissions on the merged arguments, charges the rate limits once for
+  the round, and queues the task again; the worker re-runs the service with the
+  answer. A caller refused or over its limit gets the error and the task keeps
+  waiting; a declined or cancelled answer completes the task with the inline refusal.
+  `MAX_INPUT_ROUNDS` bounds the exchange as inline, and the round is kept on the task,
+  so an answer arriving after `INPUT_REQUEST_TTL_SECONDS` still resumes it. A task
+  created by a request that did not declare form elicitation, or before this release,
+  completes as before. Only a task the package parked is resumed: a task parked
+  through `transition_task` under the caller's own keys is answered as before, the
+  answers kept and the task `working` once none is outstanding, with nothing queued,
+  charged or merged. An answer resumes a task only while it is still waiting, so a
+  `tasks/cancel`, or a duplicate `tasks/update`, landing while the answer is admitted
+  is not undone. `TaskRecord` gains `can_elicit` and `input_round`, which
+  `DjangoCacheTaskStore` persists; a custom `TaskStore` should persist both. One
+  dropping `can_elicit` never parks its tasks; one dropping `input_round` parks every
+  round under `additionalInput-1`, reusing a key the spec forbids reusing, and leaves
+  `MAX_INPUT_ROUNDS` unbounded.
+
+### Fixed
+
+- **A refusal on the task path is answered inside an `mcp.tools.call` span.** Task
+  creation opened no span, so a `tools/call` that would run as a task and was denied,
+  rate-limited or carried a declined or cancelled `inputResponses` was answered with no
+  trace, where the inline call answers each inside `mcp.tools.call`. Task creation now
+  runs from the scope gate on inside that span, sync and async; a call that becomes a
+  task is traced at its creation and again at its run in the worker.
+
 ## [0.6.0] — 2026-11-03
 
 ### Changed
@@ -719,7 +758,8 @@ carries; releases up to 0.54.0 are in
   running. The worker's run now enters below that decision. A client that did
   not declare the extension is still refused `-32021` by a `REQUIRED` tool.
 
-[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/Artui/django-spec-mcp/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Artui/django-spec-mcp/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Artui/django-spec-mcp/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Artui/django-spec-mcp/compare/v0.3.0...v0.4.0

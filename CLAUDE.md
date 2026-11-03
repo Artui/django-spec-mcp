@@ -185,6 +185,7 @@ covered.
 | In-process `call_tool` (`call_kernel_tool.py`) | `dispatch` |
 | In-process `acall_tool` (`handle_tools_call_async.py` → `run_kernel_tool_async.py`) | `adispatch` |
 | A task's worker (`tasks/run_task.py`, re-entering `handle_tools_call` below the task decision) | `dispatch` |
+| An answer resuming a waiting task (`handle_tasks_update.py` → `admit_task_call.py`) | none: the checks task creation asks; the worker's re-run dispatches |
 | `resources/read` of a kernel resource (`read_kernel_resource*.py`) | `dispatch` / `adispatch` |
 | `resources/read` of a view (`handle_resources_read*.py`) | **direct** `run_selector` |
 | `prompts/get` (`handle_prompts_get*.py`) | **direct** call of `render` |

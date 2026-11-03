@@ -98,7 +98,7 @@ next request.
 
 | Span name | When |
 | --- | --- |
-| `mcp.tools.call` | Wraps tool dispatch (permission check, rate limit, validation, service invocation, output rendering). |
+| `mcp.tools.call` | Wraps tool dispatch (permission check, rate limit, validation, service invocation, output rendering). On the task path it also opens at task creation (from the scope gate on) and on each answered `tasks/update`, so a task call shows one span at creation, one per worker run and one per answer. |
 | `mcp.resources.read` | Wraps resource dispatch (permission check, rate limit, selector invocation, output serialization). |
 | `mcp.prompts.get` | Wraps prompt dispatch (required-args check, permission check, rate limit, render normalisation). |
 

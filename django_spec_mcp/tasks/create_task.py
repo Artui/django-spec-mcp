@@ -22,6 +22,7 @@ def create_task(
     token: TokenInfo,
     ttl_ms: int | None,
     poll_interval_ms: int | None,
+    can_elicit: bool = False,
 ) -> Task:
     """Persist a task, hand it to the executor, and return the client's handle.
 
@@ -39,6 +40,10 @@ def create_task(
     the first ``tasks/get`` reports what happened. The broker's exception text
     rides in ``statusMessage`` rather than being flattened to a generic message,
     since "the queue is down" reaches a developer by no other channel.
+
+    ``can_elicit`` is whether the creating request declared form elicitation,
+    recorded because the worker that may need to ask has no request to read it
+    from (see ``TaskRecord.can_elicit``).
     """
     created: str = now_iso()
     seed = Task(
@@ -57,6 +62,7 @@ def create_task(
         user_pk=getattr(token.user, "pk", None),
         scopes=tuple(token.scopes),
         audience=token.audience,
+        can_elicit=can_elicit,
     )
     store.create(record)
 
