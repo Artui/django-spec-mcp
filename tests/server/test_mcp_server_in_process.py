@@ -33,19 +33,19 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import JsonRpcError, JsonRpcErrorCode, MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.conf import get_setting
 from django_spec_mcp.handlers.kernel_utils import carry_token
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.testapp.kernel_shapes import InvoiceInput, InvoiceOutput
 from tests.testapp.models import Invoice
 from tests.testapp.services import invoice_by_pk, record_invoice
+from tests.utils import make_server
 
 OPEN = [Unrestricted()]
 
 
 def _server() -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore())
+    return make_server(session_store=InMemorySessionStore())
 
 
 class _Deny(PermissionCheck):

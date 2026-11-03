@@ -35,10 +35,10 @@ from django_service_specs import (
     Unrestricted,
 )
 
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.server.mcp_server import MCPServer
 from django_spec_mcp.server.utils import UnboundedListWarning
+from tests.utils import make_server
 
 
 @dataclass
@@ -47,9 +47,7 @@ class _Row:
 
 
 def _server(**config: Any) -> MCPServer:
-    return MCPServer(
-        name="t",
-        auth_backend=AllowAnyBackend(),
+    return make_server(
         session_store=None,
         config=build_mcp_config(**config) if config else None,
     )

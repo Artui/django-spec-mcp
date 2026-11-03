@@ -24,10 +24,9 @@ from django_service_specs import UNSET, DataclassValidator, ServiceSpec, Unrestr
 from typing_extensions import TypedDict
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
-from tests.utils import call_context, tool_error
+from tests.utils import call_context, make_server, tool_error
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -51,7 +50,7 @@ def _issue(*, data: list[_Line]) -> list[str]:
 
 
 def _server(input_data: Callable[[], Any] = _customer) -> MCPServer:
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server = make_server(session_store=None)
     server.register_tool(
         ServiceSpec(
             service=_issue,

@@ -29,12 +29,11 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from tests.testapp.kernel_shapes import InvoiceOutput
 from tests.testapp.models import Invoice
-from tests.utils import call_context, tool_error
+from tests.utils import call_context, make_server, tool_error
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -61,7 +60,7 @@ def _get_or_404(*, pk: int) -> Invoice:
 def _server(
     selector: Callable[..., Any], *, kind: SelectorKind = SelectorKind.RETRIEVE, **spec: Any
 ) -> MCPServer:
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server = make_server(session_store=None)
     server.register_tool(
         SelectorSpec(
             kind=kind,
