@@ -36,6 +36,7 @@ from django_spec_mcp.transport.in_memory_session_store import InMemorySessionSto
 from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
 from tests.testapp.auth_backend import HeaderAuthBackend
 from tests.testapp.urlconf_for import urlconf_for
+from tests.utils import make_server
 
 MODERN = "2026-07-28"
 LEGACY = "2025-11-25"
@@ -60,7 +61,7 @@ def _slow() -> dict[str, str]:
 
 
 def _server(**kwargs: Any) -> MCPServer:
-    server = MCPServer(
+    server = make_server(
         name="subs",
         auth_backend=HeaderAuthBackend(),
         session_store=InMemorySessionStore(),

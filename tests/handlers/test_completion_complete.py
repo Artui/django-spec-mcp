@@ -407,7 +407,7 @@ class _KeyedOnPk(PermissionCheck):
 @pytest.fixture(params=[False, True], ids=["sync", "async"])
 def keyed_caller(request: pytest.FixtureRequest, client: Client) -> Iterator[KernelClient]:
     """A caller of a mount whose resource is guarded by ``_KeyedOnPk``, over the wire."""
-    server = MCPServer(name="t", auth_backend=HeaderAuthBackend())
+    server = make_server(auth_backend=HeaderAuthBackend())
     server.register_resource(
         _invoice(_KeyedOnPk()),
         name="invoice",

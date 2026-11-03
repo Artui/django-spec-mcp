@@ -49,6 +49,7 @@ from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourc
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from django_spec_mcp.server.utils import UnguardedToolWarning
 from tests.testapp.auth_backend import HeaderAuthBackend
+from tests.utils import make_server
 
 pytestmark = pytest.mark.django_db
 
@@ -106,7 +107,7 @@ def _rows() -> list[dict[str, int]]:
 
 
 def _server(**kwargs: Any) -> MCPServer:
-    return MCPServer(
+    return make_server(
         name="listable",
         auth_backend=HeaderAuthBackend(),
         # The test settings turn the guard requirement off; a server here keeps
@@ -273,7 +274,7 @@ def test_a_registered_unguarded_tool_is_listed_where_its_call_is_granted() -> No
     config = replace(
         build_mcp_config(), filter_listings_by_permissions=True, require_tool_permissions=False
     )
-    server = MCPServer(name="open", auth_backend=HeaderAuthBackend(), config=config)
+    server = make_server(name="open", auth_backend=HeaderAuthBackend(), config=config)
     with pytest.warns(UnguardedToolWarning):
         server.register_tool(ServiceSpec(service=_write), name="t")
 
@@ -305,7 +306,7 @@ def test_each_spec_listing_hands_the_server_s_seeds_and_setting(
     # a marked unguarded spec is hidden by a context whose setting is on.
     check = _Recording()
     seeds = DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme")
-    lenient = MCPServer(
+    lenient = make_server(
         name="lenient",
         auth_backend=HeaderAuthBackend(),
         config=replace(build_mcp_config(), require_tool_permissions=False),

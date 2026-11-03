@@ -40,6 +40,7 @@ from django_spec_mcp.types.tool_content_kind import ToolContentKind
 from tests.testapp.affordances import CANCEL_ORDER
 from tests.testapp.auth_backend import HeaderAuthBackend
 from tests.testapp.services import invoice_by_pk, list_invoices, record_invoice
+from tests.utils import make_server
 
 OPEN = [Unrestricted()]
 
@@ -50,8 +51,8 @@ class _Row:
 
 
 def _server(**config: Any) -> MCPServer:
-    return MCPServer(
-        name="t", auth_backend=HeaderAuthBackend(), config=replace(build_mcp_config(), **config)
+    return make_server(
+        auth_backend=HeaderAuthBackend(), config=replace(build_mcp_config(), **config)
     )
 
 

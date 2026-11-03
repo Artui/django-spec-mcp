@@ -20,7 +20,6 @@ from django_service_specs import (
     Unrestricted,
 )
 
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
@@ -31,16 +30,16 @@ from django_spec_mcp.transport.in_memory_session_store import InMemorySessionSto
 from django_spec_mcp.types.ui_meta_key import UI_META_KEY
 from django_spec_mcp.types.ui_visibility import UIVisibility
 from tests.testapp.services import record_invoice
+from tests.utils import make_server
 
 VIEW_URI = "ui://invoices/table.html"
 
 
 def _server(**config: Any) -> MCPServer:
     """A server with the view already registered — links resolve against it."""
-    server = MCPServer(
+    server = make_server(
         name="test",
         description="d",
-        auth_backend=AllowAnyBackend(),
         session_store=InMemorySessionStore(),
         config=build_mcp_config(**config) if config else None,
     )

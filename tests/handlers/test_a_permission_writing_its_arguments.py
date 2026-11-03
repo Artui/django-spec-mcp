@@ -41,7 +41,6 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
@@ -50,6 +49,7 @@ from django_spec_mcp.types.internal_error_message import INTERNAL_ERROR_MESSAGE
 from tests.kernel_client import KernelClient
 from tests.testapp.auth_backend import HeaderAuthBackend
 from tests.testapp.urlconf_for import urlconf_for
+from tests.utils import make_server
 
 
 @dataclass
@@ -102,7 +102,7 @@ def _server(
         ran.append({"note": note, "owner": owner})
         return {"ran": True}
 
-    server = MCPServer(name="t", auth_backend=auth_backend or AllowAnyBackend(), session_store=None)
+    server = make_server(auth_backend=auth_backend, session_store=None)
     permissions: list[PermissionCheck] = [_Records(checked)]
     if provider is None:
         permissions.insert(0, _Stamps(swallow=swallow))

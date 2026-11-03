@@ -312,7 +312,7 @@ async def test_none_without_allow_none_raises_in_process(is_async: bool) -> None
 def test_none_without_allow_none_is_an_internal_error(is_async: bool, client: Client) -> None:
     """What a ``LIST`` returning ``None`` with nothing declared answers on the wire,
     on both mounts: the transport's internal error, never an empty result."""
-    server = MCPServer(name="t", auth_backend=HeaderAuthBackend())
+    server = make_server(auth_backend=HeaderAuthBackend())
     server.register_tool(_invoices(lambda: None), name="invoices.list")
     with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=is_async)):
         caller = KernelClient(client)
