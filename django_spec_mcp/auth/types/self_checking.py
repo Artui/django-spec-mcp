@@ -10,7 +10,7 @@ class SelfChecking(Protocol):
     Deliberately a **second** protocol rather than a method on
     :class:`~django_spec_mcp.auth.types.auth_backend.MCPAuthBackend`. Adding
     it there would make it required, and a backend already written against the
-    four-method protocol would stop satisfying it -- so the one thing this
+    three-method protocol would stop satisfying it -- so the one thing this
     exists to prevent, a transport mounted with a backend that cannot run,
     would be bought by breaking every backend anyone has already written.
 
@@ -26,7 +26,8 @@ class SelfChecking(Protocol):
     authenticates anything, so requiring a backend's optional dependency to
     *construct* one would refuse a supported deployment. Mounting is the
     earliest point at which the requirement is real, and it is still startup:
-    ``server.urls`` runs while the URLConf is imported, so ``manage.py check``
+    ``server.urls`` and ``server.well_known_urls()`` run while the URLConf is
+    imported, each asking before it reads the backend, so ``manage.py check``
     reaches it and a missing dependency is a refusal at boot rather than a 500
     on the first request.
 

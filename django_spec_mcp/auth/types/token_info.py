@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -17,15 +18,18 @@ class TokenInfo:
         user: The resolved Django user, or an ``AnonymousUser`` equivalent.
             ``Any`` because the user model is project-defined.
         scopes: OAuth scopes proven by the bearer token.
-        audience: The ``aud`` claim. RFC 8707 requires it to match the
-            canonical ``/mcp`` URL; backends own that comparison.
+        audience: The resource or resources the token was issued for: a JWT's
+            ``aud``, which may be an array, or django-oauth-toolkit's
+            ``resource`` list. RFC 8707 requires this server's canonical URL to
+            be among them; backends own that comparison, through
+            ``audience_matches``.
         raw: Backend-specific opaque payload — the ``AccessToken`` row, the JWT
             claims dict — for advanced use cases.
     """
 
     user: Any
     scopes: tuple[str, ...] = field(default_factory=tuple)
-    audience: str | None = None
+    audience: str | Sequence[str] | None = None
     raw: Any = None
 
     def has_scope(self, scope: str) -> bool:

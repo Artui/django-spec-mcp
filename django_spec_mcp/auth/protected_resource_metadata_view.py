@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Any
+from urllib.parse import urlsplit
 
+from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest, HttpResponseBase, JsonResponse
 from django.utils.decorators import classonlymethod, method_decorator
 from django.views import View
@@ -15,13 +17,22 @@ from django_spec_mcp.auth.types.auth_backend import MCPAuthBackend
 # ``transport/__init__`` eagerly imports the views, which import ``auth``.
 _NOT_ACCEPTABLE_DETAIL: str = "Could not satisfy the request Accept header."
 
+# RFC 9728 3.1's well-known URI path suffix, as a route under a root URLConf.
+_WELL_KNOWN_ROUTE: str = ".well-known/oauth-protected-resource"
+
 
 @method_decorator(never_cache, name="dispatch")
 class ProtectedResourceMetadataView(View):
     """RFC 9728 OAuth 2.0 Protected Resource Metadata endpoint.
 
-    Mounted at ``/.well-known/oauth-protected-resource`` by
-    [`MCPServer`][django_spec_mcp.server.mcp_server.MCPServer]. A plain Django view
+    [`MCPServer`][django_spec_mcp.server.mcp_server.MCPServer] mounts it in two
+    places. ``server.urls`` mounts it under the server's own prefix, at
+    ``<mount>.well-known/oauth-protected-resource``, the URL a backend's
+    ``WWW-Authenticate`` challenge points at. ``server.well_known_urls()``
+    mounts it at RFC 9728 3.1's location, the origin with the resource's path
+    after the well-known prefix (``/.well-known/oauth-protected-resource/mcp/``
+    for ``https://example.com/mcp/``), which a project adds to its root URLConf
+    and where a client looks when a challenge carries no pointer. A plain Django view
     answering ``GET``, wired as
     ``ProtectedResourceMetadataView.as_view(auth_backend=...)``; ``HEAD`` takes
     the same handler and ``OPTIONS`` names the methods. The payload comes from the instance-scoped
@@ -48,6 +59,36 @@ class ProtectedResourceMetadataView(View):
         view.csrf_exempt = True  # ty: ignore[unresolved-attribute]
         view.login_required = False  # ty: ignore[unresolved-attribute]
         return view
+
+    @staticmethod
+    def well_known_route(resource: str) -> str:
+        """The root-URLConf route RFC 9728 3.1 places ``resource``'s metadata at.
+
+        The well-known prefix goes between the host and the resource's path,
+        and a terminating slash right after the host is dropped, so
+        ``https://example.com/mcp/`` answers at
+        ``.well-known/oauth-protected-resource/mcp/`` and ``https://example.com/``
+        at ``.well-known/oauth-protected-resource``. A query is left out of the
+        route, since the resolver matches the path alone. Built from the
+        identifier the document names, the location cannot disagree with it,
+        which is what a client checks (RFC 9728 3.3: the ``resource`` it reads
+        must be the identifier it built the URL from).
+
+        A resource that is not an absolute ``http(s)`` URL with a host and no
+        fragment (RFC 9728 1.2) is refused with ``ImproperlyConfigured``, since
+        no location can be built from it. Each condition has its case in
+        ``test_a_resource_that_is_not_an_absolute_url_is_refused_by_name``.
+        """
+        parts = urlsplit(resource)
+        if parts.scheme not in ("http", "https") or not parts.netloc or parts.fragment:
+            raise ImproperlyConfigured(
+                f"The protected resource metadata names the resource {resource!r}, which is "
+                "not an absolute http(s) URL with a host and no fragment, so RFC 9728 gives "
+                "it no well-known location. Return the server's canonical URL, such as "
+                "'https://example.com/mcp/', from protected_resource_metadata()."
+            )
+        suffix = "" if parts.path in ("", "/") else parts.path
+        return _WELL_KNOWN_ROUTE + suffix
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
         if not request.accepts("application/json"):

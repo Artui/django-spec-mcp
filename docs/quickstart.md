@@ -130,7 +130,10 @@ Override the namespace with `MCPServer(url_namespace="…")`.
 That mounts:
 
 - `POST /mcp/` — Streamable HTTP endpoint.
-- `GET /mcp/.well-known/oauth-protected-resource` — RFC 9728 metadata.
+- `GET /mcp/.well-known/oauth-protected-resource` — RFC 9728 metadata, where a
+  backend's challenge points. RFC 9728's own location, at the origin, is one
+  more line in the root URLconf once a backend publishes a resource URL; see
+  [Authentication](auth.md#where-a-client-finds-the-metadata).
 
 ## 6. Try it
 
@@ -141,7 +144,32 @@ npx @modelcontextprotocol/inspector --url http://localhost:8000/mcp/
 ```
 
 Inspector lets you list tools, fill in arguments from the generated JSON Schema,
-and watch the response. For automated checks, a single `curl` works too:
+and watch the response. For automated checks, `curl` works too. A `2026-07-28`
+client opens no session: each request stands alone, declares its revision in
+`params._meta`, and repeats the method and the tool's name in headers, which
+the server checks against the body (see
+[Protocol eras](concepts.md#protocol-eras)):
+
+```bash
+curl http://localhost:8000/mcp/ \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -H 'Mcp-Protocol-Version: 2026-07-28' \
+  -H 'Mcp-Method: tools/call' \
+  -H 'Mcp-Name: invoices.create' \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/call",
+    "params": {
+      "name": "invoices.create",
+      "arguments": {"number": "INV-1", "amount_cents": 100},
+      "_meta": {"io.modelcontextprotocol/protocolVersion": "2026-07-28"}
+    }
+  }'
+```
+
+A `2025-11-25` client opens a session first and sends its id on every call:
 
 ```bash
 # 1) initialize → the response carries an Mcp-Session-Id header

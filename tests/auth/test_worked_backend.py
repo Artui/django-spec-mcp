@@ -31,7 +31,7 @@ def _worked_backend_class() -> type:
     return namespace["BearerBackend"]
 
 
-def _backend(audience: str | None) -> Any:
+def _backend(audience: str | list[str] | None) -> Any:
     info = TokenInfo(user=AnonymousUser(), scopes=("orders:read",), audience=audience)
     return _worked_backend_class()(
         resource_url=_RESOURCE,
@@ -67,6 +67,20 @@ def test_a_token_bound_to_another_resource_is_refused() -> None:
 
 def test_a_token_bound_to_no_resource_is_refused() -> None:
     assert _backend(None).authenticate(_request("Bearer good")) is None
+
+
+def test_a_token_naming_several_resources_authenticates_when_this_server_is_one() -> None:
+    """The verifier hands the token's list on as it is, as django-oauth-toolkit stores it."""
+    audience = ["https://example.test/other/", _RESOURCE]
+
+    info = _backend(audience).authenticate(_request("Bearer good"))
+
+    assert info is not None
+    assert info.audience == audience
+
+
+def test_a_token_naming_an_empty_list_of_resources_is_refused() -> None:
+    assert _backend([]).authenticate(_request("Bearer good")) is None
 
 
 @pytest.mark.parametrize("header", [None, "", "Bearer", "Basic good", "Bearer bad"])

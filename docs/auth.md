@@ -17,7 +17,7 @@ to discover your authorization server, and `AllowAnyBackend` for development.
 | The spec's `permissions` | Kernel `PermissionCheck`s guarding a tool or resource | required: a spec with none is refused at registration |
 | `scopes=` | OAuth scopes a binding's caller must carry | `None` (no scope gate) |
 | `permissions=` on a prompt or view | Kernel `PermissionCheck`s, each handed the binding as the spec | `None` (no checks; `[]` is refused, as on a spec); a prompt with neither these nor `scopes=` is refused |
-| `/.well-known/oauth-protected-resource` | RFC 9728 metadata | served from backend's `protected_resource_metadata()` |
+| `.well-known/oauth-protected-resource` under the mount, and `server.well_known_urls()` at the origin | RFC 9728 metadata | served from backend's `protected_resource_metadata()`; the origin's route only when the root URLconf adds it |
 
 The transport flow on every request:
 
@@ -62,7 +62,7 @@ A backend implements `MCPAuthBackend`:
 | Method | Answers |
 | --- | --- |
 | `authenticate(request)` | A `TokenInfo` for a request carrying a valid token, `None` for one that does not (the transport answers 401) |
-| `protected_resource_metadata()` | The RFC 9728 document served at `.well-known/oauth-protected-resource`: the resource's URL and the authorization servers that issue tokens for it |
+| `protected_resource_metadata()` | The RFC 9728 document served at `.well-known/oauth-protected-resource` under the mount and, through `well_known_urls()`, at the origin: the resource's URL and the authorization servers that issue tokens for it |
 | `www_authenticate_challenge(scopes=, error=)` | The `WWW-Authenticate` value of a 401 or an insufficient-scope 403. A 401 passes `error="invalid_token"` when the request sent an `Authorization` header and `error=None` when it did not; a 403 passes `error="insufficient_scope"` with the scopes |
 
 This one verifies tokens with a function the project supplies (a JWKS check, an
@@ -93,6 +93,7 @@ class BearerBackend:
         info = self._verify(raw)
         # The audience MUST: a token issued for another resource on the same
         # authorization server verifies fine and must still be refused here.
+        # ``info.audience`` is the token's as it carries it, one URL or a list.
         if info is None or not audience_matches(info.audience, self._resource_url):
             return None
         return info
@@ -140,9 +141,50 @@ answers at (`https://example.com/internal/mcp/.well-known/oauth-protected-resour
 for a server whose resource URL is `https://example.com/internal/mcp/`), or
 `None` when the backend publishes no metadata.
 
+### Where a client finds the metadata
+
+A client looks for the RFC 9728 document in two places, in this order:
+
+1. **The challenge's pointer.** A 401's `WWW-Authenticate` carries
+   `resource_metadata`, the URL the backend passed to `bearer_challenge`. The
+   route `server.urls` mounts answers it, under the mount:
+   `/internal/mcp/.well-known/oauth-protected-resource`.
+2. **The well-known location.** When a challenge carries no pointer, the MCP
+   authorization spec has the client build the URL RFC 9728 3.1 defines: the
+   server's origin, then `/.well-known/oauth-protected-resource`, then the
+   resource's path. For `https://example.com/internal/mcp/` that is
+   `/.well-known/oauth-protected-resource/internal/mcp/`.
+
+The mount's own route cannot answer the second, because everything
+`server.urls` mounts sits under the mount's prefix, and the well-known location
+starts at the origin. `server.well_known_urls()` returns the pattern for it,
+which goes in the **root** URLconf, beside the mount:
+
+```python
+urlpatterns = [
+    path("internal/mcp/", server.urls),
+    *server.well_known_urls(),
+]
+```
+
+Its route is built from the `resource` the backend's
+`protected_resource_metadata()` names, not from the mount's prefix. A client
+uses the document only when its `resource` is the identifier it built the URL
+from (RFC 9728 3.3), so the location and the document agree by construction.
+The resource URL is the server's public URL, so it is where the server is
+mounted, and the challenge's pointer is built from it too. A server
+with no backend is refused, as mounting is, and so is a backend whose
+`resource` is not an absolute `http(s)` URL: `AllowAnyBackend` publishes none,
+so a development server has no document to place there. The pattern is
+unnamed, so several servers' patterns sit in one root URLconf without
+colliding. A project served under a path prefix (`SCRIPT_NAME`) has its
+well-known location outside Django's reach, at the origin's root, and routes it
+at the front server instead.
+
 Mounting is where a backend becomes load-bearing, so a backend may check itself
 there: one that implements `check_configuration()` (the `SelfChecking`
-protocol) is asked once when `server.urls` or `server.async_urls` is read, and
+protocol) is asked when `server.urls`, `server.async_urls` or
+`server.well_known_urls()` is read, before anything else reads the backend, and
 raising `ImproperlyConfigured` from it surfaces while the URLconf is imported,
 which `manage.py check` reaches, rather than as a 500 on the first request. A
 backend that needs no setup implements nothing and is left alone.
@@ -368,11 +410,16 @@ the audience lives (a JWT `aud` claim, an introspection response, a column on th
 token row). `TokenInfo.audience` carries it out, and `audience_matches` is the
 comparison, as the worked backend above calls it:
 
-- `audience_matches(token_audience, expected)` is exact equality. Token audiences
-  are URLs, not patterns, and a prefix or substring match is unsafe: a token
-  bound to `…/mcp` would otherwise satisfy a server expecting `…/mcp-admin`.
-- A token that carries **no** audience is rejected when an `expected` URL is
-  given, which is the point of configuring one.
+- A token may name **several** resources. A JWT's `aud` may be an array
+  (RFC 7519 4.1.3), and django-oauth-toolkit stores `AccessToken.resource` as a
+  list. `TokenInfo.audience` takes one URL or a sequence of them, so a backend
+  hands the token's on as it is (`TokenInfo(audience=token.resource, ...)`),
+  and `audience_matches` is true when `expected` is one of them.
+- Each comparison is exact equality. Token audiences are URLs, not patterns,
+  and a prefix or substring match is unsafe: a token bound to `…/mcp` would
+  otherwise satisfy a server expecting `…/mcp-admin`.
+- A token that carries **no** audience, `None` or an empty list, is rejected
+  when an `expected` URL is given, which is the point of configuring one.
 - `expected=None` disables the check, for a deployment whose gateway already
   binds the token upstream.
 
@@ -384,6 +431,16 @@ comparison, as the worked backend above calls it:
     here. Before you require it, check that the clients you serve send RFC 8707's
     `resource` parameter on the authorize and token requests, because a token that
     carries none is rejected.
+
+**A verifier's own audience rule may be looser than the MUST.**
+django-oauth-toolkit 3.4 is one: `AccessToken.allows_audience` treats a token
+whose `resource` list is empty as unrestricted, allowed for any audience, and
+the default `RESOURCE_SERVER_TOKEN_RESOURCE_VALIDATOR`,
+`validate_resource_as_url_prefix`, matches by prefix, so a token bound to
+`https://example.com/` passes for `https://example.com/mcp/`. A backend that
+verifies through it still calls `audience_matches` afterwards, with the
+token's `resource` list and the server's own URL, and that call is what refuses
+both tokens.
 
 Each server needs its **own** canonical URL. RFC 8707 binds a token to *a*
 resource, and that binding is what stops a token issued for one resource being
@@ -410,11 +467,14 @@ public = MCPServer(
 urlpatterns = [
     path("internal/mcp/", internal.urls),
     path("public/mcp/", public.urls),
+    *internal.well_known_urls(),
+    *public.well_known_urls(),
 ]
 ```
 
-A token minted for `public-mcp` is now rejected by `internal-mcp`, and each
-server's `WWW-Authenticate` challenge points at **its own** metadata endpoint.
+A token minted for `public-mcp` is now rejected by `internal-mcp`, each
+server's `WWW-Authenticate` challenge points at **its own** metadata endpoint,
+and each document answers at its own well-known location.
 
 ### If you are writing a resource server against the official `mcp` SDK
 
@@ -449,6 +509,7 @@ Inspector reads the protected-resource metadata, hits your authorization server'
 | --- | --- |
 | 401 with no `WWW-Authenticate` | The backend's `www_authenticate_challenge` returned an empty value. Return `bearer_challenge(...)`. |
 | 401 with `WWW-Authenticate` but no `resource_metadata` | The backend passed `resource_metadata_url=None` to `bearer_challenge`. |
+| 404 at `/.well-known/oauth-protected-resource/<path>` | The root URLconf does not add `*server.well_known_urls()`, or the backend's `resource` path is not the one the client built the URL from. |
 | Token verifies but every call is still 401 | The backend's audience comparison fails: the token's audience is not the server's own resource URL (or the token carries none). |
 | 403 with `error="insufficient_scope"` and `scope=` in the challenge | Token authenticated, missing one of the per-binding scopes. The body also carries JSON-RPC `-32006` with `data.requiredScopes`. |
 | 403 with no `scope=` | A spec's permission check refused the caller, or a prompt's or view's own check. RFC 6750 defines no error code for that case, so the challenge advertises nothing rather than a scope the client cannot obtain. |

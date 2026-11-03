@@ -1500,13 +1500,71 @@ class MCPServer:
             config=self._config,
             **extra,
         )
-        # Mounting is where the auth backend stops being optional: from here on
-        # every request reaches ``authenticate``. Both ``urls`` and
-        # ``async_urls`` land here, so one check covers them
-        # (``test_mounting_without_a_backend_refuses_by_name``, one case each).
-        # There is no default to fall back to: this package ships no backend
-        # that verifies tokens, and one that answers every caller would serve a
-        # mount nobody secured.
+        backend = self._mounted_backend()
+        patterns = [
+            path("", view, name="endpoint"),
+            path(
+                ".well-known/oauth-protected-resource",
+                ProtectedResourceMetadataView.as_view(auth_backend=backend),
+                name="protected-resource-metadata",
+            ),
+        ]
+        return patterns, self._url_namespace, self._url_namespace
+
+    def well_known_urls(self) -> list[URLPattern]:
+        """The metadata document at RFC 9728's location, for the root URLConf.
+
+        RFC 9728 3.1 places a resource's metadata at its origin, with the
+        resource's path after the well-known prefix:
+        ``/.well-known/oauth-protected-resource/mcp/`` for
+        ``https://example.com/mcp/``. The MCP authorization spec makes that the
+        place a client looks when a 401 carries no ``resource_metadata``.
+        ``urls`` cannot serve it, since everything it mounts sits under the
+        mount's own prefix, so a project adds these patterns beside the mount::
+
+            urlpatterns = [
+                path("mcp/", server.urls),
+                *server.well_known_urls(),
+            ]
+
+        The location is built from the ``resource`` the backend's
+        ``protected_resource_metadata()`` names, the server's public URL, and
+        not from a prefix passed here: a client accepts the document only when
+        its ``resource`` is the identifier the URL was built from (RFC 9728
+        3.3), so a location derived from anything else could serve a document
+        the client must discard. The mount's own route stays, as the URL a
+        challenge points at. The pattern is unnamed, so two servers' patterns
+        never collide in the root namespace.
+
+        Raises ``ImproperlyConfigured`` with no ``auth_backend=``, as mounting
+        does, and when the backend's ``resource`` is not an absolute URL
+        (``AllowAnyBackend`` publishes none).
+        """
+        backend = self._mounted_backend()
+        route = ProtectedResourceMetadataView.well_known_route(
+            backend.protected_resource_metadata().resource
+        )
+        return [path(route, ProtectedResourceMetadataView.as_view(auth_backend=backend))]
+
+    def _mounted_backend(self) -> MCPAuthBackend:
+        """The auth backend, refused when missing and checked when it can check itself.
+
+        Mounting is where the auth backend stops being optional: from here on
+        every request reaches ``authenticate``. ``urls``, ``async_urls`` and
+        ``well_known_urls`` land here, so one refusal covers them
+        (``test_mounting_without_a_backend_refuses_by_name``, one case each, and
+        ``test_a_server_with_no_backend_has_no_document_to_serve``). There is no
+        default to fall back to: this package ships no backend that verifies
+        tokens, and one that answers every caller would serve a mount nobody
+        secured.
+
+        A backend that does not implement the opt-in ``SelfChecking`` protocol
+        needs no setup and is left alone; one that does is asked here, so
+        ``manage.py check`` reaches it
+        (``test_a_self_checking_backend_that_fails_stops_the_mount``), and
+        before ``well_known_urls`` reads its metadata
+        (``test_a_self_checking_backend_is_asked_before_its_metadata_is_read``).
+        """
         if self._auth_backend is None:
             raise ImproperlyConfigured(
                 f"MCPServer {self.name!r} is mounted with no auth_backend=. Every request "
@@ -1515,21 +1573,9 @@ class MCPServer:
                 "to. Pass auth_backend= a backend of your own (the authorization page "
                 "shows one), or AllowAnyBackend() for local development."
             )
-        # A backend that does not implement the opt-in ``SelfChecking`` protocol
-        # needs no setup and is left alone; one that does is asked once, here, so
-        # ``manage.py check`` reaches it
-        # (``test_a_self_checking_backend_that_fails_stops_the_mount``).
         if isinstance(self._auth_backend, SelfChecking):
             self._auth_backend.check_configuration()
-        patterns = [
-            path("", view, name="endpoint"),
-            path(
-                ".well-known/oauth-protected-resource",
-                ProtectedResourceMetadataView.as_view(auth_backend=self._auth_backend),
-                name="protected-resource-metadata",
-            ),
-        ]
-        return patterns, self._url_namespace, self._url_namespace
+        return self._auth_backend
 
 
 @contextmanager
