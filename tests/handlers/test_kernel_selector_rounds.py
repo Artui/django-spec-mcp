@@ -28,11 +28,10 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
-from tests.utils import call_context
+from tests.utils import call_context, make_server
 
 OPEN = [Unrestricted()]
 _ACCOUNT = {"account": {"type": "string"}}
@@ -59,7 +58,7 @@ def _asks(**_: Any) -> None:
 
 
 def _server() -> MCPServer:
-    server = MCPServer(name="rounds", auth_backend=AllowAnyBackend())
+    server = make_server(name="rounds")
     server.register_tool(
         SelectorSpec(
             kind=SelectorKind.RETRIEVE,

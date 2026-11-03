@@ -8,7 +8,6 @@ import pytest
 from django.http import HttpRequest
 from django_service_specs import PermissionCheck, PoolSeeds
 
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.handlers.handle_resources_list import handle_resources_list
 from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
 from django_spec_mcp.handlers.handle_resources_read_async import handle_resources_read_async
@@ -21,17 +20,16 @@ from django_spec_mcp.transport.in_memory_session_store import InMemorySessionSto
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from django_spec_mcp.types.ui_meta_key import UI_META_KEY
 from django_spec_mcp.types.ui_resource_mime_type import UI_RESOURCE_MIME_TYPE
-from tests.utils import RefusingRateLimit, call_context
+from tests.utils import RefusingRateLimit, call_context, make_server
 
 VIEW = "<!doctype html><h1>Invoices</h1>"
 URI = "ui://invoices/table.html"
 
 
 def _server(**overrides: Any) -> MCPServer:
-    server = MCPServer(
+    server = make_server(
         name="test",
         description="d",
-        auth_backend=AllowAnyBackend(),
         session_store=InMemorySessionStore(),
     )
     server.register_ui_resource(

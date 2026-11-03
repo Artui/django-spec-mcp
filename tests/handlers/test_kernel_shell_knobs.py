@@ -17,14 +17,13 @@ from django.contrib.auth.models import AnonymousUser
 from django_service_specs import ServiceSpec, Unrestricted
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.subscriptions.in_memory_subscription_broker import (
     InMemorySubscriptionBroker,
 )
 from django_spec_mcp.subscriptions.utils import topic_for_resource
-from tests.utils import call_context, tool_error
+from tests.utils import call_context, make_server, tool_error
 
 OPEN = [Unrestricted()]
 
@@ -35,7 +34,7 @@ class _Exhausted:
 
 
 def _server(**kwargs: Any) -> MCPServer:
-    server = MCPServer(name="knobs", auth_backend=AllowAnyBackend(), **kwargs)
+    server = make_server(name="knobs", **kwargs)
     server.register_tool(
         ServiceSpec(service=lambda: {"pk": 1}, permissions=OPEN),
         name="invoices.touch",
@@ -102,7 +101,7 @@ def test_an_anonymous_in_process_caller_reaches_a_kernel_tool(is_async: bool) ->
     """``user=None`` dispatches for an ``AnonymousUser`` on both routes, where the
     kernel's ``adispatch`` would refuse ``principal=None`` outright."""
     seen: list[Any] = []
-    server = MCPServer(name="knobs", auth_backend=AllowAnyBackend())
+    server = make_server(name="knobs")
     server.register_tool(
         ServiceSpec(service=lambda *, user: seen.append(user), permissions=OPEN),
         name="invoices.seen",
@@ -121,7 +120,7 @@ def test_acall_tool_carries_its_token_on_the_request_it_synthesises() -> None:
     """``acall_tool`` reaches the wire handler with the ``HttpRequest`` it builds,
     so the kernel path's ``request.mcp_token`` always has a request to land on."""
     seen: list[Any] = []
-    server = MCPServer(name="knobs", auth_backend=AllowAnyBackend())
+    server = make_server(name="knobs")
     server.register_tool(
         ServiceSpec(service=lambda *, request: seen.append(request.mcp_token), permissions=OPEN),
         name="invoices.seen",

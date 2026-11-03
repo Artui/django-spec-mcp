@@ -5,16 +5,15 @@ from __future__ import annotations
 
 import pytest
 
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.server.mcp_server import MCPServer
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
+from tests.utils import make_server
 
 
 def _server() -> MCPServer:
-    return MCPServer(
+    return make_server(
         name="test",
         description="d",
-        auth_backend=AllowAnyBackend(),
         session_store=InMemorySessionStore(),
     )
 

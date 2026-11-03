@@ -54,7 +54,7 @@ from django_spec_mcp.registry.types.prompt_binding import PromptBinding
 from tests.kernel_client import KernelClient
 from tests.testapp.auth_backend import HeaderAuthBackend
 from tests.testapp.urlconf_for import urlconf_for
-from tests.utils import call_context
+from tests.utils import call_context, make_server
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -155,7 +155,7 @@ def _server(*, filtered: bool = True, page_size: int | None = None) -> MCPServer
     config = replace(build_mcp_config(), filter_listings_by_permissions=filtered)
     if page_size is not None:
         config = replace(config, page_size=page_size)
-    return MCPServer(name="filtered", auth_backend=HeaderAuthBackend(), config=config)
+    return make_server(name="filtered", auth_backend=HeaderAuthBackend(), config=config)
 
 
 def _ctx(server: MCPServer) -> MCPCallContext:
