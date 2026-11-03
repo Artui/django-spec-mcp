@@ -31,14 +31,13 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from django_spec_mcp import MCPServer, PromptArgument
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.handlers.handle_prompts_get import handle_prompts_get
 from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
-from tests.utils import plain_context
+from tests.utils import make_server, plain_context
 
 
 @pytest.fixture
@@ -60,10 +59,6 @@ def exporter() -> InMemorySpanExporter:
     exporter.clear()
 
 
-def _server() -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore())
-
-
 def _ctx(server: MCPServer) -> MCPCallContext:
     return plain_context(server, session_id="sess-42")
 
@@ -73,7 +68,7 @@ OPEN = [Unrestricted()]
 
 @pytest.mark.django_db
 def test_tools_call_emits_span(exporter: InMemorySpanExporter) -> None:
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     server.register_tool(ServiceSpec(service=lambda: {"ok": True}, permissions=OPEN), name="t.x")
     handle_tools_call({"name": "t.x", "arguments": {}}, _ctx(server))
     spans = list(exporter.get_finished_spans())
@@ -86,7 +81,7 @@ def test_tools_call_emits_span(exporter: InMemorySpanExporter) -> None:
 
 
 def test_resources_read_emits_span_with_uri(exporter: InMemorySpanExporter) -> None:
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     server.register_resource(
         SelectorSpec(
             kind=SelectorKind.RETRIEVE,
@@ -107,7 +102,7 @@ def test_resources_read_emits_span_with_uri(exporter: InMemorySpanExporter) -> N
 
 
 def test_prompts_get_emits_span(exporter: InMemorySpanExporter) -> None:
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     server.register_prompt(
         name="echo",
         render=lambda *, who: f"hi {who}",
@@ -126,7 +121,7 @@ def test_validation_rejects_do_not_emit_span(exporter: InMemorySpanExporter) -> 
     The span is scoped to dispatch — opening it for every parse error would
     flood traces with no useful info.
     """
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     handle_tools_call({"name": "does.not.exist", "arguments": {}}, _ctx(server))
     handle_resources_read({"uri": "nope://x"}, _ctx(server))
     handle_prompts_get({"name": "missing"}, _ctx(server))
@@ -160,7 +155,7 @@ def _server_raising_service_error() -> MCPServer:
     def boom() -> None:
         raise ServiceError("nope")
 
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     server.register_tool(ServiceSpec(service=boom, permissions=OPEN), name="t.boom")
     return server
 

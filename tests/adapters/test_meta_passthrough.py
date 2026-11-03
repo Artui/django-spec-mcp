@@ -36,7 +36,6 @@ from django_service_specs import (
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.adapters.utils import merge_meta
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_prompts_list import handle_prompts_list
 from django_spec_mcp.handlers.handle_resources_list import handle_resources_list
@@ -47,12 +46,9 @@ from django_spec_mcp.handlers.handle_resources_templates_list import (
 )
 from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
 from django_spec_mcp.handlers.types.context import MCPCallContext
+from tests.utils import make_server
 
 UI_META: dict[str, Any] = {"example.com/panel": {"href": "panel://invoices"}}
-
-
-def _server() -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
 
 
 def _ctx(server: MCPServer) -> MCPCallContext:
@@ -94,7 +90,7 @@ def _fixed() -> SelectorSpec:
 
 
 def _resource(meta: dict[str, Any] | None = None) -> MCPServer:
-    server = _server()
+    server = make_server()
     server.register_resource(_thing(), name="thing", uri_template="things://{pk}", meta=meta)
     return server
 
@@ -134,7 +130,7 @@ def test_merge_meta_does_not_mutate_its_inputs() -> None:
 
 @pytest.mark.parametrize("spec", [_service(), _list()], ids=["service", "selector"])
 def test_a_kernel_tool_s_meta_reaches_binding_and_tools_list(spec: Any) -> None:
-    server = _server()
+    server = make_server()
 
     binding = server.register_tool(spec, name="things", meta=UI_META)
 
@@ -143,7 +139,7 @@ def test_a_kernel_tool_s_meta_reaches_binding_and_tools_list(spec: Any) -> None:
 
 
 def test_a_tool_without_meta_emits_no_meta_key() -> None:
-    server = _server()
+    server = make_server()
 
     binding = server.register_tool(_service(), name="things.plain")
 
@@ -152,7 +148,7 @@ def test_a_tool_without_meta_emits_no_meta_key() -> None:
 
 
 def test_meta_and_annotations_are_independent_bundles() -> None:
-    server = _server()
+    server = make_server()
     server.register_tool(
         _service(), name="things.both", annotations={"destructiveHint": False}, meta=UI_META
     )
@@ -168,7 +164,7 @@ def test_a_registry_override_carries_meta_to_one_entry() -> None:
     registry.register("bulk.own", _list())
     registry.register("bulk.plain", _list())
 
-    own, plain = _server().register_tools(registry, overrides={"bulk.own": {"meta": UI_META}})
+    own, plain = make_server().register_tools(registry, overrides={"bulk.own": {"meta": UI_META}})
 
     assert own.meta == UI_META
     assert plain.meta == {}
@@ -180,7 +176,7 @@ def test_a_registry_override_carries_meta_to_one_entry() -> None:
 def test_resource_meta_reaches_resources_list() -> None:
     # A fixed URI lists in ``resources/list``; a templated one is a template and
     # lists in ``resources/templates/list`` below.
-    server = _server()
+    server = make_server()
     binding = server.register_resource(
         _fixed(), name="thing", uri_template="things://all", meta=UI_META
     )
@@ -244,7 +240,7 @@ def test_meta_is_passed_through_verbatim_without_key_validation() -> None:
 
 
 def test_prompt_meta_reaches_prompts_list() -> None:
-    server = _server()
+    server = make_server()
 
     binding = server.register_prompt(name="greet", render=lambda **_: "hi", meta=UI_META)
 
@@ -254,7 +250,7 @@ def test_prompt_meta_reaches_prompts_list() -> None:
 
 def test_prompt_decorator_accepts_meta() -> None:
     # Prompts are no spec, so the decorator is the same on either route.
-    server = _server()
+    server = make_server()
 
     @server.prompt(name="d.greet", meta=UI_META)
     def greet(**_: Any) -> str:
@@ -264,7 +260,7 @@ def test_prompt_decorator_accepts_meta() -> None:
 
 
 def test_a_prompt_without_meta_emits_no_meta_key() -> None:
-    server = _server()
+    server = make_server()
     server.register_prompt(name="greet", render=lambda **_: "hi")
 
     assert "_meta" not in _entry(handle_prompts_list(None, _ctx(server)), "prompts", "greet")
@@ -275,7 +271,7 @@ def test_a_prompt_without_meta_emits_no_meta_key() -> None:
 
 def test_each_binding_gets_its_own_meta_dict() -> None:
     # No shared mutable default, and the caller's dict is not aliased.
-    server = _server()
+    server = make_server()
     passed: dict[str, Any] = {"a": 1}
 
     first = server.register_tool(_service(), name="iso.one", meta=passed)
@@ -288,7 +284,7 @@ def test_each_binding_gets_its_own_meta_dict() -> None:
 
 def test_a_resource_binding_does_not_alias_the_callers_meta() -> None:
     passed: dict[str, Any] = {"a": 1}
-    server = _server()
+    server = make_server()
 
     binding = server.register_resource(
         _thing(), name="thing", uri_template="things://{pk}", meta=passed
@@ -300,7 +296,7 @@ def test_a_resource_binding_does_not_alias_the_callers_meta() -> None:
 
 def test_binding_meta_is_copied_before_it_reaches_the_wire() -> None:
     # A caller mutating the emitted payload must not corrupt the binding.
-    server = _server()
+    server = make_server()
     binding = server.register_tool(_service(), name="copy.me", meta={"a": 1})
 
     entry = _entry(handle_tools_list(None, _ctx(server)), "tools", "copy.me")

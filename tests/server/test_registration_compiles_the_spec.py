@@ -34,8 +34,7 @@ from django_service_specs import (
     Unrestricted,
 )
 
-from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from tests.utils import make_server
 
 
 @dataclass
@@ -45,15 +44,6 @@ class _Row:
 
 def _rows() -> list[_Row]:
     return [_Row(pk=1)]
-
-
-def _server() -> MCPServer:
-    return MCPServer(
-        name="t",
-        auth_backend=AllowAnyBackend(),
-        session_store=None,
-        pool_seeds=DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme"),
-    )
 
 
 def _spec(read: str) -> SelectorSpec:
@@ -68,14 +58,14 @@ def _spec(read: str) -> SelectorSpec:
 
 @pytest.mark.parametrize("read", ["request", "view", "tenant"])
 def test_a_read_a_seed_occupies_is_refused_at_registration(read: str) -> None:
-    server = _server()
+    server = make_server(pool_seeds=DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme"))
     with pytest.raises(ImproperlyConfigured, match=rf"'sel'.*\['{read}'\]"):
         server.register_tool(_spec(read), name="sel", description="d", paginate=True)
     assert "sel" not in server.tools
 
 
 def test_a_read_named_otherwise_registers_and_is_called() -> None:
-    server = _server()
+    server = make_server(pool_seeds=DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme"))
     server.register_tool(_spec("serializer"), name="sel", description="d", paginate=True)
     result = server.call_tool("sel", {"serializer": "x"}, user=None)
     assert result.is_error is False
@@ -92,7 +82,7 @@ def _two_labels() -> list[_TwoLabels]:
 
 
 def test_a_presenter_whose_markings_cannot_project_is_refused_at_registration() -> None:
-    server = _server()
+    server = make_server(pool_seeds=DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme"))
     spec = SelectorSpec(
         kind=SelectorKind.LIST,
         selector=_two_labels,

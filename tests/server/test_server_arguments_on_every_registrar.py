@@ -28,7 +28,7 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from tests.utils import make_server
 
 
 @dataclass
@@ -40,10 +40,6 @@ class _Note:
 @dataclass
 class _Card:
     project: str
-
-
-def _server() -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
 
 
 def _spec(kind: str, seen: list[Any]) -> Any:
@@ -90,7 +86,7 @@ kinds = pytest.mark.parametrize("kind", ["selector", "service"])
 @routes
 def test_a_bound_value_reaches_the_callable(route: str, kind: str) -> None:
     seen: list[Any] = []
-    server = _server()
+    server = make_server()
     _register(
         server, route=route, spec=_spec(kind, seen), bind=ServerArguments(values={"project": "7"})
     )
@@ -103,7 +99,7 @@ def test_a_bound_value_reaches_the_callable(route: str, kind: str) -> None:
 @kinds
 @routes
 def test_a_binding_that_cannot_hold_is_refused_naming_the_tool(route: str, kind: str) -> None:
-    server = _server()
+    server = make_server()
     with pytest.raises(ImproperlyConfigured, match=r"'op'.*tenant"):
         _register(
             server, route=route, spec=_spec(kind, []), bind=ServerArguments(values={"tenant": 1})

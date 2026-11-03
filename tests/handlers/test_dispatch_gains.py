@@ -27,13 +27,13 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from tests.testapp.models import Invoice
+from tests.utils import make_server
 
 OPEN = [Unrestricted()]
 
@@ -61,10 +61,6 @@ class _UnsentFilterSet(django_filters.FilterSet):
         fields = ["sent"]
 
 
-def _server() -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
-
-
 def _ctx(server: MCPServer) -> MCPCallContext:
     return MCPCallContext(
         http_request=HttpRequest(),
@@ -85,7 +81,7 @@ def test_a_collection_selector_hands_the_service_the_filtered_collection() -> No
         n, _ = collection.delete()
         return {"deleted": n}
 
-    server = _server()
+    server = make_server()
     server.register_tool(
         ServiceSpec(
             service=_bulk_delete,
@@ -116,7 +112,7 @@ def test_an_object_permission_denies_the_resolved_row_before_the_service_runs() 
         instance.save(update_fields=["number"])
         return instance
 
-    server = _server()
+    server = make_server()
     server.register_tool(
         ServiceSpec(
             service=_rename,

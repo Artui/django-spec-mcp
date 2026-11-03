@@ -1,26 +1,17 @@
 from __future__ import annotations
 
-from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
-
-
-def _make_server() -> MCPServer:
-    return MCPServer(
-        name="t",
-        auth_backend=AllowAnyBackend(),
-        session_store=InMemorySessionStore(),
-    )
+from tests.utils import make_server
 
 
 async def test_notify_returns_false_when_no_subscriber() -> None:
-    server = _make_server()
+    server = make_server(session_store=InMemorySessionStore())
     delivered = await server.notify("missing", {"x": 1})
     assert delivered is False
 
 
 async def test_notify_returns_true_and_enqueues_for_subscriber() -> None:
-    server = _make_server()
+    server = make_server(session_store=InMemorySessionStore())
     queue = server.sse_broker.subscribe("s1")
     delivered = await server.notify("s1", {"hello": "world"})
     assert delivered is True
@@ -29,7 +20,7 @@ async def test_notify_returns_true_and_enqueues_for_subscriber() -> None:
 
 
 async def test_sse_broker_property_exposes_owned_instance() -> None:
-    server = _make_server()
+    server = make_server(session_store=InMemorySessionStore())
     assert server.sse_broker is server._sse_broker  # type: ignore[attr-defined]
 
 
@@ -40,12 +31,7 @@ async def test_notify_records_to_buffer_and_wraps_payload() -> None:
     )
 
     buffer = InMemorySSEReplayBuffer()
-    server = MCPServer(
-        name="t",
-        auth_backend=AllowAnyBackend(),
-        session_store=InMemorySessionStore(),
-        sse_replay_buffer=buffer,
-    )
+    server = make_server(session_store=InMemorySessionStore(), sse_replay_buffer=buffer)
     queue = server.sse_broker.subscribe("s1")
     delivered = await server.notify("s1", {"hello": "world"})
     assert delivered is True
@@ -68,15 +54,10 @@ def test_sse_replay_buffer_property_returns_configured_buffer() -> None:
     )
 
     buffer = InMemorySSEReplayBuffer()
-    server = MCPServer(
-        name="t",
-        auth_backend=AllowAnyBackend(),
-        session_store=InMemorySessionStore(),
-        sse_replay_buffer=buffer,
-    )
+    server = make_server(session_store=InMemorySessionStore(), sse_replay_buffer=buffer)
     assert server.sse_replay_buffer is buffer
 
 
 def test_sse_replay_buffer_property_defaults_to_none() -> None:
-    server = _make_server()
+    server = make_server(session_store=InMemorySessionStore())
     assert server.sse_replay_buffer is None

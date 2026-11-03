@@ -36,7 +36,6 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import MCPServer, PromptArgument
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_completion_complete import handle_completion_complete
 from django_spec_mcp.handlers.handle_initialize import handle_initialize
@@ -48,13 +47,9 @@ from django_spec_mcp.transport.in_memory_session_store import InMemorySessionSto
 from tests.kernel_client import KernelClient
 from tests.testapp.auth_backend import HeaderAuthBackend
 from tests.testapp.urlconf_for import urlconf_for
-from tests.utils import RefusingRateLimit
+from tests.utils import RefusingRateLimit, make_server
 
 LANGUAGES = ["python", "pytorch", "pyside", "ruby"]
-
-
-def _server() -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore())
 
 
 def _ctx(server: MCPServer, scopes: tuple[str, ...] = ()) -> MCPCallContext:
@@ -83,7 +78,7 @@ def _invoice(*checks: PermissionCheck) -> SelectorSpec:
 
 def _invoice_server(*checks: PermissionCheck, **registration: Any) -> MCPServer:
     """A server whose ``invoices://{pk}`` template completes ``pk`` to ``["1"]``."""
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     server.register_resource(
         _invoice(*checks),
         name="invoice",
@@ -95,7 +90,7 @@ def _invoice_server(*checks: PermissionCheck, **registration: Any) -> MCPServer:
 
 
 def _prompt_server(**kwargs: Any) -> MCPServer:
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     server.register_prompt(
         name="code_review",
         render=lambda language="python": f"Review some {language}",
@@ -195,7 +190,7 @@ def test_a_completer_is_handed_what_it_declares(
     siblings: dict[str, Any] | None,
     values: list[str],
 ) -> None:
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     server.register_prompt(
         name="p",
         render=lambda: "x",
@@ -213,7 +208,7 @@ def test_a_completer_is_handed_what_it_declares(
 
 
 def test_resource_template_variable_completion() -> None:
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     server.register_resource(
         _invoice(),
         name="invoice",
@@ -248,7 +243,7 @@ def test_a_concrete_uri_is_not_mistaken_for_its_own_template() -> None:
 
 
 def test_values_are_capped_at_the_spec_limit_with_has_more() -> None:
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     server.register_prompt(
         name="p",
         render=lambda: "x",
@@ -273,7 +268,7 @@ def test_the_generator_is_sliced_not_drained() -> None:
             produced.append(i)
             yield str(i)
 
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     server.register_prompt(
         name="p",
         render=lambda: "x",
@@ -567,7 +562,7 @@ def test_a_non_dict_context_is_ignored_rather_than_rejected() -> None:
 
 
 def test_a_completer_for_an_unknown_prompt_argument_is_refused() -> None:
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     with pytest.raises(ImproperlyConfigured, match=r"\['langauge'\]"):
         server.register_prompt(
             name="p",
@@ -578,7 +573,7 @@ def test_a_completer_for_an_unknown_prompt_argument_is_refused() -> None:
 
 
 def test_a_completer_for_an_unknown_template_variable_is_refused() -> None:
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     with pytest.raises(ImproperlyConfigured, match=r"\['id'\]"):
         server.register_resource(
             _invoice(),
@@ -589,7 +584,7 @@ def test_a_completer_for_an_unknown_template_variable_is_refused() -> None:
 
 
 def test_the_capability_is_advertised_only_when_something_is_completable() -> None:
-    bare = handle_initialize({}, _ctx(_server()))
+    bare = handle_initialize({}, _ctx(make_server(session_store=InMemorySessionStore())))
     assert "completions" not in bare.capabilities.to_dict()
 
     with_completer = handle_initialize({}, _ctx(_prompt_server()))
@@ -597,7 +592,7 @@ def test_the_capability_is_advertised_only_when_something_is_completable() -> No
 
 
 def test_a_resource_completer_alone_advertises_the_capability() -> None:
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     server.register_resource(
         _invoice(),
         name="invoice",
@@ -625,10 +620,12 @@ async def test_async_dispatch_routes_completion_through_the_executor() -> None:
 
 def test_capabilities_describe_what_the_server_can_answer() -> None:
     """One rule for all four — nothing is advertised that would return nothing."""
-    bare = handle_initialize({}, _ctx(_server())).capabilities.to_dict()
+    bare = handle_initialize(
+        {}, _ctx(make_server(session_store=InMemorySessionStore()))
+    ).capabilities.to_dict()
     assert bare == {}
 
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     server.register_resource(
         _invoice(),
         name="invoice",
@@ -652,7 +649,7 @@ def test_a_completer_declaring_request_receives_the_transports_http_request() ->
         seen.update(request=request, user=user)
         return ["a"]
 
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     server.register_prompt(
         name="p",
         render=lambda language="python": language,
@@ -691,7 +688,7 @@ def test_a_completers_user_and_request_user_agree_for_a_token_naming_no_one() ->
         seen.update(user=user, request_user=request.user)
         return ["a"]
 
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     server.register_prompt(
         name="p",
         render=lambda language="python": language,

@@ -36,13 +36,12 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.utils import apply_tool_server_arguments
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
-from tests.utils import call_context
+from tests.utils import call_context, make_server
 
 
 @dataclass
@@ -55,10 +54,6 @@ class _Card:
 class _Note:
     project: int
     note: str
-
-
-def _server(**kwargs: Any) -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None, **kwargs)
 
 
 def _card(*, project: int, draw: int = 0) -> _Card:
@@ -98,7 +93,7 @@ _SCOPED = ServerArguments(values={"project": 7}, withheld=frozenset({"draw"}))
 
 
 def test_the_bound_and_withheld_names_leave_the_listing() -> None:
-    server = _server()
+    server = make_server()
     server.register_tool(_selector(), name="card", description="d", server_arguments=_SCOPED)
     schema = _schema(server, "card")
     assert "project" not in schema.get("properties", {})
@@ -107,7 +102,7 @@ def test_the_bound_and_withheld_names_leave_the_listing() -> None:
 
 
 def test_a_binding_fills_a_required_read() -> None:
-    server = _server()
+    server = make_server()
     server.register_tool(_selector(), name="card", description="d", server_arguments=_SCOPED)
     result = server.call_tool("card", {}, user=None)
     assert result.structured_content == {"project": 7, "draw": 0}
@@ -115,7 +110,7 @@ def test_a_binding_fills_a_required_read() -> None:
 
 def test_a_tool_binding_nothing_never_reaches_the_kernels_rule() -> None:
     # The arguments come back as the same object, unread by the kernel's rule.
-    server = _server()
+    server = make_server()
     server.register_tool(_selector(), name="card", description="d")
     binding = server.tools.get("card")
     assert binding is not None
@@ -126,7 +121,7 @@ def test_a_tool_binding_nothing_never_reaches_the_kernels_rule() -> None:
 def test_the_bound_value_wins_and_the_withheld_one_is_dropped(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    server = _server()
+    server = make_server()
     server.register_tool(_selector(), name="card", description="d", server_arguments=_SCOPED)
     with caplog.at_level(logging.WARNING, logger="django_spec_mcp"):
         result = server.call_tool("card", {"project": 99, "draw": 3}, user=None)
@@ -155,7 +150,7 @@ def test_an_optional_read_the_server_binds_registers_and_is_filled() -> None:
     # An optional read over a keyword with no default is refused at
     # registration, since a call may leave it out; a bound one never is left
     # out, because the server's value replaces the caller's on every call.
-    server = _server()
+    server = make_server()
     bind = ServerArguments(values={"project": 7})
     server.register_tool(
         _optional_reads(_card, "project", "draw"),
@@ -171,7 +166,7 @@ def test_a_bound_read_declaring_a_default_registers_and_takes_the_bound_value() 
     # A read declaring a default is not demanded either, so the derived copy
     # drops the default as well as requiring the read; requiring it alone
     # leaves it refused as optional.
-    server = _server()
+    server = make_server()
     server.register_tool(
         SelectorSpec(
             kind=SelectorKind.RETRIEVE,
@@ -193,7 +188,7 @@ def _card_for(*, project: int, owner: int) -> _Card:
 
 
 def test_an_optional_read_the_server_does_not_bind_is_still_refused() -> None:
-    server = _server()
+    server = make_server()
     bind = ServerArguments(values={"project": 7})
     with pytest.raises(
         ImproperlyConfigured, match=r"MCP tool 'card': .*\['owner'\], declared as optional"
@@ -223,7 +218,7 @@ def test_an_optional_lookup_read_the_server_binds_registers_and_is_filled(seat: 
         atomic=False,
         **{seat: lookup},
     )
-    server = _server()
+    server = make_server()
     bind = ServerArguments(values={"project": 7})
     server.register_tool(spec, name="act", description="d", server_arguments=bind)
     result = server.call_tool("act", {}, user=None)
@@ -232,7 +227,7 @@ def test_an_optional_lookup_read_the_server_binds_registers_and_is_filled(seat: 
 
 @pytest.mark.django_db
 def test_a_service_tools_schema_subtracts_the_bound_field() -> None:
-    server = _server()
+    server = make_server()
     bind = ServerArguments(values={"project": 7})
     server.register_tool(_service(), name="note", description="d", server_arguments=bind)
     schema = _schema(server, "note")
@@ -242,7 +237,7 @@ def test_a_service_tools_schema_subtracts_the_bound_field() -> None:
 
 
 def test_withholding_a_name_no_call_can_do_without_is_refused() -> None:
-    server = _server()
+    server = make_server()
     bind = ServerArguments(withheld=frozenset({"project"}))
     with pytest.raises(ImproperlyConfigured, match="'card'"):
         server.register_tool(_selector(), name="card", description="d", server_arguments=bind)
@@ -250,7 +245,7 @@ def test_withholding_a_name_no_call_can_do_without_is_refused() -> None:
 
 
 def test_a_binding_built_by_hand_is_checked_when_it_is_registered() -> None:
-    server = _server()
+    server = make_server()
     binding = KernelToolBinding(
         name="card",
         description="d",
@@ -272,14 +267,14 @@ def test_a_registered_seed_is_refused_with_the_servers_own_seeds() -> None:
         permissions=[Unrestricted()],
     )
     bind = ServerArguments(values={"tenant": "acme"})
-    _server().register_tool(spec, name="plain", description="d", server_arguments=bind)
-    seeded = _server(pool_seeds=DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme"))
+    make_server().register_tool(spec, name="plain", description="d", server_arguments=bind)
+    seeded = make_server(pool_seeds=DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme"))
     with pytest.raises(ImproperlyConfigured, match="'plain'"):
         seeded.register_tool(spec, name="plain", description="d", server_arguments=bind)
 
 
 def test_no_binding_leaves_the_tool_as_it_was() -> None:
-    server = _server()
+    server = make_server()
     server.register_tool(_selector(), name="card", description="d")
     assert set(_schema(server, "card")["properties"]) == {"project", "draw"}
     result = server.call_tool("card", {"project": 3}, user=None)
@@ -301,7 +296,7 @@ def test_a_caller_restating_a_bound_value_with_another_is_logged_once(
     caller's value equal the server's; without it both calls would log, which is
     also what a task worker replaying already-applied arguments would do.
     """
-    server = _server()
+    server = make_server()
     bind = ServerArguments(values={"project": 7})
     server.register_tool(_selector(), name="rows", description="d", server_arguments=bind)
 
@@ -325,7 +320,7 @@ def test_an_answer_cannot_replace_a_bound_value(is_async: bool) -> None:
     ``apply_tool_server_arguments`` in ``handle_tools_call`` and its async
     sibling, applied over what the answers produced.
     """
-    server = _server()
+    server = make_server()
     bind = ServerArguments(values={"project": 7})
     server.register_tool(_service(), name="note", description="d", server_arguments=bind)
     params = {

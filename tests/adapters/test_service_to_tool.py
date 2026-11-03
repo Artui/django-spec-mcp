@@ -29,9 +29,8 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from tests.testapp.kernel_shapes import InvoiceInput
-from tests.utils import tool_error
+from tests.utils import make_server, tool_error
 
 _ROWS = [{"number": "A"}, {"number": "B", "amount_cents": 3}]
 
@@ -51,12 +50,8 @@ def _many(**declared: Any) -> ServiceSpec:
     )
 
 
-def _server() -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
-
-
 def _registered(spec: ServiceSpec) -> MCPServer:
-    server = _server()
+    server = make_server()
     server.register_tool(spec, name="t", description="Record invoices.")
     return server
 
@@ -123,7 +118,7 @@ def test_a_many_spec_in_a_registry_registers() -> None:
     registry = SpecRegistry()
     registry.register("invoices.record", _many())
 
-    (binding,) = _server().register_tools(registry)
+    (binding,) = make_server().register_tools(registry)
 
     assert binding.name == "invoices.record"
 

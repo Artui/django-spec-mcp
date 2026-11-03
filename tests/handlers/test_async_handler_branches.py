@@ -38,7 +38,6 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.async_dispatch import adispatch
 from django_spec_mcp.handlers.handle_resources_read_async import handle_resources_read_async
@@ -47,7 +46,7 @@ from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.registry.types.prompt_binding import PromptBinding
 from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
-from tests.utils import tool_error
+from tests.utils import make_server, tool_error
 
 OPEN = [Unrestricted()]
 
@@ -87,10 +86,6 @@ class _LoopSniffingTaskStore:
         return None
 
 
-def _server() -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
-
-
 def _ctx(server: MCPServer) -> MCPCallContext:
     return MCPCallContext(
         http_request=HttpRequest(),
@@ -104,7 +99,7 @@ def _ctx(server: MCPServer) -> MCPCallContext:
 
 
 def _one(spec: Any, **knobs: Any) -> MCPServer:
-    server = _server()
+    server = make_server()
     server.register_tool(spec, name="t", **knobs)
     return server
 
@@ -209,7 +204,7 @@ async def test_a_validator_reads_the_calls_context() -> None:
 
 
 def _resource_server(selector: Any, **knobs: Any) -> MCPServer:
-    server = _server()
+    server = make_server()
     server.register_resource(
         SelectorSpec(
             kind=SelectorKind.RETRIEVE,
@@ -262,7 +257,7 @@ async def test_an_async_resource_selector_is_awaited() -> None:
 
 
 async def test_adispatch_routes_prompts_get_to_the_async_handler() -> None:
-    server = _server()
+    server = make_server()
     server.prompts.register(PromptBinding(name="p", description=None, render=lambda **_: "ok"))
     out = await adispatch("prompts/get", {"name": "p", "arguments": {}}, _ctx(server))
     assert out["messages"][0]["content"]["text"] == "ok"
@@ -274,7 +269,7 @@ async def test_the_sync_handler_table_does_not_run_on_the_event_loop() -> None:
     ``SynchronousOnlyOperation`` on the loop."""
     store = _LoopSniffingTaskStore()
     context = replace(
-        _ctx(_server()),
+        _ctx(make_server()),
         tasks=store,
         client_capabilities={"extensions": {TASKS_EXTENSION_ID: {}}},
     )
@@ -286,4 +281,4 @@ async def test_the_sync_handler_table_does_not_run_on_the_event_loop() -> None:
 
 async def test_the_fall_through_still_returns_the_handler_result() -> None:
     """The thread hop must be invisible to the wire: ``ping`` still answers."""
-    assert await adispatch("ping", None, _ctx(_server())) == {}
+    assert await adispatch("ping", None, _ctx(make_server())) == {}

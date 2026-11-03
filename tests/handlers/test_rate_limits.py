@@ -16,8 +16,6 @@ from asgiref.sync import async_to_sync
 from django.http import HttpRequest
 from django_service_specs import SelectorKind, SelectorSpec, ServiceSpec, Unrestricted
 
-from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_prompts_get import handle_prompts_get
 from django_spec_mcp.handlers.handle_prompts_get_async import handle_prompts_get_async
@@ -28,7 +26,7 @@ from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_a
 from django_spec_mcp.handlers.utils import consume_rate_limits
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.registry.types.prompt_binding import PromptBinding
-from tests.utils import call_context
+from tests.utils import call_context, make_server
 
 OPEN = [Unrestricted()]
 
@@ -46,10 +44,6 @@ class _AlwaysDeny:
 class _AlwaysAllow:
     def consume(self, request: HttpRequest, token: TokenInfo) -> int | None:
         return None
-
-
-def _server() -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
 
 
 def _both(sync: Callable[..., Any], asynchronous: Callable[..., Any]) -> Any:
@@ -81,7 +75,7 @@ def test_consume_rate_limits_empty_tuple_allows() -> None:
 @_both(handle_tools_call, handle_tools_call_async)
 def test_a_kernel_tool_answers_rate_limited_before_it_runs(handle: Callable[..., Any]) -> None:
     ran: list[int] = []
-    server = _server()
+    server = make_server()
     server.register_tool(
         ServiceSpec(service=lambda: ran.append(1), permissions=OPEN, atomic=False),
         name="t",
@@ -98,7 +92,7 @@ def test_a_kernel_resource_answers_rate_limited_before_it_reads(
     handle: Callable[..., Any],
 ) -> None:
     ran: list[int] = []
-    server = _server()
+    server = make_server()
     server.register_resource(
         SelectorSpec(
             kind=SelectorKind.RETRIEVE, selector=lambda: ran.append(1) or {}, permissions=OPEN
@@ -115,7 +109,7 @@ def test_a_kernel_resource_answers_rate_limited_before_it_reads(
 
 @_both(handle_prompts_get, handle_prompts_get_async)
 def test_a_prompt_answers_rate_limited(handle: Callable[..., Any]) -> None:
-    server = _server()
+    server = make_server()
     server.prompts.register(
         PromptBinding(
             name="p", description=None, render=lambda **_: "x", rate_limits=(_AlwaysDeny(retry=3),)

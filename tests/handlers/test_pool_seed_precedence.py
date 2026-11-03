@@ -36,7 +36,6 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import MCPServer, PromptArgument
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_completion_complete import handle_completion_complete
 from django_spec_mcp.handlers.handle_prompts_get import handle_prompts_get
@@ -48,13 +47,9 @@ from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.registry.resource_registry import ResourceRegistry
 from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
-from tests.utils import call_context
+from tests.utils import call_context, make_server
 
 _CALLER = "alice"
-
-
-def _server() -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
 
 
 def _ctx(server: MCPServer, *, resources: ResourceRegistry | None = None) -> MCPCallContext:
@@ -69,7 +64,7 @@ def _ctx(server: MCPServer, *, resources: ResourceRegistry | None = None) -> MCP
 
 
 def _server_with_scoped_prompt() -> MCPServer:
-    server = _server()
+    server = make_server()
     server.register_prompt(
         name="scoped",
         render=lambda *, user, topic: f"{user}:{topic}",
@@ -105,7 +100,7 @@ def test_prompt_argument_named_request_cannot_replace_the_request() -> None:
     ``render`` reading ``request.user`` is not fooled by it."""
     seen: dict[str, Any] = {}
 
-    server = _server()
+    server = make_server()
 
     def render(*, request: Any, user: Any, topic: str) -> str:
         seen.update(request=request, user=user)
@@ -158,7 +153,9 @@ def _notes_spec() -> SelectorSpec:
 
 def test_register_resource_refuses_a_template_variable_named_user() -> None:
     with pytest.raises(ImproperlyConfigured, match="reserved transport keys"):
-        _server().register_resource(_notes_spec(), name="notes", uri_template="notes://{user}/{pk}")
+        make_server().register_resource(
+            _notes_spec(), name="notes", uri_template="notes://{user}/{pk}"
+        )
 
 
 def test_a_kernel_spec_declaring_a_read_named_user_is_refused() -> None:
@@ -174,7 +171,7 @@ def test_a_kernel_spec_declaring_a_read_named_user_is_refused() -> None:
 def test_a_resource_takes_no_unknown_argument_policy() -> None:
     """Holds the module's claim that a resource read is always ``REJECT``."""
     with pytest.raises(TypeError, match="unknown_arguments"):
-        _server().register_resource(
+        make_server().register_resource(
             _notes_spec(),
             name="notes",
             uri_template="notes://{pk}",
@@ -212,7 +209,7 @@ def test_a_uri_template_variable_named_user_cannot_replace_the_caller(read: Any)
     # never runs under the URI's name, would hold if the value were dropped
     # instead, and an error is the louder way to hold it.
     ran.clear()
-    refused = read({"uri": "notes://victim/1"}, _ctx(_server(), resources=_handbuilt_notes()))
+    refused = read({"uri": "notes://victim/1"}, _ctx(make_server(), resources=_handbuilt_notes()))
     assert isinstance(refused, JsonRpcError), refused
     assert refused.code == JsonRpcErrorCode.INVALID_PARAMS
     assert refused.data["detail"] == {"user": ["Unknown argument."]}
@@ -220,7 +217,7 @@ def test_a_uri_template_variable_named_user_cannot_replace_the_caller(read: Any)
 
 
 def test_ordinary_uri_template_variables_still_reach_the_selector() -> None:
-    server = _server()
+    server = make_server()
     server.register_resource(
         SelectorSpec(
             kind=SelectorKind.RETRIEVE,
@@ -247,7 +244,7 @@ def test_ordinary_uri_template_variables_still_reach_the_selector() -> None:
 
 
 def _server_with_completer(completer: Any) -> MCPServer:
-    server = _server()
+    server = make_server()
     server.register_prompt(
         name="p",
         render=lambda **_: "x",

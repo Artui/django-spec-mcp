@@ -31,21 +31,17 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.protocol.types.tool_result import ToolResult
 from tests.testapp.models import Invoice
+from tests.utils import make_server
 
 OPEN = [Unrestricted()]
 PK = Parameters([Parameter("pk", "integer", required=True)])
 
 
-def _server() -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
-
-
 def _one(spec: Any, name: str, **registration: Any) -> MCPServer:
     """A server with ``spec`` registered as the one tool ``name``."""
-    server = _server()
+    server = make_server()
     server.register_tool(spec, name=name, **registration)
     return server
 
@@ -71,7 +67,7 @@ class _DenyObject(PermissionCheck):
 
 
 def test_a_service_tool_returns_a_tool_result() -> None:
-    server = _server()
+    server = make_server()
     server.register_tool(
         ServiceSpec(service=lambda: {"ok": True}, permissions=OPEN, atomic=False),
         name="things.create",
@@ -115,7 +111,7 @@ def test_a_selector_renders_what_its_kind_returns(
 
 
 def test_an_allow_none_retrieve_returns_an_empty_result_not_an_error() -> None:
-    server = _server()
+    server = make_server()
     server.register_tool(
         SelectorSpec(
             kind=SelectorKind.RETRIEVE,
@@ -132,7 +128,7 @@ def test_an_allow_none_retrieve_returns_an_empty_result_not_an_error() -> None:
 
 
 def test_include_structured_content_false_omits_the_structured_field() -> None:
-    server = _server()
+    server = make_server()
     server.register_tool(
         ServiceSpec(service=lambda: {"ok": True}, permissions=OPEN, atomic=False),
         name="things.quiet",
@@ -151,7 +147,7 @@ def test_include_structured_content_false_omits_the_structured_field() -> None:
 
 
 def test_a_missing_required_instance_is_a_not_found_error() -> None:
-    server = _server()
+    server = make_server()
     server.register_tool(
         SelectorSpec(
             kind=SelectorKind.RETRIEVE, selector=lambda *, pk: None, reads=PK, permissions=OPEN
@@ -173,7 +169,7 @@ def test_a_list_selectors_http404_is_not_found_in_process(allow_none: bool) -> N
     def missing_parent() -> Any:
         raise Http404("no parent")
 
-    server = _server()
+    server = make_server()
     server.register_tool(
         SelectorSpec(
             kind=SelectorKind.LIST,
@@ -196,7 +192,7 @@ def test_a_write_whose_instance_selector_raises_http404_is_not_found_unrun() -> 
     def missing(*, pk: int) -> Any:
         raise Http404("gone")
 
-    server = _server()
+    server = make_server()
     server.register_tool(
         ServiceSpec(
             service=lambda **kwargs: ran.append(kwargs),
@@ -221,7 +217,7 @@ def test_an_undeclared_argument_is_a_validation_error_not_a_fault() -> None:
     """A kernel spec declares its reads, so an argument it does not declare
     (``{"x": 1}`` here) is refused under ``REJECT`` as the wire refuses it, in
     the result rather than raised."""
-    server = _server()
+    server = make_server()
     server.register_tool(
         ServiceSpec(service=lambda: None, permissions=OPEN, atomic=False), name="t.create"
     )
@@ -256,7 +252,7 @@ def test_a_service_error_becomes_a_tool_error(raised: Exception, error_type: str
 def test_a_spec_permission_denial_propagates() -> None:
     # A kernel check refuses with the kernel's ``NotPermitted``, which the wire
     # maps to its own code. It is a fault the caller maps, not a tool result.
-    server = _server()
+    server = make_server()
     server.register_tool(
         ServiceSpec(service=lambda: {}, permissions=[_DenyAll()], atomic=False), name="t.create"
     )
@@ -271,7 +267,7 @@ def test_a_selector_spec_permission_denial_propagates_before_the_selector_runs()
         ran.append(True)
         return {"leaked": True}
 
-    server = _server()
+    server = make_server()
     server.register_tool(
         SelectorSpec(
             kind=SelectorKind.RETRIEVE, selector=_selector, reads=PK, permissions=[_DenyAll()]
@@ -288,7 +284,7 @@ def test_a_selector_object_permission_denial_propagates() -> None:
     """The object-level half: the kernel asks ``has_object_permission`` of the
     row the retrieve resolved, so a denial on it propagates too."""
     invoice = Invoice.objects.create(number="A", amount_cents=1)
-    server = _server()
+    server = make_server()
     server.register_tool(
         SelectorSpec(
             kind=SelectorKind.RETRIEVE,
@@ -304,4 +300,4 @@ def test_a_selector_object_permission_denial_propagates() -> None:
 
 def test_an_unknown_tool_name_raises_keyerror() -> None:
     with pytest.raises(KeyError, match="nope"):
-        _server().call_tool("nope", user=None)
+        make_server().call_tool("nope", user=None)

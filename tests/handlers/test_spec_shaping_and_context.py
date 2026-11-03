@@ -30,13 +30,11 @@ from django_service_specs import (
     Unrestricted,
 )
 
-from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from tests.testapp.kernel_shapes import InvoiceOutput
 from tests.testapp.models import Invoice
-from tests.utils import call_context
+from tests.utils import call_context, make_server
 
 pytestmark = pytest.mark.django_db
 
@@ -50,12 +48,8 @@ class _Annotated:
     annotated_double: int
 
 
-def _server() -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
-
-
 def _call(spec: SelectorSpec, arguments: dict[str, Any] | None = None, **knobs: Any) -> Any:
-    server = _server()
+    server = make_server()
     server.register_tool(spec, name="invoices.list", **knobs)
     context = call_context(server, token=TokenInfo(user=None, scopes=("read",)))
     return handle_tools_call({"name": "invoices.list", "arguments": arguments or {}}, context)

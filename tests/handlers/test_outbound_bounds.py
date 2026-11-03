@@ -50,15 +50,11 @@ from django_spec_mcp.registry.types.prompt_binding import PromptBinding
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from tests.testapp.kernel_shapes import InvoiceOutput
 from tests.testapp.models import Invoice
-from tests.utils import call_context, tool_error
+from tests.utils import call_context, make_server, tool_error
 
 OPEN = [Unrestricted()]
 
 # ---------- helpers ----------
-
-
-def _server() -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
 
 
 def _ctx(server: MCPServer, config: MCPConfig | None = None) -> MCPCallContext:
@@ -110,7 +106,7 @@ def _rows() -> list[dict[str, str]]:
 def test_a_model_supplied_limit_is_clamped_to_the_server_ceiling() -> None:
     """A model asking for more rows than the server allows gets the ceiling."""
     _seed(5)
-    server = _server()
+    server = make_server()
     _register_list(server)
     payload = _call(server, {"limit": 1000}, build_mcp_config(max_page_size=2))["structuredContent"]
     assert len(payload["items"]) == 2
@@ -135,7 +131,7 @@ def test_the_effective_page_ceiling(
     binding: Any, server_bound: int | None, limit: int, served: int
 ) -> None:
     _seed(5)
-    server = _server()
+    server = make_server()
     _register_list(server, max_page_size=binding)
     out = _call(server, {"limit": limit}, build_mcp_config(max_page_size=server_bound))
     assert len(out["structuredContent"]["items"]) == served
@@ -144,7 +140,7 @@ def test_the_effective_page_ceiling(
 @pytest.mark.parametrize(("binding", "maximum"), [(25, 25), (None, None)], ids=["25", "none"])
 def test_tools_list_advertises_the_effective_ceiling(binding: Any, maximum: int | None) -> None:
     """The model is told the bound, so it can ask for something serveable."""
-    server = _server()
+    server = make_server()
     _register_list(server, max_page_size=binding)
     out = handle_tools_list(None, _ctx(server, build_mcp_config(max_page_size=500)))
     assert out["tools"][0]["inputSchema"]["properties"]["limit"].get("maximum") == maximum
@@ -161,7 +157,7 @@ def test_tools_list_advertises_the_effective_ceiling(binding: Any, maximum: int 
 @pytest.mark.django_db
 def test_an_unpaginated_list_over_the_ceiling_is_refused() -> None:
     _seed(5)
-    server = _server()
+    server = make_server()
     _register(server)
     error = tool_error(_call(server, {}, build_mcp_config(max_page_size=2)))
     assert "2 row ceiling" in error["message"]
@@ -174,7 +170,7 @@ def test_an_unpaginated_list_over_the_ceiling_is_refused() -> None:
 def test_a_result_exactly_at_the_ceiling_is_served_whole() -> None:
     """The boundary is inclusive: the ceiling is a servable result."""
     _seed(2)
-    server = _server()
+    server = make_server()
     _register(server)
     assert len(_call(server, {}, build_mcp_config(max_page_size=2))["structuredContent"]) == 2
 
@@ -186,7 +182,7 @@ def test_the_ceiling_bounds_the_fetch_and_not_just_the_payload(
     """The rows are bounded in SQL, so the table is never in memory, which is
     what ``MAX_RESULT_BYTES`` cannot do: it measures a payload already fetched."""
     _seed(5)
-    server = _server()
+    server = make_server()
     _register(server)
     with django_assert_num_queries(1) as captured:
         _call(server, {}, build_mcp_config(max_page_size=2))
@@ -199,7 +195,7 @@ def test_a_queryset_under_the_ceiling_is_read_once(django_assert_num_queries: An
     """Under the ceiling the window read to tell "over" from "at" is what gets
     presented: handing the QuerySet back instead would read the table a second time."""
     _seed(2)
-    server = _server()
+    server = make_server()
     _register(server)
     with django_assert_num_queries(1):
         out = _call(server, {}, build_mcp_config(max_page_size=5))
@@ -209,7 +205,7 @@ def test_a_queryset_under_the_ceiling_is_read_once(django_assert_num_queries: An
 def test_a_generator_under_the_ceiling_is_served_whole() -> None:
     """A generator is spent by the window read, so the rows served must be the
     window itself: handing the generator back would present an empty result."""
-    server = _server()
+    server = make_server()
     _register(
         server,
         SelectorSpec(
@@ -231,7 +227,7 @@ def test_the_binding_max_page_size_overrides_the_servers_on_an_unpaginated_list(
 ) -> None:
     """The row ceiling is the binding's ``max_page_size``, deferring to the server's."""
     _seed(5)
-    server = _server()
+    server = make_server()
     _register(server, max_page_size=binding)
     out = _call(server, {}, build_mcp_config(max_page_size=server_bound))
     if served is None:
@@ -248,7 +244,7 @@ def test_a_disabled_ceiling_serves_an_unpaginated_list_whole(
     binding: Any, server_bound: int | None
 ) -> None:
     _seed(5)
-    server = _server()
+    server = make_server()
     _register(server, max_page_size=binding)
     out = _call(server, {}, build_mcp_config(max_page_size=server_bound))
     assert len(out["structuredContent"]) == 5
@@ -271,7 +267,7 @@ def test_any_list_result_is_bounded_by_the_same_ceiling(selector: Any) -> None:
     as a QuerySet is: the kernel presents a ``LIST`` by iterating whatever the
     selector returned, so a mapping counts its keys and a string its characters."""
     _seed(3)
-    server = _server()
+    server = make_server()
     _register(server, SelectorSpec(kind=SelectorKind.LIST, selector=selector, permissions=OPEN))
     error = tool_error(_call(server, {}, build_mcp_config(max_page_size=2)))
     assert error["type"] == "result_too_large"
@@ -280,7 +276,7 @@ def test_any_list_result_is_bounded_by_the_same_ceiling(selector: Any) -> None:
 
 def test_a_service_tool_returning_rows_is_not_row_bounded() -> None:
     """The row ceiling is a ``LIST`` tool's: a service's result is bounded by bytes."""
-    server = _server()
+    server = make_server()
     _register(server, ServiceSpec(service=_rows, permissions=OPEN, atomic=False))
     out = _call(server, {}, build_mcp_config(max_page_size=2))
     assert len(out["structuredContent"]) == 5
@@ -308,7 +304,7 @@ def test_a_page_past_the_end_clamps_to_the_last_page() -> None:
     """An unclamped ``page`` becomes an arbitrarily large SQL OFFSET, which a
     backend may reject with a ``DatabaseError`` that escapes as a 500."""
     _seed(5)
-    server = _server()
+    server = make_server()
     _register_list(server)
     out = _call(server, {"page": 10**20, "limit": 2}, build_mcp_config(max_page_size=100))
     payload = out["structuredContent"]
@@ -319,7 +315,7 @@ def test_a_page_past_the_end_clamps_to_the_last_page() -> None:
 @pytest.mark.django_db
 def test_a_page_inside_the_range_is_untouched() -> None:
     _seed(5)
-    server = _server()
+    server = make_server()
     _register_list(server)
     payload = _call(server, {"page": 2, "limit": 2})["structuredContent"]
     assert (payload["page"], payload["hasNext"]) == (2, True)
@@ -329,14 +325,14 @@ def test_a_page_inside_the_range_is_untouched() -> None:
 @pytest.mark.django_db
 def test_a_page_past_the_end_of_an_empty_result_stays_at_one() -> None:
     """Nothing to clamp to: page 1 of 1, empty, rather than page 0."""
-    server = _server()
+    server = make_server()
     _register_list(server)
     payload = _call(server, {"page": 500})["structuredContent"]
     assert (payload["page"], payload["totalPages"], payload["items"]) == (1, 1, [])
 
 
 def test_an_in_memory_paginated_result_clamps_its_page_too() -> None:
-    server = _server()
+    server = make_server()
     _register(
         server,
         SelectorSpec(kind=SelectorKind.LIST, selector=_rows, permissions=OPEN),
@@ -353,7 +349,7 @@ def test_an_in_memory_paginated_result_clamps_its_page_too() -> None:
 def test_an_oversized_tool_result_becomes_an_actionable_error() -> None:
     """Over the ceiling the call fails loudly; it is never truncated."""
     _seed(20)
-    server = _server()
+    server = make_server()
     _register_list(server)
     out = _call(server, {"limit": 20}, build_mcp_config(max_result_bytes=200))
     message = tool_error(out)["message"]
@@ -373,7 +369,7 @@ def test_a_result_the_ceiling_admits_is_returned_whole(
     binding: Any, server_bound: int, seeded: int
 ) -> None:
     _seed(seeded)
-    server = _server()
+    server = make_server()
     _register_list(server, max_result_bytes=binding)
     out = _call(server, {"limit": 20}, build_mcp_config(max_result_bytes=server_bound))
     assert len(out["structuredContent"]["items"]) == seeded
@@ -385,7 +381,7 @@ class _DenyAll(PermissionCheck):
 
 
 def test_a_protocol_error_passes_through_the_ceiling_untouched() -> None:
-    server = _server()
+    server = make_server()
     _register(
         server,
         SelectorSpec(kind=SelectorKind.LIST, selector=list, permissions=[_DenyAll()]),
@@ -413,7 +409,7 @@ async def test_the_async_path_enforces_the_same_ceilings(
     rows: int, paginated: bool, arguments: dict[str, Any], config: dict[str, Any], ceiling: str
 ) -> None:
     await sync_to_async(_seed)(rows)
-    server = _server()
+    server = make_server()
     _register(server, paginate=paginated)
     out = await handle_tools_call_async(
         {"name": "invoices.list", "arguments": arguments},
@@ -441,7 +437,7 @@ def _register_big_resource(server: MCPServer) -> None:
 
 @pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
 def test_an_oversized_resource_read_is_a_protocol_error(is_async: bool) -> None:
-    server = _server()
+    server = make_server()
     _register_big_resource(server)
     read = async_to_sync(handle_resources_read_async) if is_async else handle_resources_read
     out = read({"uri": "big://all"}, _ctx(server, build_mcp_config(max_result_bytes=200)))
@@ -452,7 +448,7 @@ def test_an_oversized_resource_read_is_a_protocol_error(is_async: bool) -> None:
 
 
 def test_a_resource_read_under_the_ceiling_is_returned() -> None:
-    server = _server()
+    server = make_server()
     _register_big_resource(server)
     out = handle_resources_read(
         {"uri": "big://all"}, _ctx(server, build_mcp_config(max_result_bytes=1_000_000))
@@ -464,7 +460,7 @@ def test_a_resource_read_under_the_ceiling_is_returned() -> None:
 
 
 def _big_prompt_server() -> MCPServer:
-    server = _server()
+    server = make_server()
     server.prompts.register(
         PromptBinding(name="big", description=None, render=lambda **_: "x" * 5_000)
     )
@@ -502,7 +498,7 @@ def _slow() -> list[Any]:
 
 
 def _slow_server(**knobs: Any) -> MCPServer:
-    server = _server()
+    server = make_server()
     _register(
         server,
         SelectorSpec(kind=SelectorKind.LIST, selector=_slow, permissions=OPEN),
@@ -539,7 +535,7 @@ async def test_a_resources_read_deadline_is_a_protocol_error() -> None:
         time.sleep(0.5)
         return {"ok": True}
 
-    server = _server()
+    server = make_server()
     server.register_resource(
         SelectorSpec(kind=SelectorKind.RETRIEVE, selector=_slow_resource, permissions=OPEN),
         name="slow",
