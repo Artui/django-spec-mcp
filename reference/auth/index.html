@@ -2640,7 +2640,11 @@ and a terminating slash right after the host is dropped, so
 <code>.well-known/oauth-protected-resource/mcp/</code> and <code>https://example.com/</code>
 at <code>.well-known/oauth-protected-resource</code>. A query is left out of the
 route, since the resolver matches the path alone, and the path is
-percent-decoded, since the resolver matches the decoded <code>path_info</code>:
+percent-decoded, since the resolver matches the decoded <code>path_info</code>
+(which also turns <code>%2F</code> into a <code>/</code>, so <code>a%2Fb</code> is routed as the two
+segments <code>a/b</code>, as Django resolves it; a front server that rejects or
+keeps <code>%2F</code> encoded makes such a path fragile,
+<code>test_the_route_is_built_from_the_decoded_path</code>):
 <code>https://example.com/caf%C3%A9/mcp/</code> answers at
 <code>.well-known/oauth-protected-resource/café/mcp/</code>, the URL a client
 sends in its encoded form. Built from the
@@ -2654,6 +2658,10 @@ no location can be built from it. Each condition has its case in
 one whose path holds <code>&lt;</code> or <code>&gt;</code>, raw or percent-encoded: not legal
 in a URI, and Django would read <code>&lt;int:x&gt;</code> in the route as a path
 converter (<code>test_a_resource_path_with_angle_brackets_is_refused_by_name</code>,
+whose encoded cases fail if the check ran before the decoding), and so is
+one whose path holds <code>$</code>, raw or percent-encoded: <code>path()</code> matches it
+literally, but Django's URL check warns about a route ending in one as a
+leftover regex anchor (<code>test_a_resource_path_with_a_dollar_sign_is_refused_by_name</code>,
 whose encoded cases fail if the check ran before the decoding), and so is
 one whose percent-encoding is not valid UTF-8, which would decode to a
 route nothing matches

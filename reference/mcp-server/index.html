@@ -3159,11 +3159,13 @@ the client must discard. The mount's own route stays, as the URL a
 challenge points at. A resource whose path ends in a slash is answered
 with and without it, since the TypeScript SDK strips that slash when it
 builds the URL. The patterns are unnamed, so two servers' patterns
-never collide in the root namespace.</p>
+never collide by name, but two resources that differ only by a trailing
+slash share the stripped route, which the first server in the URLconf
+answers: give two servers distinct paths.</p>
 <p>Raises <code>ImproperlyConfigured</code> with no <code>auth_backend=</code>, as mounting
 does, when the backend's <code>resource</code> is not an absolute URL
-(<code>AllowAnyBackend</code> publishes none), when its path holds <code>&lt;</code> or
-<code>&gt;</code>, raw or percent-encoded, and when its percent-encoding is not
+(<code>AllowAnyBackend</code> publishes none), when its path holds <code>&lt;</code>, <code>&gt;</code>
+or <code>$</code>, raw or percent-encoded, and when its percent-encoding is not
 valid UTF-8.</p>
 
 

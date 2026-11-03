@@ -4487,6 +4487,13 @@ the spec, or the registration distinguishes the two paths.</p>
 </tr>
 </tbody>
 </table>
+<p>A worker never asks the user: it has no client to ask, so a service that raises
+<code>AdditionalInputRequired</code> there degrades to an <code>isError</code> result carrying
+<code>requestedInput</code>, and the task is <code>completed</code>. What a task can do is <em>receive</em> a
+retry's answers. When a <code>tools/call</code> that carries <code>inputResponses</code> runs as a task,
+the answers are merged into the arguments before the task is created, as they are
+inline, with or without a valid <code>requestState</code>, so the worker runs with them. They
+are ordinary arguments from then on and stay in the task's record for its TTL.</p>
 <h2 id="asking-the-user-elicitation">Asking the user: elicitation<a class="headerlink" href="#asking-the-user-elicitation" title="Permanent link">&para;</a></h2>
 <p>Some calls cannot be decided by the arguments alone. "Delete everything matching
 this filter" is safe at three rows and alarming at nine thousand, and the service
