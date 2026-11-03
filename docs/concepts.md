@@ -1202,10 +1202,18 @@ appear in `resources/templates/list` so clients can fill them in.
 ### How a URI is split into variables
 
 A URI must match its template whole. Each `{var}` takes one or more
-characters other than `/`, and the literal text around it (`-` in
+characters other than `/` and other than control characters (the C0 range, `DEL`
+and the C1 range, a newline and a tab among them), and the literal text around it (`-` in
 `things://{a}-{b}`, `.` in `files://{name}.{ext}`) decides where it ends. So
 `things://1-2` reads as `a="1"`, `b="2"`, and `files://report.pdf` as
 `name="report"`, `ext="pdf"`.
+
+A URI holding a control character matches no template, so `invoices://7\n` is
+not `pk="7\n"`: it is an unknown resource, answered as any other unknown URI
+is (`-32602` under `2026-07-28`, `-32002` under `2025-11-25`), on the sync and
+the async path alike, and a subscription naming it leaves it out of the
+granted set. A concrete URI is equal to itself alone, so `reports://\n` does
+not reach a concrete `reports://` binding either.
 
 When that literal text also occurs inside a value, the URI fits the template
 more than one way: `things://1-2-3` is `a="1-2", b="3"` or `a="1", b="2-3"`,
