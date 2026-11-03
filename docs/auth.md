@@ -176,7 +176,9 @@ mounted, and the challenge's pointer is built from it too. The route is built
 from the resource's path percent-decoded, as Django resolves it, so
 `https://example.com/caf%C3%A9/mcp/` answers at the encoded URL a client sends;
 a path holding `<` or `>` (raw or encoded) is refused by name, since Django
-would read it as a path converter, and so is a path whose percent-encoding is
+would read it as a path converter, and so is one holding `$` (raw or encoded),
+which `path()` matches literally but Django's URL check flags as a leftover
+regex anchor when a route ends in one, and so is a path whose percent-encoding is
 not valid UTF-8 (`%FF`), which no request could match. A resource whose path ends in a slash
 answers with and without it (`/.well-known/oauth-protected-resource/internal/mcp/`
 and `.../internal/mcp`), because the TypeScript SDK strips that slash when it
@@ -184,9 +186,18 @@ builds the URL, and a project without `CommonMiddleware` has no `APPEND_SLASH`
 redirect to forgive it. A server
 with no backend is refused, as mounting is, and so is a backend whose
 `resource` is not an absolute `http(s)` URL: `AllowAnyBackend` publishes none,
-so a development server has no document to place there. The patterns are
-unnamed, so several servers' patterns sit in one root URLconf without
-colliding. A project served under a path prefix (`SCRIPT_NAME`) has its
+so a development server has no document to place there. The percent-decoding
+turns `%2F` into `/`, as Django's `path_info` does, so
+`https://example.com/a%2Fb/mcp/` is routed at `.well-known/oauth-protected-resource/a/b/mcp/`;
+front servers differ on `%2F` (some reject it, some keep it encoded), so a
+resource path holding one is fragile. The patterns are unnamed, so several
+servers' patterns sit in one root URLconf without colliding by name, but a
+route is a route: two servers whose resources differ only by a trailing slash
+(`https://example.com/mcp/` mounted first, `https://example.com/mcp` second)
+share the slash-stripped route, the first one in the URLconf answers it, and
+the second server's client must discard that document (RFC 9728 3.3: its
+`resource` is not the identifier the URL was built from). Give two servers
+distinct paths. A project served under a path prefix (`SCRIPT_NAME`) has its
 well-known location outside Django's reach, at the origin's root, and routes it
 at the front server instead.
 

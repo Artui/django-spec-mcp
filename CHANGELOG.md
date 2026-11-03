@@ -11,6 +11,40 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-11-03
+
+### Changed
+
+- **A resource whose path holds `$` is refused by `well_known_route`.**
+  `ProtectedResourceMetadataView.well_known_route` (and so `MCPServer.well_known_urls()`)
+  raises `ImproperlyConfigured` naming the resource when its percent-decoded path holds
+  `$`, raw or encoded as `%24`, beside the `<` and `>` refusal. Django's `path()` matches
+  a `$` literally, but its URL check flags a route ending in one as a leftover regex
+  anchor (`2_0.W001`).
+
+### Fixed
+
+- **A retry that runs as a task carries its merged `inputResponses`.** A `tools/call`
+  carrying `inputResponses` that ran as a task recorded the arguments as sent, with or
+  without a valid `requestState`, so the worker ran without the answers and completed
+  with an `isError` `input_required` result. Task creation now merges the answers as the
+  inline call does, after the scope gate: the binding's `server_arguments` win over an
+  answer, the spec's checks are asked on the merged arguments (a streamed call's
+  pre-flight admission stands only when nothing was merged), and a declined or cancelled
+  answer is charged once and creates no task. The merged arguments stay in the task's
+  record for its TTL, like any other argument.
+
+### Documentation
+
+- **The authentication page says how the well-known route treats `%2F` and a trailing
+  slash.** The percent-decoding turns `%2F` into `/`, as Django's `path_info` does, so a
+  resource path holding one is fragile behind front servers that reject it or keep it
+  encoded. Two servers whose resources differ only by a trailing slash share the
+  slash-stripped route: the first in the URLconf answers it and the second server's
+  client must discard that document (RFC 9728 3.3), so give two servers distinct paths.
+  The tasks section of the concepts page says a worker never asks the user, and that a
+  retry's answers arrive in the task's arguments.
+
 ## [0.5.0] — 2026-11-03
 
 ### Added
@@ -685,7 +719,8 @@ carries; releases up to 0.54.0 are in
   running. The worker's run now enters below that decision. A client that did
   not declare the extension is still refused `-32021` by a `REQUIRED` tool.
 
-[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/Artui/django-spec-mcp/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Artui/django-spec-mcp/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Artui/django-spec-mcp/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Artui/django-spec-mcp/compare/v0.2.0...v0.3.0

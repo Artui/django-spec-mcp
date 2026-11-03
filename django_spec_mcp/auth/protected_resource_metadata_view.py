@@ -70,7 +70,11 @@ class ProtectedResourceMetadataView(View):
         ``.well-known/oauth-protected-resource/mcp/`` and ``https://example.com/``
         at ``.well-known/oauth-protected-resource``. A query is left out of the
         route, since the resolver matches the path alone, and the path is
-        percent-decoded, since the resolver matches the decoded ``path_info``:
+        percent-decoded, since the resolver matches the decoded ``path_info``
+        (which also turns ``%2F`` into a ``/``, so ``a%2Fb`` is routed as the two
+        segments ``a/b``, as Django resolves it; a front server that rejects or
+        keeps ``%2F`` encoded makes such a path fragile,
+        ``test_the_route_is_built_from_the_decoded_path``):
         ``https://example.com/caf%C3%A9/mcp/`` answers at
         ``.well-known/oauth-protected-resource/café/mcp/``, the URL a client
         sends in its encoded form. Built from the
@@ -85,6 +89,10 @@ class ProtectedResourceMetadataView(View):
         one whose path holds ``<`` or ``>``, raw or percent-encoded: not legal
         in a URI, and Django would read ``<int:x>`` in the route as a path
         converter (``test_a_resource_path_with_angle_brackets_is_refused_by_name``,
+        whose encoded cases fail if the check ran before the decoding), and so is
+        one whose path holds ``$``, raw or percent-encoded: ``path()`` matches it
+        literally, but Django's URL check warns about a route ending in one as a
+        leftover regex anchor (``test_a_resource_path_with_a_dollar_sign_is_refused_by_name``,
         whose encoded cases fail if the check ran before the decoding), and so is
         one whose percent-encoding is not valid UTF-8, which would decode to a
         route nothing matches
@@ -116,6 +124,14 @@ class ProtectedResourceMetadataView(View):
                 "holds '<' or '>'. Neither is legal in a URI, and Django would read them in "
                 "the well-known route as a path converter. Return the server's canonical URL, "
                 "such as 'https://example.com/mcp/', from protected_resource_metadata()."
+            )
+        if "$" in decoded:
+            raise ImproperlyConfigured(
+                f"The protected resource metadata names the resource {resource!r}, whose path "
+                "holds '$'. Django matches it literally in a path() route, but its URL check "
+                "warns (2_0.W001) about a route ending in '$' as a leftover regex anchor. "
+                "Return the server's canonical URL, such as 'https://example.com/mcp/', from "
+                "protected_resource_metadata()."
             )
         suffix = "" if decoded in ("", "/") else decoded
         return _WELL_KNOWN_ROUTE + suffix

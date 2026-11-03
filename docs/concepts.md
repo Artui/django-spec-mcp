@@ -1739,6 +1739,14 @@ the spec, or the registration distinguishes the two paths.
 | A queue that is down fails the *task* | The record is already durable when `enqueue` raises, so the handle comes back with `status: "failed"` and the reason in `statusMessage`. The client finds out through the channel it was already using. |
 | Redelivery runs the work once | Queues deliver at least once; a task is claimed as the worker starts. Best-effort, not a lock — an idempotent service is still the right thing to write. |
 
+A worker never asks the user: it has no client to ask, so a service that raises
+`AdditionalInputRequired` there degrades to an `isError` result carrying
+`requestedInput`, and the task is `completed`. What a task can do is *receive* a
+retry's answers. When a `tools/call` that carries `inputResponses` runs as a task,
+the answers are merged into the arguments before the task is created, as they are
+inline, with or without a valid `requestState`, so the worker runs with them. They
+are ordinary arguments from then on and stay in the task's record for its TTL.
+
 ## Asking the user: elicitation
 
 Some calls cannot be decided by the arguments alone. "Delete everything matching

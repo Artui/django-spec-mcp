@@ -53,7 +53,7 @@ def handle_tools_call(
     # outright rather than queued, and before dispatch because a task exists
     # precisely so the dispatch does not happen here.
     as_task: dict[str, Any] | JsonRpcError | None = maybe_create_task(
-        binding, arguments_raw, context
+        binding, arguments_raw, context, params=params
     )
     if as_task is not None:
         return as_task
