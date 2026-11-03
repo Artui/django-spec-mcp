@@ -186,8 +186,17 @@ def test_a_percent_encoded_resource_path_answers_at_its_own_location(
         "https://example.test/%3Cint:x%3E/mcp/",
         "https://example.test/mcp>/",
         "https://example.test/mcp%3e/",
+        "https://example.test/<mcp/",
+        "https://example.test/%3Cmcp/",
     ],
-    ids=["raw", "encoded", "closing-only", "encoded-lower-case"],
+    ids=[
+        "raw",
+        "encoded",
+        "closing-only",
+        "encoded-lower-case",
+        "opening-only",
+        "encoded-opening-only",
+    ],
 )
 def test_a_resource_path_with_angle_brackets_is_refused_by_name(resource: str) -> None:
     """Not legal in a URI, and Django would read ``<int:x>`` as a path converter.

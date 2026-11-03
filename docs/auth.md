@@ -158,7 +158,7 @@ A client looks for the RFC 9728 document in two places, in this order:
 The mount's own route cannot answer the second, because everything
 `server.urls` mounts sits under the mount's prefix, and the well-known location
 starts at the origin. `server.well_known_urls()` returns the patterns for it,
-which goes in the **root** URLconf, beside the mount:
+which go in the **root** URLconf, beside the mount:
 
 ```python
 urlpatterns = [
@@ -184,7 +184,7 @@ builds the URL, and a project without `CommonMiddleware` has no `APPEND_SLASH`
 redirect to forgive it. A server
 with no backend is refused, as mounting is, and so is a backend whose
 `resource` is not an absolute `http(s)` URL: `AllowAnyBackend` publishes none,
-so a development server has no document to place there. The pattern is
+so a development server has no document to place there. The patterns are
 unnamed, so several servers' patterns sit in one root URLconf without
 colliding. A project served under a path prefix (`SCRIPT_NAME`) has its
 well-known location outside Django's reach, at the origin's root, and routes it
