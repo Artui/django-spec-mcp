@@ -24,10 +24,16 @@ carries; releases up to 0.54.0 are in
   names, so the document always matches the URL it is served at. The route under the
   mount stays. A server with no backend, or with a backend whose `resource` is not an
   absolute http(s) URL (such as `AllowAnyBackend`), is refused with
-  `ImproperlyConfigured`. The route itself is public as
+  `ImproperlyConfigured`. A resource whose path ends in a slash also answers without
+  it, since `@modelcontextprotocol/sdk` strips that slash when it builds the URL (a 404
+  under `MIDDLEWARE=[]` otherwise). The route is built from the percent-decoded resource
+  path, as Django resolves it, so `https://example.com/caf%C3%A9/mcp/` answers at its own
+  well-known URL. The route itself is public as
   `ProtectedResourceMetadataView.well_known_route(resource)`: it returns the
-  root-URLconf route for one resource URL, and refuses a `resource` that is not an
-  absolute http(s) URL with a host and no fragment with `ImproperlyConfigured`.
+  root-URLconf route for one resource URL, and refuses with `ImproperlyConfigured` a
+  `resource` that is not an absolute http(s) URL with a host and no fragment, a path
+  holding `<` or `>` (raw or encoded), and a path whose percent-encoding is not valid
+  UTF-8. The `invoicing` example mounts `*server.well_known_urls()`.
 
 ### Changed
 
@@ -42,9 +48,10 @@ carries; releases up to 0.54.0 are in
   `ValueError` naming the URI. A host fetches a view once by the exact URI a tool's `ui=`
   link names and expands nothing, so a templated view was a resource no host could ask
   for; register one view per URI. A tool's `ui=` link to a templated URI finds no view
-  and is refused as before. The ambiguity refusal on a `ui=` link is now reachable only
-  through a URI template `register_ui_resource` did not build: a data resource's, or a
-  binding registered by hand on `server.resources`.
+  and is refused as before. `ResourceRegistry.register` refuses a binding built by hand
+  with the view mime type and a templated URI the same way, so a view is concrete however
+  it is registered, and the ambiguity refusal on a `ui=` link is reachable only through a
+  data resource's URI template.
 
 ### Fixed
 
