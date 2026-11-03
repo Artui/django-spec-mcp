@@ -33,7 +33,6 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
 from django_spec_mcp.handlers.handle_resources_read_async import handle_resources_read_async
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
@@ -41,7 +40,7 @@ from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_a
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.schema.types.agent_conventions import AgentConventions
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
-from tests.utils import tool_error
+from tests.utils import make_server, tool_error
 
 REFUSAL = "No such field: total."
 
@@ -87,11 +86,8 @@ def _selector(
 
 def _server(**register: Any) -> MCPServer:
     conventions = register.pop("conventions", None)
-    server = MCPServer(
-        name="t",
-        auth_backend=AllowAnyBackend(),
-        session_store=None,
-        **({"conventions": conventions} if conventions is not None else {}),
+    server = make_server(
+        session_store=None, **({"conventions": conventions} if conventions is not None else {})
     )
     spec = register.pop("spec", None) or _selector()
     server.register_tool(spec, name="rows", description="d", **register)
@@ -228,7 +224,7 @@ def _resource_server(
     shapes: tuple[str, ...] = ("fields",),
     error: Exception | None = None,
 ) -> MCPServer:
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server = make_server(session_store=None)
     server.register_resource(
         SelectorSpec(
             kind=SelectorKind.RETRIEVE,

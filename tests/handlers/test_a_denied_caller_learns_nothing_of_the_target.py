@@ -38,14 +38,13 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
-from tests.utils import tool_error
+from tests.utils import make_server, tool_error
 
 _ROUTES = ["handler", "async_handler", "acall_tool", "call_tool"]
 _KINDS = ["service", "selector"]
@@ -98,7 +97,7 @@ class _Note:
 
 def _server(kind: str, check: PermissionCheck, lookup: _Lookup) -> MCPServer:
     """One tool named ``tool``, of ``kind``, whose target ``lookup`` finds by ``pk``."""
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server = make_server(session_store=None)
     if kind == "service":
         spec: Any = ServiceSpec(
             service=lambda instance: {"touched": instance["id"]},
@@ -247,7 +246,7 @@ async def test_a_permitted_row_is_served(kind: str) -> None:
 @pytest.mark.django_db(transaction=True)
 async def test_a_list_target_is_judged_as_a_set_not_row_by_row() -> None:
     check = _Check(admits_rows=False)
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server = make_server(session_store=None)
     server.register_tool(
         SelectorSpec(
             kind=SelectorKind.LIST, selector=lambda: [{"id": 1}, {"id": 2}], permissions=[check]

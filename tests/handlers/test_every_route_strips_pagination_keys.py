@@ -36,12 +36,12 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from tests.testapp.models import Invoice
+from tests.utils import make_server
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -84,7 +84,7 @@ async def _structured(server: MCPServer, route: str, arguments: dict[str, Any]) 
 
 
 def _server(spec: Any, **tool: Any) -> MCPServer:
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server = make_server(session_store=None)
     server.register_tool(spec, name="read", description="Read.", **tool)
     return server
 

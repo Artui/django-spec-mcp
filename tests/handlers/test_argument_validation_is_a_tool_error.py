@@ -37,7 +37,6 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
@@ -48,7 +47,7 @@ from django_spec_mcp.transport.in_memory_session_store import InMemorySessionSto
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from tests.conftest import post_jsonrpc
 from tests.testapp.urlconf_for import urlconf_for
-from tests.utils import tool_error
+from tests.utils import make_server, tool_error
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -71,9 +70,7 @@ def _read(*, pk: int) -> dict[str, int]:
 
 
 def _server(**kwargs: Any) -> MCPServer:
-    server = MCPServer(
-        name="t", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore(), **kwargs
-    )
+    server = make_server(session_store=InMemorySessionStore(), **kwargs)
     server.register_tool(
         ServiceSpec(service=_charge, validator=DataclassValidator(_Charge), permissions=OPEN),
         name="service",
