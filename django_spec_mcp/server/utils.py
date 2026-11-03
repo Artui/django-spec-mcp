@@ -172,9 +172,8 @@ def build_ui_tool_meta(
     must be registered *before* the tool linking to it, and a templated URI
     names none, since ``register_ui_resource`` refuses one); a
     ``resource_uri`` that a URI template splits more than one way, which is
-    reachable only through a template ``register_ui_resource`` did not build (a
-    *data* resource's, or a binding registered by hand on ``server.resources``),
-    since it refuses a templated URI itself; and a tool not emitting
+    reachable only through a *data* resource's template, since neither
+    ``register_ui_resource`` nor the registry takes a templated view; and a tool not emitting
     ``structuredContent``, the payload a view renders from — checked against
     the effective value, so a project that turned it off globally is caught too.
     """
@@ -188,10 +187,10 @@ def build_ui_tool_meta(
         )
 
     # ``resolve`` raises ValueError for one reason only: a URI its template
-    # splits more than one way. It walks every binding, so the template can be a
-    # data resource's or a hand-registered binding's (``register_ui_resource``
-    # builds none that is templated). The registry's message names neither
-    # the tool nor that the link is what asked, so say both.
+    # splits more than one way. It walks every binding, so the template is a
+    # data resource's: the registry refuses a templated view, however it was
+    # built. The registry's message names neither the tool nor that the link is
+    # what asked, so say both.
     try:
         resolved = resources.resolve(ui.resource_uri)
     except ValueError as exc:

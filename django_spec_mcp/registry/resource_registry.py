@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 
 from django_spec_mcp.registry.types.resource_binding import ResourceBinding
+from django_spec_mcp.types.ui_resource_mime_type import UI_RESOURCE_MIME_TYPE
 
 _TEMPLATE_VAR = re.compile(r"\{([^}]+)\}")
 
@@ -71,6 +72,21 @@ class ResourceRegistry:
         self._patterns: dict[str, tuple[re.Pattern[str], re.Pattern[str]]] = {}
 
     def register(self, binding: ResourceBinding) -> None:
+        # A view is fetched by the exact URI a tool's ``ui=`` link names, so a
+        # templated one is a resource no host can ask for;
+        # ``register_ui_resource`` refuses it first, and this catches a binding
+        # built by hand. Two conjuncts, each with the test that fails without it:
+        # the mime type (``test_a_templated_data_resource_still_registers``) and
+        # the template (``test_a_concrete_view_binding_still_registers``); the
+        # refusal itself is ``test_a_hand_registered_templated_view_is_refused_at_register``.
+        if binding.mime_type == UI_RESOURCE_MIME_TYPE and binding.is_template:
+            raise ValueError(
+                f"MCP resource {binding.name!r} has the view mime type "
+                f"{UI_RESOURCE_MIME_TYPE!r} and the templated URI "
+                f"{binding.uri_template!r}. A view's URI must be concrete: a host "
+                "fetches it by the exact URI a tool's ui= link names and expands "
+                "nothing. Register one view per URI."
+            )
         for existing in self._bindings:
             if existing.uri_template == binding.uri_template:
                 raise ValueError(f"Duplicate MCP resource URI: {binding.uri_template!r}")
