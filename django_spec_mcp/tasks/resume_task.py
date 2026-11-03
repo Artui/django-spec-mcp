@@ -21,15 +21,19 @@ def resume_task(
 ) -> None:
     """Move a task whose input is answered back to ``working`` and queue it again.
 
-    ``record`` is the task as ``tasks/update`` left it, its answers merged into its
-    arguments, and **only those two are taken from it**. Admitting the answer (the
-    checks and the charge) ran after ``tasks/update`` read the task, so the task may
-    since have been cancelled, have expired, or have been answered by a duplicate
-    ``tasks/update`` whose worker ran. It is read again, and one no longer waiting
-    for input is left as it is and queued nowhere
+    ``record`` is the task as ``tasks/update`` read it, its answers merged into its
+    arguments. Those two are saved from it; its round and the keys of its
+    outstanding requests say which question the update answered, and nothing else
+    is taken from it. Admitting the answer (the checks and the charge) ran after
+    ``tasks/update`` read the task, so the task may since have been cancelled, have
+    expired, or have been answered by a duplicate ``tasks/update`` whose worker ran,
+    and that worker's service may have asked again, parking the task on the next
+    round. It is read again, and one no longer waiting on the question this update
+    answered is left as it is and queued nowhere
     (``test_a_task_ended_while_its_answer_is_admitted_stays_ended``,
-    ``test_a_duplicate_answer_runs_the_service_once``). The read and the save are
-    still two calls, the window ``transition_task`` accepts.
+    ``test_a_duplicate_answer_runs_the_service_once``,
+    ``test_a_late_answer_leaves_the_next_rounds_question_in_place``). The read and
+    the save are still two calls, the window ``transition_task`` accepts.
 
     The worker that parked the task cleared ``enqueued`` as it claimed it, so a
     stale delivery of the first run found nothing to claim; this sets it again,
@@ -42,7 +46,18 @@ def resume_task(
     client already holds the handle, and polls it to find out.
     """
     current: TaskRecord | None = store.get(record.task_id)
-    if current is None or current.status is not TaskStatus.INPUT_REQUIRED:
+    # Still waiting, and on the question this update read. In the package's own
+    # parks the round and the key move together, so each conjunct past the first
+    # has a case where it alone moved, in
+    # ``test_an_answer_resumes_only_the_question_it_read``: ``status``, ``round``
+    # and ``requests``. A missing record is the expired case of
+    # ``test_a_task_ended_while_its_answer_is_admitted_stays_ended``.
+    if (
+        current is None
+        or current.status is not TaskStatus.INPUT_REQUIRED
+        or current.input_round != record.input_round
+        or set(current.task.input_requests or {}) != set(record.task.input_requests or {})
+    ):
         return
     working: TaskRecord = replace(
         current,

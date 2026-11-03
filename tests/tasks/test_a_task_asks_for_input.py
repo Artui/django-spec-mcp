@@ -455,7 +455,7 @@ def test_a_duplicate_answer_runs_the_service_once(worker_ran: bool) -> None:
     admits. The second resumes the task (and, here, its worker runs); the first
     then finds the task no longer waiting and queues nothing, rather than saving
     its record over a task that moved on and running the service again. Fails
-    without the status guard in ``resume_task``."""
+    without the guard in ``resume_task``."""
     runs: list[int] = []
     task: dict[str, str] = {}
 
@@ -473,6 +473,67 @@ def test_a_duplicate_answer_runs_the_service_once(worker_ran: bool) -> None:
     assert runs == [500]
     assert world.executor.enqueued == [task["id"]] * 2
     assert world.store.get(task["id"]).status is TaskStatus.COMPLETED
+
+
+def test_a_late_answer_leaves_the_next_rounds_question_in_place() -> None:
+    """A duplicate ``tasks/update`` lands while the first admits: it resumes the
+    task, its worker runs, and the service asks round 2, parking the task again.
+    The first then finds the task waiting on a question it did not answer, and
+    queues nothing, rather than resuming it, wiping round 2's question and running
+    the service once more to ask it again. Fails without the round and request
+    guard in ``resume_task``."""
+    runs: list[int] = []
+    task: dict[str, str] = {}
+
+    def duplicate_runs_and_parks_again() -> None:
+        assert world.answer(task["id"], _accept(confirmed=True), input_request_key(1)) == {}
+        world.server.run_task(task["id"])
+
+    world = _World(service=_counting(runs), check=_ChangesMeanwhile(duplicate_runs_and_parks_again))
+    task["id"] = world.start(1500)
+
+    assert world.answer(task["id"], _accept(confirmed=True), input_request_key(1)) == {}
+
+    parked = world.get(task["id"])
+    assert parked["status"] == "input_required", parked
+    assert list(parked["inputRequests"]) == [input_request_key(2)]
+    assert parked["inputRequests"][input_request_key(2)]["params"]["message"] == (
+        "Deleting more than 1000 rows needs a reason."
+    )
+    assert world.store.get(task["id"]).input_round == 2
+    assert world.executor.enqueued == [task["id"]] * 2
+    assert runs == [1500]
+
+
+@pytest.mark.parametrize("moved", ["round", "requests", "status"])
+def test_an_answer_resumes_only_the_question_it_read(moved: str) -> None:
+    """Each conjunct of the guard in ``resume_task`` alone. While the answer is
+    admitted, the task's round moves with its requests as they were, a further
+    request joins the one answered, or its status leaves ``input_required`` with
+    the rest as it was: the answer resumes none of them, saves nothing and queues
+    nothing."""
+    task: dict[str, str] = {}
+
+    def act() -> None:
+        record = world.store.get(task["id"])
+        if moved == "round":
+            world.store.save(replace(record, input_round=record.input_round + 1))
+        elif moved == "requests":
+            world.store.save(
+                record.with_task(input_requests={**record.task.input_requests, "k2": {}})
+            )
+        else:
+            world.store.save(record.with_task(status=TaskStatus.WORKING))
+
+    world = _World(check=_ChangesMeanwhile(act))
+    task["id"] = world.start(500)
+
+    assert world.answer(task["id"], _accept(confirmed=True), input_request_key(1)) == {}
+
+    record = world.store.get(task["id"])
+    assert record.input_responses == {}
+    assert not record.enqueued
+    assert world.executor.enqueued == [task["id"]]
 
 
 class _OvertakenAfterARead(InMemoryTaskStore):
