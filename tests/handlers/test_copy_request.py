@@ -29,8 +29,8 @@ from django.test import RequestFactory
 from django_service_specs import SelectorKind, SelectorSpec, Unrestricted
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
+from tests.utils import make_server
 
 _BODY = b'{"a":1}'
 
@@ -76,9 +76,7 @@ _UNREAD: dict[str, Callable[[], HttpRequest]] = {"wsgi": _wsgi, "asgi": _asgi}
 
 def _server(spec: Callable[[Any], Any]) -> MCPServer:
     """A server whose one tool, ``t``, answers what ``spec`` returns for its request."""
-    server = MCPServer(
-        name="t", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore()
-    )
+    server = make_server(session_store=InMemorySessionStore())
     server.register_tool(
         SelectorSpec(
             kind=SelectorKind.RETRIEVE,

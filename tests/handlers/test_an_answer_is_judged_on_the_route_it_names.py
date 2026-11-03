@@ -40,7 +40,6 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
@@ -54,7 +53,7 @@ from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from tests.testapp.models import Invoice
 from tests.testapp.urlconf_for import urlconf_for
-from tests.utils import RefusingRateLimit, tool_error
+from tests.utils import RefusingRateLimit, make_server, tool_error
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -113,7 +112,7 @@ def _server(
             return {"noted": True}
         return {"pk": instance.pk, "note": data.note}
 
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server = make_server(session_store=None)
     server.register_tool(
         ServiceSpec(
             service=_annotate,

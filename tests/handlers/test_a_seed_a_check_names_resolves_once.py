@@ -41,14 +41,13 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.kernel_utils import KernelAdmission, admit_kernel_tool_call
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.testapp.urlconf_for import urlconf_for
-from tests.utils import MODERN, post_in_era, tool_error
+from tests.utils import MODERN, make_server, post_in_era, tool_error
 
 
 class _Tenant:
@@ -89,9 +88,7 @@ class _NamesTenant(PermissionCheck):
 
 
 def _server(witness: _Witness) -> MCPServer:
-    server = MCPServer(
-        name="t",
-        auth_backend=AllowAnyBackend(),
+    server = make_server(
         session_store=InMemorySessionStore(),
         pool_seeds=DEFAULT_POOL_SEEDS.extend(tenant=witness.resolve),
     )
@@ -202,11 +199,8 @@ class _Line:
 
 
 def _fallback_server(witness: _Witness, check: PermissionCheck) -> MCPServer:
-    server = MCPServer(
-        name="t",
-        auth_backend=AllowAnyBackend(),
-        session_store=None,
-        pool_seeds=DEFAULT_POOL_SEEDS.extend(tenant=witness.resolve),
+    server = make_server(
+        session_store=None, pool_seeds=DEFAULT_POOL_SEEDS.extend(tenant=witness.resolve)
     )
 
     def take(*, pk: int, tenant: Any) -> dict[str, int]:
