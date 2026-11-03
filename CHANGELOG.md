@@ -48,10 +48,12 @@ carries; releases up to 0.54.0 are in
   `ValueError` naming the URI. A host fetches a view once by the exact URI a tool's `ui=`
   link names and expands nothing, so a templated view was a resource no host could ask
   for; register one view per URI. A tool's `ui=` link to a templated URI finds no view
-  and is refused as before. `ResourceRegistry.register` refuses a binding built by hand
-  with the view mime type and a templated URI the same way, so a view is concrete however
-  it is registered, and the ambiguity refusal on a `ui=` link is reachable only through a
-  data resource's URI template.
+  and is refused as before. `ResourceRegistry.register` refuses any binding with the view
+  mime type and a templated URI the same way, however it arrives: a binding built by hand,
+  and `register_resource(..., mime_type="text/html;profile=mcp-app")` with a `{var}` in
+  `uri_template`, which 0.4.0 accepted. A view is concrete however it is registered, so
+  the ambiguity refusal on a `ui=` link is reachable only through a data resource's URI
+  template; register a view with `register_ui_resource`.
 
 ### Fixed
 
