@@ -2383,8 +2383,9 @@ own authorization server behind.
   every call; a backend returns `None` for a caller it cannot authenticate, and
   that produces a spec-mandated 401 with a `WWW-Authenticate` header built from
   `www_authenticate_challenge(...)`. The
-  `/.well-known/oauth-protected-resource` view delegates its payload to the
-  backend's `protected_resource_metadata()`.
+  protected-resource metadata view, under the mount and at RFC 9728's location
+  through `well_known_urls()`, delegates its payload to the backend's
+  `protected_resource_metadata()`.
 - **The spec's own `permissions`.** A tool or a resource is guarded by its
   kernel spec's `PermissionCheck`s, asked of the token's principal
   ([How a tool is called](#how-a-tool-is-called)). A refusal is

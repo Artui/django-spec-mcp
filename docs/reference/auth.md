@@ -45,7 +45,9 @@ comparison RFC 8707 asks for, and builds its 401 challenge with
 ## Protected Resource Metadata (RFC 9728)
 
 The view serving the document is a plain Django view, mounted under the
-server's URLs as `protected-resource-metadata`.
+server's URLs as `protected-resource-metadata`, and at RFC 9728's location by
+`MCPServer.well_known_urls()` in the root URLconf
+([Where a client finds the metadata](../auth.md#where-a-client-finds-the-metadata)).
 
 ::: django_spec_mcp.auth.protected_resource_metadata_view.ProtectedResourceMetadataView
 ::: django_spec_mcp.auth.types.protected_resource_metadata.ProtectedResourceMetadata

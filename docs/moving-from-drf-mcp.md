@@ -343,7 +343,10 @@ The endpoint classes are renamed and are plain Django views:
 | `ProtectedResourceMetadataViewSet` | `ProtectedResourceMetadataView`, in `django_spec_mcp.auth.protected_resource_metadata_view` |
 
 `as_view` takes only the collaborators as keyword arguments, with no routing
-map. A project mounting `server.urls` or `server.async_urls` needs no change.
+map; the metadata view's one collaborator is `auth_backend=`. A project mounting
+`server.urls` or `server.async_urls` needs no change, and one that mounted the
+metadata view by hand at the origin can use `server.well_known_urls()` instead
+([Where a client finds the metadata](auth.md#where-a-client-finds-the-metadata)).
 
 A few answers change, which matters to a test suite that pins them:
 
