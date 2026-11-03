@@ -31,22 +31,18 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import PromptArgument
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.registry.types.ui_resource_meta import UIResourceMeta
 from django_spec_mcp.server.mcp_server import MCPServer
 from django_spec_mcp.server.utils import UnguardedToolWarning
+from tests.utils import make_server
 
 
 @dataclass
 class _Note:
     key: str
-
-
-def _server() -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
 
 
 def _retrieve(read: str = "key") -> SelectorSpec:
@@ -79,7 +75,7 @@ def _read(server: MCPServer, uri: str) -> Any:
 
 
 def test_unguarded_prompt_warns() -> None:
-    server = _server()
+    server = make_server()
     with pytest.warns(UnguardedToolWarning, match="MCP prompt 'p' is registered with no"):
         server.register_prompt(name="p", render=lambda **_: "x")
 
@@ -92,14 +88,14 @@ def test_unguarded_prompt_warns() -> None:
 def test_either_guard_silences_the_warning(
     guard: dict[str, Any], recwarn: pytest.WarningsRecorder
 ) -> None:
-    server = _server()
+    server = make_server()
     server.register_prompt(name="p", render=lambda **_: "x", **guard)
     assert not [w for w in recwarn if issubclass(w.category, UnguardedToolWarning)]
 
 
 def test_require_tool_permissions_refuses_an_unguarded_prompt(settings: Any) -> None:
     settings.SPEC_MCP = {"REQUIRE_TOOL_PERMISSIONS": True}
-    server = _server()
+    server = make_server()
     with pytest.raises(ImproperlyConfigured, match="MCP prompt 'p'"):
         server.register_prompt(name="p", render=lambda **_: "x")
     assert server.prompts.get("p") is None
@@ -111,7 +107,7 @@ def test_an_unguarded_view_is_deliberately_allowed(
     """A view's content sources cannot read the caller's data, so views stay
     exempt on purpose rather than by oversight."""
     settings.SPEC_MCP = {"REQUIRE_TOOL_PERMISSIONS": True}
-    server = _server()
+    server = make_server()
     server.register_ui_resource(name="view", uri="ui://view", html="<p>hi</p>", ui=UIResourceMeta())
     assert server.resources.by_uri_template("ui://view") is not None
     assert not [w for w in recwarn if issubclass(w.category, UnguardedToolWarning)]
@@ -120,7 +116,7 @@ def test_an_unguarded_view_is_deliberately_allowed(
 def test_a_prompt_argument_list_is_unaffected() -> None:
     """Prompt arguments are a different channel: the ``prompts/get`` seed order
     is what protects them, so a declared name is never refused here."""
-    binding = _server().register_prompt(
+    binding = make_server().register_prompt(
         name="p",
         render=lambda **_: "x",
         arguments=[PromptArgument(name="topic")],
@@ -134,7 +130,7 @@ def test_a_prompt_argument_list_is_unaffected() -> None:
 
 @pytest.mark.parametrize("reserved", ["user", "request", "data", "instance", "result", "queryset"])
 def test_a_template_variable_named_after_a_pool_seed_is_refused(reserved: str) -> None:
-    server = _server()
+    server = make_server()
     with pytest.raises(ImproperlyConfigured, match="collide with reserved transport keys"):
         server.register_resource(
             _retrieve(), name="notes", uri_template=f"notes://{{{reserved}}}/{{key}}"
@@ -143,7 +139,7 @@ def test_a_template_variable_named_after_a_pool_seed_is_refused(reserved: str) -
 
 
 def test_a_duplicated_template_variable_is_refused() -> None:
-    server = _server()
+    server = make_server()
     with pytest.raises(ImproperlyConfigured, match="duplicate uri_template variable"):
         server.register_resource(_retrieve(), name="notes", uri_template="notes://{key}/{key}")
     assert server.resources.resolve("notes://a/b") is None
@@ -153,13 +149,13 @@ def test_a_duplicated_template_variable_is_refused() -> None:
 def test_a_name_a_tool_reserves_is_an_ordinary_segment_of_a_resource(variable: str) -> None:
     """A read has no Validator to bind ``serializer`` and no post-fetch pipeline
     to take ``page``, so either is a locator segment the selector receives."""
-    server = _server()
+    server = make_server()
     server.register_resource(_retrieve(variable), name="r", uri_template=f"r://{{{variable}}}")
     assert _read(server, "r://csv") == {"key": "csv"}
 
 
 def test_an_ordinary_template_variable_still_registers() -> None:
-    binding = _server().register_resource(
+    binding = make_server().register_resource(
         _retrieve(), name="notes", uri_template="notes://{key}", completions={"key": lambda _: []}
     )
     assert binding.is_template

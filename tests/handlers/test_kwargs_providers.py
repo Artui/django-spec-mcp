@@ -37,7 +37,6 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
 from django_spec_mcp.handlers.handle_resources_read_async import handle_resources_read_async
@@ -47,7 +46,7 @@ from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
 from tests.testapp.kernel_shapes import InvoiceOutput
 from tests.testapp.models import Invoice
-from tests.utils import call_context
+from tests.utils import call_context, make_server
 
 OPEN = [Unrestricted()]
 
@@ -64,10 +63,6 @@ _ALICE = _IdentifiedUser("alice")
 
 def _ctx(server: MCPServer) -> MCPCallContext:
     return call_context(server, token=TokenInfo(user=_ALICE))
-
-
-def _server() -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
 
 
 TOOLS = pytest.mark.parametrize(
@@ -99,7 +94,7 @@ def test_a_service_provider_is_merged_into_the_pool(call: Callable[..., Any]) ->
         seen.update(user=request.mcp_token.user, view=view)
         return {"tenant_id": 42}
 
-    server = _server()
+    server = make_server()
     server.register_tool(
         ServiceSpec(
             service=lambda *, tenant_id: {"tenant_id": tenant_id},
@@ -120,7 +115,7 @@ def test_a_service_provider_is_merged_into_the_pool(call: Callable[..., Any]) ->
 def _resource(
     selector: Any, provider: Any, *, uri_template: str = "r://{pk}", **fields: Any
 ) -> tuple[MCPServer, Any]:
-    server = _server()
+    server = make_server()
     binding = server.register_resource(
         SelectorSpec(
             kind=SelectorKind.RETRIEVE,
@@ -143,7 +138,7 @@ def test_register_resource_takes_a_kernel_selector_spec_end_to_end() -> None:
         reads=Parameters([Parameter("pk", "string", required=True)]),
         permissions=OPEN,
     )
-    server = _server()
+    server = make_server()
     binding = server.register_resource(spec, name="r", uri_template="invoices://{pk}")
     assert isinstance(binding, KernelResourceBinding)
     assert binding.spec is spec

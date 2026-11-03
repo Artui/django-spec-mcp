@@ -28,20 +28,16 @@ from django_spec_mcp import (
     ToolContentBlock,
     ToolContentKind,
 )
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
+from tests.utils import make_server
 
 PNG = b"\x89PNG\r\n\x1a\n"
 PNG_B64 = base64.b64encode(PNG).decode("ascii")
 IMAGE_BLOCK = {"type": "image", "data": PNG_B64, "mimeType": "image/png"}
-
-
-def _server() -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore())
 
 
 def _spec(service: Any) -> ServiceSpec:
@@ -155,7 +151,7 @@ def _selector(payload: Any) -> SelectorSpec:
 def test_a_media_tool_emits_one_block_and_no_structured_content(
     spec: Any, kind: ToolContentKind, mime_type: str, block: dict[str, Any]
 ) -> None:
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     server.register_tool(spec, name="media.get", content_kind=kind, content_mime_type=mime_type)
     result = handle_tools_call({"name": "media.get", "arguments": {}}, _ctx(server))
     assert result["content"] == [block]
@@ -163,7 +159,7 @@ def test_a_media_tool_emits_one_block_and_no_structured_content(
 
 
 def test_image_tool_does_not_advertise_an_output_schema() -> None:
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     server.register_tool(
         _spec(lambda: PNG),
         name="chart.render",
@@ -178,7 +174,7 @@ def test_resource_link_tool_emits_links_and_keeps_structured_content() -> None:
         {"uri": "invoices://1", "name": "Invoice 1"},
         {"uri": "invoices://2", "name": "Invoice 2", "mimeType": "application/pdf"},
     ]
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     server.register_tool(
         _spec(lambda: links),
         name="invoices.find",
@@ -191,7 +187,7 @@ def test_resource_link_tool_emits_links_and_keeps_structured_content() -> None:
 
 
 def test_a_single_mapping_is_accepted_as_one_link() -> None:
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     server.register_tool(
         _spec(lambda: {"uri": "invoices://1", "name": "Invoice 1"}),
         name="invoices.one",
@@ -220,7 +216,7 @@ def test_a_payload_the_declared_kind_cannot_carry_is_a_tool_level_error(
 ) -> None:
     """It surfaces as ``isError`` rather than an exception so the client still
     gets a well-formed response, and the message names the declaration."""
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     server.register_tool(
         _spec(lambda: payload),
         name="media.get",
@@ -237,7 +233,7 @@ def test_a_payload_the_declared_kind_cannot_carry_is_a_tool_level_error(
 
 
 def test_media_without_a_mime_type_is_refused() -> None:
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     with pytest.raises(ImproperlyConfigured, match="requires content_mime_type"):
         server.register_tool(
             _spec(lambda: PNG),
@@ -247,7 +243,7 @@ def test_media_without_a_mime_type_is_refused() -> None:
 
 
 def test_media_with_structured_content_requested_is_refused() -> None:
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     with pytest.raises(ImproperlyConfigured, match="cannot be combined"):
         server.register_tool(
             _spec(lambda: PNG),
@@ -260,7 +256,7 @@ def test_media_with_structured_content_requested_is_refused() -> None:
 
 def test_resource_link_needs_no_mime_type() -> None:
     """Links carry their own per-entry ``mimeType``, so the binding needs none."""
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     binding = server.register_tool(
         _spec(lambda: []),
         name="invoices.find",
@@ -273,7 +269,7 @@ def test_resource_link_needs_no_mime_type() -> None:
 
 
 def _link_result(uri: Any) -> dict[str, Any]:
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     server.register_tool(
         _spec(lambda: [{"uri": uri, "name": "Saved link"}]),
         name="bookmarks.find",
