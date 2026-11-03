@@ -147,7 +147,7 @@ def _binding(uri_template: str) -> ResourceBinding:
     )
 
 
-@pytest.mark.parametrize("char", ["\x00", "\n", "\r", "\t", "\x1f", "\x7f", "\x85"])
+@pytest.mark.parametrize("char", ["\x00", "\n", "\r", "\t", "\x1f", "\x7f", "\x85", "\x9f"])
 def test_resolve_refuses_a_control_character_wherever_it_falls(char: str) -> None:
     reg = ResourceRegistry()
     reg.register(_binding("invoices://{pk}"))
@@ -165,3 +165,5 @@ def test_resolve_still_carries_every_printable_character() -> None:
     template = _binding("invoices://{pk}")
     reg.register(template)
     assert reg.resolve("invoices://a b%20é-_.~") == (template, {"pk": "a b%20é-_.~"})
+    # \xa0 is the first character past the C1 block, and a no-break space is printable.
+    assert reg.resolve("invoices://a\xa0b") == (template, {"pk": "a\xa0b"})

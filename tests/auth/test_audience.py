@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from collections import UserString
 from collections.abc import Sequence
+from typing import Any
 
 import pytest
 
@@ -70,3 +72,17 @@ def test_a_token_naming_no_resource_matches_nothing(audience: Sequence[str]) -> 
 def test_unset_expected_disables_enforcement_for_a_sequence_too() -> None:
     assert audience_matches(["https://anything"], None) is True
     assert audience_matches([], None) is True
+
+
+def test_a_user_string_member_is_no_substring_match() -> None:
+    """``in`` on a ``UserString`` is a substring test, and only a member equal to
+    ``expected`` counts."""
+    audience: Any = UserString(_HERE + "-admin")
+    assert audience_matches(audience, _HERE) is False
+
+
+def test_a_bytes_audience_is_rejected_not_raised() -> None:
+    """``in`` on ``bytes`` raises ``TypeError`` for a ``str`` needle, a 500 where
+    the token should be a 401."""
+    audience: Any = _HERE.encode()
+    assert audience_matches(audience, _HERE) is False

@@ -171,9 +171,10 @@ def build_ui_tool_meta(
     (a host resolves it against the server it read the tool from, so a view
     must be registered *before* the tool linking to it, and a templated URI
     names none, since ``register_ui_resource`` refuses one); a
-    ``resource_uri`` that a *data* resource's URI template splits more than one
-    way, which is the only route to the registry's ambiguity refusal now that
-    a view's URI is always concrete; and a tool not emitting
+    ``resource_uri`` that a URI template splits more than one way, which is
+    reachable only through a template ``register_ui_resource`` did not build (a
+    *data* resource's, or a binding registered by hand on ``server.resources``),
+    since it refuses a templated URI itself; and a tool not emitting
     ``structuredContent``, the payload a view renders from — checked against
     the effective value, so a project that turned it off globally is caught too.
     """
@@ -188,7 +189,8 @@ def build_ui_tool_meta(
 
     # ``resolve`` raises ValueError for one reason only: a URI its template
     # splits more than one way. It walks every binding, so the template can be a
-    # data resource's as well as a view's. The registry's message names neither
+    # data resource's or a hand-registered binding's (``register_ui_resource``
+    # builds none that is templated). The registry's message names neither
     # the tool nor that the link is what asked, so say both.
     try:
         resolved = resources.resolve(ui.resource_uri)

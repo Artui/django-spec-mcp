@@ -24,7 +24,10 @@ carries; releases up to 0.54.0 are in
   names, so the document always matches the URL it is served at. The route under the
   mount stays. A server with no backend, or with a backend whose `resource` is not an
   absolute http(s) URL (such as `AllowAnyBackend`), is refused with
-  `ImproperlyConfigured`.
+  `ImproperlyConfigured`. The route itself is public as
+  `ProtectedResourceMetadataView.well_known_route(resource)`: it returns the
+  root-URLconf route for one resource URL, and refuses a `resource` that is not an
+  absolute http(s) URL with a host and no fragment with `ImproperlyConfigured`.
 
 ### Changed
 
@@ -40,7 +43,8 @@ carries; releases up to 0.54.0 are in
   link names and expands nothing, so a templated view was a resource no host could ask
   for; register one view per URI. A tool's `ui=` link to a templated URI finds no view
   and is refused as before. The ambiguity refusal on a `ui=` link is now reachable only
-  through a data resource's URI template.
+  through a URI template `register_ui_resource` did not build: a data resource's, or a
+  binding registered by hand on `server.resources`.
 
 ### Fixed
 
