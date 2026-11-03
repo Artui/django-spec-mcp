@@ -36,14 +36,13 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
 from django_spec_mcp.handlers.types.context import MCPCallContext
-from tests.utils import call_context, tool_error
+from tests.utils import call_context, make_server, tool_error
 
 _POOL = "django_spec_mcp.handlers.offered_tools.base_pool"
 """Where the filter looks ``base_pool`` up, so a spy there sees every pool it builds."""
@@ -98,9 +97,7 @@ def _service(*affordances: Affordance) -> ServiceSpec:
 
 
 def _server(**config: Any) -> MCPServer:
-    return MCPServer(
-        name="t",
-        auth_backend=AllowAnyBackend(),
+    return make_server(
         session_store=None,
         config=build_mcp_config(**config) if config else None,
     )
@@ -299,9 +296,7 @@ def test_the_condition_sees_the_context_and_user_a_call_would() -> None:
 
 def _seeded_ctx(seeds: PoolSeeds, **kwargs: Any) -> tuple[MCPServer, MCPCallContext]:
     """A server registering ``seeds``, and a context carrying them as the transport's does."""
-    server = MCPServer(
-        name="t", auth_backend=AllowAnyBackend(), session_store=None, pool_seeds=seeds
-    )
+    server = make_server(session_store=None, pool_seeds=seeds)
     return server, replace(_ctx(server, **kwargs), pool_seeds=seeds)
 
 

@@ -27,14 +27,13 @@ from django.http import HttpRequest
 from django_service_specs import Parameter, Parameters, PermissionCheck, SelectorKind, SelectorSpec
 
 from django_spec_mcp import MCPServer, SubscriptionFilter
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
 from django_spec_mcp.handlers.handle_resources_read_async import handle_resources_read_async
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.subscriptions.grant_subscription import grant_subscription
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
-from tests.utils import RefusingRateLimit, call_context
+from tests.utils import RefusingRateLimit, call_context, make_server
 
 
 class _GrantsProjectSeven(PermissionCheck):
@@ -55,7 +54,7 @@ def _project(*, project_pk: int) -> dict[str, int]:
 
 
 def _server(check: PermissionCheck, *rate_limits: Any) -> MCPServer:
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server = make_server(session_store=None)
     server.register_resource(
         SelectorSpec(
             kind=SelectorKind.RETRIEVE,

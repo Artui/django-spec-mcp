@@ -20,10 +20,10 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
 from django_spec_mcp import JsonRpcError, JsonRpcErrorCode, MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
+from tests.utils import make_server
 
 OPEN = [Unrestricted()]
 
@@ -54,9 +54,7 @@ def exporter() -> Any:
 
 
 def _server(**tool: Any) -> MCPServer:
-    server = MCPServer(
-        name="t", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore()
-    )
+    server = make_server(session_store=InMemorySessionStore())
     server.register_tool(
         ServiceSpec(service=lambda: {"ok": True}, permissions=OPEN), name="t.x", **tool
     )

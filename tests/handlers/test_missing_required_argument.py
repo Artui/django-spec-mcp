@@ -57,7 +57,6 @@ from django_service_specs import (
 from typing_extensions import TypedDict
 
 from django_spec_mcp import AgentConventions, MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
@@ -69,7 +68,7 @@ from tests.conftest import post_jsonrpc
 from tests.testapp.kernel_shapes import InvoiceOutput
 from tests.testapp.models import Invoice
 from tests.testapp.urlconf_for import urlconf_for
-from tests.utils import tool_error
+from tests.utils import make_server, tool_error
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -153,9 +152,7 @@ def _rename_spec(permissions: Any = OPEN) -> ServiceSpec:
 
 
 def _server(*, permissions: Any = OPEN, **kwargs: Any) -> MCPServer:
-    server = MCPServer(
-        name="t", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore(), **kwargs
-    )
+    server = make_server(session_store=InMemorySessionStore(), **kwargs)
     server.register_tool(_get(permissions=permissions), name="get")
     server.register_tool(_rename_spec(permissions), name="rename")
     server.register_tool(
@@ -347,7 +344,7 @@ async def test_a_caller_the_scope_gate_refuses_is_refused_before_the_argument_is
 ) -> None:
     # The gate is the transport's, judged before dispatch is reached, so a
     # caller without the scope is told only that.
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server = make_server(session_store=None)
     server.register_tool(_get(), name="get", scopes=("invoices:read",))
     server.register_tool(_rename_spec(), name="rename", scopes=("invoices:read",))
     params: dict[str, Any] = {"name": name, "arguments": {}}
@@ -390,7 +387,7 @@ def test_call_tool_refuses_a_caller_the_spec_denies_before_the_argument_is_check
 
 def _scoped_server(provider: Any) -> MCPServer:
     """``get(*, pk, tenant)``, both reads required, with ``provider`` as its ``kwargs=``."""
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server = make_server(session_store=None)
     server.register_tool(
         SelectorSpec(
             kind=SelectorKind.RETRIEVE,
@@ -443,9 +440,7 @@ async def test_a_read_the_provider_declines_and_the_caller_leaves_out_is_refused
 
 
 def _seeded_server() -> MCPServer:
-    server = MCPServer(
-        name="t",
-        auth_backend=AllowAnyBackend(),
+    server = make_server(
         session_store=None,
         pool_seeds=DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme"),
     )

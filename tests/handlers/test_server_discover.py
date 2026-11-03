@@ -15,20 +15,18 @@ from django.http import HttpRequest
 from django_service_specs import SelectorKind, SelectorSpec, ServiceSpec, Unrestricted
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.handlers.dispatch import dispatch
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
+from tests.utils import make_server
 
 
 def _server(**config: Any) -> MCPServer:
-    return MCPServer(
-        name="t",
+    return make_server(
         version="1.2.3",
         description="Use this to bill people.",
-        auth_backend=AllowAnyBackend(),
         session_store=InMemorySessionStore(),
         config=build_mcp_config(**config) if config else None,
     )

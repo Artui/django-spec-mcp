@@ -33,10 +33,9 @@ from django_service_specs import (
 from typing_extensions import TypedDict
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
 from django_spec_mcp.handlers.handle_resources_read_async import handle_resources_read_async
-from tests.utils import call_context
+from tests.utils import call_context, make_server
 
 OPEN = [Unrestricted()]
 _PK = Parameters([Parameter("pk", "integer", required=True)])
@@ -53,7 +52,7 @@ def _invoice(*, pk: int) -> Invoice:
 
 
 def _bare_server() -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend())
+    return make_server()
 
 
 def _server() -> MCPServer:
@@ -160,7 +159,7 @@ def test_a_selector_no_read_can_run_is_refused_at_registration(
 ) -> None:
     # Neither name is a template variable, so the variable checks above pass
     # it; the kernel's ``check_seeds``, asked with the server's seeds, does not.
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), pool_seeds=seeds)
+    server = make_server(pool_seeds=seeds)
     with pytest.raises(ImproperlyConfigured, match=rf"Resource 'bad': .*\['{offender}'\]"):
         server.register_resource(spec, name="bad", uri_template="bad://{pk}")
     assert len(server.resources) == 0

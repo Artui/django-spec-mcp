@@ -29,7 +29,7 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from tests.utils import make_server
 
 
 def _echo(**pool: Any) -> dict[str, Any]:
@@ -50,9 +50,7 @@ EDGE_NAMES = sorted(CALL_SEEDS | {"serializer"})
 
 def _server(spec: ServiceSpec) -> MCPServer:
     # A registered seed beside the call's own, so ``tenant`` is asked as a seed's name.
-    server = MCPServer(
-        name="t", auth_backend=AllowAnyBackend(), session_store=None, pool_seeds=SEEDS
-    )
+    server = make_server(session_store=None, pool_seeds=SEEDS)
     server.register_tool(spec, name="echo", description="Echo the arguments.")
     return server
 

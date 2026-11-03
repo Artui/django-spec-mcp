@@ -16,18 +16,17 @@ from asgiref.sync import sync_to_async
 from django_service_specs import DataclassPresenter, SelectorKind, SelectorSpec, Unrestricted
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from tests.testapp.kernel_shapes import InvoiceOutput
 from tests.testapp.models import Invoice
-from tests.utils import call_context
+from tests.utils import call_context, make_server
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
 
 def _server(spec: SelectorSpec, **tool: Any) -> MCPServer:
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server = make_server(session_store=None)
     server.register_tool(spec, name="invoices.list", **tool)
     return server
 

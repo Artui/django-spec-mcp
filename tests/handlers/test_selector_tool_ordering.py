@@ -33,10 +33,9 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from tests.testapp.kernel_shapes import InvoiceOutput
 from tests.testapp.models import Invoice
-from tests.utils import tool_error
+from tests.utils import make_server, tool_error
 
 
 class OrderedInvoiceFilterSet(django_filters.FilterSet):
@@ -52,7 +51,7 @@ class OrderedInvoiceFilterSet(django_filters.FilterSet):
 
 def _server(selector: Any, **spec: Any) -> MCPServer:
     paginate = spec.pop("paginate", False)
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server = make_server(session_store=None)
     server.register_tool(
         SelectorSpec(
             kind=SelectorKind.LIST,
