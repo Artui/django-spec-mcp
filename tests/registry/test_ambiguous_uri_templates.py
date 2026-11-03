@@ -146,17 +146,19 @@ def test_variables_separated_by_a_slash_split_one_way() -> None:
     assert found[1] == {"a": "x-y.z", "b": "w.v-u"}
 
 
-def test_a_trailing_newline_is_part_of_the_value_not_a_false_ambiguity() -> None:
+def test_a_trailing_newline_is_no_false_ambiguity_and_no_value() -> None:
     """``$`` matches before a final newline, so a greedy ``{pk}`` would take the
     newline and a lazy one would not, and a template with one variable would be
-    called ambiguous. Matching the whole URI keeps the two in step: the newline
-    is the value's, as it always was for the template, and a concrete URI no
-    longer matches with one appended."""
+    called ambiguous. Matching the whole URI keeps the two in step, and a
+    control character is no part of a value, so the URI resolves to nothing:
+    neither the template nor the concrete ``reports://`` answers it
+    (``test_control_characters_in_uris.py``)."""
     reg = ResourceRegistry()
     template = _binding("invoices://{pk}")
     reg.register(template)
     reg.register(_binding("reports://"))
-    assert reg.resolve("invoices://7\n") == (template, {"pk": "7\n"})
+    assert reg.resolve("invoices://7") == (template, {"pk": "7"})
+    assert reg.resolve("invoices://7\n") is None
     assert reg.resolve("reports://\n") is None
 
 
