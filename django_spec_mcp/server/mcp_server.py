@@ -791,7 +791,6 @@ class MCPServer:
         user: Any,
         request: Any = None,
         scopes: Sequence[str] | None = None,
-        session_id: str | None = None,
     ) -> MCPCallContext:
         """Build the per-call context the wire handlers thread through.
 
@@ -812,11 +811,7 @@ class MCPServer:
         if request is None:
             http_request.user = user
             http_request.method = "POST"
-        return self._context(
-            http_request,
-            TokenInfo(user=user, scopes=tuple(scopes or ())),
-            session_id=session_id,
-        )
+        return self._context(http_request, TokenInfo(user=user, scopes=tuple(scopes or ())))
 
     def run_task(self, task_id: str) -> None:
         """Execute a queued task. **This is what a worker calls.**

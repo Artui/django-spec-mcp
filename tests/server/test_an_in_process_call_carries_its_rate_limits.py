@@ -1,11 +1,10 @@
 """What ``MCPServer`` puts in the context of an in-process call.
 
-``_call_context`` hands the handlers the caller's session id and ``_context`` decides whether
-the call is charged its rate limits; neither is visible in a result, so each is read where the
-handlers read it: the span a tool call opens, and the ``-32005`` a spent limit answers.
+``_context`` decides whether the call is charged its rate limits, which is not visible in a
+result, so it is read where the handlers read it: the ``-32005`` a spent limit answers.
 
-No public in-process method takes a ``session_id`` yet, so the session cases reach
-``_call_context`` itself, the one place a caller of it can name one.
+An in-process call has no session, so ``_call_context`` takes no ``session_id`` and its span
+carries no ``mcp.session.id``; the span and the signature are pinned below.
 """
 
 from __future__ import annotations
@@ -69,15 +68,13 @@ def _call_span(exporter: InMemorySpanExporter) -> Any:
     return span
 
 
-@pytest.mark.django_db
-def test_a_session_id_handed_to_the_call_context_reaches_the_tool_call_span(
-    exporter: InMemorySpanExporter,
-) -> None:
-    """Fails with ``session_id=None`` in ``_call_context``'s hand-off to ``_context``."""
+def test_the_in_process_call_context_takes_no_session_id() -> None:
+    """Fails while ``_call_context`` still accepts ``session_id``: no in-process entry point
+    has one to give, so the parameter only invited a caller to invent a session."""
     server = _server()
-    context = server._call_context(user=None, session_id="sess-7")
-    handle_tools_call({"name": "t.x", "arguments": {}}, context)
-    assert _call_span(exporter).attributes["mcp.session.id"] == "sess-7"
+    extra: dict[str, Any] = {"session_id": "sess-7"}
+    with pytest.raises(TypeError, match="session_id"):
+        server._call_context(user=None, **extra)
 
 
 @pytest.mark.django_db
