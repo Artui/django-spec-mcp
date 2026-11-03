@@ -17,17 +17,17 @@ from django_service_specs import (
     Unrestricted,
 )
 
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.registry.resource_registry import ResourceRegistry
 from django_spec_mcp.registry.types.resource_binding import ResourceBinding
 from django_spec_mcp.registry.types.ui_tool_meta import UIToolMeta
 from django_spec_mcp.server.mcp_server import MCPServer
 from django_spec_mcp.types.ui_resource_mime_type import UI_RESOURCE_MIME_TYPE
 from tests.server.test_ui_tool_linkage import _Row
+from tests.utils import make_server
 
 
 def _server() -> MCPServer:
-    return MCPServer(name="test", description="d", auth_backend=AllowAnyBackend())
+    return make_server(name="test", description="d")
 
 
 def _binding(uri_template: str, mime_type: str) -> ResourceBinding:

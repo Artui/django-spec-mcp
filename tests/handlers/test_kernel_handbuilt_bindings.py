@@ -26,6 +26,7 @@ from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from tests.kernel_client import KernelClient
 from tests.testapp.auth_backend import HeaderAuthBackend
 from tests.testapp.urlconf_for import urlconf_for
+from tests.utils import make_server
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -51,7 +52,7 @@ def _reset() -> None:
 
 
 def _server(*, require: bool) -> MCPServer:
-    return MCPServer(
+    return make_server(
         name="handbuilt",
         auth_backend=HeaderAuthBackend(),
         config=replace(build_mcp_config(), require_tool_permissions=require),

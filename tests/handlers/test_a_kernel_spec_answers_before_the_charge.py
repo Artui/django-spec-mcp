@@ -878,9 +878,7 @@ def test_a_completion_is_judged_with_the_callers_principal_and_context(
     # call context (``call_context=None`` fails it) whose request carries the
     # token (``carry_token`` dropped fails it) and the binding's name as action.
     get_user_model().objects.create_user("alice")
-    server = MCPServer(
-        name="t", auth_backend=HeaderAuthBackend(), session_store=InMemorySessionStore()
-    )
+    server = make_server(auth_backend=HeaderAuthBackend(), session_store=InMemorySessionStore())
     server.register_resource(
         SelectorSpec(
             kind=SelectorKind.RETRIEVE,
@@ -1077,7 +1075,7 @@ def test_an_admitted_reader_of_a_malformed_variable_is_told_which_over_http(
         return {"pk": pk}
 
     limit = _CountingLimit()
-    server = MCPServer(name="t", auth_backend=HeaderAuthBackend(), session_store=None)
+    server = make_server(auth_backend=HeaderAuthBackend(), session_store=None)
     server.register_resource(
         SelectorSpec(
             kind=SelectorKind.RETRIEVE,

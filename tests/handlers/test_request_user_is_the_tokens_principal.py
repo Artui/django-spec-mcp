@@ -31,6 +31,7 @@ from django_spec_mcp.types.resource_encoding import ResourceEncoding
 from tests.kernel_client import KernelClient
 from tests.testapp.auth_backend import HeaderAuthBackend
 from tests.testapp.urlconf_for import urlconf_for
+from tests.utils import make_server
 
 # Django's own session and authentication middleware, so the user a cookie names
 # is resolved by the producer that resolves it in a project. Signed-cookie
@@ -57,8 +58,7 @@ def _async_name(request: Any) -> str:
 
 
 def _server(seen: list[Any], view_read: list[Any] | None = None) -> MCPServer:
-    server = MCPServer(
-        name="t",
+    server = make_server(
         auth_backend=HeaderAuthBackend(),
         session_store=InMemorySessionStore(),
         # The async read resolves seeds on the loop, so the request is kept
