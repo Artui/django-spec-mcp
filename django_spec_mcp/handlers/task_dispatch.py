@@ -153,9 +153,13 @@ def maybe_create_task(
     # (``test_a_caller_refused_on_the_merged_arguments_gets_no_task``). Its grant is
     # not kept, since the worker's replay is a later call, judged again. A
     # streamed call's pre-flight has asked already, on the arguments as sent,
-    # and is not asked twice unless answers were carried in: without the
-    # second conjunct ``test_a_streamed_task_retry_is_admitted_afresh`` fails,
-    # and without the first a direct call with no ``params``
+    # and is not asked twice unless answers were carried in. Each part has the
+    # test that fails without it: with the whole parenthesised disjunct gone,
+    # ``test_a_streamed_task_retry_is_admitted_afresh`` (the carried answers are
+    # never judged); with only ``bool(prior.carried)`` gone,
+    # ``test_a_streamed_task_call_with_nothing_carried_is_not_asked_twice`` (a
+    # call carrying nothing is asked again); with only ``prior is not None``
+    # gone, a direct call with no ``params``
     # (``test_a_pre_flight_admission_stands_when_no_call_is_handed_in``) reads
     # ``carried`` off ``None``.
     if admission is None or (prior is not None and bool(prior.carried)):

@@ -15,23 +15,37 @@ from typing import Any
 
 import pytest
 from asgiref.sync import sync_to_async
-from django_service_specs import DataclassValidator, PermissionCheck, ServerArguments, ServiceSpec
+from django.core import signing
+from django_service_specs import (
+    DataclassValidator,
+    PermissionCheck,
+    SelectorKind,
+    SelectorSpec,
+    ServerArguments,
+    ServiceSpec,
+    Unrestricted,
+)
 
 from django_spec_mcp import MCPServer, TaskPolicy
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.elicitation.sign_request_state import sign_request_state
+from django_spec_mcp.elicitation.types.request_state import RequestState
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.kernel_utils import admit_kernel_tool_call
+from django_spec_mcp.handlers.resolve_call_input import resolve_call_input
 from django_spec_mcp.handlers.task_dispatch import maybe_create_task
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
+from django_spec_mcp.types.request_state_salt import REQUEST_STATE_SALT
 from django_spec_mcp.types.task_status import TaskStatus
 from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
 from tests.elicitation.conftest import TOOL, DeleteRows, delete_rows_kernel
 from tests.tasks.conftest import RecordingExecutor, context
+from tests.utils import tool_error
 
 _ROUTES = pytest.mark.parametrize("route", ["sync", "async", "streamed"])
 _ANSWER: dict[str, Any] = {
@@ -161,6 +175,29 @@ async def test_a_retry_that_runs_as_a_task_stores_and_runs_its_answer(route: str
 
 
 @_ROUTES
+async def test_answers_carried_in_a_verified_state_reach_the_task(route: str) -> None:
+    """The state is the server's own, re-signed with an answer an earlier round took.
+
+    Round one's state carries none, so the retry below has no ``inputResponses``
+    and the only place ``confirmed`` can come from is the verified state:
+    resolving on the arguments alone, or with the state stripped, leaves it out.
+    """
+    world = _World()
+    first = RequestState.from_payload(
+        signing.loads(await world.round_one_state(), salt=REQUEST_STATE_SALT)
+    )
+    assert first is not None
+    carried = sign_request_state(replace(first, answers={"confirmed": True}))
+    params: dict[str, Any] = {"name": TOOL, "arguments": dict(_SENT), "requestState": carried}
+
+    handle = await world.call(route, params, world.ctx())
+
+    record = await world.run(handle)
+    assert record.arguments == {"count": 500, "confirmed": True}
+    assert record.task.result.get("isError", False) is False, record.task.result
+
+
+@_ROUTES
 @pytest.mark.parametrize("state", [None, "junk"], ids=["no-state", "junk-state"])
 async def test_a_first_call_with_answers_runs_as_a_task_as_inline_does(
     route: str, state: str | None
@@ -200,8 +237,12 @@ async def test_a_junk_state_with_no_answers_stores_the_arguments_as_sent(route: 
 
     record = await world.run(handle)
     assert record.arguments == {"count": 500}
-    # A worker asks nobody: the service's question degrades to an error result.
-    assert record.task.result["isError"] is True
+    # A worker asks nobody: the service's question degrades to an error result, and
+    # the task is still ``completed``, not ``failed``.
+    assert record.status is TaskStatus.COMPLETED
+    error = tool_error(record.task.result)
+    assert error["type"] == "input_required"
+    assert error["requestedInput"] == {"confirmed": {"type": "boolean"}}
 
 
 @_ROUTES
@@ -279,3 +320,80 @@ async def test_a_pre_flight_admission_stands_when_no_call_is_handed_in() -> None
 
     assert out is not None and out["resultType"] == "task", out
     assert check.seen == [{"count": 500}]
+
+
+@pytest.mark.parametrize("route", ["sync", "async"])
+@pytest.mark.parametrize("action", ["accept", "decline"])
+async def test_a_selector_task_takes_no_part_in_the_round_trip(route: str, action: str) -> None:
+    """A selector merges and refuses nothing, so its answers neither reach the record
+    (accepted) nor answer the call before a task exists (declined)."""
+    store = InMemoryTaskStore()
+    executor = RecordingExecutor(store)
+    server = MCPServer(
+        name="selector",
+        auth_backend=AllowAnyBackend(),
+        task_store=store,
+        task_executor=executor,
+    )
+    server.register_tool(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=lambda: {"row": "one"},
+            permissions=[Unrestricted()],
+        ),
+        name="rows.read",
+        description="Read a row.",
+        task_policy=TaskPolicy.OPTIONAL,
+    )
+    ctx = replace(
+        context(server),
+        client_capabilities={"elicitation": {}, "extensions": {TASKS_EXTENSION_ID: {}}},
+    )
+    answer: dict[str, Any] = {ELICITATION_KEY: {"action": action}}
+    if action == "accept":
+        answer[ELICITATION_KEY]["content"] = {"confirmed": True}
+    params: dict[str, Any] = {"name": "rows.read", "arguments": {}, "inputResponses": answer}
+
+    out: Any = (
+        await sync_to_async(handle_tools_call)(params, ctx)
+        if route == "sync"
+        else await handle_tools_call_async(params, ctx)
+    )
+
+    assert out["resultType"] == "task", out
+    assert store.get(out["taskId"]).arguments == {}
+
+
+@pytest.mark.parametrize("route", ["sync", "async"])
+@pytest.mark.parametrize("case", ["undeclared", "no-store", "forbidden", "scope-denied"])
+async def test_a_call_that_gets_no_task_never_has_its_answers_resolved_for_one(
+    route: str, case: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The merge runs after every return that sends the call inline or refuses it.
+
+    Each case leaves ``maybe_create_task`` before its resolve: a client that did not
+    declare the extension, a server with no store, a tool that never runs as a task,
+    and a caller the scope gate denies. A spy on the function the task path calls
+    sees none of them; the inline route resolves through its own import, which the
+    spy does not touch.
+    """
+    calls: list[tuple[Any, ...]] = []
+    real = resolve_call_input
+
+    def spy(*args: Any) -> Any:
+        calls.append(args)
+        return real(*args)
+
+    monkeypatch.setattr("django_spec_mcp.handlers.task_dispatch.resolve_call_input", spy)
+    world = _World(
+        policy=TaskPolicy.FORBIDDEN if case == "forbidden" else TaskPolicy.OPTIONAL,
+        **({"scopes": ("rows:delete",)} if case == "scope-denied" else {}),
+    )
+    ctx = world.ctx(task=case != "undeclared")
+    if case == "no-store":
+        ctx = replace(ctx, tasks=None)
+
+    out = await world.call(route, _retry(None), ctx)
+
+    assert calls == []
+    assert isinstance(out, JsonRpcError) or out.get("resultType") != "task", out

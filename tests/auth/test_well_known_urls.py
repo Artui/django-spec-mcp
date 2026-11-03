@@ -249,9 +249,12 @@ def test_a_resource_path_with_a_dollar_sign_is_refused_by_name(resource: str) ->
     ``2_0.W001`` for a route that ends with one, so the resource is refused
     where the route is built. Refused whether written raw or percent-encoded,
     since the route is built from the decoded path: the encoded cases fail if
-    the check ran before the decoding.
+    the check ran before the decoding. The match includes the message's own
+    wording, so the test pins which refusal answered: the resources hold nothing
+    the angle-bracket or UTF-8 refusals read.
     """
-    with pytest.raises(ImproperlyConfigured, match=re.escape(f"resource {resource!r}")):
+    named = re.escape(f"resource {resource!r}")
+    with pytest.raises(ImproperlyConfigured, match=named + r".*holds '\$'"):
         _server(resource).well_known_urls()
 
 
@@ -288,25 +291,32 @@ def test_two_servers_each_answer_at_their_own_location() -> None:
     assert public_doc.json()["resource"] == "https://example.test/public/mcp/"
 
 
-def test_servers_whose_resources_differ_by_a_trailing_slash_share_the_stripped_route() -> None:
-    """The first server mounted answers the route both share.
+@pytest.mark.parametrize("slashed_first", [True, False], ids=["slashed-first", "bare-first"])
+def test_servers_whose_resources_differ_by_a_trailing_slash_share_the_stripped_route(
+    slashed_first: bool,
+) -> None:
+    """The first server mounted answers the route both share, in either mount order.
 
     ``https://example.test/mcp/`` and ``https://example.test/mcp`` both own
     ``/.well-known/oauth-protected-resource/mcp``, and the resolver takes the
     first match, so the second server's client reads the first server's
     document and must discard it (RFC 9728 3.3: its ``resource`` is not the
-    identifier the URL was built from). The slashed route is the first server's
-    alone. Pinned so the shared route is known behaviour; the docs tell a
-    project to give two servers distinct paths.
+    identifier the URL was built from). The slashed route belongs to the slashed
+    server alone, wherever it is mounted. Pinned so the shared route is known
+    behaviour; the docs tell a project to give two servers distinct paths.
     """
     slashed = _server("https://example.test/mcp/", name="slashed")
     bare = _server("https://example.test/mcp", name="bare")
+    mounts = [("slashed/", slashed), ("bare/", bare)]
+    first = "https://example.test/mcp/" if slashed_first else "https://example.test/mcp"
 
-    with override_settings(ROOT_URLCONF=_root_urlconf(("slashed/", slashed), ("bare/", bare))):
+    with override_settings(
+        ROOT_URLCONF=_root_urlconf(*(mounts if slashed_first else mounts[::-1]))
+    ):
         shared = Client().get("/.well-known/oauth-protected-resource/mcp")
         slashed_only = Client().get("/.well-known/oauth-protected-resource/mcp/")
 
-    assert shared.json()["resource"] == "https://example.test/mcp/"
+    assert shared.json()["resource"] == first
     assert slashed_only.json()["resource"] == "https://example.test/mcp/"
 
 
