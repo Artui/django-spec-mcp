@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any
 
@@ -42,7 +43,11 @@ class TaskRecord:
         user_pk: Rehydrates the user on the worker.
         scopes: Rebuild the worker's ``TokenInfo`` so its permission checks see
             what the request path saw.
-        audience: Rebuilds that ``TokenInfo``'s audience.
+        audience: Rebuilds that ``TokenInfo``'s audience: one URL, or the
+            several a token names, held as a tuple whatever sequence was given,
+            so a store whose codec turns a tuple into a list (JSON does) hands
+            back the same type
+            (``test_the_record_holds_a_tuple_so_no_store_changes_its_kind``).
         enqueued: Whether the task reached the executor, so a worker cannot be
             tricked into running it twice.
     """
@@ -53,7 +58,7 @@ class TaskRecord:
     principal_id: str
     user_pk: Any = None
     scopes: tuple[str, ...] = field(default_factory=tuple)
-    audience: str | None = None
+    audience: str | Sequence[str] | None = None
     enqueued: bool = False
 
     progress: float | None = None
@@ -83,6 +88,13 @@ class TaskRecord:
     The spec requires the server never to reuse a key over a task's lifetime, so
     a key appearing here is answered for good and a later request picks a new
     one."""
+
+    def __post_init__(self) -> None:
+        # A ``str`` is a sequence too, so it is excluded first, or one URL would
+        # become a tuple of its characters
+        # (``test_one_audience_or_none_is_kept_as_it_is``).
+        if self.audience is not None and not isinstance(self.audience, str):
+            object.__setattr__(self, "audience", tuple(self.audience))
 
     @property
     def task_id(self) -> str:
