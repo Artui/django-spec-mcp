@@ -38,8 +38,7 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from tests.utils import tool_error
+from tests.utils import make_server, tool_error
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -66,7 +65,7 @@ def _server(policy: UnknownArguments, seen: dict[str, Any]) -> MCPServer:
         seen.update(kwargs)
         return [{"id": 1}, {"id": 2}]
 
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server = make_server(session_store=None)
     server.register_tool(
         ServiceSpec(service=_service, validator=DataclassValidator(_Known), permissions=OPEN),
         name="service",

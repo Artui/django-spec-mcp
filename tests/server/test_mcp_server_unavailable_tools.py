@@ -32,9 +32,9 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from tests.testapp.models import Invoice
+from tests.utils import make_server
 
 _POOL = "django_spec_mcp.handlers.offered_tools.base_pool"
 """Where a pass looks ``base_pool`` up, so a spy there sees every pool it builds."""
@@ -87,9 +87,7 @@ def _register(
 
 
 def _server(**config: Any) -> MCPServer:
-    return MCPServer(
-        name="t",
-        auth_backend=AllowAnyBackend(),
+    return make_server(
         session_store=None,
         config=build_mcp_config(**config) if config else None,
     )

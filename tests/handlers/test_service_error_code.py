@@ -31,10 +31,9 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
-from tests.utils import call_context, tool_error
+from tests.utils import call_context, make_server, tool_error
 
 OPEN = [Unrestricted()]
 
@@ -80,7 +79,7 @@ def _spec(kind: str, outcome: str) -> Any:
 
 
 def _server(kind: str, outcome: str) -> MCPServer:
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server = make_server(session_store=None)
     server.register_tool(_spec(kind, outcome), name="t")
     return server
 

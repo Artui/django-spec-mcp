@@ -41,8 +41,8 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.testing import assert_tool_result_conforms
+from tests.utils import make_server
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -66,7 +66,7 @@ def _orders(kind: SelectorKind, row: dict[str, Any] = _ROW, **spec: Any) -> Sele
 
 
 def _server(spec: Any) -> MCPServer:
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server = make_server(session_store=None)
     server.register_tool(spec, name="orders", include_output_schema=True)
     return server
 

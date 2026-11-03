@@ -39,7 +39,6 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
@@ -50,7 +49,7 @@ from tests.testapp.auth_backend import HeaderAuthBackend
 from tests.testapp.kernel_shapes import InvoiceOutput
 from tests.testapp.models import Invoice
 from tests.testapp.urlconf_for import urlconf_for
-from tests.utils import call_context, tool_error
+from tests.utils import call_context, make_server, tool_error
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -88,7 +87,7 @@ def _invoices(
 
 
 def _server(spec: SelectorSpec, **tool: Any) -> MCPServer:
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server = make_server(session_store=None)
     server.register_tool(spec, name="invoices.list", **tool)
     return server
 
@@ -117,7 +116,7 @@ def _numbers(out: Any) -> list[str]:
 
 
 def test_register_tool_creates_a_selector_binding() -> None:
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server = make_server(session_store=None)
 
     binding = server.register_tool(_invoices(), name="invoices.list")
 
@@ -369,7 +368,7 @@ async def test_a_retrieve_presents_its_one_row(is_async: bool) -> None:
 
 @routes
 async def test_a_retrieve_without_a_presenter_serves_its_value_as_it_is(is_async: bool) -> None:
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server = make_server(session_store=None)
     server.register_tool(
         SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda: {"id": 1}, permissions=OPEN),
         name="invoices.list",
