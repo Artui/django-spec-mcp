@@ -30,7 +30,7 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from tests.utils import make_server
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -55,7 +55,7 @@ def _charge(*, data: _Charge) -> dict[str, Any]:
 
 
 def _server() -> MCPServer:
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server = make_server(session_store=None)
     server.register_tool(
         SelectorSpec(
             kind=SelectorKind.RETRIEVE,
@@ -124,7 +124,7 @@ def _read_without_a_default(*, number: str, limit: int) -> dict[str, Any]:
 
 
 def test_a_read_the_schema_would_offer_as_optional_over_a_required_keyword_is_refused() -> None:
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server = make_server(session_store=None)
     spec = SelectorSpec(
         kind=SelectorKind.RETRIEVE,
         selector=_read_without_a_default,
