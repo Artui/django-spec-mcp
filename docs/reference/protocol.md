@@ -85,3 +85,4 @@ declared the extension gets a task handle, and the task runs the spec.
 ::: django_spec_mcp.tasks.types.task_record.TaskRecord
 ::: django_spec_mcp.tasks.django_cache_task_store.DjangoCacheTaskStore
 ::: django_spec_mcp.tasks.in_memory_task_store.InMemoryTaskStore
+::: django_spec_mcp.tasks.transition_task.transition_task

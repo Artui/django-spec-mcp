@@ -455,7 +455,7 @@ def test_a_duplicate_answer_runs_the_service_once(worker_ran: bool) -> None:
     admits. The second resumes the task (and, here, its worker runs); the first
     then finds the task no longer waiting and queues nothing, rather than saving
     its record over a task that moved on and running the service again. Fails
-    without the status guard in ``resume_task``."""
+    without the guard in ``resume_task``."""
     runs: list[int] = []
     task: dict[str, str] = {}
 
@@ -475,49 +475,149 @@ def test_a_duplicate_answer_runs_the_service_once(worker_ran: bool) -> None:
     assert world.store.get(task["id"]).status is TaskStatus.COMPLETED
 
 
-class _OvertakenAfterARead(InMemoryTaskStore):
-    """Serves one read, then a ``tasks/cancel`` (or the record's expiry) lands
-    before the caller's next call."""
-
-    def __init__(self, meanwhile: str) -> None:
-        super().__init__()
-        self.meanwhile = meanwhile
-        self.overtake_after_a_read: str | None = None
-
-    def get(self, task_id: str) -> Any:
-        record = super().get(task_id)
-        if self.overtake_after_a_read == task_id:
-            self.overtake_after_a_read = None
-            if self.meanwhile == "cancelled":
-                transition_task(self, task_id, status=TaskStatus.CANCELLED)
-            else:
-                self.delete(task_id)
-        return record
-
-
-@pytest.mark.parametrize("meanwhile", ["cancelled", "expired"])
-def test_a_task_overtaken_between_the_parks_read_and_its_save_is_kept(meanwhile: str) -> None:
-    """The park saves the round before it moves the status, so the save must not
-    be built from a read the cancel (or the expiry) has since overtaken. Fails
-    without the read directly before the save in ``_park``."""
-    store = _OvertakenAfterARead(meanwhile)
+def test_a_late_answer_leaves_the_next_rounds_question_in_place() -> None:
+    """A duplicate ``tasks/update`` lands while the first admits: it resumes the
+    task, its worker runs, and the service asks round 2, parking the task again.
+    The first then finds the task waiting on a question it did not answer, and
+    queues nothing, rather than resuming it, wiping round 2's question and running
+    the service once more to ask it again. Fails without the round and request
+    guard in ``resume_task``."""
+    runs: list[int] = []
     task: dict[str, str] = {}
 
-    def asks(*, count: int, confirmed: bool = False, reason: str = "") -> Any:  # noqa: ARG001
-        store.overtake_after_a_read = task["id"]
+    def duplicate_runs_and_parks_again() -> None:
+        assert world.answer(task["id"], _accept(confirmed=True), input_request_key(1)) == {}
+        world.server.run_task(task["id"])
+
+    world = _World(service=_counting(runs), check=_ChangesMeanwhile(duplicate_runs_and_parks_again))
+    task["id"] = world.start(1500)
+
+    assert world.answer(task["id"], _accept(confirmed=True), input_request_key(1)) == {}
+
+    parked = world.get(task["id"])
+    assert parked["status"] == "input_required", parked
+    assert list(parked["inputRequests"]) == [input_request_key(2)]
+    assert parked["inputRequests"][input_request_key(2)]["params"]["message"] == (
+        "Deleting more than 1000 rows needs a reason."
+    )
+    assert world.store.get(task["id"]).input_round == 2
+    assert world.executor.enqueued == [task["id"]] * 2
+    assert runs == [1500]
+
+
+@pytest.mark.parametrize("moved", ["round", "requests", "status"])
+def test_an_answer_resumes_only_the_question_it_read(moved: str) -> None:
+    """Each conjunct of the guard in ``resume_task`` alone. While the answer is
+    admitted, the task's round moves with its requests as they were, a further
+    request joins the one answered, or it is cancelled with its round and requests
+    kept: the answer resumes none of them, saves nothing and queues nothing. Every
+    transition clears the requests, so only the status conjunct keeps a cancelled
+    task that kept them from being reopened."""
+    task: dict[str, str] = {}
+
+    def act() -> None:
+        record = world.store.get(task["id"])
+        if moved == "round":
+            world.store.save(replace(record, input_round=record.input_round + 1))
+        elif moved == "requests":
+            world.store.save(
+                record.with_task(input_requests={**record.task.input_requests, "k2": {}})
+            )
+        else:
+            world.store.save(record.with_task(status=TaskStatus.CANCELLED))
+
+    world = _World(check=_ChangesMeanwhile(act))
+    task["id"] = world.start(500)
+
+    assert world.answer(task["id"], _accept(confirmed=True), input_request_key(1)) == {}
+
+    record = world.store.get(task["id"])
+    assert record.input_responses == {}
+    assert not record.enqueued
+    assert world.executor.enqueued == [task["id"]]
+
+
+class _CountingStore(InMemoryTaskStore):
+    """Notes each read and save once ``calls`` is armed."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.calls: list[str] | None = None
+
+    def get(self, task_id: str) -> Any:
+        if self.calls is not None:
+            self.calls.append("get")
+        return super().get(task_id)
+
+    def save(self, record: Any) -> None:
+        if self.calls is not None:
+            self.calls.append("save")
+        super().save(record)
+
+
+def test_the_park_reads_the_task_once_and_saves_it_once() -> None:
+    """From the service's question on, the park is one read and one save: the
+    round, the status and the question land in one record, built from the task as
+    the run left it, so the progress the service reported is kept."""
+    store = _CountingStore()
+
+    def asks(*, count: int, progress: Any, confirmed: bool = False, reason: str = "") -> Any:  # noqa: ARG001
+        progress(1, total=2, message="Counting")
+        store.calls = []
         raise AdditionalInputRequired("Sure?", schema={"confirmed": {"type": "boolean"}})
 
     world = _World(service=asks, store=store)
+    task_id = world.create(500)
+
+    world.server.run_task(task_id)
+
+    assert store.calls == ["get", "save"]
+    store.calls = None
+    record = store.get(task_id)
+    assert record.status is TaskStatus.INPUT_REQUIRED
+    assert record.input_round == 1
+    assert set(record.task.input_requests) == {input_request_key(1)}
+    assert (record.progress, record.total) == (1, 2)
+
+
+def test_a_round_set_while_the_worker_runs_is_overwritten_by_its_park() -> None:
+    """The park records the round after the one the worker claimed, so a round a
+    caller set through ``transition_task`` while the run was in flight does not
+    survive it."""
+    task: dict[str, str] = {}
+
+    def moves_the_round(*, count: int, confirmed: bool = False, reason: str = "") -> Any:  # noqa: ARG001
+        transition_task(world.store, task["id"], status=TaskStatus.WORKING, input_round=5)
+        raise AdditionalInputRequired("Sure?", schema={"confirmed": {"type": "boolean"}})
+
+    world = _World(service=moves_the_round)
     task["id"] = world.create(500)
 
     world.server.run_task(task["id"])
 
-    record = store.get(task["id"])
-    if meanwhile == "cancelled":
-        assert record.status is TaskStatus.CANCELLED
-        assert record.input_round == 0
-    else:
-        assert record is None
+    record = world.store.get(task["id"])
+    assert record.input_round == 1
+    assert set(record.task.input_requests) == {input_request_key(1)}
+
+
+def test_a_transition_sets_the_round_only_when_asked_and_only_when_it_happens() -> None:
+    """``input_round`` lands with the transition it is given to; left out, the round
+    stays as it was, and ``0`` is a round like any other; a transition the terminal
+    guard refuses sets none."""
+    world = _World()
+    task_id = world.create(5)
+
+    transition_task(world.store, task_id, status=TaskStatus.INPUT_REQUIRED, input_round=3)
+    assert world.store.get(task_id).input_round == 3
+    transition_task(world.store, task_id, status=TaskStatus.WORKING)
+    assert world.store.get(task_id).input_round == 3
+    transition_task(world.store, task_id, status=TaskStatus.INPUT_REQUIRED, input_round=0)
+    assert world.store.get(task_id).input_round == 0
+    transition_task(world.store, task_id, status=TaskStatus.CANCELLED)
+    transition_task(world.store, task_id, status=TaskStatus.INPUT_REQUIRED, input_round=4)
+
+    record = world.store.get(task_id)
+    assert (record.status, record.input_round) == (TaskStatus.CANCELLED, 0)
 
 
 def test_the_answer_is_saved_before_the_task_is_queued() -> None:

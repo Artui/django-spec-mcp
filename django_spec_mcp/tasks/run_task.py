@@ -119,7 +119,12 @@ def run_task(
         )
         return
     if result.get("resultType") == ResultType.INPUT_REQUIRED.value:
-        _park(store, task_id, result, broker)
+        # ``ask_for_input`` asked this run's question as the round after the one
+        # the replay carried, which is the claim's, so the key names the round the
+        # budget was counted on. Best-effort as the claim is: a round set while
+        # the run was in flight (a second claim's park, or a caller's own
+        # ``transition_task``) is overwritten here.
+        _park(store, task_id, record.input_round + 1, result, broker)
         return
     transition_task(store, task_id, status=TaskStatus.COMPLETED, result=result, broker=broker)
 
@@ -150,38 +155,26 @@ def _replay(record: TaskRecord, context: MCPCallContext) -> dict[str, Any]:
 def _park(
     store: TaskStore,
     task_id: str,
+    asked: int,
     result: dict[str, Any],
     broker: SubscriptionBroker | None,
 ) -> None:
     """Move a task whose service asked to ``input_required``, its question under
-    the next round's key.
+    round ``asked``'s key and the round recorded with it.
 
-    Re-read rather than taken from the claim, so progress the run reported is
-    kept. The round is saved before the status moves because the reverse order
-    would save a record read before the move over ``input_required``, leaving the
-    task ``working`` with its question lost. A ``tasks/update`` landing between
-    the two saves is refused, since the status is still ``working``. A task
-    cancelled while it ran stays cancelled (``transition_task``), and one
-    cancelled between the last read and the save is kept too, by reading once
-    more directly before the save
-    (``test_a_cancel_between_the_parks_read_and_its_save_is_kept``): still two
-    calls, the window ``transition_task`` accepts.
+    One read and one save, both ``transition_task``'s
+    (``test_the_park_reads_the_task_once_and_saves_it_once``): the round, the
+    status and the question land in one record, built from the task as it stands
+    after the run, so progress the run reported is kept. A task cancelled while
+    the service ran stays cancelled, and one expired stays gone
+    (``test_a_task_gone_or_cancelled_while_its_service_asked_is_not_parked``).
     """
-    current: TaskRecord | None = store.get(task_id)
-    if current is None or current.status.is_terminal:
-        return
-    # ``ask_for_input`` asked this run's question as the round after the one
-    # the replay carried.
-    asked: int = current.input_round + 1
-    latest: TaskRecord | None = store.get(task_id)
-    if latest is None or latest.status.is_terminal:
-        return
-    store.save(replace(latest, input_round=asked))
     transition_task(
         store,
         task_id,
         status=TaskStatus.INPUT_REQUIRED,
         input_requests={input_request_key(asked): result["inputRequests"][ELICITATION_KEY]},
+        input_round=asked,
         broker=broker,
     )
 
