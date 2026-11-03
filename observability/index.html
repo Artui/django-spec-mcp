@@ -1772,7 +1772,7 @@ next request.</p>
 <tbody>
 <tr>
 <td><code>mcp.tools.call</code></td>
-<td>Wraps tool dispatch (permission check, rate limit, validation, service invocation, output rendering).</td>
+<td>Wraps tool dispatch (permission check, rate limit, validation, service invocation, output rendering). On the task path it also opens at task creation (from the scope gate on) and on each answered <code>tasks/update</code>, so a task call shows one span at creation, one per worker run and one per answer.</td>
 </tr>
 <tr>
 <td><code>mcp.resources.read</code></td>

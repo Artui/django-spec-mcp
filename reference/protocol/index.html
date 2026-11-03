@@ -2109,6 +2109,28 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#django_spec_mcp.tasks.types.task_record.TaskRecord.can_elicit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        can_elicit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.tasks.types.task_record.TaskRecord.input_round" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        input_round
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#django_spec_mcp.tasks.types.task_record.TaskRecord.with_task" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3255,6 +3277,28 @@
     <span class="md-ellipsis">
       
         input_responses
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.tasks.types.task_record.TaskRecord.can_elicit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        can_elicit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.tasks.types.task_record.TaskRecord.input_round" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        input_round
       
     </span>
   </a>
@@ -6734,7 +6778,9 @@ back the same type
             <td>
               <div class="doc-md-description">
                 <p>Whether the task reached the executor, so a worker cannot be
-tricked into running it twice.</p>
+tricked into running it twice. A worker clears it as it claims the
+task, so a task waiting for input is not claimable until
+<code>tasks/update</code> queues it again.</p>
               </div>
             </td>
           </tr>
@@ -6844,6 +6890,72 @@ parked on <code>input_required</code> reads this to find out what it was told.</
 <p>The spec requires the server never to reuse a key over a task's lifetime, so
 a key appearing here is answered for good and a later request picks a new
 one.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="django_spec_mcp.tasks.types.task_record.TaskRecord.can_elicit" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">can_elicit</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+  </span>
+
+<a href="#django_spec_mcp.tasks.types.task_record.TaskRecord.can_elicit" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">can_elicit</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Whether the request that created the task declared form elicitation.</p>
+<p>Capabilities are per request, and the worker serves no client, so this is the
+only record of whether the client can be asked. It gates parking: a worker whose
+service raises <code>AdditionalInputRequired</code> moves the task to <code>input_required</code>
+only when this is true, and otherwise completes it with the <code>isError</code> result
+the inline call gives a client that cannot be asked. <code>False</code> is also what a
+record written before the field existed reads as, so such a task never parks
+(<code>test_a_record_in_the_0_6_0_shape_still_loads</code>).</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="django_spec_mcp.tasks.types.task_record.TaskRecord.input_round" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">input_round</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+  </span>
+
+<a href="#django_spec_mcp.tasks.types.task_record.TaskRecord.input_round" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">input_round</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>How many questions the task has asked, and so the round the worker's next
+run is on.</p>
+<p>Kept on the record rather than in a signed <code>requestState</code>: the inline
+exchange signs it because it travels through the client, while a task's lives
+here, and a signature would expire with <code>INPUT_REQUEST_TTL_SECONDS</code> though the
+task waits for its own TTL
+(<code>test_an_answer_long_after_the_question_still_completes_the_task</code>). It bounds
+the exchange by <code>MAX_INPUT_ROUNDS</code>, as the inline round counter does, and
+names each question's key (<code>input_request_key</code>), which the spec forbids
+reusing over the task's lifetime.</p>
 
     </div>
 
