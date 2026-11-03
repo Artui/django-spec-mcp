@@ -11,6 +11,24 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+### Added
+
+- **`transition_task` takes `input_round`.** The round is set with the transition, in
+  the same save, and left out it stays as it stands, where every other keyword left out
+  clears its field; a refused transition sets no round. The package's own park now
+  makes one read and one save through it, where it read the task twice and saved the
+  round and the status separately.
+
+### Fixed
+
+- **A late answer no longer resumes a task waiting on the next question.** A
+  `tasks/update` slow in admitting its answer, whose duplicate had meanwhile resumed
+  the task and whose worker had parked it again on the next round, found the task
+  waiting and resumed it: the new question was wiped, the task was queued a third
+  time, and the service ran again only to ask it once more. An answer now resumes a
+  task only while it waits on the round and the requests the update read, and
+  otherwise saves and queues nothing.
+
 ## [0.7.0] — 2026-11-03
 
 ### Added
