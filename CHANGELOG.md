@@ -11,6 +11,77 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-11-03
+
+### Added
+
+- **`MCPServer.well_known_urls()` serves the protected-resource metadata where RFC 9728
+  puts it.** It returns the route for a project's root URLconf, at the location RFC 9728
+  3.1 defines: the origin, then `/.well-known/oauth-protected-resource`, then the
+  resource's path (`/.well-known/oauth-protected-resource/mcp/` for
+  `https://example.com/mcp/`). This is where an MCP client looks when a 401 carries no
+  `resource_metadata`. The route is built from the `resource` the backend's metadata
+  names, so the document always matches the URL it is served at. The route under the
+  mount stays. A server with no backend, or with a backend whose `resource` is not an
+  absolute http(s) URL (such as `AllowAnyBackend`), is refused with
+  `ImproperlyConfigured`. A resource whose path ends in a slash also answers without
+  it, since `@modelcontextprotocol/sdk` strips that slash when it builds the URL (a 404
+  under `MIDDLEWARE=[]` otherwise). The route is built from the percent-decoded resource
+  path, as Django resolves it, so `https://example.com/caf%C3%A9/mcp/` answers at its own
+  well-known URL. The route itself is public as
+  `ProtectedResourceMetadataView.well_known_route(resource)`: it returns the
+  root-URLconf route for one resource URL, and refuses with `ImproperlyConfigured` a
+  `resource` that is not an absolute http(s) URL with a host and no fragment, a path
+  holding `<` or `>` (raw or encoded), and a path whose percent-encoding is not valid
+  UTF-8. The `invoicing` example mounts `*server.well_known_urls()`.
+
+### Changed
+
+- **`audience_matches` accepts a token audience that is one URL or a sequence of them.**
+  It is true when the expected URL is a member, each member compared exactly; `None` or
+  an empty sequence matches nothing. `TokenInfo.audience` widens to
+  `str | Sequence[str] | None` to match, so a backend passes a JWT `aud` array or
+  django-oauth-toolkit's `AccessToken.resource` list on as it is. A task created from
+  such a token keeps the audience for its worker, and the task record holds it as a
+  tuple.
+- **`register_ui_resource` refuses a templated `uri=`.** A `{var}` in a view's URI raises
+  `ValueError` naming the URI. A host fetches a view once by the exact URI a tool's `ui=`
+  link names and expands nothing, so a templated view was a resource no host could ask
+  for; register one view per URI. A tool's `ui=` link to a templated URI finds no view
+  and is refused as before. `ResourceRegistry.register` refuses any binding with the view
+  mime type and a templated URI the same way, however it arrives: a binding built by hand,
+  and `register_resource(..., mime_type="text/html;profile=mcp-app")` with a `{var}` in
+  `uri_template`, which 0.4.0 accepted. A view is concrete however it is registered, so
+  the ambiguity refusal on a `ui=` link is reachable only through a data resource's URI
+  template; register a view with `register_ui_resource`.
+
+### Fixed
+
+- **A control character is no part of a URI template variable.** A `{var}` matched any
+  character but `/`, so `invoices://7\n` read as `pk="7\n"` and `reports://\n` matched
+  `reports://{report_id}`. A URI holding a control character (C0, DEL, C1) now matches
+  no template: `resources/read` answers it as an unknown resource (`-32602` under
+  `2026-07-28`, `-32002` under `2025-11-25`), sync and async, and a subscription leaves
+  it out of the granted set. Printable characters, spaces and non-ASCII included, are
+  unaffected.
+
+### Documentation
+
+- **Authentication: a token may name several resources, and where a client finds the
+  metadata.** django-oauth-toolkit's own audience rule is looser than the MUST: an empty
+  `resource` is unrestricted and the default validator matches by prefix, and the
+  backend's `audience_matches` call is what restores the exact rule. A new section,
+  "Where a client finds the metadata", covers the challenge's pointer, the well-known
+  location, and the root URLconf line.
+- **A backend is constructed by the project.** The `MCPAuthBackend` docstring no longer
+  says a backend must be constructible without arguments: the project constructs it and
+  passes it as `auth_backend=`. The `SelfChecking` docstring counts three methods.
+- **The quickstart shows one whole `2026-07-28` sessionless `tools/call`**: the headers
+  and `params._meta`.
+- **A view link can be wrong four ways.** Concepts and the `build_ui_tool_meta` docstring
+  add the ambiguity through a data resource's template, and the interactive-view recipe
+  says what happens to a templated view.
+
 ## [0.4.0] — 2026-11-02
 
 ### Changed
@@ -614,7 +685,8 @@ carries; releases up to 0.54.0 are in
   running. The worker's run now enters below that decision. A client that did
   not declare the extension is still refused `-32021` by a `REQUIRED` tool.
 
-[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/Artui/django-spec-mcp/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/Artui/django-spec-mcp/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/Artui/django-spec-mcp/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Artui/django-spec-mcp/compare/v0.1.0...v0.2.0

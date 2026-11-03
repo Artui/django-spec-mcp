@@ -1202,10 +1202,18 @@ appear in `resources/templates/list` so clients can fill them in.
 ### How a URI is split into variables
 
 A URI must match its template whole. Each `{var}` takes one or more
-characters other than `/`, and the literal text around it (`-` in
+characters other than `/` and other than control characters (the C0 range, `DEL`
+and the C1 range, a newline and a tab among them), and the literal text around it (`-` in
 `things://{a}-{b}`, `.` in `files://{name}.{ext}`) decides where it ends. So
 `things://1-2` reads as `a="1"`, `b="2"`, and `files://report.pdf` as
 `name="report"`, `ext="pdf"`.
+
+A URI holding a control character matches no template, so `invoices://7\n` is
+not `pk="7\n"`: it is an unknown resource, answered as any other unknown URI
+is (`-32602` under `2026-07-28`, `-32002` under `2025-11-25`), on the sync and
+the async path alike, and a subscription naming it leaves it out of the
+granted set. A concrete URI is equal to itself alone, so `reports://\n` does
+not reach a concrete `reports://` binding either.
 
 When that literal text also occurs inside a value, the URI fits the template
 more than one way: `things://1-2-3` is `a="1-2", b="3"` or `a="1", b="2-3"`,
@@ -2001,6 +2009,9 @@ registration, because the read path would fill it from a pool carrying
 `request` and `user`, and a view that varies by caller is exactly what the
 exemption below assumes cannot exist).
 
+A view's `uri=` is concrete: a `{var}` in it raises `ValueError`, because a host
+fetches a view once by the exact URI a tool names and expands nothing.
+
 Views are **unguarded by default**. The MCP session is already authenticated,
 a view is a static asset rather than tenant data, and hosts may prefetch one
 before any tool call. Pass `permissions=` or `scopes=` if your project wants otherwise.
@@ -2031,14 +2042,15 @@ second serialisation path — and a `tools/call` the view makes comes back
 through the ordinary endpoint, inheriting your auth backend, the spec's
 permissions, the tool's `scopes=` and its rate limits unchanged.
 
-Three ways a link can be wrong all fail the same way at runtime — a view that
-silently never renders — so all three are refused at registration:
+Four ways a link can be wrong all fail the same way at runtime — a view that
+silently never renders — so all four are refused at registration:
 
 | Mistake | Why it's caught |
 | --- | --- |
 | `resource_uri` names no view on this server | The host resolves it against the same server, so a typo reaches it as a dangling reference. Register the view **before** the tool that links to it. |
 | The tool has `include_structured_content=False` | That *is* the render payload; the view would come up blank. Checked against the effective value, so a project that turned it off globally is caught too. |
 | Both `ui=` and a `"ui"` key in `meta=` | Both write the same `_meta` key, so one would quietly overwrite the other. |
+| `resource_uri` fits a data resource's URI template more than one way | Neither `register_ui_resource` nor the registry takes a templated view, so the ambiguity can only come from a *data* resource's template (`things://{a}-{b}` splits `things://x-y-z` as `x`/`y-z` or `x-y`/`z`). Name the view by its exact URI. |
 
 `visibility` declares who may call the tool — `UIVisibility.MODEL`, `APP`, or
 both. It is **host-enforced**: a host is required not to offer the model a tool
@@ -2371,8 +2383,9 @@ own authorization server behind.
   every call; a backend returns `None` for a caller it cannot authenticate, and
   that produces a spec-mandated 401 with a `WWW-Authenticate` header built from
   `www_authenticate_challenge(...)`. The
-  `/.well-known/oauth-protected-resource` view delegates its payload to the
-  backend's `protected_resource_metadata()`.
+  protected-resource metadata view, under the mount and at RFC 9728's location
+  through `well_known_urls()`, delegates its payload to the backend's
+  `protected_resource_metadata()`.
 - **The spec's own `permissions`.** A tool or a resource is guarded by its
   kernel spec's `PermissionCheck`s, asked of the token's principal
   ([How a tool is called](#how-a-tool-is-called)). A refusal is

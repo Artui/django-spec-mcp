@@ -3,8 +3,15 @@ from __future__ import annotations
 import re
 
 from django_spec_mcp.registry.types.resource_binding import ResourceBinding
+from django_spec_mcp.types.ui_resource_mime_type import UI_RESOURCE_MIME_TYPE
 
 _TEMPLATE_VAR = re.compile(r"\{([^}]+)\}")
+
+# What one ``{var}`` may not contain: ``/`` ends a segment, and a control
+# character (Unicode ``Cc``: C0, DEL and C1) is no part of a name. Without the
+# second exclusion ``reports://\n`` would fit ``reports://{id}`` as ``id='\n'``
+# (``test_control_characters_in_uris.py``).
+_VALUE_CHAR = r"[^/\x00-\x1f\x7f-\x9f]"
 
 
 def _template_to_pattern(uri_template: str, *, lazy: bool = False) -> re.Pattern[str]:
@@ -12,16 +19,16 @@ def _template_to_pattern(uri_template: str, *, lazy: bool = False) -> re.Pattern
 
     Simple ``{var}`` placeholders only — enough for the ``scheme://{lookup}``
     shape this package emits. Each variable matches one or more characters
-    other than ``/``; ``lazy`` makes every one of them as short as the rest of
-    the URI allows instead of as long, which is how ``resolve`` finds out
-    whether a URI fits the template more than one way.
+    other than ``/`` and control characters; ``lazy`` makes every one of them
+    as short as the rest of the URI allows instead of as long, which is how
+    ``resolve`` finds out whether a URI fits the template more than one way.
     """
     quantifier: str = "+?" if lazy else "+"
     parts: list[str] = []
     last: int = 0
     for match in _TEMPLATE_VAR.finditer(uri_template):
         parts.append(re.escape(uri_template[last : match.start()]))
-        parts.append(f"(?P<{match.group(1)}>[^/]{quantifier})")
+        parts.append(f"(?P<{match.group(1)}>{_VALUE_CHAR}{quantifier})")
         last = match.end()
     parts.append(re.escape(uri_template[last:]))
     return re.compile("".join(parts))
@@ -37,8 +44,8 @@ class ResourceRegistry:
     extracted from the URI.
 
     **Specificity, not registration order.** A template's ``{var}`` matches any
-    single segment, so ``reports://{report_id}`` also matches
-    ``reports://all-tenants-summary``. Resolving in registration order would
+    single segment free of control characters, so ``reports://{report_id}``
+    also matches ``reports://all-tenants-summary``. Resolving in registration order would
     make *which permission stack guards a URI* a function of the order the two
     were registered in — and the wrong answer is the permissive one, since the
     template is the general case. Concrete URIs are therefore tried first, and
@@ -65,6 +72,21 @@ class ResourceRegistry:
         self._patterns: dict[str, tuple[re.Pattern[str], re.Pattern[str]]] = {}
 
     def register(self, binding: ResourceBinding) -> None:
+        # A view is fetched by the exact URI a tool's ``ui=`` link names, so a
+        # templated one is a resource no host can ask for;
+        # ``register_ui_resource`` refuses it first, and this catches a binding
+        # built by hand. Two conjuncts, each with the test that fails without it:
+        # the mime type (``test_a_templated_data_resource_still_registers``) and
+        # the template (``test_a_concrete_view_binding_still_registers``); the
+        # refusal itself is ``test_a_hand_registered_templated_view_is_refused_at_register``.
+        if binding.mime_type == UI_RESOURCE_MIME_TYPE and binding.is_template:
+            raise ValueError(
+                f"MCP resource {binding.name!r} has the view mime type "
+                f"{UI_RESOURCE_MIME_TYPE!r} and the templated URI "
+                f"{binding.uri_template!r}. A view's URI must be concrete: a host "
+                "fetches it by the exact URI a tool's ui= link names and expands "
+                "nothing. Register one view per URI."
+            )
         for existing in self._bindings:
             if existing.uri_template == binding.uri_template:
                 raise ValueError(f"Duplicate MCP resource URI: {binding.uri_template!r}")

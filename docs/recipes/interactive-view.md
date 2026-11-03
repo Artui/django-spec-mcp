@@ -128,8 +128,10 @@ rather than reaching the host as a dangling reference.
 This is also why there is no `ui://invoices/{pk}/detail.html`. The host fetches
 a view once, and the spec defines no expansion mechanism for a tool's
 `resource_uri` — so a templated view URI would be a hook no host implements.
-"A different view per report type" is just N concrete registrations. RFC 6570
-templating for ordinary *data* resources is unaffected.
+`register_ui_resource` therefore refuses a `uri=` holding a `{var}` with a
+`ValueError` naming the URI, and a tool's `ui=` link to one finds no view to
+resolve to. "A different view per report type" is just N concrete registrations.
+RFC 6570 templating for ordinary *data* resources is unaffected.
 
 ## Host gotchas worth knowing
 

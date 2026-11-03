@@ -791,7 +791,6 @@ class MCPServer:
         user: Any,
         request: Any = None,
         scopes: Sequence[str] | None = None,
-        session_id: str | None = None,
     ) -> MCPCallContext:
         """Build the per-call context the wire handlers thread through.
 
@@ -812,11 +811,7 @@ class MCPServer:
         if request is None:
             http_request.user = user
             http_request.method = "POST"
-        return self._context(
-            http_request,
-            TokenInfo(user=user, scopes=tuple(scopes or ())),
-            session_id=session_id,
-        )
+        return self._context(http_request, TokenInfo(user=user, scopes=tuple(scopes or ())))
 
     def run_task(self, task_id: str) -> None:
         """Execute a queued task. **This is what a worker calls.**
@@ -873,7 +868,6 @@ class MCPServer:
         http_request: HttpRequest,
         token: TokenInfo,
         *,
-        session_id: str | None = None,
         enforce_rate_limits: bool = True,
         in_task_worker: bool = False,
     ) -> MCPCallContext:
@@ -886,7 +880,6 @@ class MCPServer:
             resources=self._resources,
             prompts=self._prompts,
             protocol_version=self._config.protocol_versions[0],
-            session_id=session_id,
             server_info=self._server_info,
             instructions=self.description,
             config=self._config,
@@ -1022,7 +1015,10 @@ class MCPServer:
         ``mime_type`` is advertised as given and never inferred from or checked
         against the encoding, so ``TEXT`` left at the default
         ``application/json`` serves a ``str`` that is already a JSON document as
-        it is. The result ceiling and the cache hints apply to every encoding.
+        it is. The view mime type (``UI_RESOURCE_MIME_TYPE``) with a templated
+        ``uri_template`` raises ``ValueError``, since a view must be one
+        concrete document; use ``register_ui_resource`` for a view. The result
+        ceiling and the cache hints apply to every encoding.
         A ``TEXT`` or ``BLOB`` resource is refused, naming both, beside a spec
         declaring ``affordances``, which the kernel adds to a presented object,
         or ``allow_none``, under which a missing row presents as ``None``
@@ -1211,7 +1207,24 @@ class MCPServer:
         carries, each asked ``has_permission(principal, binding)`` with the view's
         ``ResourceBinding`` as the spec; ``scopes`` are the OAuth scopes the
         caller's token must carry, every one, asked first. Both gate the listing,
-        the read and a subscription alike."""
+        the read and a subscription alike.
+
+        ``uri`` is **concrete**: a ``{var}`` in it raises ``ValueError``. A host
+        fetches a view once by the exact URI a tool's ``ui=`` link names and the
+        extension defines no expansion for it, so a templated view would be a
+        resource nothing can ask for. A view per report type is one registration
+        per type."""
+        # ``is_template`` on the binding is ``"{" in uri``; the same test, asked
+        # before the content source is judged so the URI is what the author is told
+        # about. ``test_a_templated_view_uri_is_refused`` fails without it.
+        if "{" in uri:
+            raise ValueError(
+                f"register_ui_resource({name!r}) got the templated uri={uri!r}. A "
+                "view's URI must be concrete: a host fetches a view once by the "
+                "exact URI a tool's ui= link names and expands nothing, so a "
+                "{var} names a view no host can ask for. Register one view per "
+                "URI."
+            )
         binding = ui_view_to_resource(
             name=name,
             uri=uri,
@@ -1500,13 +1513,84 @@ class MCPServer:
             config=self._config,
             **extra,
         )
-        # Mounting is where the auth backend stops being optional: from here on
-        # every request reaches ``authenticate``. Both ``urls`` and
-        # ``async_urls`` land here, so one check covers them
-        # (``test_mounting_without_a_backend_refuses_by_name``, one case each).
-        # There is no default to fall back to: this package ships no backend
-        # that verifies tokens, and one that answers every caller would serve a
-        # mount nobody secured.
+        backend = self._mounted_backend()
+        patterns = [
+            path("", view, name="endpoint"),
+            path(
+                ".well-known/oauth-protected-resource",
+                ProtectedResourceMetadataView.as_view(auth_backend=backend),
+                name="protected-resource-metadata",
+            ),
+        ]
+        return patterns, self._url_namespace, self._url_namespace
+
+    def well_known_urls(self) -> list[URLPattern]:
+        """The metadata document at RFC 9728's location, for the root URLConf.
+
+        RFC 9728 3.1 places a resource's metadata at its origin, with the
+        resource's path after the well-known prefix:
+        ``/.well-known/oauth-protected-resource/mcp/`` for
+        ``https://example.com/mcp/``. The MCP authorization spec makes that the
+        place a client looks when a 401 carries no ``resource_metadata``.
+        ``urls`` cannot serve it, since everything it mounts sits under the
+        mount's own prefix, so a project adds these patterns beside the mount::
+
+            urlpatterns = [
+                path("mcp/", server.urls),
+                *server.well_known_urls(),
+            ]
+
+        The location is built from the ``resource`` the backend's
+        ``protected_resource_metadata()`` names, the server's public URL, and
+        not from a prefix passed here: a client accepts the document only when
+        its ``resource`` is the identifier the URL was built from (RFC 9728
+        3.3), so a location derived from anything else could serve a document
+        the client must discard. The mount's own route stays, as the URL a
+        challenge points at. A resource whose path ends in a slash is answered
+        with and without it, since the TypeScript SDK strips that slash when it
+        builds the URL. The patterns are unnamed, so two servers' patterns
+        never collide in the root namespace.
+
+        Raises ``ImproperlyConfigured`` with no ``auth_backend=``, as mounting
+        does, when the backend's ``resource`` is not an absolute URL
+        (``AllowAnyBackend`` publishes none), when its path holds ``<`` or
+        ``>``, raw or percent-encoded, and when its percent-encoding is not
+        valid UTF-8.
+        """
+        backend = self._mounted_backend()
+        route = ProtectedResourceMetadataView.well_known_route(
+            backend.protected_resource_metadata().resource
+        )
+        view = ProtectedResourceMetadataView.as_view(auth_backend=backend)
+        patterns = [path(route, view)]
+        # ``@modelcontextprotocol/sdk`` strips the resource's trailing slash when it
+        # builds the URL, and with no ``APPEND_SLASH`` redirect to forgive it that
+        # is a 404, so both forms answer. A resource at the origin has no route
+        # ending in a slash (the route ends at the prefix), so it gets no second
+        # one (``test_the_stripped_route_is_added_only_for_a_path_that_ends_in_a_slash``).
+        if route.endswith("/"):
+            patterns.append(path(route.removesuffix("/"), view))
+        return patterns
+
+    def _mounted_backend(self) -> MCPAuthBackend:
+        """The auth backend, refused when missing and checked when it can check itself.
+
+        Mounting is where the auth backend stops being optional: from here on
+        every request reaches ``authenticate``. ``urls``, ``async_urls`` and
+        ``well_known_urls`` land here, so one refusal covers them
+        (``test_mounting_without_a_backend_refuses_by_name``, one case each, and
+        ``test_a_server_with_no_backend_has_no_document_to_serve``). There is no
+        default to fall back to: this package ships no backend that verifies
+        tokens, and one that answers every caller would serve a mount nobody
+        secured.
+
+        A backend that does not implement the opt-in ``SelfChecking`` protocol
+        needs no setup and is left alone; one that does is asked here, so
+        ``manage.py check`` reaches it
+        (``test_a_self_checking_backend_that_fails_stops_the_mount``), and
+        before ``well_known_urls`` reads its metadata
+        (``test_a_self_checking_backend_is_asked_before_its_metadata_is_read``).
+        """
         if self._auth_backend is None:
             raise ImproperlyConfigured(
                 f"MCPServer {self.name!r} is mounted with no auth_backend=. Every request "
@@ -1515,21 +1599,9 @@ class MCPServer:
                 "to. Pass auth_backend= a backend of your own (the authorization page "
                 "shows one), or AllowAnyBackend() for local development."
             )
-        # A backend that does not implement the opt-in ``SelfChecking`` protocol
-        # needs no setup and is left alone; one that does is asked once, here, so
-        # ``manage.py check`` reaches it
-        # (``test_a_self_checking_backend_that_fails_stops_the_mount``).
         if isinstance(self._auth_backend, SelfChecking):
             self._auth_backend.check_configuration()
-        patterns = [
-            path("", view, name="endpoint"),
-            path(
-                ".well-known/oauth-protected-resource",
-                ProtectedResourceMetadataView.as_view(auth_backend=self._auth_backend),
-                name="protected-resource-metadata",
-            ),
-        ]
-        return patterns, self._url_namespace, self._url_namespace
+        return self._auth_backend
 
 
 @contextmanager

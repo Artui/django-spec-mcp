@@ -19,7 +19,7 @@ MCP. Every operation is a `django_service_specs` spec (`ServiceSpec` or
 | `MCPServer(conventions=)`      | `invoices.set_amount` without `number` — the refusal's message is the server's own `missing_arguments` wording, which points the model at `invoices.list`; every sentence it does not override keeps the package's words.|
 | `register_resource`            | `invoice` — single invoice by PK via `invoices://{pk}` URI, the template's `pk` being the spec's read.|
 | `register_prompt(permissions=, scopes=)` | `compose_invoice_email` — render an email body for an invoice, gated by a kernel `PermissionCheck` as a spec is, and by the `invoices:email` scope: a token without it is a `403` whose challenge names the scope.|
-| A backend of your own + `bearer_challenge` | `invoices/auth.py` — `DemoTokenBackend` knows two hard-coded tokens; a request without one is a `401` whose `WWW-Authenticate` points at the `.well-known/oauth-protected-resource` document the mount serves.|
+| A backend of your own + `bearer_challenge` | `invoices/auth.py` — `DemoTokenBackend` knows two hard-coded tokens; a request without one is a `401` whose `WWW-Authenticate` points at the `.well-known/oauth-protected-resource` document the mount serves; `server.well_known_urls()` in `invoicing/urls.py` serves the same document at RFC 9728's location, where a client looks when a challenge carries no pointer.|
 
 Every spec declares `permissions=[Unrestricted()]`, which says "deliberately
 open" out loud; a spec declaring none is refused at registration. The prompt
@@ -192,6 +192,9 @@ curl -i -X POST http://localhost:8000/mcp/ \
 
 # No token at all is a 401 pointing at the metadata document, served here
 curl -s http://localhost:8000/mcp/.well-known/oauth-protected-resource
+
+# The same document at RFC 9728's location, from the root URLconf
+curl -s http://localhost:8000/.well-known/oauth-protected-resource/mcp/
 ```
 
 ## Where the patterns are documented

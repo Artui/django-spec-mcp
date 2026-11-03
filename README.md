@@ -88,8 +88,9 @@ See the [quickstart](docs/quickstart.md) for the full end-to-end recipe.
 - **Services** (mutations) and **selectors** (reads) → MCP **tools**, through
   `register_tool`; the spec's class says which kind of tool it is.
 - A `RETRIEVE` selector → an MCP **resource**, through `register_resource`.
-- A single `/mcp` endpoint speaks Streamable HTTP. The
-  `/.well-known/oauth-protected-resource` endpoint comes mounted alongside.
+- A single `/mcp` endpoint speaks Streamable HTTP, with its protected-resource
+  metadata mounted alongside. `server.well_known_urls()` also serves that document
+  at RFC 9728's location, from the project's root URLconf.
 
 ## What ships
 

@@ -164,15 +164,18 @@ def build_ui_tool_meta(
     Empty dict when the tool declares no link, so the caller can hand the
     result to ``merge_meta`` unconditionally.
 
-    Three ways a link can be wrong, each of which would otherwise fail at
-    runtime as a view that silently never renders, so all three raise here:
+    Four ways a link can be wrong, each of which would otherwise fail at
+    runtime as a view that silently never renders, so all four raise here:
     ``ui=`` and a ``"ui"`` key in ``meta=`` together (same ``_meta`` key, so
     one would quietly win); a ``resource_uri`` naming no view on this server
     (a host resolves it against the server it read the tool from, so a view
-    must be registered *before* the tool linking to it); and a tool not
-    emitting ``structuredContent``, the payload a view renders from — checked
-    against the effective value, so a project that turned it off globally is
-    caught too.
+    must be registered *before* the tool linking to it, and a templated URI
+    names none, since ``register_ui_resource`` refuses one); a
+    ``resource_uri`` that a URI template splits more than one way, which is
+    reachable only through a *data* resource's template, since neither
+    ``register_ui_resource`` nor the registry takes a templated view; and a tool not emitting
+    ``structuredContent``, the payload a view renders from — checked against
+    the effective value, so a project that turned it off globally is caught too.
     """
     if ui is None:
         return {}
@@ -184,9 +187,10 @@ def build_ui_tool_meta(
         )
 
     # ``resolve`` raises ValueError for one reason only: a URI its template
-    # splits more than one way. It walks every binding, so the template can be a
-    # data resource's as well as a view's. The registry's message names neither
-    # the tool nor that the link is what asked, so say both.
+    # splits more than one way. It walks every binding, so the template is a
+    # data resource's: the registry refuses a templated view, however it was
+    # built. The registry's message names neither the tool nor that the link is
+    # what asked, so say both.
     try:
         resolved = resources.resolve(ui.resource_uri)
     except ValueError as exc:
