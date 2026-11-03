@@ -32,13 +32,13 @@ from django_service_specs import (
 from typing_extensions import TypedDict
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from django_spec_mcp.schema.kernel_tool_input_schema import kernel_tool_input_schema
+from tests.utils import make_server
 
 
 @dataclass
@@ -51,10 +51,6 @@ class _CloseTicket:
 
 def _close_ticket(*, ticket: int, resolution: str, tenant: int, note: str = "") -> None:
     return None
-
-
-def _server(**kwargs: Any) -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None, **kwargs)
 
 
 def _schema(server: MCPServer) -> dict[str, Any]:
@@ -81,7 +77,7 @@ def test_a_service_lists_its_validators_fields_at_the_top_level() -> None:
     # Not bundled under ``data``. A field without a default is required,
     # because nothing but the caller fills it, and the schema is closed, as the
     # call's argument set is.
-    server = _server()
+    server = make_server()
     _register(server)
 
     schema = _schema(server)
@@ -99,7 +95,7 @@ def test_a_field_named_like_a_registered_seed_is_still_the_callers() -> None:
     # (``test_kernel_tool_input_schema.py``); the reflected read of the same name is the
     # control that shows they reached it.
     seeds = DEFAULT_POOL_SEEDS.extend(tenant=lambda: 1)
-    server = _server()
+    server = make_server()
     _register(
         server,
         reads=Parameters([Parameter("region", "string", required=True, reflected=True)]),
@@ -164,7 +160,7 @@ def _declining_input_data() -> _MaybeTenantScope:
 def test_a_field_the_input_data_provider_fills_is_offered_where_the_callers_value_is_served(
     provider: Any, properties: set[str], required: set[str]
 ) -> None:
-    server = _server()
+    server = make_server()
     _register(server, input_data=provider)
 
     schema = _schema(server)
@@ -180,7 +176,7 @@ def _close_by_tenant(*, tenant: int, ticket: int) -> None:
 def test_a_service_without_a_validator_relaxes_its_reads_alone() -> None:
     # A service may declare its arguments as ``reads`` and no Validator; a
     # provider beside them relaxes them, and there is no Validator seat to read.
-    server = _server()
+    server = make_server()
     server.register_tool(
         ServiceSpec(
             service=_close_by_tenant,
@@ -262,7 +258,7 @@ async def _served(server: MCPServer, route: str, arguments: dict[str, Any]) -> A
 async def test_a_provider_filled_field_is_not_offered_because_the_callers_value_is_replaced(
     route: str,
 ) -> None:
-    server = _server()
+    server = make_server()
     server.register_tool(
         ServiceSpec(
             service=_archive_with_reason,

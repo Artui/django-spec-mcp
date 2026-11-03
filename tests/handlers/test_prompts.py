@@ -17,7 +17,6 @@ from django.http import HttpRequest, QueryDict
 from django_service_specs import PermissionCheck
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_prompts_get import handle_prompts_get
 from django_spec_mcp.handlers.handle_prompts_get_async import handle_prompts_get_async
@@ -31,10 +30,7 @@ from django_spec_mcp.protocol.types.prompt_argument import PromptArgument
 from django_spec_mcp.protocol.types.prompt_message import PromptMessage
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
-
-
-def _server() -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore())
+from tests.utils import make_server
 
 
 def _ctx(server: MCPServer) -> MCPCallContext:
@@ -91,7 +87,7 @@ def test_normalize_unsupported_value_raises(value: Any, message: str) -> None:
 
 
 def test_prompts_list_advertises_arguments() -> None:
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     server.register_prompt(
         name="greet",
         description="Say hi",
@@ -110,7 +106,7 @@ def test_prompts_list_paginates(settings) -> None:
     # this test's throwaway prompts are unguarded; carried through so the
     # subject stays pagination.
     settings.SPEC_MCP = {"PAGE_SIZE": 2, "REQUIRE_TOOL_PERMISSIONS": False}
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     for i in range(3):
         server.register_prompt(name=f"p{i}", render=lambda **_: "x")
     out = handle_prompts_list(None, _ctx(server))
@@ -121,7 +117,9 @@ def test_prompts_list_paginates(settings) -> None:
 
 @pytest.mark.parametrize("cursor", ["###", 1], ids=["undecodable", "non-string"])
 def test_prompts_list_rejects_a_bad_cursor(cursor: Any) -> None:
-    out = handle_prompts_list({"cursor": cursor}, _ctx(_server()))
+    out = handle_prompts_list(
+        {"cursor": cursor}, _ctx(make_server(session_store=InMemorySessionStore()))
+    )
     assert isinstance(out, JsonRpcError) and out.code == -32602
 
 
@@ -144,7 +142,7 @@ def get(request: pytest.FixtureRequest) -> Get:
 
 
 def test_prompts_get_renders_string(get: Get) -> None:
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     server.register_prompt(name="p", render=lambda **_: "rendered")
     out = get(server, {"name": "p", "arguments": {}})
     assert isinstance(out, dict)
@@ -152,7 +150,7 @@ def test_prompts_get_renders_string(get: Get) -> None:
 
 
 def test_prompts_get_threads_arguments_to_render(get: Get) -> None:
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     server.register_prompt(
         name="echo",
         render=lambda *, who: f"hello {who}",
@@ -164,7 +162,7 @@ def test_prompts_get_threads_arguments_to_render(get: Get) -> None:
 
 
 def test_prompts_get_missing_required_arg(get: Get) -> None:
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     server.register_prompt(
         name="p",
         render=lambda *, who: who,
@@ -186,14 +184,14 @@ def test_prompts_get_missing_required_arg(get: Get) -> None:
     ids=["unknown-prompt", "non-dict-params", "missing-name", "non-dict-arguments"],
 )
 def test_prompts_get_rejects_malformed_params(get: Get, params: Any) -> None:
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     server.register_prompt(name="p", render=lambda **_: "x")
     out = get(server, params)
     assert isinstance(out, JsonRpcError) and out.code == -32602
 
 
 def test_prompts_get_handles_unsupported_render_value(get: Get) -> None:
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     server.register_prompt(name="bad", render=lambda **_: 123)
     out = get(server, {"name": "bad", "arguments": {}})
     assert isinstance(out, JsonRpcError) and out.code == -32603
@@ -205,14 +203,14 @@ class _DenyAll(PermissionCheck):
 
 
 def test_prompts_get_permission_denied(get: Get) -> None:
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     server.register_prompt(name="p", render=lambda **_: "x", permissions=[_DenyAll()])
     out = get(server, {"name": "p", "arguments": {}})
     assert isinstance(out, JsonRpcError) and out.code == -32006
 
 
 def test_decorator_uses_function_name_and_docstring() -> None:
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
 
     @server.prompt()
     def greeting(*, name: str) -> str:
@@ -225,7 +223,7 @@ def test_decorator_uses_function_name_and_docstring() -> None:
 
 
 async def test_async_prompts_get_dispatches_async_render() -> None:
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
 
     async def render(**_: Any) -> str:
         return "async-rendered"
@@ -306,7 +304,7 @@ def test_a_prompt_permission_is_judged_on_the_principal_and_the_binding_alone(ge
     # ``AnonymousUser`` for none, and the prompt's binding as the spec, once
     # per get, and nothing of the arguments, which reach ``render`` and no check.
     permission = _Recording()
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     binding = server.register_prompt(name="p", render=lambda **_: "hello", permissions=[permission])
     out = get(server, {"name": "p", "arguments": {"deny": "1"}})
 
@@ -328,7 +326,7 @@ def test_a_render_declaring_request_receives_the_transports_http_request(get: Ge
         seen.update(request=request, user=user)
         return "hello"
 
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
     server.register_prompt(name="p", render=render)
     http_request = HttpRequest()
     session_user = object()
@@ -355,7 +353,7 @@ def test_render_reads_the_endpoints_query_string_and_no_drf_attributes() -> None
     """``request.GET`` is the MCP endpoint's own query string, and the request
     is a Django one: no ``data`` or ``query_params`` to read arguments from."""
     seen: dict[str, Any] = {}
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
 
     def render(*, request: Any) -> str:
         seen.update(
@@ -378,7 +376,7 @@ async def test_user_and_request_user_agree_for_a_token_naming_no_one() -> None:
     ``request.user`` is, on both dispatchers, so declaring ``user`` and reading
     ``request.user`` answer alike."""
     seen: list[tuple[Any, Any]] = []
-    server = _server()
+    server = make_server(session_store=InMemorySessionStore())
 
     def render(*, request: Any, user: Any) -> str:
         seen.append((user, request.user))

@@ -22,12 +22,7 @@ from django_service_specs import (
     Unrestricted,
 )
 
-from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-
-
-def _server() -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+from tests.utils import make_server
 
 
 def _service() -> ServiceSpec:
@@ -45,13 +40,13 @@ def test_a_kernel_tool_carries_display_metadata(spec: Any) -> None:
         "display_description": "Does nice things",
     }
 
-    binding: Any = _server().register_tool(spec, name="t", **labels)
+    binding: Any = make_server().register_tool(spec, name="t", **labels)
 
     assert (binding.display_name, binding.display_description) == ("Nice Tool", "Does nice things")
 
 
 def test_the_binding_defaults_to_no_display_metadata() -> None:
-    binding: Any = _server().register_tool(_service(), name="t")
+    binding: Any = make_server().register_tool(_service(), name="t")
 
     assert binding.display_name is None
     assert binding.display_description is None
@@ -61,7 +56,7 @@ def test_register_tools_forwards_metadata_from_the_overrides() -> None:
     registry = SpecRegistry()
     registry.register("s", _service())
 
-    bindings: Any = _server().register_tools(
+    bindings: Any = make_server().register_tools(
         registry, overrides={"s": {"display_name": "S", "display_description": "sd"}}
     )
 
@@ -69,7 +64,7 @@ def test_register_tools_forwards_metadata_from_the_overrides() -> None:
 
 
 def test_display_metadata_is_not_emitted_on_the_wire() -> None:
-    server = _server()
+    server = make_server()
     labels: dict[str, Any] = {"display_name": "Hidden", "display_description": "Secret"}
     server.register_tool(_service(), name="t", **labels)
 

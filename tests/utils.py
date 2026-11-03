@@ -14,10 +14,21 @@ from django.http import HttpRequest
 from django.test import AsyncClient, Client
 
 from django_spec_mcp import MCPServer
+from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.conf import get_setting
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
+
+
+def make_server(**overrides: Any) -> MCPServer:
+    """An ``MCPServer`` named ``t`` that lets any caller in; ``overrides`` replace the rest.
+
+    The head most test modules built by hand. ``session_store`` is left to the
+    server's default unless a test passes one, so a module that wants an
+    in-memory store says so at the call.
+    """
+    return MCPServer(name="t", auth_backend=AllowAnyBackend(), **overrides)
 
 
 def tool_error(out: Any) -> dict[str, Any]:

@@ -24,14 +24,9 @@ from django_service_specs import (
     Unrestricted,
 )
 
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.server.mcp_server import MCPServer
 from django_spec_mcp.server.utils import UndescribedToolWarning
 from tests.testapp.services import list_invoices, record_invoice
-
-
-def _server() -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+from tests.utils import make_server
 
 
 def _service(service: Any = record_invoice) -> ServiceSpec:
@@ -52,25 +47,25 @@ def _undescribed(register: Any) -> list[warnings.WarningMessage]:
 
 
 def test_undescribed_service_tool_warns() -> None:
-    server = _server()
+    server = make_server()
     with pytest.warns(UndescribedToolWarning, match="'x' is registered with no description"):
         server.register_tool(_service(), name="x")
 
 
 def test_undescribed_selector_tool_warns() -> None:
-    server = _server()
+    server = make_server()
     assert _undescribed(lambda: server.register_tool(_selector(), name="x", paginate=True))
 
 
 def test_an_undescribed_registry_entry_warns() -> None:
     registry = SpecRegistry([RegisteredSpec(name="x", spec=_service())])
-    server = _server()
+    server = make_server()
     (warning,) = _undescribed(lambda: server.register_tools(registry))
     assert "'x'" in str(warning.message)
 
 
 def test_a_description_silences_the_warning() -> None:
-    server = _server()
+    server = make_server()
     assert not _undescribed(
         lambda: server.register_tool(
             _service(), name="x", description="Archive a widget so it stops appearing."
@@ -80,7 +75,7 @@ def test_a_description_silences_the_warning() -> None:
 
 def test_a_register_tools_override_description_silences_it_too() -> None:
     registry = SpecRegistry([RegisteredSpec(name="x", spec=_service())])
-    server = _server()
+    server = make_server()
     assert not _undescribed(
         lambda: server.register_tools(registry, overrides={"x": {"description": "Archive it."}})
     )
@@ -88,7 +83,7 @@ def test_a_register_tools_override_description_silences_it_too() -> None:
 
 def test_whitespace_is_not_a_description() -> None:
     """Otherwise ``description=" "`` silences the check while ``tools/list`` stays blank."""
-    server = _server()
+    server = make_server()
     with pytest.warns(UndescribedToolWarning):
         server.register_tool(_service(), name="x", description="   \n ")
 
@@ -100,7 +95,7 @@ def test_a_docstring_on_the_service_does_not_count() -> None:
         """Internal helper. Assumes the caller already checked tenancy."""
         return {}
 
-    server = _server()
+    server = make_server()
     with pytest.warns(UndescribedToolWarning):
         server.register_tool(_service(documented_service), name="x")
     assert server.tools.get("x").description is None
@@ -108,7 +103,7 @@ def test_a_docstring_on_the_service_does_not_count() -> None:
 
 def test_require_tool_descriptions_refuses_registration(settings: Any) -> None:
     settings.SPEC_MCP = {"REQUIRE_TOOL_DESCRIPTIONS": True}
-    server = _server()
+    server = make_server()
     with pytest.raises(ImproperlyConfigured, match="no description"):
         server.register_tool(_service(), name="x")
     assert server.tools.get("x") is None
@@ -116,7 +111,7 @@ def test_require_tool_descriptions_refuses_registration(settings: Any) -> None:
 
 def test_warning_can_be_filtered_by_category() -> None:
     """The dedicated category exists so consumers can target it precisely."""
-    server = _server()
+    server = make_server()
     with warnings.catch_warnings():
         warnings.simplefilter("error", UndescribedToolWarning)
         with pytest.raises(UndescribedToolWarning):
@@ -131,7 +126,7 @@ def test_the_warning_points_at_the_registering_line_not_this_package() -> None:
     name a frame inside this package for one of them.
     """
     registry = SpecRegistry([RegisteredSpec(name="y", spec=_service())])
-    (direct,) = _undescribed(lambda: _server().register_tool(_service(), name="x"))
-    (batch,) = _undescribed(lambda: _server().register_tools(registry))
+    (direct,) = _undescribed(lambda: make_server().register_tool(_service(), name="x"))
+    (batch,) = _undescribed(lambda: make_server().register_tools(registry))
     assert direct.filename == __file__
     assert batch.filename == __file__

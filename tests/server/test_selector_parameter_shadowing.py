@@ -37,18 +37,13 @@ from django_service_specs import (
     Unrestricted,
 )
 
-from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from tests.utils import make_server
 
 
 @dataclass
 class _Row:
     pk: int
     seen: str
-
-
-def _server() -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
 
 
 def _rows(*, page: int = 0, limit: int = 0, status: int = 0) -> list[_Row]:
@@ -72,7 +67,7 @@ def _spec(name: str, *, kind: SelectorKind = SelectorKind.LIST, required: bool =
 @pytest.mark.parametrize("required", [False, True], ids=["defaulted", "required"])
 @pytest.mark.parametrize("name", ["page", "limit"])
 def test_a_paginated_list_tool_refuses_a_pagination_named_read(name: str, required: bool) -> None:
-    server = _server()
+    server = make_server()
     with pytest.raises(ImproperlyConfigured, match=rf"tool 'rows'.*\['{name}'\].*paginate"):
         server.register_tool(
             _spec(name, required=required), name="rows", description="d", paginate=True
@@ -82,14 +77,14 @@ def test_a_paginated_list_tool_refuses_a_pagination_named_read(name: str, requir
 
 def test_a_register_tools_override_that_paginates_is_refused_too() -> None:
     registry = SpecRegistry([RegisteredSpec(name="rows", spec=_spec("page"))])
-    server = _server()
+    server = make_server()
     with pytest.raises(ImproperlyConfigured, match=r"\['page'\]"):
         server.register_tools(registry, overrides={"rows": {"paginate": True, "description": "d"}})
     assert "rows" not in server.tools
 
 
 def test_an_unpaginated_list_tools_pagination_named_read_reaches_the_selector() -> None:
-    server = _server()
+    server = make_server()
     with warnings.catch_warnings():
         # Unpaginated on purpose; the unbounded-list warning is not the question.
         warnings.simplefilter("ignore")
@@ -100,7 +95,7 @@ def test_an_unpaginated_list_tools_pagination_named_read_reaches_the_selector() 
 
 
 def test_a_retrieve_tools_pagination_named_read_registers() -> None:
-    server = _server()
+    server = make_server()
     server.register_tool(
         _spec("page", kind=SelectorKind.RETRIEVE, required=True), name="row", description="d"
     )
@@ -109,5 +104,7 @@ def test_a_retrieve_tools_pagination_named_read_registers() -> None:
 
 
 def test_a_paginated_list_tool_with_other_reads_still_registers() -> None:
-    binding = _server().register_tool(_spec("status"), name="rows", description="d", paginate=True)
+    binding = make_server().register_tool(
+        _spec("status"), name="rows", description="d", paginate=True
+    )
     assert binding.paginate is True

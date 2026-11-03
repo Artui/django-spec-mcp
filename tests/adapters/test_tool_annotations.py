@@ -26,11 +26,7 @@ from django_service_specs import (
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.adapters.utils import merge_tool_annotations
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-
-
-def _server() -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+from tests.utils import make_server
 
 
 def _service(**overrides: Any) -> ServiceSpec:
@@ -77,21 +73,21 @@ def test_explicit_hints_override_derived_defaults() -> None:
 
 
 def test_a_selector_tool_is_read_only() -> None:
-    server = _server()
+    server = make_server()
     server.register_tool(_selector(), name="things.list")
 
     assert _listed(server, "things.list") == {"readOnlyHint": True}
 
 
 def test_a_service_tool_is_destructive() -> None:
-    server = _server()
+    server = make_server()
     server.register_tool(_service(), name="things.create")
 
     assert _listed(server, "things.create") == {"readOnlyHint": False, "destructiveHint": True}
 
 
 def test_an_explicit_title_rides_alongside_the_derived_hint() -> None:
-    server = _server()
+    server = make_server()
     server.register_tool(_selector(), name="things.list", annotations={"title": "List things"})
 
     assert _listed(server, "things.list") == {"readOnlyHint": True, "title": "List things"}
@@ -101,7 +97,7 @@ def test_an_explicit_title_rides_alongside_the_derived_hint() -> None:
 def test_a_service_spec_declaring_idempotent_advertises_the_hint(idempotent: bool) -> None:
     # A declared ``False`` is published, not dropped: silence and ``False`` are
     # two answers the kernel keeps apart.
-    server = _server()
+    server = make_server()
     server.register_tool(_service(idempotent=idempotent), name="things.upsert")
 
     assert _listed(server, "things.upsert") == {
@@ -113,14 +109,14 @@ def test_a_service_spec_declaring_idempotent_advertises_the_hint(idempotent: boo
 
 def test_an_undeclared_service_spec_leaves_the_hint_absent() -> None:
     # Holds ``idempotent is not None`` in ``merge_tool_annotations``.
-    server = _server()
+    server = make_server()
     server.register_tool(_service(), name="things.create")
 
     assert "idempotentHint" not in _listed(server, "things.create")
 
 
 def test_explicit_annotations_win_over_a_declared_idempotent() -> None:
-    server = _server()
+    server = make_server()
     server.register_tool(
         _service(idempotent=True),
         name="things.upsert",
@@ -145,7 +141,7 @@ def test_a_registry_override_flips_the_hints_of_one_tool() -> None:
     registry = SpecRegistry()
     registry.register("things.create", _service())
     registry.register("things.archive", _service())
-    server = _server()
+    server = make_server()
 
     server.register_tools(
         registry, overrides={"things.archive": {"annotations": {"destructiveHint": False}}}

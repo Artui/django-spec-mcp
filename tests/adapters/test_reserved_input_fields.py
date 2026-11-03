@@ -35,14 +35,9 @@ from django_service_specs import (
     Unrestricted,
 )
 
-from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from tests.utils import make_server
 
 _SEEDED = DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme")
-
-
-def _server(**options: Any) -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None, **options)
 
 
 @dataclass
@@ -68,7 +63,7 @@ def test_a_validator_field_named_after_a_reserved_seed_is_refused_at_registratio
     )
 
     with pytest.raises(ImproperlyConfigured, match=r"declares the parameter\(s\) \['user'\]"):
-        _server().register_tool(spec, name="t")
+        make_server().register_tool(spec, name="t")
 
 
 @pytest.mark.parametrize("kind", ["service", "selector"])
@@ -89,7 +84,7 @@ def test_a_validator_field_named_like_a_registered_seed_is_the_callers_and_reach
     # the service's pool. The kernel keeps the caller's value in ``data`` and
     # the seed in the parameter, so each reaches the service under its own name
     # and nothing is lost.
-    server = _server(pool_seeds=_SEEDED)
+    server = make_server(pool_seeds=_SEEDED)
     server.register_tool(
         ServiceSpec(
             service=lambda *, data, tenant: {"sent": data.tenant, "seeded": tenant},
@@ -116,7 +111,7 @@ def test_a_read_named_like_a_registered_seed_is_refused_at_registration() -> Non
         permissions=[Unrestricted()],
         reads=Parameters([Parameter("tenant", "string", required=True)]),
     )
-    server = _server(pool_seeds=_SEEDED)
+    server = make_server(pool_seeds=_SEEDED)
     with pytest.raises(ImproperlyConfigured, match=r"MCP tool 't': .*\['tenant'\]"):
         server.register_tool(spec, name="t")
     assert "t" not in server.tools
@@ -132,7 +127,7 @@ def test_a_read_named_after_the_calls_own_seat_is_refused_at_registration(name: 
         permissions=[Unrestricted()],
         reads=Parameters([Parameter(name, "string", required=True)]),
     )
-    server = _server()
+    server = make_server()
     with pytest.raises(ImproperlyConfigured, match=rf"MCP tool 't': .*\['{name}'\]"):
         server.register_tool(spec, name="t")
     assert "t" not in server.tools

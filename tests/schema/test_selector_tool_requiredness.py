@@ -38,7 +38,7 @@ from django_service_specs import (
 from typing_extensions import TypedDict
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from tests.utils import make_server
 
 _T = TypeVar("_T")
 
@@ -47,10 +47,6 @@ _T = TypeVar("_T")
 class _Row:
     pk: int
     tenant: str
-
-
-def _server() -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
 
 
 def _schema(server: MCPServer, name: str = "get") -> dict[str, Any]:
@@ -83,7 +79,7 @@ def _register(server: MCPServer, *reads: Parameter, kwargs: Any = None) -> None:
 
 
 def test_a_read_declared_required_is_required() -> None:
-    server = _server()
+    server = make_server()
     _register(server, _PK)
 
     schema = _schema(server)
@@ -93,7 +89,7 @@ def test_a_read_declared_required_is_required() -> None:
 
 
 def test_a_read_declared_optional_stays_optional() -> None:
-    server = _server()
+    server = make_server()
     _register(server, _PK, Parameter("tenant", "string"))
 
     schema = _schema(server)
@@ -106,7 +102,7 @@ def test_a_selector_parameter_no_read_declares_is_not_advertised() -> None:
     # A kernel spec takes the arguments it declares and no others, not every
     # parameter of the selector's signature, so ``tenant``, which ``_rows``
     # takes with a default, is never offered and the closed set refuses it.
-    server = _server()
+    server = make_server()
     _register(server, _PK)
 
     assert set(_schema(server)["properties"]) == {"pk"}
@@ -221,7 +217,7 @@ def test_a_name_a_typed_provider_returns_is_not_asked_for(provider: Any) -> None
     # needs a value for it; the provider is who supplies it, and replaces
     # whatever a caller sends, so asking for it would demand a value the call
     # then discards. A parameterised TypedDict is read off its origin.
-    server = _server()
+    server = make_server()
     _register(server, _PK, _TENANT, kwargs=provider)
 
     schema = _schema(server)
@@ -234,7 +230,7 @@ def test_a_name_a_typed_provider_returns_is_not_asked_for(provider: Any) -> None
 @pytest.mark.django_db
 def test_the_call_serves_the_providers_value_whatever_the_caller_sends() -> None:
     # Why the name is left out: a caller's value never reaches the selector.
-    server = _server()
+    server = make_server()
     _register(server, _PK, _TENANT, kwargs=_typed_provider)
 
     bare = server.call_tool("get", {"pk": 1}, user=None).to_dict()
@@ -251,7 +247,7 @@ def test_a_key_the_provider_may_decline_is_offered_but_not_required(provider: An
     # A kernel read declared ``required=True`` is relaxed at dispatch when a
     # provider may fill it, so a call without it is not refused for it, and
     # the schema says what dispatch demands, as django-spec-agents' does.
-    server = _server()
+    server = make_server()
     _register(server, _PK, _TENANT, kwargs=provider)
 
     schema = _schema(server)
@@ -262,7 +258,7 @@ def test_a_key_the_provider_may_decline_is_offered_but_not_required(provider: An
 
 def test_a_union_that_does_not_admit_unset_is_still_filled() -> None:
     # ``None`` is a value the provider answers with, not a decline.
-    server = _server()
+    server = make_server()
     _register(server, _PK, _TENANT, kwargs=_noneable_provider)
 
     assert set(_schema(server)["properties"]) == {"pk"}
@@ -277,7 +273,7 @@ def test_an_untyped_provider_leaves_every_read_offered_and_none_required(provide
     # A provider whose return says nothing about its keys may fill any read,
     # so dispatch demands none of them of the caller and none is required.
     # Every one is still offered, since the provider fills none for certain.
-    server = _server()
+    server = make_server()
     _register(server, _PK, _TENANT, kwargs=provider)
 
     schema = _schema(server)
@@ -290,7 +286,7 @@ def test_an_untyped_provider_leaves_every_read_offered_and_none_required(provide
 def test_a_read_left_out_that_the_untyped_provider_does_not_fill_is_handed_back() -> None:
     # Not required is not unchecked: the kernel refuses the call where the
     # provider's answer is merged, and the refusal names the read.
-    server = _server()
+    server = make_server()
     _register(server, _PK, _TENANT, kwargs=lambda: {})
 
     out = server.call_tool("get", {"tenant": "acme"}, user=None).to_dict()
@@ -304,7 +300,7 @@ def test_a_key_holding_unset_inside_a_container_is_filled() -> None:
     # a list or a dict, and only a value that is ``UNSET`` itself is dropped
     # from the pool. So both are filled and not advertised, and walking every
     # argument of every generic would find ``UnsetType`` inside them and offer both.
-    server = _server()
+    server = make_server()
     _register(
         server,
         _PK,
@@ -333,7 +329,7 @@ def test_an_unresolvable_annotation_beside_the_return_costs_only_what_it_names(
     # annotation says which keys are filled. Either way ``region`` is filled,
     # ``tenant`` is offered, and ``pk`` stays required, where reading the whole
     # provider as untyped would offer ``region`` and require nothing.
-    server = _server()
+    server = make_server()
     _register(server, _PK, _TENANT, _REGION, kwargs=provider)
 
     schema = _schema(server)
@@ -343,7 +339,7 @@ def test_an_unresolvable_annotation_beside_the_return_costs_only_what_it_names(
 
 
 def test_a_spec_without_a_provider_keeps_every_declared_requirement() -> None:
-    server = _server()
+    server = make_server()
     _register(server, _PK, _TENANT)
 
     assert _schema(server)["required"] == ["pk", "tenant"]

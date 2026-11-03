@@ -42,7 +42,6 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.config.types.mcp_config import MCPConfig
@@ -56,7 +55,7 @@ from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.registry.types.prompt_binding import PromptBinding
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
-from tests.utils import tool_error
+from tests.utils import make_server, tool_error
 
 OPEN = [Unrestricted()]
 
@@ -77,10 +76,6 @@ class _Out:
 class _DenySpec(PermissionCheck):
     def has_permission(self, principal: Any, spec: Any) -> bool:
         return False
-
-
-def _server(config: MCPConfig | None = None) -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None, config=config)
 
 
 def _ctx(server: MCPServer) -> MCPCallContext:
@@ -122,7 +117,7 @@ def _call(handle: Handle, server: MCPServer, arguments: Any = None, **params: An
 
 
 def _one(spec: Any, config: MCPConfig | None = None, **knobs: Any) -> MCPServer:
-    server = _server(config)
+    server = make_server(config=config)
     server.register_tool(spec, name="t", **knobs)
     return server
 
@@ -192,7 +187,7 @@ def test_an_output_selector_reshapes_the_result(handle: Handle) -> None:
 
 
 def test_a_resource_read_passes_through_with_no_presenter(read: Handle) -> None:
-    server = _server()
+    server = make_server()
     server.register_resource(
         SelectorSpec(
             kind=SelectorKind.RETRIEVE,
@@ -208,7 +203,7 @@ def test_a_resource_read_passes_through_with_no_presenter(read: Handle) -> None:
 
 
 def test_a_resource_read_denied_by_its_scope_gate(read: Handle) -> None:
-    server = _server()
+    server = make_server()
     server.register_resource(
         SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda: {}, permissions=OPEN),
         name="r",
