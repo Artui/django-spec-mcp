@@ -157,7 +157,7 @@ A client looks for the RFC 9728 document in two places, in this order:
 
 The mount's own route cannot answer the second, because everything
 `server.urls` mounts sits under the mount's prefix, and the well-known location
-starts at the origin. `server.well_known_urls()` returns the pattern for it,
+starts at the origin. `server.well_known_urls()` returns the patterns for it,
 which goes in the **root** URLconf, beside the mount:
 
 ```python
