@@ -34,8 +34,7 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from tests.utils import tool_error
+from tests.utils import make_server, tool_error
 
 # A value for every name any spec below can advertise, so a call can send
 # exactly the advertised set.
@@ -91,7 +90,7 @@ _SPECS: dict[str, Callable[[], ServiceSpec]] = {
 
 
 def _server(spec: ServiceSpec, *, policy: UnknownArguments) -> MCPServer:
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+    server = make_server(session_store=None)
     server.register_tool(spec, name="t", unknown_arguments=policy)
     return server
 

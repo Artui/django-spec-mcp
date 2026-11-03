@@ -44,7 +44,6 @@ from django_service_specs import (
 )
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.handlers.handle_completion_complete import handle_completion_complete
@@ -70,7 +69,7 @@ from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
 from tests.kernel_client import KernelClient
 from tests.testapp.auth_backend import HeaderAuthBackend
 from tests.testapp.urlconf_for import urlconf_for
-from tests.utils import RefusingRateLimit, tool_error
+from tests.utils import RefusingRateLimit, make_server, tool_error
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -158,7 +157,7 @@ def _get(*checks: PermissionCheck) -> SelectorSpec:
 
 
 def _bare_server(**kwargs: Any) -> MCPServer:
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None, **kwargs)
+    return make_server(session_store=None, **kwargs)
 
 
 def _server(*checks: PermissionCheck, limiter: Any = None, **kwargs: Any) -> MCPServer:

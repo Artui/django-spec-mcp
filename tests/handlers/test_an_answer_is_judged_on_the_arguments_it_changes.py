@@ -29,7 +29,6 @@ from django.test import AsyncClient, Client, override_settings
 from django_service_specs import DataclassValidator, PermissionCheck, ServiceSpec
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
@@ -39,7 +38,7 @@ from django_spec_mcp.transport.in_memory_session_store import InMemorySessionSto
 from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from tests.testapp.urlconf_for import urlconf_for
-from tests.utils import RefusingRateLimit
+from tests.utils import RefusingRateLimit, make_server
 
 pytestmark = pytest.mark.django_db(transaction=True)
 
@@ -64,9 +63,7 @@ def _server(ran: list[Any], *, limiter: Any = None) -> MCPServer:
         ran.append(data.project)
         return {"ok": True}
 
-    server = MCPServer(
-        name="t", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore()
-    )
+    server = make_server(session_store=InMemorySessionStore())
     server.register_tool(
         ServiceSpec(
             service=_service,

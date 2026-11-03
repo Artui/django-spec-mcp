@@ -19,7 +19,6 @@ from django.http import HttpRequest
 from django_service_specs import PermissionCheck, ServiceSpec, Unrestricted
 
 from django_spec_mcp import MCPServer
-from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.handlers.handle_completion_complete import handle_completion_complete
@@ -36,6 +35,7 @@ from django_spec_mcp.subscriptions.grant_subscription import grant_subscription
 from django_spec_mcp.subscriptions.types.subscription_filter import SubscriptionFilter
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
+from tests.utils import make_server
 
 ALICE = User(username="alice")
 BOB = User(username="bob")
@@ -65,7 +65,7 @@ class Recording(PermissionCheck):
 def _server(*, require: bool = False, settings: Any = None) -> MCPServer:
     if settings is not None:
         settings.SPEC_MCP = {**settings.SPEC_MCP, "REQUIRE_TOOL_PERMISSIONS": require}
-    return MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore())
+    return make_server(session_store=InMemorySessionStore())
 
 
 def _ctx(server: MCPServer, user: Any, scopes: tuple[str, ...] = ()) -> MCPCallContext:
