@@ -1781,7 +1781,8 @@ key is never reused over a task's lifetime, and keeps the first answer.
 | `MAX_INPUT_ROUNDS` bounds it | Counted on the task as inline, so the question past the budget is the `isError` result below, and the task is `completed`. |
 | The wait is the task's, not the form's | A task waits for its TTL. The round is kept on the task record, not in a signed `requestState`, so an answer after `INPUT_REQUEST_TTL_SECONDS` still resumes it. |
 | A client that cannot be asked | A task created by a request that did not declare form elicitation is never parked: the question degrades to the `isError` result carrying `requestedInput`, and the task is `completed`. A task created before this release reads as one of these. |
-| A custom `TaskStore` | Persists `can_elicit` and `input_round` with the rest of the record. A store dropping them loses the declaration, and its tasks never park. |
+| A custom `TaskStore` | Persists `can_elicit` and `input_round` with the rest of the record. A store dropping `can_elicit` loses the declaration, so its tasks never park. A store dropping `input_round` parks every round under `additionalInput-1`, which reuses a key the spec forbids reusing and leaves `MAX_INPUT_ROUNDS` unbounded, since the round never counts up. |
+| Only the tasks the package parked | A task whose one outstanding request is its round's key (`additionalInput-N`) is resumed by `tasks/update`. A task parked through `transition_task` under its own keys is answered as before: the answers are kept, and the task is `working` again once none is outstanding, with nothing queued, charged or merged. |
 
 ## Asking the user: elicitation
 

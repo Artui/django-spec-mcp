@@ -39,6 +39,7 @@ from django_spec_mcp.handlers.handle_tasks_update import handle_tasks_update
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
@@ -204,8 +205,24 @@ def test_service_error_not_recorded_by_default(
 # ---------- the task path ----------
 
 
-def _task_server() -> MCPServer:
-    """A task-running server holding ``rows.delete`` as an optional task."""
+class _Limiter:
+    """A rate limit that charges nothing until ``refuse`` is set."""
+
+    def __init__(self) -> None:
+        self.refuse: bool = False
+
+    def consume(self, request: Any, token: Any) -> int | None:  # noqa: ARG002
+        return 30 if self.refuse else None
+
+
+GATED = ("rows:delete",)
+
+
+def _task_server(
+    *, scopes: tuple[str, ...] | None = None, limiter: _Limiter | None = None
+) -> MCPServer:
+    """A task-running server holding ``rows.delete`` as an optional task, behind
+    ``scopes`` and ``limiter`` when given."""
     store = InMemoryTaskStore()
     server = make_server(task_store=store, task_executor=RecordingExecutor(store))
     server.register_tool(
@@ -217,53 +234,77 @@ def _task_server() -> MCPServer:
         ),
         name=TOOL,
         task_policy=TaskPolicy.OPTIONAL,
+        **({"scopes": scopes} if scopes else {}),
+        **({"rate_limits": [limiter]} if limiter else {}),
     )
     return server
 
 
+def _asking_context(server: MCPServer, *, scopes: tuple[str, ...] = ()) -> MCPCallContext:
+    """A request declaring forms and the tasks extension, its token carrying ``scopes``."""
+    return replace(
+        task_context(server, scopes=scopes),
+        client_capabilities={"elicitation": {}, "extensions": {TASKS_EXTENSION_ID: {}}},
+    )
+
+
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("action", ["decline", "cancel"])
+@pytest.mark.parametrize("refusal", ["decline", "cancel", "denied", "rate-limited"])
 def test_a_task_path_refusal_is_answered_inside_the_span(
-    exporter: InMemorySpanExporter, tools_call, action: str
+    exporter: InMemorySpanExporter, tools_call, refusal: str
 ) -> None:
-    """A declined answer on the task path is answered as inline is, inside an
-    ``mcp.tools.call`` span: before, task creation opened none, so the one outcome
-    the two paths share was traced on one only."""
-    server = _task_server()
-    ctx = replace(
-        task_context(server),
-        client_capabilities={"elicitation": {}, "extensions": {TASKS_EXTENSION_ID: {}}},
+    """A refusal on the task path is answered as inline is, inside an
+    ``mcp.tools.call`` span: before, task creation opened none, so the outcomes the
+    two paths share were traced on one only. Fails with the checks of
+    ``admit_task_call`` answered before the span opens, for any of the four."""
+    limiter = _Limiter()
+    limiter.refuse = refusal == "rate-limited"
+    server = _task_server(
+        scopes=GATED if refusal == "denied" else None,
+        limiter=limiter if refusal == "rate-limited" else None,
     )
-    out = tools_call(
-        {
-            "name": TOOL,
-            "arguments": {"count": 500},
-            "inputResponses": {ELICITATION_KEY: {"action": action}},
-        },
-        ctx,
-    )
-    assert out.get("isError") is True, out
+    call: dict[str, Any] = {"name": TOOL, "arguments": {"count": 500}}
+    if refusal in ("decline", "cancel"):
+        call["inputResponses"] = {ELICITATION_KEY: {"action": refusal}}
+
+    out = tools_call(call, _asking_context(server))
+
+    if refusal in ("decline", "cancel"):
+        assert out.get("isError") is True, out
+    else:
+        assert isinstance(out, JsonRpcError), out
     assert server.task_executor.enqueued == []
-    (call,) = [s for s in exporter.get_finished_spans() if s.name == "mcp.tools.call"]
-    assert call.attributes["mcp.binding.name"] == TOOL
+    (call_span,) = [s for s in exporter.get_finished_spans() if s.name == "mcp.tools.call"]
+    assert call_span.attributes["mcp.binding.name"] == TOOL
 
 
 @pytest.mark.django_db(transaction=True)
-def test_an_answer_refused_on_a_waiting_task_is_traced(exporter: InMemorySpanExporter) -> None:
-    """An answer to a waiting task meets task creation's checks, inside its span."""
-    server = _task_server()
-    ctx = replace(
-        task_context(server),
-        client_capabilities={"elicitation": {}, "extensions": {TASKS_EXTENSION_ID: {}}},
+@pytest.mark.parametrize("refusal", ["decline", "denied", "rate-limited"])
+def test_an_answer_refused_on_a_waiting_task_is_traced(
+    exporter: InMemorySpanExporter, refusal: str
+) -> None:
+    """An answer to a waiting task meets task creation's checks, inside its span:
+    its scope gate, its charge and a declined answer. Fails with the checks of
+    ``admit_task_call`` answered before the span opens, for any of the three."""
+    limiter = _Limiter()
+    server = _task_server(scopes=GATED if refusal == "denied" else None, limiter=limiter)
+    handle: Any = handle_tools_call(
+        {"name": TOOL, "arguments": {"count": 500}}, _asking_context(server, scopes=GATED)
     )
-    handle: Any = handle_tools_call({"name": TOOL, "arguments": {"count": 500}}, ctx)
     server.run_task(handle["taskId"])
     (key,) = server.task_store.get(handle["taskId"]).task.input_requests
+    limiter.refuse = refusal == "rate-limited"
+    answer = (
+        {"action": "decline"}
+        if refusal == "decline"
+        else {"action": "accept", "content": {"confirmed": True}}
+    )
     exporter.clear()
 
-    handle_tasks_update(
-        {"taskId": handle["taskId"], "inputResponses": {key: {"action": "decline"}}}, ctx
-    )
+    # A caller holding the scope, except in the case that lost it.
+    ctx = _asking_context(server, scopes=() if refusal == "denied" else GATED)
+    out = handle_tasks_update({"taskId": handle["taskId"], "inputResponses": {key: answer}}, ctx)
 
+    assert isinstance(out, JsonRpcError) == (refusal != "decline"), out
     (call,) = [s for s in exporter.get_finished_spans() if s.name == "mcp.tools.call"]
     assert call.attributes["mcp.binding.name"] == TOOL

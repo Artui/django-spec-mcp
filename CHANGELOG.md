@@ -28,9 +28,16 @@ carries; releases up to 0.54.0 are in
   `MAX_INPUT_ROUNDS` bounds the exchange as inline, and the round is kept on the task,
   so an answer arriving after `INPUT_REQUEST_TTL_SECONDS` still resumes it. A task
   created by a request that did not declare form elicitation, or before this release,
-  completes as before. `TaskRecord` gains `can_elicit` and `input_round`, which
-  `DjangoCacheTaskStore` persists; a custom `TaskStore` should persist them too, or
-  its tasks never park.
+  completes as before. Only a task the package parked is resumed: a task parked
+  through `transition_task` under the caller's own keys is answered as before, the
+  answers kept and the task `working` once none is outstanding, with nothing queued,
+  charged or merged. An answer resumes a task only while it is still waiting, so a
+  `tasks/cancel`, or a duplicate `tasks/update`, landing while the answer is admitted
+  is not undone. `TaskRecord` gains `can_elicit` and `input_round`, which
+  `DjangoCacheTaskStore` persists; a custom `TaskStore` should persist both. One
+  dropping `can_elicit` never parks its tasks; one dropping `input_round` parks every
+  round under `additionalInput-1`, reusing a key the spec forbids reusing, and leaves
+  `MAX_INPUT_ROUNDS` unbounded.
 
 ### Fixed
 

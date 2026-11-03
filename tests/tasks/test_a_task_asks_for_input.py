@@ -33,6 +33,7 @@ from django_service_specs import (
 
 from django_spec_mcp import MCPServer, TaskPolicy
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
+from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.handlers.handle_tasks_cancel import handle_tasks_cancel
 from django_spec_mcp.handlers.handle_tasks_get import handle_tasks_get
@@ -40,8 +41,11 @@ from django_spec_mcp.handlers.handle_tasks_update import handle_tasks_update
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.tasks.create_task import create_task
 from django_spec_mcp.tasks.django_cache_task_store import DjangoCacheTaskStore
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
+from django_spec_mcp.tasks.transition_task import transition_task
+from django_spec_mcp.tasks.utils import input_request_key
 from django_spec_mcp.types.task_status import TaskStatus
 from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
 from tests.elicitation.conftest import TOOL, DeleteRows, delete_rows_kernel
@@ -161,6 +165,7 @@ def test_a_task_asks_waits_and_completes_with_the_answer() -> None:
     assert world.answer(task_id, _accept(confirmed=True), key) == {}
     assert world.get(task_id)["status"] == "working"
     assert world.executor.enqueued == [task_id, task_id]
+    assert world.store.get(task_id).input_responses == {key: _accept(confirmed=True)}
 
     world.server.run_task(task_id)
     done = world.get(task_id)
@@ -196,6 +201,7 @@ def test_a_second_question_is_asked_under_a_new_key_and_keeps_the_first_answer()
         "confirmed": True,
         "reason": "cleanup",
     }
+    assert set(world.store.get(task_id).input_responses) == {first, second}
 
 
 @pytest.mark.parametrize("elicitation", [False, {"url": {}}])
@@ -383,3 +389,275 @@ def test_a_task_queued_by_0_6_0_runs_as_it_did() -> None:
     done = world.get(task_id)
     assert done["status"] == "completed", done
     assert tool_error(done["result"])["type"] == "input_required"
+
+
+class _ChangesMeanwhile(PermissionCheck):
+    """Runs ``act`` once, as the check of the answered round: a request landing
+    while ``tasks/update`` admits the answer, after it read the task."""
+
+    def __init__(self, act: Any) -> None:
+        self.act = act
+        self.fired: bool = False
+
+    def has_permission(self, principal: Any, spec: Any, *, arguments: Any) -> bool:  # noqa: ARG002
+        if arguments.get("confirmed") and not self.fired:
+            self.fired = True
+            self.act()
+        return True
+
+
+def _counting(runs: list[int]) -> Any:
+    """``delete_rows_kernel`` noting each run that carries the answer."""
+
+    def counted(*, count: int, confirmed: bool = False, reason: str = "") -> dict[str, Any]:
+        if confirmed:
+            runs.append(count)
+        return delete_rows_kernel(count=count, confirmed=confirmed, reason=reason)
+
+    return counted
+
+
+@pytest.mark.parametrize("meanwhile", ["cancelled", "expired"])
+def test_a_task_ended_while_its_answer_is_admitted_stays_ended(meanwhile: str) -> None:
+    """``tasks/update`` reads the task, then admits the answer (the checks and the
+    charge), then saves ``working``: the save is built from the record as it stands
+    then, so a cancel, or the record's expiry, landing in between is not undone and
+    the cancelled task's service does not run. Fails without the re-read in
+    ``resume_task``."""
+    runs: list[int] = []
+    task: dict[str, str] = {}
+
+    def act() -> None:
+        if meanwhile == "cancelled":
+            assert handle_tasks_cancel({"taskId": task["id"]}, world.ctx()) == {}
+        else:
+            world.store.delete(task["id"])
+
+    world = _World(service=_counting(runs), check=_ChangesMeanwhile(act))
+    task["id"] = world.start(500)
+    enqueued = list(world.executor.enqueued)
+
+    assert world.answer(task["id"], _accept(confirmed=True)) == {}
+    world.server.run_task(task["id"])
+
+    record = world.store.get(task["id"])
+    if meanwhile == "cancelled":
+        assert record.status is TaskStatus.CANCELLED
+    else:
+        assert record is None
+    assert runs == []
+    assert world.executor.enqueued == enqueued
+
+
+@pytest.mark.parametrize("worker_ran", [True, False])
+def test_a_duplicate_answer_runs_the_service_once(worker_ran: bool) -> None:
+    """A client retrying ``tasks/update`` can land the second while the first
+    admits. The second resumes the task (and, here, its worker runs); the first
+    then finds the task no longer waiting and queues nothing, rather than saving
+    its record over a task that moved on and running the service again. Fails
+    without the status guard in ``resume_task``."""
+    runs: list[int] = []
+    task: dict[str, str] = {}
+
+    def duplicate() -> None:
+        assert world.answer(task["id"], _accept(confirmed=True)) == {}
+        if worker_ran:
+            world.server.run_task(task["id"])
+
+    world = _World(service=_counting(runs), check=_ChangesMeanwhile(duplicate))
+    task["id"] = world.start(500)
+
+    assert world.answer(task["id"], _accept(confirmed=True)) == {}
+    world.server.run_task(task["id"])
+
+    assert runs == [500]
+    assert world.executor.enqueued == [task["id"]] * 2
+    assert world.store.get(task["id"]).status is TaskStatus.COMPLETED
+
+
+class _OvertakenAfterARead(InMemoryTaskStore):
+    """Serves one read, then a ``tasks/cancel`` (or the record's expiry) lands
+    before the caller's next call."""
+
+    def __init__(self, meanwhile: str) -> None:
+        super().__init__()
+        self.meanwhile = meanwhile
+        self.overtake_after_a_read: str | None = None
+
+    def get(self, task_id: str) -> Any:
+        record = super().get(task_id)
+        if self.overtake_after_a_read == task_id:
+            self.overtake_after_a_read = None
+            if self.meanwhile == "cancelled":
+                transition_task(self, task_id, status=TaskStatus.CANCELLED)
+            else:
+                self.delete(task_id)
+        return record
+
+
+@pytest.mark.parametrize("meanwhile", ["cancelled", "expired"])
+def test_a_task_overtaken_between_the_parks_read_and_its_save_is_kept(meanwhile: str) -> None:
+    """The park saves the round before it moves the status, so the save must not
+    be built from a read the cancel (or the expiry) has since overtaken. Fails
+    without the read directly before the save in ``_park``."""
+    store = _OvertakenAfterARead(meanwhile)
+    task: dict[str, str] = {}
+
+    def asks(*, count: int, confirmed: bool = False, reason: str = "") -> Any:  # noqa: ARG001
+        store.overtake_after_a_read = task["id"]
+        raise AdditionalInputRequired("Sure?", schema={"confirmed": {"type": "boolean"}})
+
+    world = _World(service=asks, store=store)
+    task["id"] = world.create(500)
+
+    world.server.run_task(task["id"])
+
+    record = store.get(task["id"])
+    if meanwhile == "cancelled":
+        assert record.status is TaskStatus.CANCELLED
+        assert record.input_round == 0
+    else:
+        assert record is None
+
+
+def test_the_answer_is_saved_before_the_task_is_queued() -> None:
+    """An executor may run the worker before ``enqueue`` returns: the task must
+    already read ``working`` and queued then, or the worker finds it waiting and
+    leaves it so for good."""
+    world = _World()
+    task_id = world.start(500)
+
+    class _Inline:
+        def enqueue(self, queued: str) -> None:
+            world.server.run_task(queued)
+
+    world.server._task_executor = _Inline()
+
+    assert world.answer(task_id, _accept(confirmed=True)) == {}
+
+    assert world.get(task_id)["status"] == "completed"
+
+
+def _hand_parked(keys: dict[str, Any], *, count: int = 5) -> tuple[_World, str]:
+    """A registered tool's task parked as 0.6.0's public API did it: through
+    ``transition_task``, under the caller's own keys.
+
+    ``count`` of 5 is a call the service never asks about, so what happens next is
+    the package's doing and not the service's."""
+    world = _World()
+    task_id = world.create(count)
+    record = world.store.get(task_id)
+    world.store.save(replace(record, enqueued=False))
+    transition_task(world.store, task_id, status=TaskStatus.INPUT_REQUIRED, input_requests=keys)
+    return world, task_id
+
+
+def _seen(world: _World, task_id: str) -> tuple[Any, ...]:
+    """What an answer could have caused: queueings, charges and the recorded call."""
+    record = world.store.get(task_id)
+    return (len(world.executor.enqueued), world.limiter.charges, record.arguments)
+
+
+@pytest.mark.parametrize(
+    "answers",
+    [
+        [{"k1": {"name": "Ada"}, "k2": 2}],
+        [{"k1": {"name": "Ada"}}, {"k2": 2}],
+    ],
+    ids=["in-one-update", "in-two-updates"],
+)
+def test_a_task_parked_by_hand_is_answered_as_in_0_6_0(answers: list[dict[str, Any]]) -> None:
+    """Answering every key sets it ``working`` and nothing else: no queueing, no
+    charge and no merge into the arguments, as when only ``transition_task`` parked
+    tasks. The tool is registered, which is what makes the package's own resuming
+    reachable."""
+    world, task_id = _hand_parked({"k1": {}, "k2": {}})
+    before = _seen(world, task_id)
+
+    for answer in answers:
+        assert handle_tasks_update({"taskId": task_id, "inputResponses": answer}, world.ctx()) == {}
+        if answer is not answers[-1]:
+            assert world.store.get(task_id).status is TaskStatus.INPUT_REQUIRED
+
+    record = world.store.get(task_id)
+    assert record.status is TaskStatus.WORKING
+    assert record.input_responses == {"k1": {"name": "Ada"}, "k2": 2}
+    assert record.task.input_requests is None
+    assert _seen(world, task_id) == before
+
+
+def test_a_task_parked_by_hand_keeps_its_arguments_whatever_the_answer_carries() -> None:
+    world, task_id = _hand_parked({"k1": {}})
+    before = _seen(world, task_id)
+
+    answer = {"k1": _accept(count=99)}
+    assert handle_tasks_update({"taskId": task_id, "inputResponses": answer}, world.ctx()) == {}
+
+    assert world.store.get(task_id).arguments == {"count": 5}
+    assert _seen(world, task_id) == before
+
+
+def test_a_task_parked_with_no_requests_is_not_queued_by_an_answer() -> None:
+    world, task_id = _hand_parked({})
+    before = _seen(world, task_id)
+
+    handle_tasks_update({"taskId": task_id, "inputResponses": {"x": 1}}, world.ctx())
+
+    assert _seen(world, task_id) == before
+
+
+@pytest.mark.parametrize("shape", ["round-zero", "more-than-the-key", "another-key"])
+def test_only_the_question_the_package_asked_resumes_a_task(shape: str) -> None:
+    """The package resumes a task whose one outstanding request is the key of its
+    recorded round, answered under that key. Each conjunct has its case: a round
+    of 0 (whose key is ``additionalInput-0``), a further request beside the key, and
+    an answer under another key."""
+    if shape == "round-zero":
+        world, task_id = _hand_parked({input_request_key(0): {}})
+        answer: dict[str, Any] = {input_request_key(0): _accept(confirmed=True)}
+    else:
+        world = _World()
+        task_id = world.start(500)
+        key = input_request_key(1)
+        if shape == "more-than-the-key":
+            record = world.store.get(task_id)
+            world.store.save(
+                record.with_task(input_requests={**record.task.input_requests, "k2": {}})
+            )
+            answer = {key: _accept(confirmed=True), "k2": 2}
+        else:
+            answer = {"made-up": _accept(confirmed=True)}
+    before = _seen(world, task_id)
+
+    assert handle_tasks_update({"taskId": task_id, "inputResponses": answer}, world.ctx()) == {}
+
+    assert _seen(world, task_id) == before
+
+
+def test_a_task_whose_tool_is_no_longer_registered_is_queued_as_it_stands() -> None:
+    """Nothing is left to merge into or to charge, so the answer queues the task
+    and its worker answers the unknown tool as any run would."""
+    world = _World()
+    task = create_task(
+        store=world.store,
+        executor=world.executor,
+        tool_name="gone.tool",
+        arguments={"count": 5},
+        token=TokenInfo(user=None),
+        ttl_ms=None,
+        poll_interval_ms=None,
+        can_elicit=True,
+    )
+    key = input_request_key(1)
+    record = world.store.get(task.task_id)
+    world.store.save(replace(record, enqueued=False, input_round=1))
+    transition_task(
+        world.store, task.task_id, status=TaskStatus.INPUT_REQUIRED, input_requests={key: {}}
+    )
+
+    assert world.answer(task.task_id, _accept(confirmed=True), key) == {}
+
+    assert world.store.get(task.task_id).status is TaskStatus.WORKING
+    assert world.executor.enqueued == [task.task_id] * 2
+    assert world.limiter.charges == 0
+    assert world.store.get(task.task_id).arguments == {"count": 5}

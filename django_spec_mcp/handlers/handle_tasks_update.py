@@ -19,7 +19,7 @@ from django_spec_mcp.tasks.resume_task import resume_task
 from django_spec_mcp.tasks.transition_task import transition_task
 from django_spec_mcp.tasks.types.task_record import TaskRecord
 from django_spec_mcp.tasks.types.task_store import TaskStore
-from django_spec_mcp.tasks.utils import now_iso
+from django_spec_mcp.tasks.utils import input_request_key, now_iso
 from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from django_spec_mcp.types.task_status import TaskStatus
@@ -42,13 +42,17 @@ def handle_tasks_update(
       the whole call over.
     - **A partial set is accepted**, so answers accumulate rather than replace.
     - **Only when nothing is left outstanding** does the task go back to
-      ``working``, queued again for its worker; until then the next ``tasks/get``
-      shows what is still wanted.
+      ``working`` (queued again for its worker, if the package parked it); until
+      then the next ``tasks/get`` shows what is still wanted.
 
-    **The answer resumes the task as a retry would resume the call.** It merges
-    into the task's arguments, under the checks and the charge task creation asks
-    (``_resume``), and the worker runs the service again from the top with it, as
-    an inline retry does.
+    **The answer resumes a task the package parked as a retry would resume the
+    call.** A task whose one outstanding request is the key of its recorded round
+    (``run_task`` parked it) is resumed: the answer merges into the task's
+    arguments, under the checks and the charge task creation asks (``_resume``),
+    and the worker runs the service again from the top with it, as an inline retry
+    does. A task parked through ``transition_task`` under its caller's own keys is
+    answered as it was in 0.6.0: the answers are kept, and the task is ``working``
+    again once none is outstanding, with nothing queued, charged or merged.
 
     **Updating a task that is not waiting for input is refused.** The keys are
     the correlation, and a task in ``working`` has none outstanding, so every
@@ -90,15 +94,32 @@ def handle_tasks_update(
     merged: dict[str, Any] = {**record.input_responses, **accepted}
     remaining: dict[str, Any] = {k: v for k, v in outstanding.items() if k not in merged}
 
-    if remaining:
-        waiting: TaskRecord = replace(record, input_responses=merged).with_task(
-            input_requests=remaining,
-            last_updated_at=now_iso(),
-        )
-        store.save(waiting)
-        publish_task_status(context.subscriptions, waiting)
-        return {}
-    return _resume(store, replace(record, input_responses=merged), accepted, context)
+    asked: str = input_request_key(record.input_round)
+    # A task this package parked (``run_task``) waits on exactly its round's one
+    # key, and its answer lands there. Each conjunct has the test that fails
+    # without it (``test_only_the_question_the_package_asked_resumes_a_task``):
+    # ``input_round >= 1`` (a hand-parked task keyed ``additionalInput-0``), the
+    # outstanding set being only that key (a further request beside it), and the
+    # key being answered (an answer under another key resumes nothing).
+    if record.input_round >= 1 and set(outstanding) == {asked} and asked in accepted:
+        return _resume(store, replace(record, input_responses=merged), accepted, context)
+
+    # Any other task in ``input_required`` was parked through ``transition_task``
+    # under its caller's own keys, and is answered as it was before the package
+    # parked tasks of its own: the answers are kept, and once none is outstanding
+    # the task is ``working`` again with nothing queued, charged or merged
+    # (``test_a_task_parked_by_hand_is_answered_as_in_0_6_0``).
+    updated: TaskRecord = replace(record, input_responses=merged).with_task(
+        status=TaskStatus.WORKING if not remaining else TaskStatus.INPUT_REQUIRED,
+        input_requests=remaining or None,
+        last_updated_at=now_iso(),
+        status_message=None if not remaining else record.task.status_message,
+    )
+    store.save(updated)
+    # Answering changes the task's status, so a subscriber watching it hears,
+    # exactly as it would for any other transition.
+    publish_task_status(context.subscriptions, updated)
+    return {}
 
 
 def _resume(

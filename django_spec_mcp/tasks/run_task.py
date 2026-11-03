@@ -118,7 +118,7 @@ def run_task(
             broker=broker,
         )
         return
-    if isinstance(result, dict) and result.get("resultType") == ResultType.INPUT_REQUIRED.value:
+    if result.get("resultType") == ResultType.INPUT_REQUIRED.value:
         _park(store, task_id, result, broker)
         return
     transition_task(store, task_id, status=TaskStatus.COMPLETED, result=result, broker=broker)
@@ -157,9 +157,15 @@ def _park(
     the next round's key.
 
     Re-read rather than taken from the claim, so progress the run reported is
-    kept, and the round is saved before the status moves, so a ``tasks/update``
-    landing in between reads the key the question is filed under. A task
-    cancelled while it ran stays cancelled (``transition_task``).
+    kept. The round is saved before the status moves because the reverse order
+    would save a record read before the move over ``input_required``, leaving the
+    task ``working`` with its question lost. A ``tasks/update`` landing between
+    the two saves is refused, since the status is still ``working``. A task
+    cancelled while it ran stays cancelled (``transition_task``), and one
+    cancelled between the last read and the save is kept too, by reading once
+    more directly before the save
+    (``test_a_cancel_between_the_parks_read_and_its_save_is_kept``): still two
+    calls, the window ``transition_task`` accepts.
     """
     current: TaskRecord | None = store.get(task_id)
     if current is None or current.status.is_terminal:
@@ -167,7 +173,10 @@ def _park(
     # ``ask_for_input`` asked this run's question as the round after the one
     # the replay carried.
     asked: int = current.input_round + 1
-    store.save(replace(current, input_round=asked))
+    latest: TaskRecord | None = store.get(task_id)
+    if latest is None or latest.status.is_terminal:
+        return
+    store.save(replace(latest, input_round=asked))
     transition_task(
         store,
         task_id,
