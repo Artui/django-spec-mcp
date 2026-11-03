@@ -11,6 +11,26 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-11-03
+
+### Added
+
+- **`transition_task` takes `input_round`.** The round is set with the transition, in
+  the same save, and left out it stays as it stands, where every other keyword left out
+  clears its field; a refused transition sets no round. The package's own park now
+  makes one read and one save through it, where it made three reads and two saves,
+  saving the round and the status separately.
+
+### Fixed
+
+- **A late answer no longer resumes a task waiting on the next question.** A
+  `tasks/update` slow in admitting its answer, whose duplicate had meanwhile resumed
+  the task and whose worker had parked it again on the next round, found the task
+  waiting and resumed it: the new question was wiped, the task was queued a third
+  time, and the service ran again only to ask it once more. An answer now resumes a
+  task only while it waits on the round and the requests the update read, and
+  otherwise saves and queues nothing.
+
 ## [0.7.0] — 2026-11-03
 
 ### Added
@@ -758,7 +778,8 @@ carries; releases up to 0.54.0 are in
   running. The worker's run now enters below that decision. A client that did
   not declare the extension is still refused `-32021` by a `REQUIRED` tool.
 
-[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/Artui/django-spec-mcp/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Artui/django-spec-mcp/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Artui/django-spec-mcp/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/Artui/django-spec-mcp/compare/v0.4.0...v0.5.0
