@@ -2050,7 +2050,7 @@ silently never renders — so all four are refused at registration:
 | `resource_uri` names no view on this server | The host resolves it against the same server, so a typo reaches it as a dangling reference. Register the view **before** the tool that links to it. |
 | The tool has `include_structured_content=False` | That *is* the render payload; the view would come up blank. Checked against the effective value, so a project that turned it off globally is caught too. |
 | Both `ui=` and a `"ui"` key in `meta=` | Both write the same `_meta` key, so one would quietly overwrite the other. |
-| `resource_uri` fits a data resource's URI template more than one way | `register_ui_resource` refuses a templated URI, so the ambiguity can only come from a template it did not build: a *data* resource's (`things://{a}-{b}` splits `things://x-y-z` as `x`/`y-z` or `x-y`/`z`), or a binding registered by hand on `server.resources`. Name the view by its exact URI. |
+| `resource_uri` fits a data resource's URI template more than one way | Neither `register_ui_resource` nor the registry takes a templated view, so the ambiguity can only come from a *data* resource's template (`things://{a}-{b}` splits `things://x-y-z` as `x`/`y-z` or `x-y`/`z`). Name the view by its exact URI. |
 
 `visibility` declares who may call the tool — `UIVisibility.MODEL`, `APP`, or
 both. It is **host-enforced**: a host is required not to offer the model a tool
