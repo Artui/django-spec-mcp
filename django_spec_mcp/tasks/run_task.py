@@ -120,8 +120,10 @@ def run_task(
         return
     if result.get("resultType") == ResultType.INPUT_REQUIRED.value:
         # ``ask_for_input`` asked this run's question as the round after the one
-        # the replay carried, which is the claim's: only a park moves the round,
-        # and the task is not parked while its worker runs.
+        # the replay carried, which is the claim's, so the key names the round the
+        # budget was counted on. Best-effort as the claim is: a round set while
+        # the run was in flight (a second claim's park, or a caller's own
+        # ``transition_task``) is overwritten here.
         _park(store, task_id, record.input_round + 1, result, broker)
         return
     transition_task(store, task_id, status=TaskStatus.COMPLETED, result=result, broker=broker)

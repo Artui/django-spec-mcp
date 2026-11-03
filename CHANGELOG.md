@@ -18,8 +18,8 @@ carries; releases up to 0.54.0 are in
 - **`transition_task` takes `input_round`.** The round is set with the transition, in
   the same save, and left out it stays as it stands, where every other keyword left out
   clears its field; a refused transition sets no round. The package's own park now
-  makes one read and one save through it, where it read the task twice and saved the
-  round and the status separately.
+  makes one read and one save through it, where it made three reads and two saves,
+  saving the round and the status separately.
 
 ### Fixed
 

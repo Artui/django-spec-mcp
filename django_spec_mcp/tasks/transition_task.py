@@ -47,8 +47,11 @@ def transition_task(
     and ``None`` (the default) keeps the round as it stands, where every other
     keyword's ``None`` clears its field: the round counts a task's questions over
     its lifetime, and a transition that does not ask one has nothing to say about
-    it. A refused transition sets no round either
+    it. ``0`` sets it like any other round, and a refused transition sets none
     (``test_a_transition_sets_the_round_only_when_asked_and_only_when_it_happens``).
+    A round set while a worker runs the task is overwritten when that run parks it,
+    since the park records the round after the one the worker claimed
+    (``test_a_round_set_while_the_worker_runs_is_overwritten_by_its_park``).
 
     ``broker`` opts the transition into ``notifications/tasks``, published only
     for a transition that *happened* — a refused one changed nothing, and

@@ -509,9 +509,10 @@ def test_a_late_answer_leaves_the_next_rounds_question_in_place() -> None:
 def test_an_answer_resumes_only_the_question_it_read(moved: str) -> None:
     """Each conjunct of the guard in ``resume_task`` alone. While the answer is
     admitted, the task's round moves with its requests as they were, a further
-    request joins the one answered, or its status leaves ``input_required`` with
-    the rest as it was: the answer resumes none of them, saves nothing and queues
-    nothing."""
+    request joins the one answered, or it is cancelled with its round and requests
+    kept: the answer resumes none of them, saves nothing and queues nothing. Every
+    transition clears the requests, so only the status conjunct keeps a cancelled
+    task that kept them from being reopened."""
     task: dict[str, str] = {}
 
     def act() -> None:
@@ -523,7 +524,7 @@ def test_an_answer_resumes_only_the_question_it_read(moved: str) -> None:
                 record.with_task(input_requests={**record.task.input_requests, "k2": {}})
             )
         else:
-            world.store.save(record.with_task(status=TaskStatus.WORKING))
+            world.store.save(record.with_task(status=TaskStatus.CANCELLED))
 
     world = _World(check=_ChangesMeanwhile(act))
     task["id"] = world.start(500)
@@ -579,9 +580,30 @@ def test_the_park_reads_the_task_once_and_saves_it_once() -> None:
     assert (record.progress, record.total) == (1, 2)
 
 
+def test_a_round_set_while_the_worker_runs_is_overwritten_by_its_park() -> None:
+    """The park records the round after the one the worker claimed, so a round a
+    caller set through ``transition_task`` while the run was in flight does not
+    survive it."""
+    task: dict[str, str] = {}
+
+    def moves_the_round(*, count: int, confirmed: bool = False, reason: str = "") -> Any:  # noqa: ARG001
+        transition_task(world.store, task["id"], status=TaskStatus.WORKING, input_round=5)
+        raise AdditionalInputRequired("Sure?", schema={"confirmed": {"type": "boolean"}})
+
+    world = _World(service=moves_the_round)
+    task["id"] = world.create(500)
+
+    world.server.run_task(task["id"])
+
+    record = world.store.get(task["id"])
+    assert record.input_round == 1
+    assert set(record.task.input_requests) == {input_request_key(1)}
+
+
 def test_a_transition_sets_the_round_only_when_asked_and_only_when_it_happens() -> None:
     """``input_round`` lands with the transition it is given to; left out, the round
-    stays as it was; and a transition the terminal guard refuses sets none."""
+    stays as it was, and ``0`` is a round like any other; a transition the terminal
+    guard refuses sets none."""
     world = _World()
     task_id = world.create(5)
 
@@ -589,11 +611,13 @@ def test_a_transition_sets_the_round_only_when_asked_and_only_when_it_happens() 
     assert world.store.get(task_id).input_round == 3
     transition_task(world.store, task_id, status=TaskStatus.WORKING)
     assert world.store.get(task_id).input_round == 3
+    transition_task(world.store, task_id, status=TaskStatus.INPUT_REQUIRED, input_round=0)
+    assert world.store.get(task_id).input_round == 0
     transition_task(world.store, task_id, status=TaskStatus.CANCELLED)
     transition_task(world.store, task_id, status=TaskStatus.INPUT_REQUIRED, input_round=4)
 
     record = world.store.get(task_id)
-    assert (record.status, record.input_round) == (TaskStatus.CANCELLED, 3)
+    assert (record.status, record.input_round) == (TaskStatus.CANCELLED, 0)
 
 
 def test_the_answer_is_saved_before_the_task_is_queued() -> None:
