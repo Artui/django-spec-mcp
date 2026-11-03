@@ -2,13 +2,17 @@ from __future__ import annotations
 
 from typing import Any
 
+from django_spec_mcp.elicitation.types.resolved_input import ResolvedInput
+from django_spec_mcp.handlers.input_dispatch import refusal_result
 from django_spec_mcp.handlers.kernel_utils import KernelAdmission, admit_kernel_tool_call
+from django_spec_mcp.handlers.resolve_call_input import resolve_call_input
 from django_spec_mcp.handlers.tasks_utils import (
     declares_tasks_extension,
     missing_capability_error,
 )
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import (
+    apply_tool_server_arguments,
     consume_rate_limits,
     effective_rate_limits,
     forbidden,
@@ -29,6 +33,7 @@ def maybe_create_task(
     context: MCPCallContext,
     *,
     admission: KernelAdmission | None = None,
+    params: dict[str, Any] | None = None,
 ) -> dict[str, Any] | JsonRpcError | None:
     """Answer a tool call with a task handle, if this call should get one.
 
@@ -65,15 +70,31 @@ def maybe_create_task(
     pays. Without the charge here, declaring the tasks extension would be a
     self-service exemption from every quota a task-shaped tool configures.
 
+    **A retry's answers are merged here, so the task is created with them.** The
+    worker replays the recorded arguments and nothing else, with no
+    ``inputResponses`` to read, so answers left out of the record are answers the
+    task never sees: it would run without them and degrade to an ``isError``
+    ``input_required`` result. ``params`` is the call's, and the merge is the
+    inline one (``resolve_call_input``, then the binding's ``server_arguments``
+    laid over again, since an answer may name any key). It runs after every
+    route that sends the call inline and after the scope gate, so no call
+    resolves its answers twice and a denied caller is told before they are read.
+    Absent ``params`` merges nothing, which is how a caller with no call to read
+    (the direct calls in ``tests/tasks/test_task_wire_shape.py``) asks. A declined or
+    cancelled answer is answered after the charge, as inline, and creates no
+    task. The merged arguments stay in the record for the task's lifetime, like
+    any other argument.
+
     ``admission`` is the one a streamed call's pre-flight made, which task
     creation takes instead of asking the spec's checks again, so a seed a check
     names resolves once before the worker
     (``test_a_streamed_task_call_resolves_a_checks_seed_once_before_the_worker``).
-    It is the same question: the pre-flight asks on the client's ``arguments``
-    with the binding's ``server_arguments`` laid over, as ``arguments`` is here,
-    and a retry's answers are merged into neither, since both run before the
-    merge. Only the async view hands one in; the sync ``handle_tools_call`` has
-    no pre-flight and asks here.
+    It is the same question only while nothing was carried in: the pre-flight asks
+    on the client's ``arguments`` with the binding's ``server_arguments`` laid
+    over, and a retry's answers are merged after, so a call that carried any is
+    asked afresh on what the worker will run with
+    (``test_a_streamed_task_retry_is_admitted_afresh``). Only the async view hands
+    one in; the sync ``handle_tools_call`` has no pre-flight and asks here.
     """
     # A worker's run is the task this decision already made, so it runs, under
     # either policy: asked again, a ``REQUIRED`` tool's run met a worker that
@@ -113,15 +134,31 @@ def maybe_create_task(
     if not allowed:
         return forbidden(required_scopes)
 
+    # A retry's answers become ordinary arguments here, as inline: the record
+    # below holds them, since the worker reads nothing else
+    # (``test_a_retry_that_runs_as_a_task_stores_and_runs_its_answer``). Applied
+    # again over what the answers produced, since the merge takes any key
+    # (``test_an_answer_cannot_replace_a_bound_value_in_a_task``).
+    prior: ResolvedInput | None = None
+    if params is not None:
+        prior = resolve_call_input(binding, params, arguments, context)
+        arguments = apply_tool_server_arguments(binding, prior.arguments)
+
     # The spec's own checks, which the binding's ``permissions`` above do not
     # hold, as the inline call asks them before its charge: without this the
     # plain route queued a call its worker would refuse, where the streamed
     # route's pre-flight answered ``403``
-    # (``test_a_caller_the_spec_refuses_gets_no_task``). Its grant is not kept,
-    # since the worker's replay is a later call, judged again. A streamed
-    # call's pre-flight has asked already, on these arguments, and is not asked
-    # twice.
-    if admission is None:
+    # (``test_a_caller_the_spec_refuses_gets_no_task``). Asked on the merged
+    # arguments, so an answer that names a route is the one judged
+    # (``test_a_caller_refused_on_the_merged_arguments_gets_no_task``). Its grant is
+    # not kept, since the worker's replay is a later call, judged again. A
+    # streamed call's pre-flight has asked already, on the arguments as sent,
+    # and is not asked twice unless answers were carried in: without the
+    # second conjunct ``test_a_streamed_task_retry_is_admitted_afresh`` fails,
+    # and without the first a direct call with no ``params``
+    # (``test_a_pre_flight_admission_stands_when_no_call_is_handed_in``) reads
+    # ``carried`` off ``None``.
+    if admission is None or (prior is not None and bool(prior.carried)):
         admitted = admit_kernel_tool_call(binding, arguments, context)
         if isinstance(admitted, JsonRpcError):
             return admitted
@@ -134,6 +171,11 @@ def maybe_create_task(
     )
     if retry_after is not None:
         return rate_limited(retry_after)
+
+    # After the charge, as inline: a declined answer is a call the client made
+    # (``test_a_declined_answer_creates_no_task_and_is_charged_once``).
+    if prior is not None and prior.refused_with is not None:
+        return refusal_result(prior.refused_with)
 
     task: Task = create_task(
         store=store,
