@@ -16,6 +16,7 @@ registrar is asked in ``test_server_arguments_on_every_registrar.py``.
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -33,6 +34,8 @@ from django_service_specs import (
     ServerArguments,
     ServiceSpec,
     Unrestricted,
+    ValidationContext,
+    Validator,
 )
 
 from django_spec_mcp import MCPServer
@@ -115,7 +118,7 @@ def test_a_tool_binding_nothing_never_reaches_the_kernels_rule() -> None:
     binding = server.tools.get("card")
     assert binding is not None
     arguments: dict[str, Any] = {"project": 1}
-    assert apply_tool_server_arguments(binding, arguments) is arguments
+    assert apply_tool_server_arguments(binding, arguments, dispatch_context={}) is arguments
 
 
 def test_the_bound_value_wins_and_the_withheld_one_is_dropped(
@@ -242,6 +245,32 @@ def test_withholding_a_name_no_call_can_do_without_is_refused() -> None:
     with pytest.raises(ImproperlyConfigured, match="'card'"):
         server.register_tool(_selector(), name="card", description="d", server_arguments=bind)
     assert "card" not in server.tools
+
+
+class _ProjectOnlyToACall(Validator):
+    """Declares ``project`` to a call, and nothing to no call."""
+
+    def parameters(self, *, call_context: dict[str, Any] | None = None) -> Parameters:
+        if call_context is None:
+            return Parameters([])
+        return Parameters.of(Parameter("project", "integer"))
+
+    def validate(self, arguments: Mapping[str, Any], context: ValidationContext) -> dict[str, Any]:
+        return dict(arguments)
+
+
+def test_a_name_a_validator_declares_only_to_a_call_is_refused_at_registration() -> None:
+    """Registration reads the declaration made to no call, so a binding a call's
+    declaration would take is refused: the name is declared to no call too, or
+    not bound."""
+    spec = ServiceSpec(
+        service=lambda **_: {}, validator=_ProjectOnlyToACall(), permissions=[Unrestricted()]
+    )
+    server = make_server()
+    bind = ServerArguments(values={"project": 7})
+    with pytest.raises(ImproperlyConfigured, match=r"MCP tool 'only'.*project"):
+        server.register_tool(spec, name="only", description="d", server_arguments=bind)
+    assert "only" not in server.tools
 
 
 def test_a_binding_built_by_hand_is_checked_when_it_is_registered() -> None:

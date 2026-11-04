@@ -12,7 +12,11 @@ from django_spec_mcp.handlers.input_dispatch import (
     refusal_result,
 )
 from django_spec_mcp.handlers.invalidation_dispatch import announce_invalidations_async
-from django_spec_mcp.handlers.kernel_utils import KernelAdmission, admit_kernel_tool_call
+from django_spec_mcp.handlers.kernel_utils import (
+    KernelAdmission,
+    admit_kernel_tool_call,
+    tool_call_context,
+)
 from django_spec_mcp.handlers.resolve_call_input import resolve_call_input
 from django_spec_mcp.handlers.run_kernel_tool_async import run_kernel_tool_async
 from django_spec_mcp.handlers.task_dispatch import maybe_create_task
@@ -64,7 +68,11 @@ async def handle_tools_call_async(
     target = resolve_tool_call(params, context)
     if isinstance(target, JsonRpcError):
         return target
-    binding, arguments_raw = target
+    binding, sent = target
+    # See the sync sibling: the server's values in place before the task decision.
+    arguments_raw = apply_tool_server_arguments(
+        binding, sent, dispatch_context=tool_call_context(binding, context)
+    )
 
     # Placed as in the sync sibling, and deliberately *outside* the deadline:
     # creating a task is a store write and a queue hand-off, not the work, and
@@ -131,8 +139,6 @@ async def _dispatch_tool_call_async(
         # before anything else looks at them, and a declined one is answered
         # after the rate limit.
         prior: ResolvedInput = resolve_call_input(binding, params, arguments_raw, context)
-        # See the sync sibling: applied again, since the merge takes any key.
-        arguments_raw = apply_tool_server_arguments(binding, prior.arguments)
 
         # See the sync sibling: the spec's own checks, on the arguments the
         # tool will run with and before the charge, off the loop because a
@@ -141,12 +147,27 @@ async def _dispatch_tool_call_async(
         # stands only while nothing was merged in
         # (``test_a_streamed_retry_with_merged_answers_is_admitted_afresh``);
         # reusing it keeps one resolution of each seed a check names, and the
-        # call context the carrier is bound to by identity.
+        # call context the carrier is bound to by identity. The value is laid
+        # again, since the merge takes any key, under the dict the admission
+        # carries: the pre-flight's when it stands, which laid it under that
+        # dict too
+        # (``test_a_streamed_call_lays_its_bound_value_under_the_dict_it_dispatches_with``),
+        # and otherwise a fresh one, as a check may have written into the
+        # pre-flight's.
         admission: KernelAdmission | JsonRpcError
         if preflight is not None and not prior.carried:
+            arguments_raw = apply_tool_server_arguments(
+                binding, prior.arguments, dispatch_context=preflight.call_context
+            )
             admission = preflight
         else:
-            admission = await acall(admit_kernel_tool_call, binding, arguments_raw, context)
+            dispatched = tool_call_context(binding, context)
+            arguments_raw = apply_tool_server_arguments(
+                binding, prior.arguments, dispatch_context=dispatched
+            )
+            admission = await acall(
+                admit_kernel_tool_call, binding, arguments_raw, context, dispatched
+            )
         if isinstance(admission, JsonRpcError):
             return admission, arguments_raw
 

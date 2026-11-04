@@ -43,7 +43,11 @@ from django_service_specs import (
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
-from django_spec_mcp.handlers.kernel_utils import KernelAdmission, admit_kernel_tool_call
+from django_spec_mcp.handlers.kernel_utils import (
+    KernelAdmission,
+    admit_kernel_tool_call,
+    tool_call_context,
+)
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.testapp.urlconf_for import urlconf_for
@@ -253,7 +257,11 @@ def _context(server: MCPServer) -> MCPCallContext:
 
 
 def _admit(server: MCPServer, name: str, arguments: dict[str, Any]) -> KernelAdmission:
-    admission = admit_kernel_tool_call(server.tools.get(name), arguments, _context(server))
+    binding = server.tools.get(name)
+    context = _context(server)
+    admission = admit_kernel_tool_call(
+        binding, arguments, context, tool_call_context(binding, context)
+    )
     assert isinstance(admission, KernelAdmission), admission
     return admission
 

@@ -6,7 +6,11 @@ from typing import Any
 from django.http import StreamingHttpResponse
 from django_service_specs import ProgressReporter, apply_server_arguments
 
-from django_spec_mcp.handlers.kernel_utils import KernelAdmission, admit_kernel_tool_call
+from django_spec_mcp.handlers.kernel_utils import (
+    KernelAdmission,
+    admit_kernel_tool_call,
+    tool_call_context,
+)
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import forbidden, judge_tool_permissions
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
@@ -141,7 +145,10 @@ def _kernel_admission(
     (``test_a_check_reading_arguments_is_judged_on_the_servers_value``),
     through the kernel's rule rather than ``apply_tool_server_arguments``,
     which would log the dropped value a second time
-    (``test_the_server_arguments_are_laid_without_a_second_warning``).
+    (``test_the_server_arguments_are_laid_without_a_second_warning``). Laid
+    under the dict the admission carries, so a handler reusing it dispatches
+    under the dict the value was checked against
+    (``test_a_streamed_call_lays_its_bound_value_under_the_dict_it_dispatches_with``).
 
     Only a denial, which ``KERNEL_REFUSALS`` answers ``-32006``, is answered
     here. Any other refusal is left to the handler, which answers it in the
@@ -160,8 +167,11 @@ def _kernel_admission(
     in the run
     (``test_a_many_call_with_a_refused_row_is_asked_by_its_prelude_and_by_dispatch``).
     """
-    laid: dict[str, Any] = apply_server_arguments(binding.spec, arguments, binding.server_arguments)
-    return admit_kernel_tool_call(binding, laid, context)
+    dispatched = tool_call_context(binding, context)
+    laid: dict[str, Any] = apply_server_arguments(
+        binding.spec, arguments, binding.server_arguments, call_context=dispatched
+    )
+    return admit_kernel_tool_call(binding, laid, context, dispatched)
 
 
 def _tool_binding(params: dict[str, Any], context: MCPCallContext) -> Any:

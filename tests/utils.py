@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
@@ -12,6 +12,7 @@ import pytest
 from asgiref.sync import async_to_sync
 from django.http import HttpRequest
 from django.test import AsyncClient, Client
+from django_service_specs import Parameter, Parameters, ValidationContext, Validator
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
@@ -99,6 +100,40 @@ def call_context(server: MCPServer, **overrides: Any) -> MCPCallContext:
     }
     base.update(overrides)
     return MCPCallContext(**base)
+
+
+class TypedByTheCall(Validator):
+    """Declares ``project`` an integer to a call of ``action``, and any value to no call.
+
+    Keyed on the call's dict: a reader handed ``call_context`` for a call of
+    ``action`` reads the integer, one handed ``None`` reads the declaration made
+    to no call, which takes any value and so passes ``check_server_arguments``
+    at registration for a bound value the call refuses. Records every
+    ``call_context`` its ``parameters`` is handed, the dict itself, so a test
+    can ask which reader was handed what, and whether two were handed one dict.
+    """
+
+    def __init__(self, action: str) -> None:
+        self.action = action
+        self.handed: list[dict[str, Any] | None] = []
+
+    def parameters(self, *, call_context: dict[str, Any] | None = None) -> Parameters:
+        self.handed.append(call_context)
+        to_the_call = call_context is not None and call_context["action"] == self.action
+        return Parameters.of(Parameter("project", "integer" if to_the_call else "any"))
+
+    def validate(self, arguments: Mapping[str, Any], context: ValidationContext) -> dict[str, Any]:
+        return dict(arguments)
+
+    def distinct(self) -> list[dict[str, Any]]:
+        """The dicts handed, each object once, in the order first handed; ``None`` raises."""
+        assert None not in self.handed, "a reader was handed no call_context during the call"
+        seen: list[dict[str, Any]] = []
+        for each in self.handed:
+            assert each is not None
+            if not any(each is kept for kept in seen):
+                seen.append(each)
+        return seen
 
 
 class RefusingRateLimit:
