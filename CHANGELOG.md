@@ -11,6 +11,8 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+## [0.8.1] — 2026-11-04
+
 ### Changed
 
 - **A tool's server arguments are checked against what its spec declares to the
@@ -799,7 +801,8 @@ carries; releases up to 0.54.0 are in
   running. The worker's run now enters below that decision. A client that did
   not declare the extension is still refused `-32021` by a `REQUIRED` tool.
 
-[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/Artui/django-spec-mcp/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/Artui/django-spec-mcp/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Artui/django-spec-mcp/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Artui/django-spec-mcp/compare/v0.5.0...v0.6.0
