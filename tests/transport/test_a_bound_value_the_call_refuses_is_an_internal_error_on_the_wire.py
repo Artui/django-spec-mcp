@@ -6,8 +6,10 @@ server's mistake, so on the wire it is the dispatch backstop's ``500`` with a
 JSON-RPC ``-32603``, never a ``200`` carrying an ``isError`` ``validation_error``
 tool result, which would tell the caller an argument it never sent is invalid.
 Each case posts through a real URL conf, on the sync and the async view, plain
-and with a ``progressToken``; a streamed call fails in its pre-flight, before a
-stream opens, so it answers the same JSON rather than a stream.
+and with a ``progressToken``. The async view's streamed call fails in its
+pre-flight, before a stream opens, so it answers the same JSON rather than a
+stream; the sync view never streams, so its ``progressToken`` case pins that a
+token changes nothing there.
 """
 
 from __future__ import annotations
@@ -130,3 +132,5 @@ async def test_a_bound_value_the_call_refuses_is_a_json_rpc_internal_error(
     assert len(records) == 1, [r.name for r in caplog.records]
     assert records[0].exc_info is not None
     assert isinstance(records[0].exc_info[1], ImproperlyConfigured)
+    # The kernel's rule, not any ``ImproperlyConfigured`` raised on the way to it.
+    assert "binds a value its parameter refuses" in str(records[0].exc_info[1])
