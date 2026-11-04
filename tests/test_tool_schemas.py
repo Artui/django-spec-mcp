@@ -19,8 +19,8 @@ A schema change regenerates the dump in the same pull request::
     make tool-schemas
 
 which runs this test with ``TOOL_SCHEMAS_WRITE=1`` set, so it writes the file
-instead of comparing; the diff of ``tool_schemas.json`` is then the change a
-reviewer reads.
+instead of comparing and then skips, so a write is never reported as a pass; the
+diff of ``tool_schemas.json`` is then the change a reviewer reads.
 """
 
 from __future__ import annotations
@@ -43,10 +43,18 @@ from django_service_specs import (
     SelectorSpec,
     ServerArguments,
     ServiceSpec,
+    UnknownArguments,
     Unrestricted,
 )
 
-from django_spec_mcp import Icon, MCPServer
+from django_spec_mcp import (
+    Icon,
+    IconTheme,
+    MCPServer,
+    ToolContentKind,
+    UIToolMeta,
+    UIVisibility,
+)
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
 from django_spec_mcp.server.utils import UnboundedListWarning
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
@@ -85,6 +93,21 @@ def _invoice_of(*, project: int, draw: int = 0, note: str = "") -> Invoice | Non
     return None
 
 
+def _maybe_invoice(**_: Any) -> Invoice | None:
+    """A selector that may find nothing, for ``allow_none``."""
+    return None
+
+
+def _maybe_invoices() -> list[Invoice] | None:
+    """A service that returns rows or nothing, for ``returns_many`` with ``allow_none``."""
+    return None
+
+
+def _chart() -> bytes:
+    """A service whose result is an image rather than JSON text."""
+    return b""
+
+
 def _server() -> MCPServer:
     server = MCPServer(
         name="tool-schemas", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore()
@@ -101,7 +124,14 @@ def _server() -> MCPServer:
         name="invoices.create",
         description="Create an invoice.",
         title="Create invoice",
-        icons=(Icon(src="https://example.test/i.png", mime_type="image/png", sizes=("48x48",)),),
+        icons=(
+            Icon(
+                src="https://example.test/i.png",
+                mime_type="image/png",
+                sizes=("48x48",),
+                theme=IconTheme.DARK,
+            ),
+        ),
         annotations={"destructiveHint": False, "idempotentHint": False},
         meta={"example.test/owner": "billing"},
     )
@@ -121,13 +151,19 @@ def _server() -> MCPServer:
         annotations={"readOnlyHint": True},
     )
     # A paged list: ``page`` and ``limit`` under a bound, a filter set's
-    # ``ordering`` and filter, and a read-shaping ``fields``.
+    # ``ordering`` and filter, and read-shaping ``fields`` (with help) and
+    # ``expand`` (without).
     server.register_tool(
         SelectorSpec(
             kind=SelectorKind.LIST,
             selector=_invoices,
             filter_set=_SortedInvoices,
-            shapes=Parameters([Parameter("fields", "string", help="Fields to return.")]),
+            shapes=Parameters(
+                [
+                    Parameter("fields", "string", help="Fields to return."),
+                    Parameter("expand", "string"),
+                ]
+            ),
             presenter=DataclassPresenter(InvoiceOutput),
             permissions=[Unrestricted()],
         ),
@@ -166,6 +202,78 @@ def _server() -> MCPServer:
         name="invoices.in_project",
         description="Fetch the bound project's invoice.",
         server_arguments=ServerArguments(values={"project": 7}, withheld=frozenset({"draw"})),
+    )
+    # A retrieve that may find nothing: ``allow_none`` lets the output schema
+    # admit an empty result.
+    server.register_tool(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=_maybe_invoice,
+            allow_none=True,
+            presenter=DataclassPresenter(InvoiceOutput),
+            permissions=[Unrestricted()],
+        ),
+        name="invoices.maybe",
+        description="Fetch an invoice, if there is one.",
+    )
+    # A service returning many rows, or nothing: ``returns_many`` makes the
+    # output an array, and ``allow_none`` keeps it an array that may be empty.
+    server.register_tool(
+        ServiceSpec(
+            service=_maybe_invoices,
+            returns_many=True,
+            allow_none=True,
+            presenter=DataclassPresenter(InvoiceOutput),
+            permissions=[Unrestricted()],
+        ),
+        name="invoices.returned",
+        description="Rows or nothing.",
+    )
+    # An image result: ``content_kind`` and ``content_mime_type`` change what
+    # the tool declares it returns.
+    server.register_tool(
+        ServiceSpec(
+            service=_chart,
+            presenter=DataclassPresenter(InvoiceOutput),
+            permissions=[Unrestricted()],
+        ),
+        name="invoices.chart",
+        description="Draw a chart.",
+        content_kind=ToolContentKind.IMAGE,
+        content_mime_type="image/png",
+    )
+    # An MCP Apps tool: ``_meta.ui`` names a registered resource and who may
+    # see the tool, ``unknown_arguments`` loosens the input schema, and
+    # ``include_output_schema=False`` drops the output schema.
+    server.register_ui_resource(name="table", uri="ui://invoices/table.html", html="<h1>x</h1>")
+    server.register_tool(
+        ServiceSpec(
+            service=record_invoice,
+            validator=DataclassValidator(InvoiceInput),
+            presenter=DataclassPresenter(InvoiceOutput),
+            permissions=[Unrestricted()],
+        ),
+        name="invoices.create_loose",
+        description="Create an invoice, ignoring unknown arguments.",
+        ui=UIToolMeta(resource_uri="ui://invoices/table.html", visibility=[UIVisibility.APP]),
+        unknown_arguments=UnknownArguments.IGNORE,
+        include_output_schema=False,
+    )
+    # A bulk service: ``many`` wraps the input and the output in arrays, the
+    # input under ``items`` and bounded by ``many_min_length`` and
+    # ``many_max_length``.
+    server.register_tool(
+        ServiceSpec(
+            service=record_invoice,
+            validator=DataclassValidator(InvoiceInput),
+            presenter=DataclassPresenter(InvoiceOutput),
+            permissions=[Unrestricted()],
+            many=True,
+            many_min_length=1,
+            many_max_length=20,
+        ),
+        name="invoices.create_many",
+        description="Create several invoices.",
     )
     return server
 
@@ -208,7 +316,9 @@ def test_the_advertised_tool_schemas_match_the_checked_in_dump():
     current = _encode(_listing())
     if WRITE:
         DUMP.write_text(current, encoding="utf-8")
-        return
+        # A skip, not a pass: a ``TOOL_SCHEMAS_WRITE=1`` left exported must not
+        # turn drift into a silent rewrite that CI reports green.
+        pytest.skip("wrote tests/testapp/tool_schemas.json")
     checked_in = DUMP.read_text(encoding="utf-8") if DUMP.exists() else ""
     if current != checked_in:
         diff = "".join(

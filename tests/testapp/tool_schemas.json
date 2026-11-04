@@ -16,7 +16,8 @@
           "sizes": [
             "48x48"
           ],
-          "src": "https://example.test/i.png"
+          "src": "https://example.test/i.png",
+          "theme": "dark"
         }
       ],
       "inputSchema": {
@@ -116,6 +117,10 @@
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
+          "expand": {
+            "description": "On a paged result it applies to each item in `items`, never to the page envelope (`items`, `page`, `totalPages`, `hasNext`).",
+            "type": "string"
+          },
           "fields": {
             "description": "Fields to return. On a paged result it applies to each item in `items`, never to the page envelope (`items`, `page`, `totalPages`, `hasNext`).",
             "type": "string"
@@ -264,6 +269,195 @@
           "sent"
         ],
         "type": "object"
+      }
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "description": "Fetch an invoice, if there is one.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "invoices.maybe",
+      "outputSchema": {
+        "anyOf": [
+          {
+            "required": [
+              "id",
+              "number",
+              "amount_cents",
+              "sent"
+            ]
+          },
+          {
+            "maxProperties": 0
+          }
+        ],
+        "properties": {
+          "amount_cents": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "number": {
+            "type": "string"
+          },
+          "sent": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      }
+    },
+    {
+      "annotations": {
+        "destructiveHint": true,
+        "readOnlyHint": false
+      },
+      "description": "Rows or nothing.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "invoices.returned",
+      "outputSchema": {
+        "items": {
+          "properties": {
+            "amount_cents": {
+              "type": "integer"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "number": {
+              "type": "string"
+            },
+            "sent": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "number",
+            "amount_cents",
+            "sent"
+          ],
+          "type": "object"
+        },
+        "type": "array"
+      }
+    },
+    {
+      "annotations": {
+        "destructiveHint": true,
+        "readOnlyHint": false
+      },
+      "description": "Draw a chart.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "invoices.chart"
+    },
+    {
+      "_meta": {
+        "ui": {
+          "resourceUri": "ui://invoices/table.html",
+          "visibility": [
+            "app"
+          ]
+        }
+      },
+      "annotations": {
+        "destructiveHint": true,
+        "readOnlyHint": false
+      },
+      "description": "Create an invoice, ignoring unknown arguments.",
+      "inputSchema": {
+        "properties": {
+          "amount_cents": {
+            "default": 0,
+            "type": "integer"
+          },
+          "number": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "number"
+        ],
+        "type": "object"
+      },
+      "name": "invoices.create_loose"
+    },
+    {
+      "annotations": {
+        "destructiveHint": true,
+        "readOnlyHint": false
+      },
+      "description": "Create several invoices.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "amount_cents": {
+                  "default": 0,
+                  "type": "integer"
+                },
+                "number": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "number"
+              ],
+              "type": "object"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "name": "invoices.create_many",
+      "outputSchema": {
+        "items": {
+          "properties": {
+            "amount_cents": {
+              "type": "integer"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "number": {
+              "type": "string"
+            },
+            "sent": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "number",
+            "amount_cents",
+            "sent"
+          ],
+          "type": "object"
+        },
+        "type": "array"
       }
     }
   ]
