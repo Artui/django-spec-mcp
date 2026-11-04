@@ -239,6 +239,13 @@ upstream rather than growing a second copy here.
 - Async tests: `async def test_...` with pytest-asyncio (`asyncio_mode = "auto"`).
 - DB tests: `@pytest.mark.django_db` for sync; `@pytest.mark.django_db(transaction=True)`
   for async.
+- The advertised tool schemas are an API for deployed agents, so `tools/list` is pinned:
+  `tests/test_tool_schemas.py` posts it to a server built over the test app's shapes and
+  diffs the answer against `tests/testapp/tool_schemas.json`. A change to what a tool
+  advertises (its name, description, `inputSchema`, `outputSchema`, annotations) runs
+  `make tool-schemas` and commits the rewritten dump in the same pull request, so the
+  reviewer reads the change as a diff. A schema feature the listing gains earns a tool
+  in that server.
 
 ## Lint and types
 
