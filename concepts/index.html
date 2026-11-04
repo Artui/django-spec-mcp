@@ -3198,6 +3198,15 @@ and each route checks it the same way:</p>
   withheld name the callable cannot do without each raise
   <code>ImproperlyConfigured</code> naming the tool. A binding built by hand and passed to
   <code>server.tools.register</code> is checked there too.</li>
+<li><strong>Each call checks the values again, against what the spec declares to that
+  call.</strong> A Validator declaring <code>parameters(self, *, call_context=None)</code> may
+  declare itself differently to a call than to no call; every <code>tools/call</code>
+  route, the in-process <code>call_tool</code> included, lays the values under the call's
+  <code>call_context</code>, the dict the call is then dispatched with. A value that
+  declaration refuses raises <code>ImproperlyConfigured</code> on the call, the server's
+  mistake rather than the caller's invalid argument. Registration reads the
+  declaration made to no call, so a name a Validator declares only to a call is
+  refused there: declare it to no call too.</li>
 </ul>
 <p>The values are <strong>static</strong> for the life of the binding. A value computed per
 request - the project the signed-in user belongs to - is not something
@@ -4602,7 +4611,9 @@ anything else a caller sent.</p>
 parameter the spec declares, less every name the server fills for the call (a
 <code>server_arguments</code> entry, a pool seed, a reflected <code>request</code> or <code>view</code> read, or a
 key a typed <code>kwargs=</code> or <code>input_data=</code> provider declares, unless its type admits
-<code>UnsetType</code>). A question for any other property is a <code>-32603</code> naming
+<code>UnsetType</code>). Both are read as the spec declares itself to the call, so a
+top-level field a Validator declares only to the call, under a registered
+seed's name, is the caller's to answer. A question for any other property is a <code>-32603</code> naming
 the property and the names the tool does take, whether or not the client can be
 asked, since the answer would come back as an argument the call refuses, drops
 or replaces. The author finds out on the first call, not when a user's answer is
