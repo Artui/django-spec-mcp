@@ -32,7 +32,10 @@ carries; releases up to 0.54.0 are in
 - **`django-service-specs` floor raised to 0.26.0**, the release that gives the
   kernel's readers `call_context=`. It also carries 0.24.0 and 0.25.0; among what
   their changelogs name, `PydanticValidator` hands a service declaring `data` the
-  model instance rather than a dict of its fields.
+  model instance rather than a dict of its fields. 0.25.0 also asks the caller for
+  a read a provider requires itself: `tools/list` marks it required, and
+  `register_tool` refuses `server_arguments` that withhold it with
+  `ImproperlyConfigured`.
 
 ## [0.8.0] — 2026-11-03
 

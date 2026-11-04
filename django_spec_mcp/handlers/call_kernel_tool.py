@@ -79,8 +79,9 @@ def call_kernel_tool(
         request = HttpRequest()
         request.method = "POST"
     request = seat(request, principal_of(user))
-    # After the copy is seated, so a Validator reading the request off the
-    # dict reads the one the call runs on, without the outer caller's token.
+    # Built from the copy of the request the call runs on, so a Validator
+    # reading the request off the dict reads that one, without the outer
+    # caller's token.
     context = call_context(request, binding.name)
     arguments = apply_tool_server_arguments(binding, arguments, dispatch_context=context)
     dispatched, page = page_request(binding, arguments, config)

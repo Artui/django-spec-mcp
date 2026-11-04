@@ -58,8 +58,10 @@ decide the call, so a seat leaves `permissions` at its default, `None`.
 whose precondition or condition names a seed nothing fills, which already failed on
 every call. The kernel's changelog for 0.21.0 to 0.26.0 has the rest: a `parameters`
 override on a spec subclass must accept `call_context`, `PydanticValidator` hands a
-service declaring `data` the model instance rather than a dict of its fields, and the
-kernel's translation catalog loads only when `"django_service_specs"` is in
+service declaring `data` the model instance rather than a dict of its fields, a read
+a provider requires itself is asked of the caller (`tools/list` marks it required, and
+`register_tool` refuses `server_arguments` that withhold it with `ImproperlyConfigured`),
+and the kernel's translation catalog loads only when `"django_service_specs"` is in
 `INSTALLED_APPS` (it runs unlisted).
 
 djangorestframework, djangorestframework-services and
