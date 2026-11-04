@@ -1,0 +1,464 @@
+{
+  "tools": [
+    {
+      "_meta": {
+        "example.test/owner": "billing"
+      },
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": false,
+        "readOnlyHint": false
+      },
+      "description": "Create an invoice.",
+      "icons": [
+        {
+          "mimeType": "image/png",
+          "sizes": [
+            "48x48"
+          ],
+          "src": "https://example.test/i.png",
+          "theme": "dark"
+        }
+      ],
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "amount_cents": {
+            "default": 0,
+            "type": "integer"
+          },
+          "number": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "number"
+        ],
+        "type": "object"
+      },
+      "name": "invoices.create",
+      "outputSchema": {
+        "properties": {
+          "amount_cents": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "number": {
+            "type": "string"
+          },
+          "sent": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "amount_cents",
+          "sent"
+        ],
+        "type": "object"
+      },
+      "title": "Create invoice"
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "description": "Fetch a single invoice by id.\n\nIdentify records by `number`. Fields described as opaque identifiers are for other tool calls, not for the reader: pass them to other tools that ask for one; refer to records by their name in anything you say, never by the identifier.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "pk": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pk"
+        ],
+        "type": "object"
+      },
+      "name": "invoices.get",
+      "outputSchema": {
+        "properties": {
+          "amount_cents": {
+            "type": "integer"
+          },
+          "id": {
+            "description": "Invoice handle.",
+            "type": "integer"
+          },
+          "number": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "PENDING_REVIEW",
+              "PAID"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "amount_cents",
+          "status"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "description": "Search invoices.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "expand": {
+            "description": "On a paged result it applies to each item in `items`, never to the page envelope (`items`, `page`, `totalPages`, `hasNext`).",
+            "type": "string"
+          },
+          "fields": {
+            "description": "Fields to return. On a paged result it applies to each item in `items`, never to the page envelope (`items`, `page`, `totalPages`, `hasNext`).",
+            "type": "string"
+          },
+          "limit": {
+            "maximum": 50,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "ordering": {
+            "items": {
+              "enum": [
+                "amount",
+                "-amount"
+              ],
+              "type": "string"
+            },
+            "maxItems": 1000,
+            "type": "array"
+          },
+          "page": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "sent": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "name": "invoices.search",
+      "outputSchema": {
+        "properties": {
+          "hasNext": {
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "properties": {
+                "amount_cents": {
+                  "type": "integer"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "number": {
+                  "type": "string"
+                },
+                "sent": {
+                  "type": "boolean"
+                }
+              },
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "totalPages": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "totalPages",
+          "hasNext"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "description": "List every invoice.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "invoices.list",
+      "outputSchema": {
+        "items": {
+          "properties": {
+            "amount_cents": {
+              "type": "integer"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "number": {
+              "type": "string"
+            },
+            "sent": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "number",
+            "amount_cents",
+            "sent"
+          ],
+          "type": "object"
+        },
+        "type": "array"
+      }
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "description": "Fetch the bound project's invoice.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "note": {
+            "description": "A note to match.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "name": "invoices.in_project",
+      "outputSchema": {
+        "properties": {
+          "amount_cents": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "number": {
+            "type": "string"
+          },
+          "sent": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "amount_cents",
+          "sent"
+        ],
+        "type": "object"
+      }
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "description": "Fetch an invoice, if there is one.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "invoices.maybe",
+      "outputSchema": {
+        "anyOf": [
+          {
+            "required": [
+              "id",
+              "number",
+              "amount_cents",
+              "sent"
+            ]
+          },
+          {
+            "maxProperties": 0
+          }
+        ],
+        "properties": {
+          "amount_cents": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "number": {
+            "type": "string"
+          },
+          "sent": {
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      }
+    },
+    {
+      "annotations": {
+        "destructiveHint": true,
+        "readOnlyHint": false
+      },
+      "description": "Rows or nothing.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "invoices.returned",
+      "outputSchema": {
+        "items": {
+          "properties": {
+            "amount_cents": {
+              "type": "integer"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "number": {
+              "type": "string"
+            },
+            "sent": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "number",
+            "amount_cents",
+            "sent"
+          ],
+          "type": "object"
+        },
+        "type": "array"
+      }
+    },
+    {
+      "annotations": {
+        "destructiveHint": true,
+        "readOnlyHint": false
+      },
+      "description": "Draw a chart.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "invoices.chart"
+    },
+    {
+      "_meta": {
+        "ui": {
+          "resourceUri": "ui://invoices/table.html",
+          "visibility": [
+            "app"
+          ]
+        }
+      },
+      "annotations": {
+        "destructiveHint": true,
+        "readOnlyHint": false
+      },
+      "description": "Create an invoice, ignoring unknown arguments.",
+      "inputSchema": {
+        "properties": {
+          "amount_cents": {
+            "default": 0,
+            "type": "integer"
+          },
+          "number": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "number"
+        ],
+        "type": "object"
+      },
+      "name": "invoices.create_loose"
+    },
+    {
+      "annotations": {
+        "destructiveHint": true,
+        "readOnlyHint": false
+      },
+      "description": "Create several invoices.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "amount_cents": {
+                  "default": 0,
+                  "type": "integer"
+                },
+                "number": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "number"
+              ],
+              "type": "object"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
+      "name": "invoices.create_many",
+      "outputSchema": {
+        "items": {
+          "properties": {
+            "amount_cents": {
+              "type": "integer"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "number": {
+              "type": "string"
+            },
+            "sent": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "id",
+            "number",
+            "amount_cents",
+            "sent"
+          ],
+          "type": "object"
+        },
+        "type": "array"
+      }
+    }
+  ]
+}
