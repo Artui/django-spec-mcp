@@ -53,7 +53,6 @@ from django_spec_mcp.handlers.offered_tools import (
     unavailable_tools,
 )
 from django_spec_mcp.handlers.types.context import MCPCallContext
-from django_spec_mcp.handlers.utils import apply_tool_server_arguments
 from django_spec_mcp.output.resolve_structured_output import resolve_structured_output
 from django_spec_mcp.protocol.build_server_info import build_server_info
 from django_spec_mcp.protocol.types.icon import Icon
@@ -623,9 +622,9 @@ class MCPServer:
             raise KeyError(f"No tool registered under {name!r}.")
         return call_kernel_tool(
             binding,
-            # The binding's ``server_arguments`` in place before anything reads
-            # the arguments, as on the wire.
-            apply_tool_server_arguments(binding, arguments or {}),
+            # ``call_kernel_tool`` lays the binding's ``server_arguments`` over
+            # these before anything reads them, as on the wire.
+            arguments or {},
             user=user,
             request=request,
             config=self._config,

@@ -10,6 +10,7 @@ from django_spec_mcp.handlers.answer_kernel_refusal import answer_kernel_refusal
 from django_spec_mcp.handlers.kernel_utils import (
     admit_kernel_call,
     bound_unpaginated_rows,
+    call_context,
     copy_request,
     not_found_result,
     page_request,
@@ -19,6 +20,7 @@ from django_spec_mcp.handlers.kernel_utils import (
 )
 from django_spec_mcp.handlers.present_kernel_result import present_kernel_result
 from django_spec_mcp.handlers.types.kernel_refusal_scene import KernelRefusalScene
+from django_spec_mcp.handlers.utils import apply_tool_server_arguments
 from django_spec_mcp.protocol.types.tool_result import ToolResult
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from django_spec_mcp.schema.types.agent_conventions import AgentConventions
@@ -37,7 +39,10 @@ def call_kernel_tool(
 ) -> ToolResult:
     """The in-process ``call_tool`` of a kernel tool, through ``dispatch``.
 
-    ``arguments`` already carry the binding's server arguments. The scope gate
+    ``arguments`` are the caller's: the binding's server arguments are laid
+    over them here, as on the wire, under the ``call_context`` the call is
+    admitted and dispatched with, built from the request it runs on
+    (``test_call_tool_hands_every_reader_the_dict_it_dispatches_with``). The scope gate
     is not judged here: there is no token in process. The spec's own permissions are the kernel's, asked of ``user``
     before ``dispatch`` checks the arguments, as on the wire
     (``admit_kernel_call``), so a caller they refuse is told that rather than
@@ -74,6 +79,11 @@ def call_kernel_tool(
         request = HttpRequest()
         request.method = "POST"
     request = seat(request, principal_of(user))
+    # Built from the copy of the request the call runs on, so a Validator
+    # reading the request off the dict reads that one, without the outer
+    # caller's token.
+    context = call_context(request, binding.name)
+    arguments = apply_tool_server_arguments(binding, arguments, dispatch_context=context)
     dispatched, page = page_request(binding, arguments, config)
     try:
         # Inside the ``try``, so the one thing it raises, a denial, meets the
@@ -82,10 +92,10 @@ def call_kernel_tool(
             binding,
             dispatched,
             user=user,
-            request=request,
             config=config,
             pool_seeds=pool_seeds,
             unknown_arguments=binding.unknown_arguments,
+            context=context,
         )
         result = dispatch(
             binding.spec,

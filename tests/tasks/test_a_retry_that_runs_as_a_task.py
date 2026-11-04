@@ -32,7 +32,7 @@ from django_spec_mcp.elicitation.sign_request_state import sign_request_state
 from django_spec_mcp.elicitation.types.request_state import RequestState
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
-from django_spec_mcp.handlers.kernel_utils import admit_kernel_tool_call
+from django_spec_mcp.handlers.kernel_utils import admit_kernel_tool_call, tool_call_context
 from django_spec_mcp.handlers.resolve_call_input import resolve_call_input
 from django_spec_mcp.handlers.task_dispatch import maybe_create_task
 from django_spec_mcp.handlers.types.context import MCPCallContext
@@ -131,7 +131,9 @@ class _World:
             return await handle_tools_call_async(params, ctx)
         # A streamed call: the pre-flight admits what the client sent, and hands it in.
         binding = self.server.tools.get(TOOL)
-        preflight = await sync_to_async(admit_kernel_tool_call)(binding, params["arguments"], ctx)
+        preflight = await sync_to_async(admit_kernel_tool_call)(
+            binding, params["arguments"], ctx, tool_call_context(binding, ctx)
+        )
         assert not isinstance(preflight, JsonRpcError), preflight
         return await handle_tools_call_async(params, ctx, admission=preflight)
 
@@ -311,7 +313,9 @@ async def test_a_pre_flight_admission_stands_when_no_call_is_handed_in() -> None
     world = _World(check=check)
     ctx = world.ctx()
     binding = world.server.tools.get(TOOL)
-    preflight = await sync_to_async(admit_kernel_tool_call)(binding, dict(_SENT), ctx)
+    preflight = await sync_to_async(admit_kernel_tool_call)(
+        binding, dict(_SENT), ctx, tool_call_context(binding, ctx)
+    )
     assert not isinstance(preflight, JsonRpcError), preflight
 
     out = await sync_to_async(maybe_create_task)(binding, dict(_SENT), ctx, admission=preflight)

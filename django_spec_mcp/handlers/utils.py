@@ -39,13 +39,15 @@ from django_spec_mcp.types.modern_protocol_versions import MODERN_PROTOCOL_VERSI
 logger = get_logger(__name__)
 
 
-def apply_tool_server_arguments(binding: Any, arguments: dict[str, Any]) -> dict[str, Any]:
+def apply_tool_server_arguments(
+    binding: Any, arguments: dict[str, Any], *, dispatch_context: dict[str, Any]
+) -> dict[str, Any]:
     """``arguments`` with the binding's ``server_arguments`` in place, the caller's dropped.
 
     The first thing every ``tools/call`` route does with the arguments, once it
-    knows they are an object: ``resolve_tool_call``, for both transports,
-    before a task is created, the in-process ``MCPServer.call_tool`` before it
-    runs the tool. So everything after reads the server's value - the kernel's
+    knows they are an object: both handlers, once ``resolve_tool_call`` has
+    named the binding and before a task is created, and the in-process
+    ``call_tool`` before it admits the tool. So everything after reads the server's value - the kernel's
     admission and its required-argument check - and a bound value fills a
     required read rather than being refused as missing before it arrives. A
     task is recorded with the arguments this returns, so it runs with the
@@ -54,7 +56,11 @@ def apply_tool_server_arguments(binding: Any, arguments: dict[str, Any]) -> dict
     The rule is the kernel's ``apply_server_arguments``: the caller's value for
     every bound or withheld name is dropped before anything reads it, so a
     malformed one cannot refuse the call, and the bound values are laid over
-    what is left.
+    what is left. ``dispatch_context`` is the call's ``call_context``, which the
+    kernel reads the spec's declaration under, so a bound value is checked
+    against what the spec declares to the call: one that declaration refuses is
+    the server's ``ImproperlyConfigured``, not the caller's invalid argument
+    (``test_a_bound_value_the_call_s_declaration_refuses_is_the_server_s_mistake``).
 
     **A dropped value is logged at ``WARNING`` with the tool's name and the
     argument names, never the values**, which are the consumer's data. A
@@ -74,7 +80,7 @@ def apply_tool_server_arguments(binding: Any, arguments: dict[str, Any]) -> dict
     server = binding.server_arguments
     if not server.names():
         return arguments
-    applied = apply_server_arguments(binding.spec, arguments, server)
+    applied = apply_server_arguments(binding.spec, arguments, server, call_context=dispatch_context)
     dropped = sorted(
         name
         for name in server.names() & arguments.keys()
@@ -372,9 +378,11 @@ def resolve_tool_call(
     params: dict[str, Any], context: MCPCallContext
 ) -> tuple[KernelToolBinding, dict[str, Any]] | JsonRpcError:
     """The ``tools/call`` request both transports start from: the binding it
-    names and its arguments with the binding's ``server_arguments`` applied, or
-    the protocol error a malformed request or an unknown tool gets. The caller
-    checks that ``params`` is an object, since it reads them again after."""
+    names and its arguments as sent, or the protocol error a malformed request
+    or an unknown tool gets. The caller checks that ``params`` is an object,
+    since it reads them again after, and lays the binding's ``server_arguments``
+    under the call's ``tool_call_context``, which this module cannot build:
+    ``kernel_utils`` imports it."""
     tool_name: Any = params.get("name")
     if not isinstance(tool_name, str):
         return JsonRpcError(
@@ -398,12 +406,7 @@ def resolve_tool_call(
     if not isinstance(arguments_raw, dict):
         return JsonRpcError(JsonRpcErrorCode.INVALID_PARAMS, "'arguments' must be an object")
 
-    # The binding's ``server_arguments`` in place before anything reads the
-    # arguments: a task records what the tool will run with, and the permission
-    # check at its creation, the dispatch and the strict split and
-    # missing-argument checks all see the server's value, so a binding can fill
-    # a required read (``apply_tool_server_arguments``).
-    return binding, apply_tool_server_arguments(binding, arguments_raw)
+    return binding, arguments_raw
 
 
 def resolve_prompt_get(

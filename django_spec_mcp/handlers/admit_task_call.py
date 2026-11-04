@@ -4,7 +4,11 @@ from typing import Any
 
 from django_spec_mcp.elicitation.types.resolved_input import ResolvedInput
 from django_spec_mcp.handlers.input_dispatch import refusal_result
-from django_spec_mcp.handlers.kernel_utils import KernelAdmission, admit_kernel_tool_call
+from django_spec_mcp.handlers.kernel_utils import (
+    KernelAdmission,
+    admit_kernel_tool_call,
+    tool_call_context,
+)
 from django_spec_mcp.handlers.resolve_call_input import resolve_call_input
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import (
@@ -51,11 +55,17 @@ def admit_task_call(
     # holds them, since the worker reads nothing else
     # (``test_a_retry_that_runs_as_a_task_stores_and_runs_its_answer``). Applied
     # again over what the answers produced, since the merge takes any key
-    # (``test_an_answer_cannot_replace_a_bound_value_in_a_task``).
+    # (``test_an_answer_cannot_replace_a_bound_value_in_a_task``). Under the
+    # call's dict, which the checks below are handed too
+    # (``test_a_task_is_judged_under_the_call_s_dict``); their admission is not
+    # kept, so the dict reaches no dispatch, and the worker builds its own.
+    dispatched = tool_call_context(binding, context)
     prior: ResolvedInput | None = None
     if params is not None:
         prior = resolve_call_input(binding, params, arguments, context)
-        arguments = apply_tool_server_arguments(binding, prior.arguments)
+        arguments = apply_tool_server_arguments(
+            binding, prior.arguments, dispatch_context=dispatched
+        )
 
     # The spec's own checks, which the binding's ``permissions`` above do not
     # hold, as the inline call asks them before its charge: without this the
@@ -76,7 +86,7 @@ def admit_task_call(
     # (``test_a_pre_flight_admission_stands_when_no_call_is_handed_in``) reads
     # ``carried`` off ``None``.
     if admission is None or (prior is not None and bool(prior.carried)):
-        admitted = admit_kernel_tool_call(binding, arguments, context)
+        admitted = admit_kernel_tool_call(binding, arguments, context, dispatched)
         if isinstance(admitted, JsonRpcError):
             return admitted, arguments
 

@@ -11,6 +11,32 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+## [0.8.1] — 2026-11-04
+
+### Changed
+
+- **A tool's server arguments are checked against what its spec declares to the
+  call.** `django-service-specs` 0.26.0 lets `apply_server_arguments` and
+  `server_owned_keys` read a Validator declaring `parameters(self, *,
+  call_context=None)` as it declares itself to a call, and every `tools/call`
+  route now hands them the call's `call_context`: the plain and streamed
+  handlers on both transports, task creation, an answer resuming a waiting task
+  and the in-process `call_tool`. The binding's values are laid under the dict
+  the call is admitted and dispatched with, so a value the call's declaration
+  refuses raises `ImproperlyConfigured` on the call, where it reached dispatch and
+  was answered as the caller's invalid argument. The names an
+  `AdditionalInputRequired` may ask for are read the same way, so a top-level
+  field a Validator declares only to the call, under a registered seed's name,
+  can be asked for, where it was refused as a name the server fills. Registration
+  and the listing read the declaration made to no call, as before.
+- **`django-service-specs` floor raised to 0.26.0**, the release that gives the
+  kernel's readers `call_context=`. It also carries 0.24.0 and 0.25.0; among what
+  their changelogs name, `PydanticValidator` hands a service declaring `data` the
+  model instance rather than a dict of its fields. 0.25.0 also asks the caller for
+  a read a provider requires itself: `tools/list` marks it required, and
+  `register_tool` refuses `server_arguments` that withhold it with
+  `ImproperlyConfigured`.
+
 ## [0.8.0] — 2026-11-03
 
 ### Added
@@ -778,7 +804,8 @@ carries; releases up to 0.54.0 are in
   running. The worker's run now enters below that decision. A client that did
   not declare the extension is still refused `-32021` by a `REQUIRED` tool.
 
-[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/Artui/django-spec-mcp/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/Artui/django-spec-mcp/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Artui/django-spec-mcp/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/Artui/django-spec-mcp/compare/v0.5.0...v0.6.0

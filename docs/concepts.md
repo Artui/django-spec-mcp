@@ -438,6 +438,15 @@ server.register_tool(
   withheld name the callable cannot do without each raise
   `ImproperlyConfigured` naming the tool. A binding built by hand and passed to
   `server.tools.register` is checked there too.
+- **Each call checks the values again, against what the spec declares to that
+  call.** A Validator declaring `parameters(self, *, call_context=None)` may
+  declare itself differently to a call than to no call; every `tools/call`
+  route, the in-process `call_tool` included, lays the values under the call's
+  `call_context`, the dict the call is then dispatched with. A value that
+  declaration refuses raises `ImproperlyConfigured` on the call, the server's
+  mistake rather than the caller's invalid argument. Registration reads the
+  declaration made to no call, so a name a Validator declares only to a call is
+  refused there: declare it to no call too.
 
 The values are **static** for the life of the binding. A value computed per
 request - the project the signed-in user belongs to - is not something
@@ -1816,7 +1825,9 @@ A tool admits an answer only under a name it takes from a client: a
 parameter the spec declares, less every name the server fills for the call (a
 `server_arguments` entry, a pool seed, a reflected `request` or `view` read, or a
 key a typed `kwargs=` or `input_data=` provider declares, unless its type admits
-`UnsetType`). A question for any other property is a `-32603` naming
+`UnsetType`). Both are read as the spec declares itself to the call, so a
+top-level field a Validator declares only to the call, under a registered
+seed's name, is the caller's to answer. A question for any other property is a `-32603` naming
 the property and the names the tool does take, whether or not the client can be
 asked, since the answer would come back as an argument the call refuses, drops
 or replaces. The author finds out on the first call, not when a user's answer is

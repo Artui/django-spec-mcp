@@ -64,6 +64,7 @@ from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
 from tests.elicitation.conftest import DeleteRows, delete_rows_kernel
 from tests.testapp.auth_backend import HeaderAuthBackend
 from tests.testapp.urlconf_for import urlconf_for
+from tests.utils import TypedByTheCall
 
 MODERN = "2026-07-28"
 LEGACY = "2025-11-25"
@@ -536,6 +537,38 @@ async def test_a_streamed_call_resolves_a_checks_seed_once() -> None:
     assert len(checked) == 1, checked
     assert checked[0] is resolved[0]
     assert ran == [resolved[0]]
+
+
+@pytest.mark.django_db(transaction=True)
+async def test_a_streamed_call_lays_its_bound_value_under_the_dict_it_dispatches_with() -> None:
+    """The pre-flight lays the bound value under the dict its admission carries,
+    and the handler, reusing that admission, lays it again under the same dict:
+    two dicts in all, that one and the one ``resolve_tool_call`` builds. Handed
+    ``None`` in the pre-flight the record holds a ``None``; a dict of the
+    handler's own at the re-apply makes three."""
+    validator = TypedByTheCall("p.bound")
+    ran: list[Any] = []
+
+    def touch(*, project: int, call_context: Any) -> dict[str, Any]:
+        ran.append(call_context)
+        return {"project": project}
+
+    server = _bare()
+    server.register_tool(
+        ServiceSpec(service=touch, validator=validator, permissions=OPEN, atomic=False),
+        name="p.bound",
+        server_arguments=ServerArguments(values={"project": 7}),
+    )
+    validator.handed.clear()
+
+    response = await _post(server, name="p.bound")
+
+    assert response["Content-Type"] == "text/event-stream"
+    assert (await _answer(response))["result"]["structuredContent"] == {"project": 7}
+    admitted, resolved = validator.distinct()
+    (dispatched,) = ran
+    assert dispatched is admitted
+    assert resolved == admitted
 
 
 @pytest.mark.django_db(transaction=True)

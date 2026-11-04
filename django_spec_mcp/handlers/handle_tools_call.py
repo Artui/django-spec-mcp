@@ -8,7 +8,7 @@ from django_spec_mcp.handlers.input_dispatch import (
     refusal_result,
 )
 from django_spec_mcp.handlers.invalidation_dispatch import announce_invalidations
-from django_spec_mcp.handlers.kernel_utils import admit_kernel_tool_call
+from django_spec_mcp.handlers.kernel_utils import admit_kernel_tool_call, tool_call_context
 from django_spec_mcp.handlers.resolve_call_input import resolve_call_input
 from django_spec_mcp.handlers.run_kernel_tool import run_kernel_tool
 from django_spec_mcp.handlers.task_dispatch import maybe_create_task
@@ -47,7 +47,17 @@ def handle_tools_call(
     target = resolve_tool_call(params, context)
     if isinstance(target, JsonRpcError):
         return target
-    binding, arguments_raw = target
+    binding, sent = target
+    # The binding's ``server_arguments`` in place before anything reads the
+    # arguments: a task records what the tool will run with, and the permission
+    # check at its creation, the dispatch and the strict split and
+    # missing-argument checks all see the server's value, so a binding can fill
+    # a required read (``apply_tool_server_arguments``). Under a dict built as the
+    # call's: the one dispatch runs under is built where the value is laid again,
+    # below the task decision, since a task's worker is a later call.
+    arguments_raw = apply_tool_server_arguments(
+        binding, sent, dispatch_context=tool_call_context(binding, context)
+    )
 
     # Ordering: after argument-shape validation so a malformed call is rejected
     # outright rather than queued, and before dispatch because a task exists
@@ -114,8 +124,13 @@ def _dispatch_tool_call(
         prior: ResolvedInput = resolve_call_input(binding, params, arguments_raw, context)
         # Applied again over what the answers produced, since the merge takes
         # any key: an answer naming a bound argument would otherwise replace the
-        # server's value (``test_an_answer_cannot_replace_a_bound_value``).
-        arguments_raw = apply_tool_server_arguments(binding, prior.arguments)
+        # server's value (``test_an_answer_cannot_replace_a_bound_value``). Under
+        # the dict the admission carries to dispatch, so the value is checked
+        # against what the spec declares to the call that runs.
+        dispatched = tool_call_context(binding, context)
+        arguments_raw = apply_tool_server_arguments(
+            binding, prior.arguments, dispatch_context=dispatched
+        )
 
         # The spec's own checks, asked here on the arguments the tool will run
         # with: after the answers are merged, so a route an answer names is the
@@ -130,7 +145,7 @@ def _dispatch_tool_call(
         # again. A streamed call is no exception: its pre-flight makes this same
         # admission, and the async handler runs under it unless a retry's
         # answers were merged in.
-        admission = admit_kernel_tool_call(binding, arguments_raw, context)
+        admission = admit_kernel_tool_call(binding, arguments_raw, context, dispatched)
         if isinstance(admission, JsonRpcError):
             return admission, arguments_raw
 

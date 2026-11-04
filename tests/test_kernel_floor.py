@@ -1,10 +1,11 @@
 """What the kernel floor in ``pyproject.toml`` rests on.
 
-The floor, ``django-service-specs>=0.23.0``, is a chosen one: the package imports
-on 0.20.0 and the rest of the suite passes on 0.22.0, so nothing else here fails
-below it. These two behaviours are the 0.22.0 and 0.23.0 ones the docs and the
-changelog tell a project to rely on, and each is asserted here so that a floor
-lowered past its release fails a test rather than holding by luck.
+The floor, ``django-service-specs>=0.26.0``, is a chosen one: ``apply_server_arguments``
+and ``server_owned_keys`` take ``call_context=`` from that release, and below it the
+keyword raises ``TypeError``, which the rest of the suite holds. These two behaviours
+are the 0.22.0 and 0.23.0 ones the docs and the changelog tell a project to rely on,
+and each is asserted here so that a floor lowered past its release fails a test rather
+than holding by luck.
 """
 
 from __future__ import annotations

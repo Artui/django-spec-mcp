@@ -142,6 +142,19 @@ def call_context(request: Any, action: str) -> dict[str, Any]:
     return {"request": request, "view": None, "format": None, "action": action}
 
 
+def tool_call_context(binding: Any, context: MCPCallContext) -> dict[str, Any]:
+    """The ``call_context`` a ``tools/call`` over the wire runs ``binding`` under.
+
+    Built from the request carrying the call's token, as the spec's checks and
+    dispatch read it. A route builds it once where it lays the binding's
+    ``server_arguments`` and hands that one dict to the admission, so the
+    kernel's ``apply_server_arguments`` reads the spec as it declares itself to
+    the call dispatch then runs
+    (``test_every_reader_in_a_call_is_handed_the_call_s_dict``).
+    """
+    return call_context(carry_token(context.http_request, context.token), binding.name)
+
+
 def principal_of(user: Any) -> Any:
     """The principal a kernel dispatch runs for: ``user``, or an ``AnonymousUser``.
 
@@ -541,11 +554,10 @@ def admit_kernel_call(
     arguments: dict[str, Any],
     *,
     user: Any,
-    request: Any,
     config: MCPConfig,
     pool_seeds: PoolSeeds,
     unknown_arguments: UnknownArguments,
-    context: dict[str, Any] | None = None,
+    context: dict[str, Any],
 ) -> KernelAdmission:
     """Ask a kernel spec's class-level checks about a call before the transport acts on it.
 
@@ -612,15 +624,13 @@ def admit_kernel_call(
     commits its status
     (``test_a_permission_preflight_that_raises_before_a_stream_is_a_json_rpc_error``).
 
-    ``context`` is the call's ``call_context`` when the caller has already
-    asked the spec about this call with it, as ``admit_kernel_read`` asks its
-    parameters before the variables are read; otherwise one is built from
-    ``request``. Either way that one dict is the admission's, so the checks,
-    the seeds and dispatch see what the caller saw.
+    ``context`` is the call's ``call_context``, which the caller has already
+    read the spec under: ``admit_kernel_read`` asks its parameters with it
+    before the variables are read, and every tool route lays the binding's
+    ``server_arguments`` under it. That one dict is the admission's, so the
+    checks, the seeds and dispatch see what the caller saw.
     """
     principal: Any = principal_of(user)
-    if context is None:
-        context = call_context(request, binding.name)
     unchecked = unguarded_grant(binding, principal, config)
     keywords: dict[str, Any] = {"pool_seeds": pool_seeds, "call_context": context}
     grant: Grant | None
@@ -660,11 +670,16 @@ def admit_kernel_call(
 
 
 def admit_kernel_tool_call(
-    binding: KernelToolBinding, arguments: dict[str, Any], context: MCPCallContext
+    binding: KernelToolBinding,
+    arguments: dict[str, Any],
+    context: MCPCallContext,
+    dispatch_context: dict[str, Any],
 ) -> KernelAdmission | JsonRpcError:
     """``admit_kernel_call`` for a ``tools/call`` over the wire, a denial as its answer.
 
-    ``arguments`` carry the server's arguments and any answers merged in; the
+    ``dispatch_context`` is the call's ``tool_call_context``, the dict its
+    ``server_arguments`` were laid under, which the admission carries to
+    dispatch. ``arguments`` carry the server's arguments and any answers merged in; the
     page a paginated tool takes is split off, as ``run_kernel_tool`` splits it
     before dispatch, and the shape is checked under the tool's own
     ``unknown_arguments``, as dispatch checks it. Otherwise an admitted call
@@ -678,10 +693,10 @@ def admit_kernel_tool_call(
             binding,
             dispatched,
             user=context.token.user,
-            request=carry_token(context.http_request, context.token),
             config=context.config,
             pool_seeds=context.pool_seeds,
             unknown_arguments=binding.unknown_arguments,
+            context=dispatch_context,
         )
     except _DENIALS as exc:
         return resource_refusal(
@@ -732,7 +747,6 @@ def admit_kernel_read(
             binding,
             arguments,
             user=context.token.user,
-            request=request,
             config=context.config,
             pool_seeds=context.pool_seeds,
             unknown_arguments=UnknownArguments.REJECT,
@@ -1054,9 +1068,13 @@ def admitted_arguments(
     ``test_a_question_whose_answer_the_spec_refuses_is_an_internal_error`` (the
     parameters), ``test_a_field_the_server_fills_is_not_admitted`` (the server
     arguments) and ``test_a_key_a_provider_fills_is_not_admitted`` (the owned keys).
+    Both readers are handed the call's dict, so a field the Validator declares
+    only to the call, under a registered seed's name, is the caller's to answer
+    (``test_a_question_for_a_field_named_like_a_seed_is_asked``).
     """
+    owned = server_owned_keys(binding.spec, pool_seeds=pool_seeds, call_context=dispatch_context)
     return frozenset(binding.spec.parameters(call_context=dispatch_context).names()) - (
-        binding.server_arguments.names() | server_owned_keys(binding.spec, pool_seeds=pool_seeds)
+        binding.server_arguments.names() | owned
     )
 
 
@@ -1100,6 +1118,7 @@ __all__ = [
     "resource_read_result",
     "resource_refusal",
     "seat",
+    "tool_call_context",
     "tool_result",
     "unguarded_grant",
 ]
