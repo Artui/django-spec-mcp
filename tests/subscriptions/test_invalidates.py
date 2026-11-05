@@ -104,10 +104,11 @@ from tests.utils import call_context
             id="duplicates-collapse-and-order-is-kept",
         ),
         # ``{pk}`` over many rows has no single answer, and guessing one would
-        # publish a URI for an arbitrary member.
+        # publish a URI for an arbitrary member. A list is served under
+        # ``items``, so no row's ``pk`` is a key of the result.
         pytest.param(
             ("invoices://{pk}",),
-            {"structuredContent": [{"pk": 1}]},
+            {"structuredContent": {"items": [{"pk": 1}]}},
             {},
             (),
             id="a-list-payload-contributes-no-keys",

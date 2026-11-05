@@ -2281,10 +2281,12 @@ envelope with `paginate=True`, so its rows are at `structuredContent.items`
 either way. The object is not special to selector tools: wherever a result
 presents as an unpaginated list — a `many=True` service, a `returns_many` one,
 or a service whose output re-read is a `LIST` — the tool advertises and serves
-the same `{"items": [...]}`. The text block carries the same JSON, and a
-`RESOURCE_LINK` tool's link blocks are still one per row; only its
-`structuredContent` is wrapped. A list that presents nothing is
-`{"items": []}`.
+the same `{"items": [...]}`. The wrap follows what the call returns, so a
+presenter-less tool whose result is a list, which advertises no `outputSchema`,
+is served `{"items": [...]}` too. The text block carries the same JSON, even
+with `structuredContent` turned off, and a `RESOURCE_LINK` tool's link blocks
+are still one per row; only its `structuredContent` is wrapped. A list that
+presents nothing is `{"items": []}`.
 
 **A result with nothing to present is `{}`, and the schema admits it.** Three
 successful calls present nothing: an `allow_none` RETRIEVE selector tool that

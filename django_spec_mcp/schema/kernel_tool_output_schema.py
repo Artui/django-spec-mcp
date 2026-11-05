@@ -73,7 +73,9 @@ def _items_of(array: dict[str, Any]) -> dict[str, Any]:
     the key the paged envelope holds its rows under, so a client reads a list
     tool's rows at one path whether it pages or not. No
     ``additionalProperties``, as on the kernel's paged envelope
-    (``test_every_advertised_output_schema_is_an_object``).
+    (``test_a_spec_without_affordances_advertises_exactly_what_it_did_before``);
+    the root ``"object"`` is held over the dump by
+    ``test_every_advertised_output_schema_is_an_object``.
     """
     return {"type": "object", "properties": {"items": array}, "required": ["items"]}
 

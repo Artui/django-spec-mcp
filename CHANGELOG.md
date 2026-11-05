@@ -27,8 +27,11 @@ carries; releases up to 0.54.0 are in
   `items` is the key the paged envelope already holds its rows under, so a
   client reads a list tool's rows at `structuredContent.items` whether it pages
   or not. A `RESOURCE_LINK` tool presenting several links keeps one link block
-  per row and wraps only its `structuredContent`. Every `outputSchema` the
-  server advertises now has a root `"type": "object"`. A client, a prompt or an
+  per row and wraps only its `structuredContent`. The wrap follows what the
+  call returns, so any tool whose result is a list or tuple is served
+  `{"items": [...]}`, a presenter-less one advertising no `outputSchema`
+  included: for that tool this entry is the only notice. Every `outputSchema`
+  the server advertises now has a root `"type": "object"`. A client, a prompt or an
   MCP Apps view reading `structuredContent[0]` reads
   `structuredContent.items[0]` instead; a paged tool's result is unchanged.
 

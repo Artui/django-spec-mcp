@@ -30,6 +30,14 @@ def test_the_text_block_is_the_payload_as_json(payload: object, served: object, 
     assert [block.to_dict() for block in res.content] == [{"type": "text", "text": text}]
 
 
+def test_a_list_text_block_is_the_object_with_structured_content_off() -> None:
+    # The text block carries the JSON the structured content would, so a tool
+    # emitting no structured content still serves its rows under ``items``.
+    res = build_tool_result([{"a": 1}], include_structured_content=False)
+    assert res.structured_content is UNSET
+    assert json.loads(res.content[0].to_dict()["text"]) == {"items": [{"a": 1}]}
+
+
 def test_build_tool_result_marks_error() -> None:
     res = build_tool_result({"err": "x"}, is_error=True)
     assert res.is_error is True

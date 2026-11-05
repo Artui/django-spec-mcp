@@ -27,7 +27,8 @@ def build_tool_result(
 
     Args:
         payload: The JSON-shaped tool output. Becomes ``structuredContent``
-            verbatim and is also rendered, as JSON, into the first content block.
+            in its object form (a list under ``items``, ``None`` as ``{}``,
+            below) and is also rendered, as JSON, into the first content block.
         is_error: Stamped onto the result as ``isError``.
         include_structured_content: ``False`` omits ``structuredContent``
             entirely. The text block still carries the full payload, so a

@@ -69,8 +69,9 @@ def _result_keys(payload: Any) -> dict[str, Any]:
     wrapped round it — ``invalidates=`` is written against what the author's
     service returns.
 
-    A list payload contributes nothing: ``{pk}`` over many rows has no single
-    answer, and guessing one would publish a URI for an arbitrary member.
+    A list result contributes only its ``items`` key, as it is served under
+    it: ``{pk}`` over many rows has no single answer, and guessing one would
+    publish a URI for an arbitrary member, so a row's fields are never read.
     """
     if not isinstance(payload, dict):
         return {}
