@@ -326,7 +326,8 @@ TOON output is gone, along with `OutputFormat`, `encode_toon`,
 `register_tool(output_format=)` and its `register_tools` override,
 `KernelToolBinding.output_format`, `build_tool_result(output_format=)` and the
 `toon` extra. A tool result's `content[0]` text is the payload as JSON, beside
-the same payload in `structuredContent`.
+the same payload in `structuredContent` when the payload is an object; a scalar
+result is the text block alone.
 
 - A `SPEC_MCP["DEFAULT_OUTPUT_FORMAT"]` left in settings is ignored, with no
   warning. Delete it.

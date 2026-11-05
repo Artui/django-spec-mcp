@@ -41,7 +41,11 @@ carries; releases up to 0.54.0 are in
   which MCP 2025-11-25 declares an object. The result is now the text block
   alone, carrying the scalar as JSON; MCP makes `structuredContent` optional
   when no `outputSchema` is declared. A client reading the value parses
-  `content[0].text` instead.
+  `content[0].text` instead. The rule is the payload's shape, not the
+  listing: `structuredContent` is left out only when the payload, after a list
+  is wrapped under `items`, is not an object, so a tool registered with
+  `include_output_schema=False` still carries `structuredContent` for an object
+  result.
 
 ## [0.8.1] — 2026-11-04
 

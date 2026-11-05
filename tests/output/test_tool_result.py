@@ -38,6 +38,20 @@ def test_a_list_text_block_is_the_object_with_structured_content_off() -> None:
     assert json.loads(res.content[0].to_dict()["text"]) == {"items": [{"a": 1}]}
 
 
+@pytest.mark.parametrize(
+    ("payload", "text"),
+    [(True, "true"), (7, "7"), (0.5, "0.5"), ("done", '"done"')],
+    ids=["bool", "int", "float", "str"],
+)
+def test_a_scalar_payload_is_the_text_block_alone(payload: object, text: str) -> None:
+    # MCP declares structured content an object, and a scalar has no object
+    # form, so it is left out even with structured content on.
+    res = build_tool_result(payload, include_structured_content=True)
+    assert res.structured_content is UNSET
+    assert "structuredContent" not in res.to_dict()
+    assert [block.to_dict() for block in res.content] == [{"type": "text", "text": text}]
+
+
 def test_build_tool_result_marks_error() -> None:
     res = build_tool_result({"err": "x"}, is_error=True)
     assert res.is_error is True

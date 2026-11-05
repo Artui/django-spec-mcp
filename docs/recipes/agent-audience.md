@@ -73,8 +73,8 @@ that way: give the dataclass the display value, from the model's
 Both. The description is read once per listing and the schema sits next to the
 field it describes, so that is where the wording belongs. But a field the model
 should never use is *removed* rather than relabelled: a tool result is emitted
-as `structuredContent` **and** rendered into a text content block, so the model
-reads every byte twice. Relocating a field under some reserved subtree would
+as `structuredContent` **and** rendered into a text content block whenever it is
+an object, as every presented row is, so the model reads every byte twice. Relocating a field under some reserved subtree would
 cost its keys twice over and hide nothing.
 
 ## Override it for one tool
