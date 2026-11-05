@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from django_service_specs import UNSET
@@ -52,6 +53,12 @@ def build_tool_result(
     A ``RESOURCE_LINK`` tool's blocks are built from the list itself, one link
     per row, and only its ``structuredContent`` is wrapped.
 
+    A scalar payload, a bool, a number or a string, has no object form, so it
+    is served as the text block alone with no ``structuredContent``, which MCP
+    makes optional when the tool declares no ``outputSchema``. Only a spec with
+    no presenter returns one, and such a tool advertises none
+    (``test_a_scalar_result_is_the_text_block_alone``).
+
     A ``None`` payload is a result with **nothing to present**: an
     ``allow_none`` RETRIEVE that found no row, a service whose output re-read
     selector found none, or a service with no re-read declaring
@@ -91,11 +98,14 @@ def build_tool_result(
     # Only the text kind: a media or resource-link block has its own payload
     # contract, which ``build_content_blocks`` answers above. The text block
     # carries the same JSON as the structured content, so it is the object too,
-    # whether or not the structured content is sent.
+    # whether or not the structured content is sent. A scalar has no object
+    # form, so it is the text block alone.
     payload = _as_object(payload)
     return ToolResult(
         content=[ToolContentBlock.text_block(encode_json(payload))],
-        structured_content=payload if include_structured_content else UNSET,
+        structured_content=payload
+        if include_structured_content and isinstance(payload, Mapping)
+        else UNSET,
         is_error=is_error,
         meta=meta,
     )

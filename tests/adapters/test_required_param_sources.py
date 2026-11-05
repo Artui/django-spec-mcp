@@ -71,9 +71,16 @@ def _server(spec: Any) -> MCPServer:
 
 
 def _served(spec: Any, arguments: dict[str, Any]) -> Any:
+    # The text block carries every result; structured content mirrors it for an
+    # object and is left out for a scalar, which it cannot carry.
     out = _server(spec).call_tool("t", arguments, user=None).to_dict()
     assert out.get("isError") is not True, out
-    return out["structuredContent"]
+    served = json.loads(out["content"][0]["text"])
+    if isinstance(served, dict):
+        assert out["structuredContent"] == served
+    else:
+        assert "structuredContent" not in out
+    return served
 
 
 def test_a_required_seed_parameter_is_filled_by_dispatch() -> None:
@@ -197,7 +204,7 @@ def test_a_validator_field_the_callable_cannot_receive_registers_and_is_validate
     assert unreceived_fields(spec) == frozenset({"note"})
     assert "note" in listed["tools"][0]["inputSchema"]["properties"]
     assert out.get("isError") is not True, out
-    assert out["structuredContent"] == "a"
+    assert json.loads(out["content"][0]["text"]) == "a"
     # A refusal naming no missing argument keeps the generic message.
     assert refused.get("isError") is True, refused
     assert json.loads(refused["content"][0]["text"])["error"] == {

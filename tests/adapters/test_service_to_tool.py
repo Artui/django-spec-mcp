@@ -13,6 +13,7 @@ the list.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
@@ -141,7 +142,7 @@ def test_a_single_item_spec_may_read_an_argument_named_items() -> None:
 
     out = _registered(spec).call_tool("t", {"items": "x"}, user=None).to_dict()
 
-    assert out["structuredContent"] == "x"
+    assert json.loads(out["content"][0]["text"]) == "x"
 
 
 @pytest.mark.parametrize(

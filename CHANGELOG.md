@@ -34,6 +34,14 @@ carries; releases up to 0.54.0 are in
   the server advertises now has a root `"type": "object"`. A client, a prompt or an
   MCP Apps view reading `structuredContent[0]` reads
   `structuredContent.items[0]` instead; a paged tool's result is unchanged.
+- **A scalar result carries no `structuredContent`. This is a wire change for a
+  client that reads the bare scalar there.** A tool whose spec has no presenter
+  and whose service returns a bool, a number or a string advertises no
+  `outputSchema`, and its result carried the bare scalar as `structuredContent`,
+  which MCP 2025-11-25 declares an object. The result is now the text block
+  alone, carrying the scalar as JSON; MCP makes `structuredContent` optional
+  when no `outputSchema` is declared. A client reading the value parses
+  `content[0].text` instead.
 
 ## [0.8.1] — 2026-11-04
 

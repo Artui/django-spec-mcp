@@ -2288,6 +2288,13 @@ with `structuredContent` turned off, and a `RESOURCE_LINK` tool's link blocks
 are still one per row; only its `structuredContent` is wrapped. A list that
 presents nothing is `{"items": []}`.
 
+**A scalar result is the text block alone.** A tool whose spec has no
+presenter and whose service returns a bool, a number or a string advertises no
+`outputSchema`, and a scalar has no object form, so its result carries the
+value as JSON in the text block and no `structuredContent`, which MCP makes
+optional when no schema is declared. A client reads it by parsing
+`content[0].text`.
+
 **A result with nothing to present is `{}`, and the schema admits it.** Three
 successful calls present nothing: an `allow_none` RETRIEVE selector tool that
 finds no row, a single-row service tool whose output re-read selector finds
@@ -2386,7 +2393,9 @@ loop). See [Async deployment](async.md) for the wire details and
 Per the MCP tools spec, a tool result has both a `content` block list and an
 optional `structuredContent`:
 
-- `structuredContent` is always JSON-shaped — clients parse it directly.
+- `structuredContent` is always a JSON object — clients parse it directly. A
+  scalar result (a presenter-less service returning a bool, a number or a
+  string) has none, since it is not an object.
 - `content[0]` is a text block carrying the same payload encoded as JSON.
 
 ### Omitting `structuredContent` and `outputSchema`
