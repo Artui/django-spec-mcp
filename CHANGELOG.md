@@ -11,6 +11,42 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-11-05
+
+### Changed
+
+- **A list result is served as an object, under `items`, and advertised so.
+  This is a wire change for a client that reads the bare array.** MCP
+  2025-11-25 declares every `outputSchema` of type `"object"` and
+  `structuredContent` a JSON object, and an unpaginated `LIST` tool, a `many`
+  service, a `returns_many` service and a service whose output re-read is a
+  `LIST` each advertised and served a bare array. Each now serves
+  `{"items": [...]}`, as `structuredContent` and as the text block, against an
+  `outputSchema` of `{"type": "object", "properties": {"items": <the array>},
+  "required": ["items"]}`; a list that presents nothing is `{"items": []}`.
+  `items` is the key the paged envelope already holds its rows under, so a
+  client reads a list tool's rows at `structuredContent.items` whether it pages
+  or not. A `RESOURCE_LINK` tool presenting several links keeps one link block
+  per row and wraps only its `structuredContent`. The wrap follows what the
+  call returns, so any tool whose result is a list or tuple is served
+  `{"items": [...]}`, a presenter-less one advertising no `outputSchema`
+  included: for that tool this entry is the only notice. Every `outputSchema`
+  the server advertises now has a root `"type": "object"`. A client, a prompt or an
+  MCP Apps view reading `structuredContent[0]` reads
+  `structuredContent.items[0]` instead; a paged tool's result is unchanged.
+- **A scalar result carries no `structuredContent`. This is a wire change for a
+  client that reads the bare scalar there.** A tool whose spec has no presenter
+  and whose service returns a bool, a number or a string advertises no
+  `outputSchema`, and its result carried the bare scalar as `structuredContent`,
+  which MCP 2025-11-25 declares an object. The result is now the text block
+  alone, carrying the scalar as JSON; MCP makes `structuredContent` optional
+  when no `outputSchema` is declared. A client reading the value parses
+  `content[0].text` instead. The rule is the payload's shape, not the
+  listing: `structuredContent` is left out only when the payload, after a list
+  is wrapped under `items`, is not an object, so a tool registered with
+  `include_output_schema=False` still carries `structuredContent` for an object
+  result.
+
 ## [0.8.1] — 2026-11-04
 
 ### Changed
@@ -804,7 +840,8 @@ carries; releases up to 0.54.0 are in
   running. The worker's run now enters below that decision. A client that did
   not declare the extension is still refused `-32021` by a `REQUIRED` tool.
 
-[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/Artui/django-spec-mcp/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/Artui/django-spec-mcp/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/Artui/django-spec-mcp/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Artui/django-spec-mcp/compare/v0.6.0...v0.7.0

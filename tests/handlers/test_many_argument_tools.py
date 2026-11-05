@@ -136,7 +136,7 @@ async def test_every_route_hands_the_service_the_list(route: str) -> None:
     else:
         out = await sync_to_async(handle_tools_call)(params, call_context(server))
 
-    assert out["structuredContent"] == [_ROW, _OTHER]
+    assert out["structuredContent"] == {"items": [_ROW, _OTHER]}
 
 
 def test_a_declared_argument_name_carries_the_list() -> None:
@@ -145,7 +145,7 @@ def test_a_declared_argument_name_carries_the_list() -> None:
     out = server.call_tool("bulk", {"lines": [_ROW]}, user=None)
 
     assert set(_schema(server)["properties"]) == {"lines"}
-    assert out.structured_content == [_ROW]
+    assert out.structured_content == {"items": [_ROW]}
 
 
 # ---------- what dispatch refuses ----------
@@ -181,7 +181,7 @@ def test_an_argument_beside_the_list_follows_the_unknown_arguments_policy(
         assert schema["additionalProperties"] is False
     else:
         assert not out.is_error, out
-        assert out.structured_content == [_ROW]
+        assert out.structured_content == {"items": [_ROW]}
         assert ran == [[_Line(**_ROW)]]
         assert "additionalProperties" not in schema
 
@@ -257,18 +257,20 @@ def test_arguments_that_dispatch_accepts_conform_to_the_advertised_schema() -> N
 
 
 def test_the_served_list_conforms_to_the_advertised_output_schema() -> None:
-    """Read off the wire: ``structuredContent`` is the bare array, as for every
-    unpaginated list result this server serves, and the text block encodes the
-    same array."""
+    """Read off the wire: ``structuredContent`` is the rows under ``items``, as for
+    every list result this server serves, and the text block encodes the same
+    object."""
     server = _server(include_output_schema=True)
 
     listed: Any = _post(server, "tools/list", {})["result"]
     served: Any = _call_over_http(server, {"items": [_ROW, _OTHER]})
 
     (tool,) = listed["tools"]
-    assert tool["outputSchema"]["type"] == "array"
-    assert tool["outputSchema"]["items"]["properties"].keys() == {"number", "amount_cents"}
+    assert tool["outputSchema"]["type"] == "object"
+    rows = tool["outputSchema"]["properties"]["items"]
+    assert rows["type"] == "array"
+    assert rows["items"]["properties"].keys() == {"number", "amount_cents"}
     assert served.get("isError") is not True, served
-    assert served["structuredContent"] == [_ROW, _OTHER]
-    assert json.loads(served["content"][0]["text"]) == [_ROW, _OTHER]
+    assert served["structuredContent"] == {"items": [_ROW, _OTHER]}
+    assert json.loads(served["content"][0]["text"]) == {"items": [_ROW, _OTHER]}
     assert_tool_result_conforms(tool, served)

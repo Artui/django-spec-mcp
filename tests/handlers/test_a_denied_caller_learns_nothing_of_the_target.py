@@ -256,7 +256,7 @@ async def test_a_list_target_is_judged_as_a_set_not_row_by_row() -> None:
 
     out = await _via(server, "handler", {})
 
-    assert out["structuredContent"] == [{"id": 1}, {"id": 2}]
+    assert out["structuredContent"] == {"items": [{"id": 1}, {"id": 2}]}
     assert check.asked == ["class", "scope"]
 
 

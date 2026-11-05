@@ -91,7 +91,7 @@ def test_an_unpaginated_list_tools_pagination_named_read_reaches_the_selector() 
         server.register_tool(_spec("page"), name="rows", description="d")
     result = server.call_tool("rows", {"page": 3}, user=None)
     assert result.is_error is False
-    assert result.structured_content == [{"pk": 1, "seen": "page=3 limit=0"}]
+    assert result.structured_content == {"items": [{"pk": 1, "seen": "page=3 limit=0"}]}
 
 
 def test_a_retrieve_tools_pagination_named_read_registers() -> None:

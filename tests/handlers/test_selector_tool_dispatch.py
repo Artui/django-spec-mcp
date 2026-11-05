@@ -299,7 +299,7 @@ async def test_none_under_allow_none_is_the_empty_list(is_async: bool) -> None:
     # (test_none_without_allow_none_is_an_internal_error).
     out = await _call(_server(_invoices(lambda: None, allow_none=True)), {}, is_async=is_async)
 
-    assert out["structuredContent"] == []
+    assert out["structuredContent"] == {"items": []}
 
 
 @routes

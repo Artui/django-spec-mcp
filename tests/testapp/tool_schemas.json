@@ -205,30 +205,38 @@
       },
       "name": "invoices.list",
       "outputSchema": {
-        "items": {
-          "properties": {
-            "amount_cents": {
-              "type": "integer"
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "amount_cents": {
+                  "type": "integer"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "number": {
+                  "type": "string"
+                },
+                "sent": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "number",
+                "amount_cents",
+                "sent"
+              ],
+              "type": "object"
             },
-            "id": {
-              "type": "integer"
-            },
-            "number": {
-              "type": "string"
-            },
-            "sent": {
-              "type": "boolean"
-            }
-          },
-          "required": [
-            "id",
-            "number",
-            "amount_cents",
-            "sent"
-          ],
-          "type": "object"
+            "type": "array"
+          }
         },
-        "type": "array"
+        "required": [
+          "items"
+        ],
+        "type": "object"
       }
     },
     {
@@ -326,30 +334,38 @@
       },
       "name": "invoices.returned",
       "outputSchema": {
-        "items": {
-          "properties": {
-            "amount_cents": {
-              "type": "integer"
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "amount_cents": {
+                  "type": "integer"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "number": {
+                  "type": "string"
+                },
+                "sent": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "number",
+                "amount_cents",
+                "sent"
+              ],
+              "type": "object"
             },
-            "id": {
-              "type": "integer"
-            },
-            "number": {
-              "type": "string"
-            },
-            "sent": {
-              "type": "boolean"
-            }
-          },
-          "required": [
-            "id",
-            "number",
-            "amount_cents",
-            "sent"
-          ],
-          "type": "object"
+            "type": "array"
+          }
         },
-        "type": "array"
+        "required": [
+          "items"
+        ],
+        "type": "object"
       }
     },
     {
@@ -434,30 +450,38 @@
       },
       "name": "invoices.create_many",
       "outputSchema": {
-        "items": {
-          "properties": {
-            "amount_cents": {
-              "type": "integer"
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "amount_cents": {
+                  "type": "integer"
+                },
+                "id": {
+                  "type": "integer"
+                },
+                "number": {
+                  "type": "string"
+                },
+                "sent": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "number",
+                "amount_cents",
+                "sent"
+              ],
+              "type": "object"
             },
-            "id": {
-              "type": "integer"
-            },
-            "number": {
-              "type": "string"
-            },
-            "sent": {
-              "type": "boolean"
-            }
-          },
-          "required": [
-            "id",
-            "number",
-            "amount_cents",
-            "sent"
-          ],
-          "type": "object"
+            "type": "array"
+          }
         },
-        "type": "array"
+        "required": [
+          "items"
+        ],
+        "type": "object"
       }
     }
   ]

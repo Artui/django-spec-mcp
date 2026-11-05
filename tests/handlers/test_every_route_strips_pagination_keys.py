@@ -121,7 +121,7 @@ async def test_a_selector_nothing_paginates_takes_page_and_limit_as_its_reads(
 
     out = await _structured(_server(_selector(kind, *_PAGE_AND_LIMIT, _STATUS)), route, sent)
 
-    assert out == ([sent] if kind is SelectorKind.LIST else sent)
+    assert out == ({"items": [sent]} if kind is SelectorKind.LIST else sent)
 
 
 class _AmountCeiling(django_filters.FilterSet):
@@ -149,7 +149,7 @@ async def test_a_filter_set_reads_a_pagination_named_filter_on_every_route(route
 
     out = await _structured(server, route, {"limit": 100})
 
-    assert out == [{"number": "A-1"}]
+    assert out == {"items": [{"number": "A-1"}]}
 
 
 @dataclass

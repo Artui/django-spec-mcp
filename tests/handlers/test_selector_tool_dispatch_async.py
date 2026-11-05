@@ -70,7 +70,11 @@ async def test_an_async_selector_answers_either_handler(is_async: bool) -> None:
 
     out = await _call(server, {}, is_async=is_async)
 
-    assert [row["number"] for row in out["structuredContent"]] == ["INV-0", "INV-1", "INV-2"]
+    assert [row["number"] for row in out["structuredContent"]["items"]] == [
+        "INV-0",
+        "INV-1",
+        "INV-2",
+    ]
 
 
 @pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])

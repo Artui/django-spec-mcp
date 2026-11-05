@@ -264,7 +264,9 @@ pagination envelope:
 }
 ```
 
-Without `paginate`, the response is the presented list directly. Choose
+Without `paginate`, the response is the presented list under `items` alone,
+`{"items": [<presented rows>]}`, because MCP's `structuredContent` is an
+object: the rows are at the same path either way. Choose
 based on how many rows your selector can return — paginate as soon as
 the list could outgrow a single tool-call response.
 

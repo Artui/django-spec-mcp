@@ -21,8 +21,8 @@ response *conforms* is a different question, and the check a suite reaches for
 on its own answers a third one:
 
 ```python
-advertised = tool["outputSchema"]["items"]["properties"]
-assert set(advertised) == set(result["structuredContent"][0])
+rows = tool["outputSchema"]["properties"]["items"]["items"]
+assert set(rows["properties"]) == set(result["structuredContent"]["items"][0])
 ```
 
 Comparing key sets catches a field that vanished. It passes unchanged when a
@@ -47,8 +47,8 @@ assert_tool_result_conforms(tool, result)
 ```text
 AssertionError: Tool 'invoices.list' returned 'structuredContent' that does not
 conform to the 'outputSchema' it advertises (2 problems):
-  - $[0].amount_cents: advertised type 'integer', got string '1240.00'
-  - $[1]: 'number' is a required property
+  - $.items[0].amount_cents: advertised type 'integer', got string '1240.00'
+  - $.items[1]: 'number' is a required property
 ```
 
 Both arguments are plain mappings off the wire — one `tools/list` entry and one

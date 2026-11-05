@@ -353,7 +353,8 @@ shape's description in the `inputSchema` ends with:
 > On a paged result it applies to each item in `items`, never to the page
 > envelope (`items`, `page`, `totalPages`, `hasNext`).
 
-A service tool and an unpaginated list have no envelope, and get no sentence.
+A service tool and an unpaginated list have no page envelope, and get no
+sentence: an unpaginated list's `{"items": [...]}` holds only the rows.
 The words are the server's [`conventions.query_param_on_pages`](#agent-conventions),
 which can change them or drop them; whether the sentence appears stays the
 server's call.
@@ -516,10 +517,13 @@ What a caller should know:
   are strings, so the index arrives as `"1"`; with `INCLUDE_VALIDATION_VALUE`
   on, `error.value["invoices"][1]` is the item it names. A call with no list is
   refused under the argument as missing.
-- **The result is the service's list.** It is presented as a list, and the
-  `outputSchema` is an array of the item schema. `structuredContent` is that
-  bare array, as for every unpaginated list result this server returns, not an
-  object wrapping it.
+- **The result is the service's list, under `items`.** It is presented as a
+  list and served as `{"items": [...]}`, both as `structuredContent` and as the
+  text block, and the `outputSchema` is an object whose `items` is an array of
+  the item schema. MCP declares every `outputSchema` an object and
+  `structuredContent` a JSON object, so no list result this server returns is a
+  bare array; `items` is the key a paged list's envelope uses too, so a client
+  reads the rows at one path either way.
 
 ### A resource is a `RETRIEVE` selector { #a-resource-is-a-retrieve-selector }
 
@@ -2269,13 +2273,27 @@ traceback ([Observability](observability.md#what-lands-where)). A
 progress-carrying stream has already committed its `200`, so there the same
 error arrives as the stream's last frame.
 
-LIST tools advertise a kind-aware `outputSchema`: a bare array schema
-unpaginated, the `{items, page, totalPages, hasNext}` envelope with
-`paginate=True` (enable pagination for a fully spec-compliant *object*-shaped
-`structuredContent`). The array schema is not special to selector tools:
-wherever a result presents as an unpaginated list — a `many=True` service, or a
-service whose output re-read is a `LIST` — the tool advertises the same bare
-array, because that is what it serves.
+**A list is served as an object, under `items`.** MCP declares every
+`outputSchema` of type `"object"` and `structuredContent` a JSON object, so a
+result that presents as a list is never served bare. A LIST tool advertises
+`{"items": [...]}` unpaginated and the `{items, page, totalPages, hasNext}`
+envelope with `paginate=True`, so its rows are at `structuredContent.items`
+either way. The object is not special to selector tools: wherever a result
+presents as an unpaginated list — a `many=True` service, a `returns_many` one,
+or a service whose output re-read is a `LIST` — the tool advertises and serves
+the same `{"items": [...]}`. The wrap follows what the call returns, so a
+presenter-less tool whose result is a list, which advertises no `outputSchema`,
+is served `{"items": [...]}` too. The text block carries the same JSON, even
+with `structuredContent` turned off, and a `RESOURCE_LINK` tool's link blocks
+are still one per row; only its `structuredContent` is wrapped. A list that
+presents nothing is `{"items": []}`.
+
+**A scalar result is the text block alone.** A tool whose spec has no
+presenter and whose service returns a bool, a number or a string advertises no
+`outputSchema`, and a scalar has no object form, so its result carries the
+value as JSON in the text block and no `structuredContent`, which MCP makes
+optional when no schema is declared. A client reads it by parsing
+`content[0].text`.
 
 **A result with nothing to present is `{}`, and the schema admits it.** Three
 successful calls present nothing: an `allow_none` RETRIEVE selector tool that
@@ -2375,7 +2393,9 @@ loop). See [Async deployment](async.md) for the wire details and
 Per the MCP tools spec, a tool result has both a `content` block list and an
 optional `structuredContent`:
 
-- `structuredContent` is always JSON-shaped — clients parse it directly.
+- `structuredContent` is always a JSON object — clients parse it directly. A
+  scalar result (a presenter-less service returning a bool, a number or a
+  string) has none, since it is not an object.
 - `content[0]` is a text block carrying the same payload encoded as JSON.
 
 ### Omitting `structuredContent` and `outputSchema`

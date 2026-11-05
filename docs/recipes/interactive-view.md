@@ -32,8 +32,8 @@ what you take on by skipping it.
   // `mcpApp` is defined before this fragment is parsed, so assigning here is
   // always early enough.
   mcpApp.onToolResult = function (structuredContent) {
-    // What `list_invoices` already emits — the selector tool's pagination
-    // envelope, unchanged.
+    // What `list_invoices` already emits: its rows under `items`, paged or
+    // not.
     var rows = (structuredContent && structuredContent.items) || [];
     document.getElementById("root").innerHTML = rows.length
       ? "<table><thead><tr><th>Number</th><th>Amount (cents)</th><th>Sent</th></tr></thead><tbody>" +

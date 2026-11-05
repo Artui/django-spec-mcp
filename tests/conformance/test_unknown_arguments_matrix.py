@@ -84,7 +84,7 @@ def test_reject_unknown_accepts_known_only(jsonrpc: Any, initialized_session: st
     body = _call(jsonrpc, initialized_session, {"project_id": "p1"})
 
     assert body["result"].get("isError") is not True, body
-    assert body["result"]["structuredContent"] == [{"project_id": "p1"}]
+    assert body["result"]["structuredContent"] == {"items": [{"project_id": "p1"}]}
 
 
 def test_passthrough_is_refused_where_the_conformance_server_would_have_carried_it() -> None:

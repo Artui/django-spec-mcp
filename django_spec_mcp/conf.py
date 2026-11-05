@@ -41,9 +41,9 @@ DEFAULTS: dict[str, Any] = {
     "SERVER_INFO": {"name": "django-spec-mcp"},
     "MAX_PROGRESS_NOTIFICATIONS": 1_000,
     "MAX_REQUEST_BYTES": 1_048_576,
-    # Measured on the encoded wire payload: a tool result carries the payload
-    # twice (``structuredContent`` plus the text mirror), so a ceiling counting
-    # one copy would be wrong by 2x.
+    # Measured on the encoded wire payload: a tool result whose payload is an
+    # object carries it twice (``structuredContent`` plus the text mirror), so a
+    # ceiling counting one copy would be wrong by 2x.
     "MAX_RESULT_BYTES": 5_242_880,
     # Matches the page size dispatch applies when ``limit`` is absent, so an
     # unconfigured deployment never advertises a larger page than it serves.

@@ -172,7 +172,9 @@ def test_a_result_exactly_at_the_ceiling_is_served_whole() -> None:
     _seed(2)
     server = make_server()
     _register(server)
-    assert len(_call(server, {}, build_mcp_config(max_page_size=2))["structuredContent"]) == 2
+    assert (
+        len(_call(server, {}, build_mcp_config(max_page_size=2))["structuredContent"]["items"]) == 2
+    )
 
 
 @pytest.mark.django_db
@@ -199,7 +201,7 @@ def test_a_queryset_under_the_ceiling_is_read_once(django_assert_num_queries: An
     _register(server)
     with django_assert_num_queries(1):
         out = _call(server, {}, build_mcp_config(max_page_size=5))
-    assert [row["number"] for row in out["structuredContent"]] == ["INV-0", "INV-1"]
+    assert [row["number"] for row in out["structuredContent"]["items"]] == ["INV-0", "INV-1"]
 
 
 def test_a_generator_under_the_ceiling_is_served_whole() -> None:
@@ -213,7 +215,7 @@ def test_a_generator_under_the_ceiling_is_served_whole() -> None:
         ),
     )
     out = _call(server, {}, build_mcp_config(max_page_size=10))
-    assert out["structuredContent"] == _rows()
+    assert out["structuredContent"] == {"items": _rows()}
 
 
 @pytest.mark.django_db
@@ -233,7 +235,7 @@ def test_the_binding_max_page_size_overrides_the_servers_on_an_unpaginated_list(
     if served is None:
         assert f"{binding} row ceiling" in tool_error(out)["message"]
     else:
-        assert len(out["structuredContent"]) == served
+        assert len(out["structuredContent"]["items"]) == served
 
 
 @pytest.mark.django_db
@@ -247,7 +249,7 @@ def test_a_disabled_ceiling_serves_an_unpaginated_list_whole(
     server = make_server()
     _register(server, max_page_size=binding)
     out = _call(server, {}, build_mcp_config(max_page_size=server_bound))
-    assert len(out["structuredContent"]) == 5
+    assert len(out["structuredContent"]["items"]) == 5
 
 
 @pytest.mark.django_db
@@ -279,7 +281,7 @@ def test_a_service_tool_returning_rows_is_not_row_bounded() -> None:
     server = make_server()
     _register(server, ServiceSpec(service=_rows, permissions=OPEN, atomic=False))
     out = _call(server, {}, build_mcp_config(max_page_size=2))
-    assert len(out["structuredContent"]) == 5
+    assert len(out["structuredContent"]["items"]) == 5
 
 
 @pytest.mark.django_db

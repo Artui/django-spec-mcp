@@ -110,12 +110,15 @@ def test_a_retrieve_is_its_item() -> None:
     assert set(schema["properties"]) == {"name", "qty"}
 
 
-def test_an_unpaginated_list_is_an_array_of_its_item() -> None:
+def test_an_unpaginated_list_is_an_array_of_its_item_under_items() -> None:
     schema = _tool(_selector(SelectorKind.LIST))["outputSchema"]
 
-    assert schema["type"] == "array"
-    assert schema["items"]["type"] == "object"
-    assert "name" in schema["items"]["properties"]
+    assert schema["type"] == "object"
+    assert schema["required"] == ["items"]
+    rows = schema["properties"]["items"]
+    assert rows["type"] == "array"
+    assert rows["items"]["type"] == "object"
+    assert "name" in rows["items"]["properties"]
 
 
 def test_a_paginated_list_is_the_envelope() -> None:

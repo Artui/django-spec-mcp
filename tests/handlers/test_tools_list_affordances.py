@@ -104,8 +104,9 @@ def test_an_unpaginated_list_tool_advertises_them_on_each_array_item() -> None:
     )
     schema = _output_schema(server, "list_orders")
 
-    assert schema["type"] == "array"
-    _assert_advertises_cancel(schema["items"])
+    assert schema["type"] == "object"
+    assert schema["properties"]["items"]["type"] == "array"
+    _assert_advertises_cancel(schema["properties"]["items"]["items"])
 
 
 def test_a_paginated_list_tool_advertises_them_on_each_envelope_item() -> None:
@@ -157,7 +158,16 @@ def test_a_service_s_own_affordances_are_not_advertised() -> None:
     ("kind", "paginate", "expected"),
     [
         pytest.param(SelectorKind.RETRIEVE, False, _ORDER_ITEM, id="retrieve"),
-        pytest.param(SelectorKind.LIST, False, {"type": "array", "items": _ORDER_ITEM}, id="list"),
+        pytest.param(
+            SelectorKind.LIST,
+            False,
+            {
+                "type": "object",
+                "properties": {"items": {"type": "array", "items": _ORDER_ITEM}},
+                "required": ["items"],
+            },
+            id="list",
+        ),
         pytest.param(
             SelectorKind.LIST,
             True,

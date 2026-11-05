@@ -89,7 +89,7 @@ async def test_a_row_omitting_a_field_input_data_fills_conforms_and_dispatches(
     out = await _call(server, route, arguments)
 
     assert out.get("isError") is not True, out
-    assert out["structuredContent"] == ["acme:A-1", "acme:A-2"]
+    assert out["structuredContent"] == {"items": ["acme:A-1", "acme:A-2"]}
 
 
 @pytest.mark.parametrize("route", ["handler", "async_handler"])
@@ -131,7 +131,7 @@ async def test_a_row_omitting_a_field_input_data_may_fill_conforms_when_it_fills
     out = await _call(server, route, arguments)
 
     assert out.get("isError") is not True, out
-    assert out["structuredContent"] == ["acme:auto-1", "acme:auto-1"]
+    assert out["structuredContent"] == {"items": ["acme:auto-1", "acme:auto-1"]}
 
 
 @pytest.mark.parametrize("route", ["handler", "async_handler"])

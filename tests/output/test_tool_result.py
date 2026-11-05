@@ -9,17 +9,46 @@ from django_spec_mcp.output.tool_result import build_tool_result
 
 
 @pytest.mark.parametrize(
-    ("payload", "text"),
+    ("payload", "served", "text"),
     [
-        ({"a": 1}, '{\n  "a": 1\n}'),
-        # A uniform list of objects, the payload a denser format would be tempting for.
-        ([{"a": 1}, {"a": 2}], '[\n  {\n    "a": 1\n  },\n  {\n    "a": 2\n  }\n]'),
+        ({"a": 1}, {"a": 1}, '{\n  "a": 1\n}'),
+        # A uniform list of objects, the payload a denser format would be
+        # tempting for, served under ``items`` because MCP's structured content
+        # is an object.
+        (
+            [{"a": 1}, {"a": 2}],
+            {"items": [{"a": 1}, {"a": 2}]},
+            '{\n  "items": [\n    {\n      "a": 1\n    },\n    {\n      "a": 2\n    }\n  ]\n}',
+        ),
+        (("a", "b"), {"items": ("a", "b")}, '{\n  "items": [\n    "a",\n    "b"\n  ]\n}'),
     ],
-    ids=["object", "uniform-list"],
+    ids=["object", "uniform-list", "tuple"],
 )
-def test_the_text_block_is_the_payload_as_json(payload: object, text: str) -> None:
+def test_the_text_block_is_the_payload_as_json(payload: object, served: object, text: str) -> None:
     res = build_tool_result(payload)
-    assert res.structured_content == payload
+    assert res.structured_content == served
+    assert [block.to_dict() for block in res.content] == [{"type": "text", "text": text}]
+
+
+def test_a_list_text_block_is_the_object_with_structured_content_off() -> None:
+    # The text block carries the JSON the structured content would, so a tool
+    # emitting no structured content still serves its rows under ``items``.
+    res = build_tool_result([{"a": 1}], include_structured_content=False)
+    assert res.structured_content is UNSET
+    assert json.loads(res.content[0].to_dict()["text"]) == {"items": [{"a": 1}]}
+
+
+@pytest.mark.parametrize(
+    ("payload", "text"),
+    [(True, "true"), (7, "7"), (0.5, "0.5"), ("done", '"done"')],
+    ids=["bool", "int", "float", "str"],
+)
+def test_a_scalar_payload_is_the_text_block_alone(payload: object, text: str) -> None:
+    # MCP declares structured content an object, and a scalar has no object
+    # form, so it is left out even with structured content on.
+    res = build_tool_result(payload, include_structured_content=True)
+    assert res.structured_content is UNSET
+    assert "structuredContent" not in res.to_dict()
     assert [block.to_dict() for block in res.content] == [{"type": "text", "text": text}]
 
 

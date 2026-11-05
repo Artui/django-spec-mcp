@@ -62,8 +62,8 @@ class MCPConfig:
 
     max_result_bytes: int | None
     """Ceiling on one tool result or resource read, measured on the encoded wire
-    payload so the ``structuredContent`` + text-mirror double emission is
-    counted once each. Over it the call returns an ``isError`` result, never a
+    payload, so an object result's ``structuredContent`` + text-mirror double
+    emission is counted once each and a scalar's text block alone once. Over it the call returns an ``isError`` result, never a
     truncated payload. ``None`` disables; per-binding overrides win."""
 
     max_page_size: int | None

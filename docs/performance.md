@@ -96,9 +96,12 @@ per tool at registration:
 
 Three things worth knowing before you tune them:
 
-**Every payload goes out twice.** A successful tool result carries the payload
-as `structuredContent` *and* as the `content[0]` text mirror the spec asks for,
-so the context cost at the client is roughly 2× the payload. If you are fighting
+**An object payload goes out twice.** A successful tool result whose payload is
+an object (which includes every list, served under `items`) carries it as
+`structuredContent` *and* as the `content[0]` text mirror the spec asks for, so
+the context cost at the client is roughly 2× the payload. A scalar result, a
+presenter-less service returning a bool, a number or a string, goes out once,
+as the text block alone. If you are fighting
 a context window rather than a byte ceiling, `INCLUDE_STRUCTURED_CONTENT=False`
 (server-wide or per binding) halves it at once — clients that don't parse the
 structured field lose nothing.

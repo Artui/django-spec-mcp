@@ -87,7 +87,7 @@ def test_a_service_tool_returns_a_tool_result() -> None:
                 kind=SelectorKind.LIST, selector=lambda: [{"a": 1}, {"a": 2}], permissions=OPEN
             ),
             {},
-            [{"a": 1}, {"a": 2}],
+            {"items": [{"a": 1}, {"a": 2}]},
         ),
         (
             SelectorSpec(

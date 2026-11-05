@@ -82,7 +82,10 @@ def test_annotations_attach_to_each_row() -> None:
             annotations={"annotated_double": models.F("amount_cents") * 2},
         )
     )
-    assert sorted(row["annotated_double"] for row in out["structuredContent"]) == [200, 400]
+    assert sorted(row["annotated_double"] for row in out["structuredContent"]["items"]) == [
+        200,
+        400,
+    ]
 
 
 def test_extend_queryset_runs_last_and_is_handed_the_calls_request() -> None:
@@ -96,7 +99,7 @@ def test_extend_queryset_runs_last_and_is_handed_the_calls_request() -> None:
         return queryset.filter(amount_cents__gte=200)
 
     out = _call(_list(extend_queryset=_narrow))
-    assert sorted(row["number"] for row in out["structuredContent"]) == ["INV-1", "INV-2"]
+    assert sorted(row["number"] for row in out["structuredContent"]["items"]) == ["INV-1", "INV-2"]
     assert isinstance(seen["request"], HttpRequest)
     assert seen["request"].mcp_token.scopes == ("read",)
     assert seen["view"] is None
@@ -110,7 +113,7 @@ def test_the_selector_is_handed_the_calls_request() -> None:
         return [{"number": "A"}]
 
     out = _call(SelectorSpec(kind=SelectorKind.LIST, selector=_rows, permissions=OPEN))
-    assert out["structuredContent"] == [{"number": "A"}]
+    assert out["structuredContent"] == {"items": [{"number": "A"}]}
     assert isinstance(seen[0], HttpRequest)
 
 

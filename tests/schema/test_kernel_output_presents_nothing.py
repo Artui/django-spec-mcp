@@ -154,15 +154,16 @@ def test_a_list_that_may_present_nothing_is_advertised_as_a_list(name: str) -> N
     # ``None`` the service returned, and no MCP result can carry a ``null``.
     # The schema states the list a client should be served in its place, the
     # empty one, which an array admits; each row stays as strict as declared.
-    # The call serves that empty list (the test below).
+    # The call serves that empty list under ``items`` (the test below).
     schema = _schemas(_list_server())[name]
 
-    assert schema["type"] == "array"
-    assert schema["items"]["required"] == ["pk", "name"]
-    jsonschema.validate([], schema)
-    jsonschema.validate([_ROW], schema)
+    assert schema["type"] == "object"
+    assert schema["properties"]["items"]["type"] == "array"
+    assert schema["properties"]["items"]["items"]["required"] == ["pk", "name"]
+    jsonschema.validate({"items": []}, schema)
+    jsonschema.validate({"items": [_ROW]}, schema)
     with pytest.raises(jsonschema.ValidationError):
-        jsonschema.validate([{"pk": 1}], schema)
+        jsonschema.validate({"items": [{"pk": 1}]}, schema)
 
 
 @pytest.mark.django_db
@@ -174,7 +175,7 @@ def test_a_list_that_presents_nothing_conforms_to_its_schema(name: str) -> None:
     served = server.call_tool(name, _arguments(name), user=None).to_dict()["structuredContent"]
 
     jsonschema.validate(served, schema)
-    assert served == []
+    assert served == {"items": []}
 
 
 @pytest.mark.django_db
@@ -207,4 +208,4 @@ def test_a_list_that_presents_rows_is_served_them(many: bool) -> None:
 
     served = server.call_tool("rows", arguments, user=None).to_dict()["structuredContent"]
 
-    assert served == [{"pk": 1, "name": "a"}, {"pk": 2, "name": "b"}]
+    assert served == {"items": [{"pk": 1, "name": "a"}, {"pk": 2, "name": "b"}]}

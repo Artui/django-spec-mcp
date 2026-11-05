@@ -67,7 +67,7 @@ def test_the_returned_payload_is_projected() -> None:
     server = _server()
 
     result: Any = handle_tools_call({"name": "list_invoices", "arguments": {}}, _ctx(server))
-    rows = result["structuredContent"]
+    rows = result["structuredContent"]["items"]
 
     assert rows == [
         {
@@ -79,7 +79,7 @@ def test_the_returned_payload_is_projected() -> None:
     ]
     # The text block a client reads carries the same projection, not the raw row.
     assert "sent" not in result["content"][0]["text"]
-    assert json.loads(result["content"][0]["text"]) == rows
+    assert json.loads(result["content"][0]["text"]) == {"items": rows}
 
 
 @pytest.mark.django_db
@@ -91,8 +91,8 @@ def test_the_advertised_schema_matches_what_the_call_returns() -> None:
     tool: Any = handle_tools_list(None, ctx)["tools"][0]
     returned: Any = handle_tools_call({"name": "list_invoices", "arguments": {}}, ctx)
 
-    advertised = set(tool["outputSchema"]["items"]["properties"])
-    assert advertised == set(returned["structuredContent"][0])
+    advertised = set(tool["outputSchema"]["properties"]["items"]["items"]["properties"])
+    assert advertised == set(returned["structuredContent"]["items"][0])
     # The handle is described rather than silently omitted, and the hidden
     # field is described nowhere.
     assert "id" in advertised
@@ -104,4 +104,5 @@ def test_the_description_teaches_the_handle_convention() -> None:
 
     assert tool["description"].startswith("List invoices.")
     assert "Identify records by `number`." in tool["description"]
-    assert tool["outputSchema"]["items"]["properties"]["id"]["description"] == "Invoice handle."
+    row = tool["outputSchema"]["properties"]["items"]["items"]
+    assert row["properties"]["id"]["description"] == "Invoice handle."

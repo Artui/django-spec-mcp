@@ -183,7 +183,7 @@ def test_resource_link_tool_emits_links_and_keeps_structured_content() -> None:
     result = handle_tools_call({"name": "invoices.find", "arguments": {}}, _ctx(server))
     assert [b["uri"] for b in result["content"]] == ["invoices://1", "invoices://2"]
     assert result["content"][1]["mimeType"] == "application/pdf"
-    assert result["structuredContent"] == links
+    assert result["structuredContent"] == {"items": links}
 
 
 def test_a_single_mapping_is_accepted_as_one_link() -> None:

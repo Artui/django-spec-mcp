@@ -15,10 +15,11 @@ def enforce_result_bytes(payload: Any, max_bytes: int | None, *, label: str) -> 
     ``max_bytes`` of ``None`` disables it.
 
     **Measured on the encoded result, not on the rendered text block.** A
-    successful ``tools/call`` result carries its payload twice — as
-    ``structuredContent`` and as the ``content[0]`` text mirror the spec asks
-    for — so counting one copy would be wrong by 2× against the client's context
-    window. Callers hand in the finished result dict for that reason.
+    successful ``tools/call`` result whose payload is an object carries it twice
+    — as ``structuredContent`` and as the ``content[0]`` text mirror the spec
+    asks for — so counting one copy would be wrong by 2× against the client's
+    context window; a scalar result is the text block alone. Callers hand in the
+    finished result dict for that reason, so either is measured as sent.
 
     **Returns a message rather than a response** because the two callers need
     different shapes: a tool call answers with an ``isError`` result, while

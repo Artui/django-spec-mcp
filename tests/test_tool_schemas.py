@@ -338,3 +338,18 @@ def test_the_advertised_tool_schemas_match_the_checked_in_dump():
             "`make tool-schemas` and commit tests/testapp/tool_schemas.json in the "
             f"same pull request.\n{shown}"
         )
+
+
+def test_every_advertised_output_schema_is_an_object():
+    # MCP 2025-11-25 declares ``outputSchema.type: "object"``, so a list a
+    # tool presents travels under ``items`` rather than as the root. Read off
+    # the checked-in dump, which the test above holds to the wire.
+    listing = json.loads(DUMP.read_text(encoding="utf-8"))
+    advertised = {
+        tool["name"]: tool["outputSchema"]["type"]
+        for tool in listing["tools"]
+        if "outputSchema" in tool
+    }
+
+    assert advertised
+    assert {name: kind for name, kind in advertised.items() if kind != "object"} == {}

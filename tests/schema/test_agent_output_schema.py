@@ -74,8 +74,8 @@ def test_retrieve_schema_is_annotated_directly() -> None:
 def test_list_schema_is_annotated_inside_the_array() -> None:
     schema = _output_schema(_AgentInvoice, kind=SelectorKind.LIST)
 
-    assert schema["type"] == "array"
-    assert "sent" not in schema["items"]["properties"]
+    assert schema["type"] == "object"
+    assert "sent" not in schema["properties"]["items"]["items"]["properties"]
 
 
 def test_paginated_schema_is_annotated_inside_the_envelope() -> None:
