@@ -11,6 +11,8 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-11-05
+
 ### Changed
 
 - **A list result is served as an object, under `items`, and advertised so.
@@ -823,7 +825,8 @@ carries; releases up to 0.54.0 are in
   running. The worker's run now enters below that decision. A client that did
   not declare the extension is still refused `-32021` by a `REQUIRED` tool.
 
-[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/Artui/django-spec-mcp/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/Artui/django-spec-mcp/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/Artui/django-spec-mcp/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/Artui/django-spec-mcp/compare/v0.6.0...v0.7.0
