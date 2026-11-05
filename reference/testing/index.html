@@ -1439,8 +1439,8 @@ whenever <code>outputSchema</code> is declared (see
 <p>That is coherence, decided from the configuration alone. Whether a real
 response <em>conforms</em> is a different question, and the check a suite reaches for
 on its own answers a third one:</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">advertised</span> <span class="o">=</span> <span class="n">tool</span><span class="p">[</span><span class="s2">&quot;outputSchema&quot;</span><span class="p">][</span><span class="s2">&quot;items&quot;</span><span class="p">][</span><span class="s2">&quot;properties&quot;</span><span class="p">]</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="k">assert</span> <span class="nb">set</span><span class="p">(</span><span class="n">advertised</span><span class="p">)</span> <span class="o">==</span> <span class="nb">set</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;structuredContent&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">rows</span> <span class="o">=</span> <span class="n">tool</span><span class="p">[</span><span class="s2">&quot;outputSchema&quot;</span><span class="p">][</span><span class="s2">&quot;properties&quot;</span><span class="p">][</span><span class="s2">&quot;items&quot;</span><span class="p">][</span><span class="s2">&quot;items&quot;</span><span class="p">]</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="k">assert</span> <span class="nb">set</span><span class="p">(</span><span class="n">rows</span><span class="p">[</span><span class="s2">&quot;properties&quot;</span><span class="p">])</span> <span class="o">==</span> <span class="nb">set</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;structuredContent&quot;</span><span class="p">][</span><span class="s2">&quot;items&quot;</span><span class="p">][</span><span class="mi">0</span><span class="p">])</span>
 </span></code></pre></div>
 <p>Comparing key sets catches a field that vanished. It passes unchanged when a
 property advertised as <code>integer</code> arrives as a string, or a <code>date-time</code> arrives
@@ -1459,8 +1459,8 @@ and formats included, and names each disagreement:</p>
 </span></code></pre></div>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>AssertionError: Tool &#39;invoices.list&#39; returned &#39;structuredContent&#39; that does not
 </span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>conform to the &#39;outputSchema&#39; it advertises (2 problems):
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>  - $[0].amount_cents: advertised type &#39;integer&#39;, got string &#39;1240.00&#39;
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>  - $[1]: &#39;number&#39; is a required property
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>  - $.items[0].amount_cents: advertised type &#39;integer&#39;, got string &#39;1240.00&#39;
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>  - $.items[1]: &#39;number&#39; is a required property
 </span></code></pre></div>
 <p>Both arguments are plain mappings off the wire — one <code>tools/list</code> entry and one
 <code>tools/call</code> result — so the same call works against

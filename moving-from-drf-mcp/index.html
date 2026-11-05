@@ -1975,7 +1975,8 @@ drf-mcp stripped it.</p>
 <code>register_tool(output_format=)</code> and its <code>register_tools</code> override,
 <code>KernelToolBinding.output_format</code>, <code>build_tool_result(output_format=)</code> and the
 <code>toon</code> extra. A tool result's <code>content[0]</code> text is the payload as JSON, beside
-the same payload in <code>structuredContent</code>.</p>
+the same payload in <code>structuredContent</code> when the payload is an object; a scalar
+result is the text block alone.</p>
 <ul>
 <li>A <code>SPEC_MCP["DEFAULT_OUTPUT_FORMAT"]</code> left in settings is ignored, with no
   warning. Delete it.</li>

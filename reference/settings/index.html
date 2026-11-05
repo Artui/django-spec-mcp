@@ -1747,7 +1747,7 @@ See <a href="../../performance/#what-the-package-bounds">What the package bounds
 <tr>
 <td><code>MAX_RESULT_BYTES</code></td>
 <td><code>5242880</code> (5 MiB)</td>
-<td>Ceiling on one tool result or resource read, measured on the <strong>encoded wire payload</strong>. A successful tool result carries the payload twice — as <code>structuredContent</code> and as the spec's backwards-compatibility text mirror — so a ceiling counting one copy would be wrong by 2× against the thing that matters, the client's context window. Over the ceiling the call returns an <code>isError</code> result naming the remedy; <strong>it is never truncated</strong>, because a clipped list reads as complete to the model reasoning from it.</td>
+<td>Ceiling on one tool result or resource read, measured on the <strong>encoded wire payload</strong>. A successful tool result whose payload is an object carries it twice — as <code>structuredContent</code> and as the spec's backwards-compatibility text mirror — so a ceiling counting one copy would be wrong by 2× against the thing that matters, the client's context window; a scalar result is the text block alone, measured once. Over the ceiling the call returns an <code>isError</code> result naming the remedy; <strong>it is never truncated</strong>, because a clipped list reads as complete to the model reasoning from it.</td>
 </tr>
 <tr>
 <td><code>MAX_PAGE_SIZE</code></td>

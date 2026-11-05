@@ -3119,7 +3119,8 @@ shape's description in the <code>inputSchema</code> ends with:</p>
 <p>On a paged result it applies to each item in <code>items</code>, never to the page
 envelope (<code>items</code>, <code>page</code>, <code>totalPages</code>, <code>hasNext</code>).</p>
 </blockquote>
-<p>A service tool and an unpaginated list have no envelope, and get no sentence.
+<p>A service tool and an unpaginated list have no page envelope, and get no
+sentence: an unpaginated list's <code>{"items": [...]}</code> holds only the rows.
 The words are the server's <a href="#agent-conventions"><code>conventions.query_param_on_pages</code></a>,
 which can change them or drop them; whether the sentence appears stays the
 server's call.</p>
@@ -3268,10 +3269,13 @@ spec says otherwise:</p>
   are strings, so the index arrives as <code>"1"</code>; with <code>INCLUDE_VALIDATION_VALUE</code>
   on, <code>error.value["invoices"][1]</code> is the item it names. A call with no list is
   refused under the argument as missing.</li>
-<li><strong>The result is the service's list.</strong> It is presented as a list, and the
-  <code>outputSchema</code> is an array of the item schema. <code>structuredContent</code> is that
-  bare array, as for every unpaginated list result this server returns, not an
-  object wrapping it.</li>
+<li><strong>The result is the service's list, under <code>items</code>.</strong> It is presented as a
+  list and served as <code>{"items": [...]}</code>, both as <code>structuredContent</code> and as the
+  text block, and the <code>outputSchema</code> is an object whose <code>items</code> is an array of
+  the item schema. MCP declares every <code>outputSchema</code> an object and
+  <code>structuredContent</code> a JSON object, so no list result this server returns is a
+  bare array; <code>items</code> is the key a paged list's envelope uses too, so a client
+  reads the rows at one path either way.</li>
 </ul>
 <h3 id="a-resource-is-a-retrieve-selector">A resource is a <code>RETRIEVE</code> selector<a class="headerlink" href="#a-resource-is-a-retrieve-selector" title="Permanent link">&para;</a></h3>
 <p><code>register_resource(spec, *, uri_template, name, ...)</code> takes a kernel
@@ -5107,13 +5111,26 @@ exception's own text never reaches the client; it is logged at <code>ERROR</code
 traceback (<a href="../observability/#what-lands-where">Observability</a>). A
 progress-carrying stream has already committed its <code>200</code>, so there the same
 error arrives as the stream's last frame.</p>
-<p>LIST tools advertise a kind-aware <code>outputSchema</code>: a bare array schema
-unpaginated, the <code>{items, page, totalPages, hasNext}</code> envelope with
-<code>paginate=True</code> (enable pagination for a fully spec-compliant <em>object</em>-shaped
-<code>structuredContent</code>). The array schema is not special to selector tools:
-wherever a result presents as an unpaginated list — a <code>many=True</code> service, or a
-service whose output re-read is a <code>LIST</code> — the tool advertises the same bare
-array, because that is what it serves.</p>
+<p><strong>A list is served as an object, under <code>items</code>.</strong> MCP declares every
+<code>outputSchema</code> of type <code>"object"</code> and <code>structuredContent</code> a JSON object, so a
+result that presents as a list is never served bare. A LIST tool advertises
+<code>{"items": [...]}</code> unpaginated and the <code>{items, page, totalPages, hasNext}</code>
+envelope with <code>paginate=True</code>, so its rows are at <code>structuredContent.items</code>
+either way. The object is not special to selector tools: wherever a result
+presents as an unpaginated list — a <code>many=True</code> service, a <code>returns_many</code> one,
+or a service whose output re-read is a <code>LIST</code> — the tool advertises and serves
+the same <code>{"items": [...]}</code>. The wrap follows what the call returns, so a
+presenter-less tool whose result is a list, which advertises no <code>outputSchema</code>,
+is served <code>{"items": [...]}</code> too. The text block carries the same JSON, even
+with <code>structuredContent</code> turned off, and a <code>RESOURCE_LINK</code> tool's link blocks
+are still one per row; only its <code>structuredContent</code> is wrapped. A list that
+presents nothing is <code>{"items": []}</code>.</p>
+<p><strong>A scalar result is the text block alone.</strong> A tool whose spec has no
+presenter and whose service returns a bool, a number or a string advertises no
+<code>outputSchema</code>, and a scalar has no object form, so its result carries the
+value as JSON in the text block and no <code>structuredContent</code>, which MCP makes
+optional when no schema is declared. A client reads it by parsing
+<code>content[0].text</code>.</p>
 <p><strong>A result with nothing to present is <code>{}</code>, and the schema admits it.</strong> Three
 successful calls present nothing: an <code>allow_none</code> RETRIEVE selector tool that
 finds no row, a single-row service tool whose output re-read selector finds
@@ -5205,7 +5222,9 @@ loop). See <a href="../async/">Async deployment</a> for the wire details and
 <p>Per the MCP tools spec, a tool result has both a <code>content</code> block list and an
 optional <code>structuredContent</code>:</p>
 <ul>
-<li><code>structuredContent</code> is always JSON-shaped — clients parse it directly.</li>
+<li><code>structuredContent</code> is always a JSON object — clients parse it directly. A
+  scalar result (a presenter-less service returning a bool, a number or a
+  string) has none, since it is not an object.</li>
 <li><code>content[0]</code> is a text block carrying the same payload encoded as JSON.</li>
 </ul>
 <h3 id="omitting-structuredcontent-and-outputschema">Omitting <code>structuredContent</code> and <code>outputSchema</code><a class="headerlink" href="#omitting-structuredcontent-and-outputschema" title="Permanent link">&para;</a></h3>

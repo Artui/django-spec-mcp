@@ -1795,7 +1795,9 @@ pagination envelope:</p>
 </span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">  </span><span class="nt">&quot;hasNext&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
 </span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="p">}</span>
 </span></code></pre></div>
-<p>Without <code>paginate</code>, the response is the presented list directly. Choose
+<p>Without <code>paginate</code>, the response is the presented list under <code>items</code> alone,
+<code>{"items": [&lt;presented rows&gt;]}</code>, because MCP's <code>structuredContent</code> is an
+object: the rows are at the same path either way. Choose
 based on how many rows your selector can return — paginate as soon as
 the list could outgrow a single tool-call response.</p>
 <h2 id="arguments-beside-the-filters">Arguments beside the filters<a class="headerlink" href="#arguments-beside-the-filters" title="Permanent link">&para;</a></h2>

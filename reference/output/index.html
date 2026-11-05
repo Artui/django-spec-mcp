@@ -1528,7 +1528,8 @@ for a successful (or tool-level error) call.</p>
             <td>
               <div class="doc-md-description">
                 <p>The JSON-shaped tool output. Becomes <code>structuredContent</code>
-verbatim and is also rendered, as JSON, into the first content block.</p>
+in its object form (a list under <code>items</code>, <code>None</code> as <code>{}</code>,
+below) and is also rendered, as JSON, into the first content block.</p>
               </div>
             </td>
             <td>
@@ -1640,7 +1641,20 @@ a payload that doesn't match the declared kind comes back as an
           </tr>
       </tbody>
     </table>
-        <p>A <code>None</code> payload is a result with <strong>nothing to present</strong>: an
+        <p>A list or tuple payload is served as <code>{"items": [...]}</code>, both as
+<code>structuredContent</code> and as the text block, for the same reason as the
+<code>None</code> below: MCP requires structured content to be an object. <code>items</code>
+is the key a paged list's envelope holds its rows under, so a client reads
+a list's rows at one path whether the tool pages or not, and the advertised
+<code>outputSchema</code> holds the array under it (<code>kernel_tool_output_schema</code>).
+A <code>RESOURCE_LINK</code> tool's blocks are built from the list itself, one link
+per row, and only its <code>structuredContent</code> is wrapped.</p>
+<p>A scalar payload, a bool, a number or a string, has no object form, so it
+is served as the text block alone with no <code>structuredContent</code>, which MCP
+makes optional when the tool declares no <code>outputSchema</code>. Only a spec with
+no presenter returns one, and such a tool advertises none
+(<code>test_a_scalar_result_is_the_text_block_alone</code>).</p>
+<p>A <code>None</code> payload is a result with <strong>nothing to present</strong>: an
 <code>allow_none</code> RETRIEVE that found no row, a service whose output re-read
 selector found none, or a service with no re-read declaring
 <code>ServiceSpec(allow_none=True)</code> that returned <code>None</code>. It is served as

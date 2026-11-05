@@ -1529,9 +1529,10 @@ that way: give the dataclass the display value, from the model's
 <p>Both. The description is read once per listing and the schema sits next to the
 field it describes, so that is where the wording belongs. But a field the model
 should never use is <em>removed</em> rather than relabelled: a tool result is emitted
-as <code>structuredContent</code> <strong>and</strong> rendered into a text content block, so the model
-reads every byte twice. Relocating a field under some reserved subtree would
-cost its keys twice over and hide nothing.</p>
+as <code>structuredContent</code> <strong>and</strong> rendered into a text content block whenever it is
+an object, as every presented row is, so the model reads every byte twice.
+Relocating a field under some reserved subtree would cost its keys twice over
+and hide nothing.</p>
 <h2 id="override-it-for-one-tool">Override it for one tool<a class="headerlink" href="#override-it-for-one-tool" title="Permanent link">&para;</a></h2>
 <p>The presenter stays authoritative — it is the one declaration this server, any
 in-process toolset and any other transport serving the spec all read. When a
