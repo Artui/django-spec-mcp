@@ -85,8 +85,8 @@ def test_a_type_break_that_the_key_set_check_calls_conforming() -> None:
     Invoice.objects.create(number="FV/2026/0043", amount_cents=124000, sent=True)
 
     tool, result = _call(_LedgerPresenter(InvoiceOutput))
-    advertised = tool["outputSchema"]["items"]["properties"]
-    row = result["structuredContent"][0]
+    advertised = tool["outputSchema"]["properties"]["items"]["items"]["properties"]
+    row = result["structuredContent"]["items"][0]
 
     # The schema says integer; an integer is not what arrived.
     assert advertised["amount_cents"] == {"type": "integer"}
@@ -101,7 +101,7 @@ def test_a_type_break_that_the_key_set_check_calls_conforming() -> None:
     message = str(caught.value)
     assert "'list_invoices'" in message
     assert "1 problem" in message
-    assert "$[0].amount_cents: advertised type 'integer', got string '1240.00'" in message
+    assert "$.items[0].amount_cents: advertised type 'integer', got string '1240.00'" in message
 
 
 def test_a_format_break_is_caught_too() -> None:

@@ -10,7 +10,8 @@ The other half is this assertion, and the shape a suite reaches for on its own
 is a key-set comparison:
 
 ```python
-assert set(tool["outputSchema"]["items"]["properties"]) == set(result["structuredContent"][0])
+rows = tool["outputSchema"]["properties"]["items"]["items"]
+assert set(rows["properties"]) == set(result["structuredContent"]["items"][0])
 ```
 
 That catches a field that vanished. It passes unchanged when a property

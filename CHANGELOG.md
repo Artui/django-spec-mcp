@@ -11,6 +11,25 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+### Changed
+
+- **A list result is served as an object, under `items`, and advertised so.
+  This is a wire change for a client that reads the bare array.** MCP
+  2025-11-25 declares every `outputSchema` of type `"object"` and
+  `structuredContent` a JSON object, and an unpaginated `LIST` tool, a `many`
+  service, a `returns_many` service and a service whose output re-read is a
+  `LIST` each advertised and served a bare array. Each now serves
+  `{"items": [...]}`, as `structuredContent` and as the text block, against an
+  `outputSchema` of `{"type": "object", "properties": {"items": <the array>},
+  "required": ["items"]}`; a list that presents nothing is `{"items": []}`.
+  `items` is the key the paged envelope already holds its rows under, so a
+  client reads a list tool's rows at `structuredContent.items` whether it pages
+  or not. A `RESOURCE_LINK` tool presenting several links keeps one link block
+  per row and wraps only its `structuredContent`. Every `outputSchema` the
+  server advertises now has a root `"type": "object"`. A client, a prompt or an
+  MCP Apps view reading `structuredContent[0]` reads
+  `structuredContent.items[0]` instead; a paged tool's result is unchanged.
+
 ## [0.8.1] — 2026-11-04
 
 ### Changed

@@ -236,8 +236,8 @@ def test_the_call_serves_the_providers_value_whatever_the_caller_sends() -> None
     bare = server.call_tool("get", {"pk": 1}, user=None).to_dict()
     sent = server.call_tool("get", {"pk": 1, "tenant": "caller"}, user=None).to_dict()
 
-    assert bare["structuredContent"] == [{"pk": 1, "tenant": "acme"}]
-    assert sent["structuredContent"] == [{"pk": 1, "tenant": "acme"}]
+    assert bare["structuredContent"] == {"items": [{"pk": 1, "tenant": "acme"}]}
+    assert sent["structuredContent"] == {"items": [{"pk": 1, "tenant": "acme"}]}
 
 
 @pytest.mark.parametrize(

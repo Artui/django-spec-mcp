@@ -89,7 +89,7 @@ def test_a_required_data_parameter_without_a_validator_receives_an_empty_payload
 def test_the_calls_own_view_and_context_reach_a_required_parameter() -> None:
     served = _served(_service(lambda *, view, call_context: [view, sorted(call_context)]), {})
 
-    assert served == [None, ["action", "format", "request", "view"]]
+    assert served == {"items": [None, ["action", "format", "request", "view"]]}
 
 
 def test_a_required_parameter_a_read_declares_is_the_callers() -> None:

@@ -791,8 +791,9 @@ def present_tool_result(
     the page envelope is laid around what they present as.
 
     A list-shaped spec that presents nothing is served the empty list, which
-    its ``outputSchema`` advertises as ``"array"`` (``kernel_tool_output_schema``),
-    rather than the ``{}`` a ``None`` becomes
+    its ``outputSchema`` advertises as an ``"array"`` under ``items``
+    (``kernel_tool_output_schema``) and ``build_tool_result`` serves as
+    ``{"items": []}``, rather than the ``{}`` a ``None`` becomes
     (``test_a_list_that_presents_nothing_conforms_to_its_schema``).
     """
     if page is None:
@@ -814,7 +815,7 @@ def present_tool_result(
 def _presents_a_list(binding: KernelToolBinding) -> bool:
     """Whether the kernel describes what ``binding`` presents as a list or nothing.
 
-    The root ``kernel_tool_output_schema`` restates as ``"array"``: a ``many`` or
+    The root ``kernel_tool_output_schema`` restates as an ``"array"`` under ``items``: a ``many`` or
     ``returns_many`` service's rows, or ``None``.
     """
     # A spec with no presenter has no output schema (``test_no_presenter_yields_no_schema``),

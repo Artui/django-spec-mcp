@@ -18,9 +18,11 @@ def kernel_tool_output_schema(
     projected through the binding's audience markings, so it names the fields
     the presented payload carries, and with the ``"null"`` the kernel admits for
     a spec that can present nothing restated as what this transport serves in
-    its place (``_admitting_nothing``, ``_a_list``). ``None`` for an image or audio tool, whose
-    result is a media block with no structured content to describe, and for a
-    spec the kernel has no schema for.
+    its place (``_admitting_nothing``, ``_a_list``). A list the kernel describes
+    as the root ``"array"`` is held under ``items`` (``_items_of``), because MCP
+    declares every ``outputSchema`` an object. ``None`` for an image or audio
+    tool, whose result is a media block with no structured content to describe,
+    and for a spec the kernel has no schema for.
     """
     if binding.content_kind in (ToolContentKind.IMAGE, ToolContentKind.AUDIO):
         return None
@@ -35,7 +37,9 @@ def kernel_tool_output_schema(
     if schema.get("type") == _OBJECT_OR_NULL:
         return _admitting_nothing(schema)
     if schema.get("type") == _ARRAY_OR_NULL:
-        return _a_list(schema)
+        return _items_of(_a_list(schema))
+    if schema.get("type") == "array":
+        return _items_of(schema)
     return schema
 
 
@@ -54,10 +58,24 @@ def _a_list(schema: dict[str, Any]) -> dict[str, Any]:
     that presents nothing is the empty list, which ``"array"`` already admits,
     and each row stays as strict as declared
     (``test_a_list_that_may_present_nothing_is_advertised_as_a_list``), and
-    ``present_tool_result`` serves that empty list rather than ``{}``
-    (``test_a_list_that_presents_nothing_conforms_to_its_schema``).
+    ``present_tool_result`` serves that empty list rather than ``{}``, as
+    ``{"items": []}`` (``test_a_list_that_presents_nothing_conforms_to_its_schema``).
     """
     return {**schema, "type": "array"}
+
+
+def _items_of(array: dict[str, Any]) -> dict[str, Any]:
+    """An unpaged list's schema, held under ``items`` in an object.
+
+    MCP 2025-11-25 declares ``outputSchema.type`` as ``"object"`` and
+    ``structuredContent`` as an object, so ``build_tool_result`` serves a
+    presented list as ``{"items": [...]}`` and this describes it. ``items`` is
+    the key the paged envelope holds its rows under, so a client reads a list
+    tool's rows at one path whether it pages or not. No
+    ``additionalProperties``, as on the kernel's paged envelope
+    (``test_every_advertised_output_schema_is_an_object``).
+    """
+    return {"type": "object", "properties": {"items": array}, "required": ["items"]}
 
 
 def _admitting_nothing(schema: dict[str, Any]) -> dict[str, Any]:

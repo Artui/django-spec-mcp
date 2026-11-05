@@ -42,6 +42,15 @@ def build_tool_result(
         content_mime_type: Media type for a non-``TEXT`` block.
         binding_name: Names the binding in that mismatch message.
 
+    A list or tuple payload is served as ``{"items": [...]}``, both as
+    ``structuredContent`` and as the text block, for the same reason as the
+    ``None`` below: MCP requires structured content to be an object. ``items``
+    is the key a paged list's envelope holds its rows under, so a client reads
+    a list's rows at one path whether the tool pages or not, and the advertised
+    ``outputSchema`` holds the array under it (``kernel_tool_output_schema``).
+    A ``RESOURCE_LINK`` tool's blocks are built from the list itself, one link
+    per row, and only its ``structuredContent`` is wrapped.
+
     A ``None`` payload is a result with **nothing to present**: an
     ``allow_none`` RETRIEVE that found no row, a service whose output re-read
     selector found none, or a service with no re-read declaring
@@ -71,7 +80,7 @@ def build_tool_result(
             content=blocks,
             # Media blocks carry no ``structuredContent`` — binary is not JSON.
             # Resource links do: the links are an ordinary JSON payload.
-            structured_content=payload
+            structured_content=_as_object(payload)
             if include_structured_content and content_kind is ToolContentKind.RESOURCE_LINK
             else UNSET,
             is_error=is_error,
@@ -79,15 +88,29 @@ def build_tool_result(
         )
 
     # Only the text kind: a media or resource-link block has its own payload
-    # contract, which ``build_content_blocks`` answers above.
-    if payload is None:
-        payload = {}
+    # contract, which ``build_content_blocks`` answers above. The text block
+    # carries the same JSON as the structured content, so it is the object too,
+    # whether or not the structured content is sent.
+    payload = _as_object(payload)
     return ToolResult(
         content=[ToolContentBlock.text_block(encode_json(payload))],
         structured_content=payload if include_structured_content else UNSET,
         is_error=is_error,
         meta=meta,
     )
+
+
+def _as_object(payload: Any) -> Any:
+    """``payload`` as the object MCP requires structured content to be.
+
+    ``None`` is the empty object and a list or tuple its rows under ``items``;
+    every other payload is served as presented.
+    """
+    if payload is None:
+        return {}
+    if isinstance(payload, list | tuple):
+        return {"items": payload}
+    return payload
 
 
 __all__ = ["build_tool_result"]

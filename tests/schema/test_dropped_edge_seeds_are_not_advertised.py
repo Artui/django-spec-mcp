@@ -79,7 +79,7 @@ def test_a_reflected_read_named_request_is_not_advertised() -> None:
 def test_a_call_without_it_is_served() -> None:
     out = _server().call_tool("echo", {"note": "hi"}, user=None).to_dict()
 
-    assert out["structuredContent"] == [{"note": "hi", "request_is_caller_value": False}]
+    assert out["structuredContent"] == {"items": [{"note": "hi", "request_is_caller_value": False}]}
 
 
 @pytest.mark.django_db

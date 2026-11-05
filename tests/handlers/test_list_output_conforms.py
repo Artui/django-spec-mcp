@@ -1,7 +1,8 @@
 """A kernel tool whose result presents as a list advertises, and serves, a list.
 
 A service tool whose ``output_selector_spec`` re-fetches a ``LIST`` must not
-advertise the bare item schema while serving an array. Every case registers a
+advertise the bare item schema while serving rows. A list is served under
+``items``, as MCP's structured content is an object, and advertised so. Every case registers a
 kernel spec with
 ``include_output_schema=True``, calls it, and runs the served payload through
 ``assert_tool_result_conforms``, which is what a client holding the schema
@@ -83,10 +84,22 @@ async def _listed_and_served(server: MCPServer, arguments: Any = None) -> tuple[
 _KINDS = pytest.mark.parametrize(
     ("kind", "served"),
     [
-        pytest.param(SelectorKind.LIST, [_ROW], id="list"),
+        pytest.param(SelectorKind.LIST, {"items": [_ROW]}, id="list"),
         pytest.param(SelectorKind.RETRIEVE, _ROW, id="retrieve"),
     ],
 )
+
+
+def _rows_schema(tool: Any, kind: SelectorKind) -> None:
+    # Named outright as well: a schema loose enough to accept both shapes would
+    # conform either way, and the shape is the contract.
+    schema = tool["outputSchema"]
+    assert schema["type"] == "object"
+    if kind is SelectorKind.LIST:
+        assert schema["required"] == ["items"]
+        assert schema["properties"]["items"]["type"] == "array"
+    else:
+        assert "items" not in schema["properties"]
 
 
 @_KINDS
@@ -104,9 +117,7 @@ async def test_the_served_payload_conforms_to_the_advertised_schema(
     tool, result = await _listed_and_served(_server(spec))
 
     assert result["structuredContent"] == served
-    # Named outright as well: a schema loose enough to accept both shapes would
-    # conform either way, and the shape is the contract.
-    assert tool["outputSchema"]["type"] == ("array" if kind is SelectorKind.LIST else "object")
+    _rows_schema(tool, kind)
 
 
 def _placed(*, data: list[_Order]) -> list[_Order]:
@@ -125,7 +136,7 @@ def _placed(*, data: list[_Order]) -> list[_Order]:
                 permissions=OPEN,
             ),
             None,
-            [_ROW],
+            {"items": [_ROW]},
             id="returns-many",
         ),
         pytest.param(
@@ -138,18 +149,18 @@ def _placed(*, data: list[_Order]) -> list[_Order]:
                 permissions=OPEN,
             ),
             {"items": [_ROW, _ROW]},
-            [_ROW, _ROW],
+            {"items": [_ROW, _ROW]},
             id="many",
         ),
     ],
 )
-async def test_a_service_over_many_rows_serves_and_advertises_an_array(
-    spec: ServiceSpec, arguments: dict[str, Any] | None, served: list[Any]
+async def test_a_service_over_many_rows_serves_and_advertises_an_array_under_items(
+    spec: ServiceSpec, arguments: dict[str, Any] | None, served: dict[str, Any]
 ) -> None:
     tool, result = await _listed_and_served(_server(spec), arguments)
 
     assert result["structuredContent"] == served
-    assert tool["outputSchema"]["type"] == "array"
+    _rows_schema(tool, SelectorKind.LIST)
 
 
 _RE_FETCHED: dict[str, Any] = {"number": "Z-9"}
@@ -158,7 +169,7 @@ _RE_FETCHED: dict[str, Any] = {"number": "Z-9"}
 @pytest.mark.parametrize(
     ("kind", "served"),
     [
-        pytest.param(SelectorKind.LIST, [_RE_FETCHED], id="list"),
+        pytest.param(SelectorKind.LIST, {"items": [_RE_FETCHED]}, id="list"),
         pytest.param(SelectorKind.RETRIEVE, _RE_FETCHED, id="retrieve"),
     ],
 )
@@ -180,4 +191,4 @@ async def test_a_many_services_output_selector_re_reads_and_its_kind_decides(
     tool, result = await _listed_and_served(_server(spec), {"items": [_ROW, _ROW]})
 
     assert result["structuredContent"] == served
-    assert tool["outputSchema"]["type"] == ("array" if kind is SelectorKind.LIST else "object")
+    _rows_schema(tool, kind)

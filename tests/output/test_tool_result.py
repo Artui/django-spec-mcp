@@ -9,17 +9,24 @@ from django_spec_mcp.output.tool_result import build_tool_result
 
 
 @pytest.mark.parametrize(
-    ("payload", "text"),
+    ("payload", "served", "text"),
     [
-        ({"a": 1}, '{\n  "a": 1\n}'),
-        # A uniform list of objects, the payload a denser format would be tempting for.
-        ([{"a": 1}, {"a": 2}], '[\n  {\n    "a": 1\n  },\n  {\n    "a": 2\n  }\n]'),
+        ({"a": 1}, {"a": 1}, '{\n  "a": 1\n}'),
+        # A uniform list of objects, the payload a denser format would be
+        # tempting for, served under ``items`` because MCP's structured content
+        # is an object.
+        (
+            [{"a": 1}, {"a": 2}],
+            {"items": [{"a": 1}, {"a": 2}]},
+            '{\n  "items": [\n    {\n      "a": 1\n    },\n    {\n      "a": 2\n    }\n  ]\n}',
+        ),
+        (("a", "b"), {"items": ("a", "b")}, '{\n  "items": [\n    "a",\n    "b"\n  ]\n}'),
     ],
-    ids=["object", "uniform-list"],
+    ids=["object", "uniform-list", "tuple"],
 )
-def test_the_text_block_is_the_payload_as_json(payload: object, text: str) -> None:
+def test_the_text_block_is_the_payload_as_json(payload: object, served: object, text: str) -> None:
     res = build_tool_result(payload)
-    assert res.structured_content == payload
+    assert res.structured_content == served
     assert [block.to_dict() for block in res.content] == [{"type": "text", "text": text}]
 
 
