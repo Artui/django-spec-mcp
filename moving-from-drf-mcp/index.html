@@ -2023,6 +2023,13 @@ metadata view by hand at the origin can use <code>server.well_known_urls()</code
 <li>A <code>?format=</code> query is ignored rather than answered <code>404</code>.</li>
 <li>The <code>406</code> body and the metadata document are written with <code>json.dumps</code>
   defaults: <code>", "</code> and <code>": "</code> separators, and non-ASCII escaped.</li>
+<li>A <code>tools/call</code> leaving out a field the spec's Validator declares is answered
+  <code>Missing required argument(s): `number`.</code> by default, the server's
+  <a href="../concepts/#agent-conventions"><code>missing_arguments</code></a> convention, where
+  drf-mcp answered an <code>input_serializer</code> field left out as <code>Invalid
+  arguments</code> with the same <code>validation_error</code> detail; a call that also leaves
+  out the read of the tool's target lookup is answered naming both, in the
+  message and the detail, where drf-mcp named only the read.</li>
 </ul>
 <h2 id="calling-a-tool-in-process">Calling a tool in process<a class="headerlink" href="#calling-a-tool-in-process" title="Permanent link">&para;</a></h2>
 <p><code>call_tool</code> and <code>acall_tool</code> never write the call's user to a request you hand
