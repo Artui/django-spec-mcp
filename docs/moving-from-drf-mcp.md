@@ -361,6 +361,11 @@ A few answers change, which matters to a test suite that pins them:
 - A `?format=` query is ignored rather than answered `404`.
 - The `406` body and the metadata document are written with `json.dumps`
   defaults: `", "` and `": "` separators, and non-ASCII escaped.
+- A `tools/call` leaving out a field the spec's Validator declares is answered
+  ``Missing required argument(s): `number`.`` by default, the server's
+  [`missing_arguments`](concepts.md#agent-conventions) convention, where
+  drf-mcp answered an `input_serializer` field left out as `Invalid
+  arguments`; the `validation_error` detail is the same.
 
 ## Calling a tool in process
 

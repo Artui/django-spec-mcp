@@ -11,6 +11,17 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+## [0.9.1] — 2026-11-07
+
+### Documentation
+
+- **The page on moving from drf-mcp names the new message for a missing Validator
+  field.** A call leaving out a field the spec's Validator declares is answered
+  ``Missing required argument(s): `number`.`` by default, the server's
+  `missing_arguments` convention, where drf-mcp answered an `input_serializer`
+  field left out as `Invalid arguments`; the `validation_error` detail is the
+  same. The page's list of answers that change now says so.
+
 ## [0.9.0] — 2026-11-05
 
 ### Changed
@@ -840,7 +851,8 @@ carries; releases up to 0.54.0 are in
   running. The worker's run now enters below that decision. A client that did
   not declare the extension is still refused `-32021` by a `REQUIRED` tool.
 
-[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/Artui/django-spec-mcp/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/Artui/django-spec-mcp/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/Artui/django-spec-mcp/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/Artui/django-spec-mcp/compare/v0.7.0...v0.8.0
