@@ -19,8 +19,10 @@ carries; releases up to 0.54.0 are in
   field.** A call leaving out a field the spec's Validator declares is answered
   ``Missing required argument(s): `number`.`` by default, the server's
   `missing_arguments` convention, where drf-mcp answered an `input_serializer`
-  field left out as `Invalid arguments`; the `validation_error` detail is the
-  same. The page's list of answers that change now says so.
+  field left out as `Invalid arguments` with the same `validation_error` detail.
+  A call that also leaves out the read of the tool's target lookup is answered
+  naming both, in the message and the detail, where drf-mcp named only the read.
+  The page's list of answers that change now says so.
 
 ## [0.9.0] — 2026-11-05
 

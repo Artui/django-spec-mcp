@@ -365,7 +365,9 @@ A few answers change, which matters to a test suite that pins them:
   ``Missing required argument(s): `number`.`` by default, the server's
   [`missing_arguments`](concepts.md#agent-conventions) convention, where
   drf-mcp answered an `input_serializer` field left out as `Invalid
-  arguments`; the `validation_error` detail is the same.
+  arguments` with the same `validation_error` detail; a call that also leaves
+  out the read of the tool's target lookup is answered naming both, in the
+  message and the detail, where drf-mcp named only the read.
 
 ## Calling a tool in process
 
