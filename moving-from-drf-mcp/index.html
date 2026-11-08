@@ -1674,7 +1674,7 @@ holds no session to lose.</p>
 that are gone: <code>UnknownArguments</code> (import it from the kernel), and
 <code>ArgumentBinding</code>, <code>OutputFormat</code> and <code>ToolKind</code>, which the sections below
 cover.
-<code>django-service-specs</code> <strong>0.26.0</strong> is the kernel release the package
+<code>django-service-specs</code> <strong>0.29.0</strong> is the kernel release the package
 requires. It reserves <code>shapes</code> as a pool name, so a <code>PoolSeeds</code> entry named
 <code>shapes</code> is refused with a <code>ValueError</code> when it is built, as one named <code>user</code> is.
 A <code>ServiceSpec</code> refuses, when it is built, a nested selector seat
@@ -1683,7 +1683,7 @@ whose <code>SelectorSpec</code> declares <code>permissions</code>: the service's
 decide the call, so a seat leaves <code>permissions</code> at its default, <code>None</code>.
 <code>register_tool</code> also refuses, with <code>ImproperlyConfigured</code> at registration, a spec
 whose precondition or condition names a seed nothing fills, which already failed on
-every call. The kernel's changelog for 0.21.0 to 0.26.0 has the rest: a <code>parameters</code>
+every call. The kernel's changelog for 0.21.0 to 0.29.0 has the rest: a <code>parameters</code>
 override on a spec subclass must accept <code>call_context</code>, <code>PydanticValidator</code> hands a
 service declaring <code>data</code> the model instance rather than a dict of its fields, a read
 a provider requires itself is asked of the caller (<code>tools/list</code> marks it required, and

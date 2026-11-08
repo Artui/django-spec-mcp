@@ -1814,7 +1814,9 @@ template variables resolved).</p>
 error. <code>ServiceValidationError</code> is deliberately <em>not</em> recorded — it
 represents client-side input failure and would clutter alerting
 pipelines. Resource and prompt errors stay un-recorded too; they're
-tool-call-specific.</p>
+tool-call-specific. An exception the server's
+<a href="../concepts/#exception-map"><code>exception_map=</code></a> answers is recorded the same way,
+whether its handler's result is an error or not.</p>
 </li>
 </ul>
 <h2 id="without-otel-installed">Without <code>[otel]</code> installed<a class="headerlink" href="#without-otel-installed" title="Permanent link">&para;</a></h2>

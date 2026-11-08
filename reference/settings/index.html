@@ -1806,7 +1806,7 @@ See <a href="../../performance/#what-the-package-bounds">What the package bounds
 <tr>
 <td><code>RECORD_SERVICE_EXCEPTIONS</code></td>
 <td><code>False</code></td>
-<td>Record a <code>ServiceError</code> raised from a tool callable on the active OpenTelemetry span before mapping it to a JSON-RPC error. Off by default because services often raise <code>ServiceError</code> for routine business-rule denials, which would flood error pipelines. <code>ServiceValidationError</code> is <em>never</em> recorded — it is client input failure, not a server fault. See <a href="../../observability/">Observability</a>.</td>
+<td>Record a <code>ServiceError</code> raised from a tool callable, or an exception the server's <a href="../../concepts/#exception-map"><code>exception_map=</code></a> answers, on the active OpenTelemetry span before mapping it to a JSON-RPC error. Off by default because services often raise <code>ServiceError</code> for routine business-rule denials, which would flood error pipelines. <code>ServiceValidationError</code> is <em>never</em> recorded — it is client input failure, not a server fault. See <a href="../../observability/">Observability</a>.</td>
 </tr>
 </tbody>
 </table>

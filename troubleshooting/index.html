@@ -1968,6 +1968,9 @@ presenter that refuses a shape the caller sent with a <code>ServiceValidationErr
 is answered as an <code>isError</code> <code>validation_error</code> result, the same as any other
 validation failure, so declaring the shape's <code>choices</code> on its
 <code>Parameter</code> turns this <code>500</code> into a correctable answer.</p>
+<p>An exception of the project's own that a client should be told about is answered by
+naming it in the server's <a href="../concepts/#exception-map"><code>exception_map=</code></a>, which turns
+this <code>500</code> into a tool result of the project's own.</p>
 <p>A <code>PermissionDenied</code> raised inside the call is the exception: it is a refusal,
 not a server fault, so it is answered <code>-32006</code> under <code>403</code> with the
 <code>WWW-Authenticate</code> challenge, exactly like a permission check that answered

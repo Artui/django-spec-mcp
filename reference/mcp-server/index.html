@@ -1478,6 +1478,28 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.types.mcp_transport.MCP_TRANSPORT" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP_TRANSPORT
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.handlers.types.exception_handler.ExceptionHandler" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ExceptionHandler
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2019,6 +2041,28 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.types.mcp_transport.MCP_TRANSPORT" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP_TRANSPORT
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#django_spec_mcp.handlers.types.exception_handler.ExceptionHandler" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ExceptionHandler
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2122,6 +2166,18 @@ Change one sentence and keep the rest:</p>
 </code></pre></div>
 <p>The server still decides where each sentence appears; the conventions
 decide what it says, on every route the seeds above reach.</p>
+<p>How a tool answers a project's own exception is <code>exception_map=</code>, a mapping of
+exception types to handlers. A handler is handed the exception and returns the
+tool's result, the most specific type winning:</p>
+<div class="language-text highlight"><pre><span></span><code>def tenant_gone(exc: Exception) -&gt; ToolResult:
+    return build_error_tool_result(str(exc), error_type=&quot;tenant_gone&quot;)
+
+server = MCPServer(exception_map={TenantGone: tenant_gone})
+</code></pre></div>
+<p>An exception no entry holds behaves as it would with no map. A denial and a
+configuration error are not mappable, and an entry naming one is refused here with
+<code>ImproperlyConfigured</code>: they answer as they would with no map, however broad an
+entry is.</p>
 
 
 
@@ -3390,6 +3446,61 @@ the result's whole message.</p>
 
 
   </div>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h2 id="django_spec_mcp.types.mcp_transport.MCP_TRANSPORT" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">MCP_TRANSPORT</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-module-attribute"><code>module-attribute</code></small>
+  </span>
+
+<a href="#django_spec_mcp.types.mcp_transport.MCP_TRANSPORT" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">MCP_TRANSPORT</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;mcp&#39;</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>What <code>call_transport(call_context)</code> answers for every call this package serves.</p>
+<p>A plain string, because the kernel lists no transports: each package owns its
+own value and stamps it on the context it builds. The value is the transport the
+call came in on, so a tool an agent reaches through <code>acall_tool</code> reads <code>mcp</code>
+too (<code>test_a_call_proxied_through_acall_tool_reads_mcp</code>).</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h2 id="django_spec_mcp.handlers.types.exception_handler.ExceptionHandler" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">ExceptionHandler</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-module-attribute"><code>module-attribute</code></small>
+  </span>
+
+<a href="#django_spec_mcp.handlers.types.exception_handler.ExceptionHandler" class="headerlink" title="Permanent link">&para;</a></h2>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">ExceptionHandler</span> <span class="o">=</span> <span class="n">Callable</span><span class="p">[[</span><span class="ne">Exception</span><span class="p">],</span> <span class="n">ToolResult</span><span class="p">]</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents first">
+
+        <p>What an <code>MCPServer(exception_map=...)</code> entry maps an exception type to.</p>
+<p>Handed the exception, and returns the tool's result, so the caller still gets a
+well-formed <code>tools/call</code> response. Synchronous on both transports: the async one
+runs it off the event loop, so it may read the database.</p>
 
     </div>
 
