@@ -10,3 +10,5 @@ selector as a resource.
         - "!^_"
 
 ::: django_spec_mcp.schema.types.agent_conventions.AgentConventions
+
+::: django_spec_mcp.types.mcp_transport.MCP_TRANSPORT

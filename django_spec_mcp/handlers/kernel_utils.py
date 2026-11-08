@@ -32,6 +32,7 @@ from django_service_specs import (
     UnknownArguments,
     authorize,
     authorize_scope,
+    build_call_context,
     check_call,
     coerce_flat,
     is_queryset,
@@ -63,6 +64,7 @@ from django_spec_mcp.protocol.types.tool_result import ToolResult
 from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
+from django_spec_mcp.types.mcp_transport import MCP_TRANSPORT
 
 logger = get_logger(__name__)
 
@@ -138,8 +140,14 @@ def call_context(request: Any, action: str) -> dict[str, Any]:
     resolved token as ``request.mcp_token``, or ``None`` off HTTP; there is no
     view and no format negotiation on this transport, and ``action`` is the
     tool or resource name, the role ``view.action`` plays for a view.
+
+    Built through the kernel's ``build_call_context``, which stamps
+    ``MCP_TRANSPORT`` last, so a callable reading ``call_transport`` reads ``mcp``
+    on every route: a call, a listing, a completion, a resource read, a watch and
+    a call proxied in process. Nothing in this package writes to the dict after
+    it is built, so the stamp is what every reader of one call sees.
     """
-    return {"request": request, "view": None, "format": None, "action": action}
+    return build_call_context(MCP_TRANSPORT, request=request, action=action)
 
 
 def tool_call_context(binding: Any, context: MCPCallContext) -> dict[str, Any]:

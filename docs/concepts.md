@@ -106,7 +106,8 @@ transport what it means on any other:
 - **The call is the kernel's `dispatch` / `adispatch`.** The principal is the
   token's user, an `AnonymousUser` for a token naming no one and for
   `call_tool(..., user=None)`. The call context holds `request`, `view` (always
-  `None` here), `format` and `action`, the tool's name. Over HTTP,
+  `None` here), `format`, `action`, the tool's name, and
+  [`transport`](#transport), `"mcp"`. Over HTTP,
   `call_context["request"]` is the transport's Django `HttpRequest`, with the
   resolved token as `request.mcp_token` and the token's principal as
   `request.user`. An in-process call has no HTTP request of its own:
@@ -173,6 +174,40 @@ transport what it means on any other:
   `max_page_size=` on a service tool or a `RETRIEVE`, `invalidates=` on a
   selector tool, and `UnknownArguments.PASSTHROUGH`. `task_policy=` is taken by
   either kind of tool, as [Opting a tool in](#opting-a-tool-in) describes.
+
+### What a callable reads here, and what a project overrides { #transport }
+
+Every `call_context` this package builds is built through the kernel's
+`build_call_context`, and carries `MCP_TRANSPORT`, the plain string `"mcp"`, under
+the kernel's `TRANSPORT_KEY`. A check, a Validator, a seed's resolver, a service, a
+selector or a presenter reads it through the kernel's `call_transport`:
+
+```python
+from django_service_specs import call_transport
+from django_spec_mcp import MCP_TRANSPORT
+
+
+def wants_terse_rows(*, call_context):
+    return call_transport(call_context) == MCP_TRANSPORT
+```
+
+One value for every reader of a call, and on every route that builds a context: a
+`tools/call`, a resource read, a filtered listing, a completion and a resource
+watch. It names the transport the call came in on, so `call_tool` and `acall_tool`
+read `"mcp"` too, including a tool an agent reaches through spec-agents' MCP bridge,
+which calls `acall_tool`. A call of a spec through any other transport reads that
+transport's value, or `None` from a dict nobody stamped.
+
+What a project overrides on this transport, all of it per server or per tool, with no
+base class to subclass:
+
+| To change | Pass | To |
+| --- | --- | --- |
+| Who the caller is | `auth_backend=` | `MCPServer` |
+| The names every spec on the mount may read | `pool_seeds=` | `MCPServer` |
+| The sentences written for a model | `conventions=` | `MCPServer` |
+| A scalar setting, per server | `config=` | `MCPServer` |
+| What one tool is called, shown as, bound to, gated and limited by | [its registration kwargs](#per-tool-registration-kwargs) | `register_tool` |
 
 ### Project-wide seeds: `pool_seeds=` { #pool-seeds }
 

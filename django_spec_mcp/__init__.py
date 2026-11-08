@@ -42,6 +42,7 @@ from django_spec_mcp.transport.types.sse_broker import SSEBroker
 from django_spec_mcp.transport.types.sse_replay_buffer import SSEReplayBuffer
 from django_spec_mcp.types.icon_theme import IconTheme
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
+from django_spec_mcp.types.mcp_transport import MCP_TRANSPORT
 from django_spec_mcp.types.notification_kind import NotificationKind
 from django_spec_mcp.types.resource_encoding import ResourceEncoding
 from django_spec_mcp.types.task_policy import TaskPolicy
@@ -57,6 +58,7 @@ from django_spec_mcp.version import __version__
 __all__ = [
     "UI_EXTENSION_ID",
     "UI_RESOURCE_MIME_TYPE",
+    "MCP_TRANSPORT",
     "AgentConventions",
     "DjangoCacheSessionStore",
     "InMemorySSEBroker",

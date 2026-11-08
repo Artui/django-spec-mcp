@@ -129,6 +129,8 @@ happens to live.
 - `authorize`, `authorize_scope` and `check_call` — a spec's checks asked outside a
   call: before the rate limit is charged, by the listing filter, and by a
   subscription's grant. They are the checks `dispatch` asks.
+- `build_call_context` — every `call_context` this package builds, through the one
+  builder `call_context` in `handlers/kernel_utils.py`, stamped `MCP_TRANSPORT`.
 - `check_seeds` and `check_server_arguments` — the registration checks: whether a
   spec can be called at all under the server's `pool_seeds`, and whether a tool's
   `server_arguments` can hold for its spec.

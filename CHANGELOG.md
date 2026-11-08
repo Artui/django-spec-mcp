@@ -11,6 +11,23 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+### Added
+
+- **Every call says it came over MCP.** Each `call_context` this package builds now
+  carries `MCP_TRANSPORT`, the plain string `"mcp"`, exported from the package root,
+  under the kernel's `TRANSPORT_KEY`, so a check, a Validator, a seed's resolver, a
+  service, a selector or a presenter reads it through the kernel's `call_transport`.
+  One value for every reader of a call, on a `tools/call`, a resource read, a filtered
+  listing, a completion and a watch, and on `call_tool` and `acall_tool`, so a tool an
+  agent reaches through spec-agents' MCP bridge reads `"mcp"`. The dict is built through
+  the kernel's `build_call_context`, and the concepts page states the value and what a
+  project overrides on this transport.
+
+### Changed
+
+- **The floor on `django-service-specs` is 0.29.0**, from 0.26.0: the release that
+  brings `build_call_context` and `authorize_without_arguments`.
+
 ## [0.9.1] — 2026-11-07
 
 ### Documentation
