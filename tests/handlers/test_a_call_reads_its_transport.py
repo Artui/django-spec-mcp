@@ -16,7 +16,9 @@ import pytest
 from asgiref.sync import sync_to_async
 from django.test import RequestFactory
 from django_service_specs import (
+    DEFAULT_POOL_SEEDS,
     TRANSPORT_KEY,
+    Affordance,
     Parameter,
     Parameters,
     PermissionCheck,
@@ -25,13 +27,14 @@ from django_service_specs import (
     SelectorKind,
     SelectorSpec,
     ServiceSpec,
+    Unrestricted,
     ValidationContext,
     Validator,
     call_transport,
 )
 
 import django_spec_mcp
-from django_spec_mcp import MCP_TRANSPORT
+from django_spec_mcp import MCP_TRANSPORT, SubscriptionFilter
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.handlers.handle_completion_complete import handle_completion_complete
 from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
@@ -39,6 +42,7 @@ from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
 from django_spec_mcp.handlers.kernel_utils import call_context as build_context
+from django_spec_mcp.subscriptions.grant_subscription import grant_subscription
 from tests.utils import call_context, make_server
 
 TOOL = "orders.place"
@@ -222,3 +226,37 @@ def test_a_completion_asks_the_checks_with_the_stamp() -> None:
     out = handle_completion_complete(params, call_context(server))
     assert out["completion"]["values"] == ["1"], out
     assert readers.seen == {"check": ["mcp"]}
+
+
+def test_a_watch_asks_the_checks_with_the_stamp() -> None:
+    server, readers = _resource_server()
+    granted, _ = grant_subscription(
+        SubscriptionFilter(resource_uris=("orders://1",)), call_context(server)
+    )
+    assert granted.resource_uris == ("orders://1",)
+    assert readers.seen["check"] == ["mcp"]
+
+
+def test_a_conditioned_tool_s_seeds_read_the_stamp_in_a_listing() -> None:
+    read: list[str | None] = []
+
+    def transport(*, call_context: Any) -> str | None:
+        read.append(call_transport(call_context))
+        return call_transport(call_context)
+
+    def available(transport: str | None) -> bool:
+        return transport == MCP_TRANSPORT
+
+    server = make_server(pool_seeds=DEFAULT_POOL_SEEDS.extend(transport=transport))
+    server.register_tool(
+        ServiceSpec(
+            service=lambda: None,
+            permissions=[Unrestricted()],
+            affordances=[Affordance(code="c", reason="r", when=available)],
+        ),
+        name=TOOL,
+    )
+    context = call_context(server, pool_seeds=server.pool_seeds)
+    listed: Any = handle_tools_list(None, context)
+    assert [tool["name"] for tool in listed["tools"]] == [TOOL]
+    assert read == ["mcp"]

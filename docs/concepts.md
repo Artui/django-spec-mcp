@@ -194,9 +194,11 @@ def wants_terse_rows(*, call_context):
 One value for every reader of a call, and on every route that builds a context: a
 `tools/call`, a resource read, a filtered listing, a completion and a resource
 watch. It names the transport the call came in on, so `call_tool` and `acall_tool`
-read `"mcp"` too, including a tool an agent reaches through spec-agents' MCP bridge,
-which calls `acall_tool`. A call of a spec through any other transport reads that
-transport's value, or `None` from a dict nobody stamped.
+read `"mcp"` too. That includes a tool an agent reaches through spec-agents' MCP
+bridge, which calls `acall_tool`, when this release is the `django-spec-mcp`
+installed: one before 0.10.0 stamps nothing. A call of a spec through any other
+transport reads what that transport stamps at its installed version, or `None` from a
+dict nobody stamped.
 
 What a project overrides on this transport, all of it per server or per tool, with no
 base class to subclass:
@@ -231,9 +233,11 @@ server = MCPServer(name="billing", exception_map={TenantGone: tenant_gone})
 ```
 
 - **What it covers.** A tool's whole call: a check, a seed's resolver, the Validator,
-  the service, the selector and the presenter, on `tools/call` over either view, on
-  `call_tool` and `acall_tool`, and in a task's worker. A resource read is not covered,
-  since its answer is no tool result: its exception still raises.
+  the service, the selector, the rows of a lazy result and the presenter, on
+  `tools/call` over either view, on `call_tool` and `acall_tool`, and in a task's worker.
+  Two things are outside it and still raise: a resource read, since its answer is no
+  tool result, and a Validator's `parameters()` when it is read to lay a tool's
+  `server_arguments`, which happens before the call starts.
 - **A handler takes the exception and returns a `ToolResult`.** It is synchronous, and
   on an async view it runs off the event loop, as a presenter does, so it may read the
   database. It always answers with a tool result, so a mapped exception is never a
@@ -248,10 +252,13 @@ server = MCPServer(name="billing", exception_map={TenantGone: tenant_gone})
   `{Exception: handler}` or `{ServiceError: handler}` reaches what no refusal answers
   more closely, and leaves a request for input, a refused argument or a
   `ServiceValidationError` as they were. A project's own `ServiceError` subclass reaches
-  its handler, and so does `ServiceNotFound` when named. A denial cannot be mapped: an
-  entry for `NotPermitted` or `PrincipalUnavailable`, or a subclass of either, is an
-  `ImproperlyConfigured` when the server is built, since a tool result would tell the
-  client the tool ran. An `Exception` entry leaves a denial as it is, like the others.
+  its handler, and so does `ServiceNotFound` when named.
+- **No entry reaches a denial or a configuration error.** `NotPermitted`,
+  `PrincipalUnavailable`, Django's `PermissionDenied` and `ImproperlyConfigured`, and
+  their subclasses, answer as they do with no map, however broad an entry is. A tool
+  result would tell the client the tool ran, or hide the server's own mistake. An entry
+  naming one is an `ImproperlyConfigured` when the server is built, as is an entry that
+  cannot be called.
 - **A check raising a mapped exception is answered after the charge.** It is left to
   the call, as a check's `ServiceError` is, so the tool's rate limits are charged first,
   and on a call carrying a `progressToken` it arrives on the stream rather than before it.
@@ -260,8 +267,11 @@ server = MCPServer(name="billing", exception_map={TenantGone: tenant_gone})
   so its tool's resources are announced. A task's run completes either way, carrying
   the result, as it does for a `ServiceError`.
 
-Under `RECORD_SERVICE_EXCEPTIONS` a mapped exception is recorded on the call's span, as
-a `ServiceError` is ([Observability](observability.md)).
+A handler owns its exception's logging. An exception it answers is not logged at `ERROR`
+and is no `500`, so an entry as broad as `Exception` takes faults out of the logs and out
+of an error rate unless its handler logs them. Under `RECORD_SERVICE_EXCEPTIONS` a mapped
+exception is recorded on the call's span, as a `ServiceError` is
+([Observability](observability.md)).
 
 ### Project-wide seeds: `pool_seeds=` { #pool-seeds }
 

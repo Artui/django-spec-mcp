@@ -12,6 +12,7 @@ import json
 from typing import Any
 
 import pytest
+from django.core.exceptions import PermissionDenied
 from django.test import AsyncClient, override_settings
 from django_service_specs import PermissionCheck, ServiceSpec, Unrestricted
 
@@ -116,6 +117,37 @@ async def test_each_view_still_answers_an_unmapped_exception_with_its_backstop(
     response = await _called(endpoint, _service_server(), era)
     assert response.status_code == 500, response.content
     assert response.json()["error"] == {"code": -32603, "message": "Internal error"}
+
+
+def _gone_for_anything(exc: Exception) -> ToolResult:
+    return build_error_tool_result(str(exc), error_type="anything")
+
+
+@pytest.mark.parametrize("era", [LEGACY, MODERN])
+@pytest.mark.parametrize("raised_by", ["service", "check"])
+async def test_a_catch_all_entry_leaves_django_s_denial_a_403(
+    endpoint: Endpoint, era: str, raised_by: str
+) -> None:
+    """The denial's own answer and challenge, rather than a ``200`` saying the tool ran."""
+
+    def service() -> None:
+        raise PermissionDenied("x")
+
+    class Check(PermissionCheck):
+        def has_permission(self, principal: Any, spec: Any) -> bool:
+            raise PermissionDenied("x")
+
+    spec = (
+        ServiceSpec(service=service, permissions=[Unrestricted()])
+        if raised_by == "service"
+        else ServiceSpec(service=lambda: None, permissions=[Check()])
+    )
+    response = await _called(
+        endpoint, _server(spec, exception_map={Exception: _gone_for_anything}), era
+    )
+    assert response.status_code == 403, response.content
+    assert response.json()["error"]["code"] == -32006
+    assert "WWW-Authenticate" in response
 
 
 async def _streamed(server: MCPServer, era: str) -> Any:

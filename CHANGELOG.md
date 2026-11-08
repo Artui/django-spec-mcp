@@ -20,23 +20,28 @@ carries; releases up to 0.54.0 are in
   under the kernel's `TRANSPORT_KEY`, so a check, a Validator, a seed's resolver, a
   service, a selector or a presenter reads it through the kernel's `call_transport`.
   One value for every reader of a call, on a `tools/call`, a resource read, a filtered
-  listing, a completion and a watch, and on `call_tool` and `acall_tool`, so a tool an
-  agent reaches through spec-agents' MCP bridge reads `"mcp"`. The dict is built through
+  listing, a completion and a watch, and on `call_tool` and `acall_tool`, so with this
+  release installed a tool an agent reaches through spec-agents' MCP bridge reads
+  `"mcp"`. The dict is built through
   the kernel's `build_call_context`, and the concepts page states the value and what a
   project overrides on this transport.
 - **`MCPServer(exception_map=)`: how a tool answers a project's own exception.** A
   mapping of exception type to a handler, `ExceptionHandler`, which takes the exception
   and returns the `ToolResult` the client gets, so a project's exception stops being a
   `-32603` without inheriting from a kernel type. The most specific type wins. It covers
-  a tool's whole call, its check, seed, Validator, service, selector and presenter, on
-  both views, on `call_tool` and `acall_tool`, and in a task's worker. A handler runs off
-  the event loop on an async view, and returning anything but a `ToolResult` is a
-  `TypeError`, so a mapped exception never becomes a protocol error. The kernel's
-  refusals keep their answers: an entry for `Exception` or `ServiceError` leaves a
-  request for input and a refused argument as they were, an entry for a project's own
-  subclass of `ServiceError` reaches its handler, and an entry for a denial is refused
-  when the server is built. An exception nothing maps behaves as it did. A resource read
-  has no map. `RECORD_SERVICE_EXCEPTIONS` records a mapped exception on the call's span.
+  a tool's whole call, its check, seed, Validator, service, selector, a lazy result's
+  rows and presenter, on both views, on `call_tool` and `acall_tool`, and in a task's
+  worker; a resource read has no map, and a Validator's `parameters()` read to lay a
+  tool's `server_arguments` is outside it. A handler runs off the event loop on an async
+  view, and returning anything but a `ToolResult` is a `TypeError`, so a mapped exception
+  never becomes a protocol error. The kernel's refusals keep their answers: an entry for
+  `Exception` or `ServiceError` leaves a request for input and a refused argument as they
+  were, and an entry for a project's own subclass of `ServiceError` reaches its handler.
+  No entry reaches a denial, Django's `PermissionDenied` included, or a configuration
+  error, and an entry naming one or holding something uncallable is refused when the
+  server is built. An exception nothing maps behaves as it did. A handler owns its
+  exception's logging; `RECORD_SERVICE_EXCEPTIONS` records a mapped exception on the
+  call's span.
 
 ### Changed
 

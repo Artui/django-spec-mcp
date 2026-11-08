@@ -128,7 +128,7 @@ def call_kernel_tool(
         return answer
     if result.kind == "not_found":
         return not_found_result(binding)
-    bounded = bound_unpaginated_rows(binding, result, page, config)
+    bounded = bound_unpaginated_rows(binding, result, page, config, exception_map=exception_map)
     if isinstance(bounded, ToolResult):
         return bounded
     payload: Any = present_kernel_result(

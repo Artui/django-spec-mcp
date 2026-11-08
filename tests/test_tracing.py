@@ -11,7 +11,7 @@ rejection and no-OTel cases build no spec.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import replace
 from typing import Any
 
@@ -228,23 +228,30 @@ def _server_mapping_an_exception(*, raised_by: str) -> MCPServer:
         return build_error_tool_result(str(exc), error_type="tenant_gone")
 
     server = make_server(session_store=InMemorySessionStore(), exception_map={_TenantGone: gone})
-    spec = (
-        ServiceSpec(service=from_service, permissions=OPEN)
-        if raised_by == "service"
-        else ServiceSpec(service=lambda: {}, presenter=_RaisingPresenter(), permissions=OPEN)
-    )
+
+    def from_rows() -> Iterator[int]:
+        raise _TenantGone("from the rows")
+        yield 1
+
+    spec: Any = {
+        "service": ServiceSpec(service=from_service, permissions=OPEN),
+        "presenter": ServiceSpec(
+            service=lambda: {}, presenter=_RaisingPresenter(), permissions=OPEN
+        ),
+        "rows": SelectorSpec(kind=SelectorKind.LIST, selector=from_rows, permissions=OPEN),
+    }[raised_by]
     server.register_tool(spec, name="t.boom")
     return server
 
 
 @pytest.mark.django_db(transaction=True)
-@pytest.mark.parametrize("raised_by", ["service", "presenter"])
+@pytest.mark.parametrize("raised_by", ["service", "presenter", "rows"])
 @pytest.mark.parametrize("record", [True, False], ids=["asked", "by-default"])
 def test_a_mapped_exception_is_recorded_on_the_call_s_span_when_asked(
     exporter: InMemorySpanExporter, settings, tools_call, raised_by: str, record: bool
 ) -> None:
     """The handler ends the call inside a well-formed result, so the tracer never sees
-    the exception leave; both of the call's arms hand the span along."""
+    the exception leave; each of the call's arms hands the span along."""
     settings.SPEC_MCP = {"RECORD_SERVICE_EXCEPTIONS": record}
     server = _server_mapping_an_exception(raised_by=raised_by)
     out = tools_call(

@@ -19,11 +19,9 @@ from django_service_specs import (
     RESERVED_POOL_SEEDS,
     UNSET,
     Affordance,
-    NotPermitted,
     Parameters,
     PermissionCheck,
     PoolSeeds,
-    PrincipalUnavailable,
     SelectorKind,
     ServerArguments,
     SpecRegistry,
@@ -57,6 +55,7 @@ from django_spec_mcp.handlers.offered_tools import (
 )
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.types.exception_handler import ExceptionHandler
+from django_spec_mcp.handlers.unmappable_exceptions import UNMAPPABLE_EXCEPTIONS
 from django_spec_mcp.output.resolve_structured_output import resolve_structured_output
 from django_spec_mcp.protocol.build_server_info import build_server_info
 from django_spec_mcp.protocol.types.icon import Icon
@@ -175,14 +174,15 @@ class MCPServer:
     exception types to handlers. A handler is handed the exception and returns the
     tool's result, the most specific type winning:
 
-        def tenant_gone(exc: TenantGone) -> ToolResult:
+        def tenant_gone(exc: Exception) -> ToolResult:
             return build_error_tool_result(str(exc), error_type="tenant_gone")
 
         server = MCPServer(exception_map={TenantGone: tenant_gone})
 
-    An exception no entry holds behaves as it would with no map. A denial is not
-    mappable, and an entry naming ``NotPermitted`` or ``PrincipalUnavailable`` is
-    refused here with ``ImproperlyConfigured``: it stays ``-32006`` on the wire.
+    An exception no entry holds behaves as it would with no map. A denial and a
+    configuration error are not mappable, and an entry naming one is refused here with
+    ``ImproperlyConfigured``: they answer as they would with no map, however broad an
+    entry is.
     """
 
     def __init__(
@@ -1637,20 +1637,24 @@ class MCPServer:
 def _checked_exception_map(
     exception_map: Mapping[type[Exception], ExceptionHandler] | None,
 ) -> dict[type[Exception], ExceptionHandler]:
-    """``exception_map`` as a dict of its own, refusing an entry for a denial.
+    """``exception_map`` as a dict of its own, refusing an entry no handler could honour.
 
-    A denial is what the wire answers ``-32006``, before the charge on a class-level
-    check, and raises from ``call_tool``. A tool result would tell the client the tool
-    ran, so the entry could only ever be half honoured
-    (``test_an_entry_for_a_denial_is_refused``). A broader entry such as ``Exception`` is
-    no such entry: the denial's own row answers first, in ``exception_handler_for``.
+    One naming what ``UNMAPPABLE_EXCEPTIONS`` holds could never be asked
+    (``test_an_entry_for_what_no_handler_may_answer_is_refused_by_name``). A broader entry
+    such as ``Exception`` is no such entry: it reaches everything else, in
+    ``exception_handler_for``. One that cannot be called would be found only by the first
+    call to raise its exception (``test_an_entry_that_cannot_be_called_is_refused``).
     """
     entries = dict(exception_map or {})
-    for refused in entries:
-        if issubclass(refused, NotPermitted | PrincipalUnavailable):
+    for klass, handler in entries.items():
+        if issubclass(klass, UNMAPPABLE_EXCEPTIONS):
             raise ImproperlyConfigured(
-                f"exception_map cannot hold {refused.__name__}: a denial stays -32006, "
-                "so a handler could not answer it."
+                f"exception_map cannot hold {klass.__name__}: a denial stays -32006 and a "
+                "configuration error stays the server's, so a handler could not answer it."
+            )
+        if not callable(handler):
+            raise ImproperlyConfigured(
+                f"exception_map's entry for {klass.__name__} is no callable."
             )
     return entries
 

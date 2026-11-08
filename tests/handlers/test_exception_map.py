@@ -9,16 +9,20 @@ from __future__ import annotations
 
 import json
 import threading
+from collections.abc import Iterator
 from dataclasses import dataclass, replace
 from typing import Any
 
 import pytest
 from asgiref.sync import sync_to_async
-from django.core.exceptions import ImproperlyConfigured
+from django.core.exceptions import ImproperlyConfigured, PermissionDenied
+from django.db.models import QuerySet
 from django_service_specs import (
     DEFAULT_POOL_SEEDS,
     AdditionalInputRequired,
     DataclassValidator,
+    DispatchError,
+    InvalidArguments,
     NotPermitted,
     Parameter,
     Parameters,
@@ -27,6 +31,7 @@ from django_service_specs import (
     PrincipalUnavailable,
     SelectorKind,
     SelectorSpec,
+    ServerArguments,
     ServiceError,
     ServiceNotFound,
     ServiceSpec,
@@ -46,6 +51,7 @@ from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.protocol.types.tool_result import ToolResult
 from django_spec_mcp.subscriptions.in_memory_subscription_broker import InMemorySubscriptionBroker
 from django_spec_mcp.subscriptions.utils import topic_for_resource
+from tests.testapp.models import Invoice
 from tests.utils import call_context, make_server, tool_error
 
 pytestmark = pytest.mark.django_db(transaction=True)
@@ -167,8 +173,8 @@ async def test_an_unmapped_exception_is_raised_as_it_is_today(
 
 EVERY_BROAD_MAP = pytest.mark.parametrize(
     "exception_map",
-    [None, {KeyError: GONE}, {Exception: GONE}, {ServiceError: GONE}],
-    ids=["no-map", "unrelated", "exception", "service-error"],
+    [None, {KeyError: GONE}, {Exception: GONE}, {ServiceError: GONE}, {DispatchError: GONE}],
+    ids=["no-map", "unrelated", "exception", "service-error", "dispatch-error"],
 )
 
 
@@ -183,10 +189,101 @@ async def test_a_broad_entry_leaves_a_service_s_validation_refusal_alone(
 
 
 @EVERY_BROAD_MAP
-async def test_a_broad_entry_leaves_a_denial_alone(exception_map: Any) -> None:
-    out = await _call("wire-sync", _server(NotPermitted(), exception_map=exception_map))
+@pytest.mark.parametrize(
+    "raised", [NotPermitted(), PrincipalUnavailable()], ids=["not-permitted", "unavailable"]
+)
+async def test_a_broad_entry_leaves_a_denial_alone(exception_map: Any, raised: Exception) -> None:
+    out = await _call("wire-sync", _server(raised, exception_map=exception_map))
     assert isinstance(out, JsonRpcError)
     assert out.code == -32006
+
+
+@EVERY_BROAD_MAP
+async def test_a_broad_entry_leaves_a_refused_argument_alone(exception_map: Any) -> None:
+    raised = InvalidArguments({"pk": ["Nope."]})
+    out = await _call("wire-sync", _server(raised, exception_map=exception_map))
+    assert tool_error(out)["type"] == "validation_error"
+
+
+@pytest.mark.parametrize("exception_map", [None, {Exception: GONE}, {ServiceError: GONE}], ids=str)
+async def test_a_broad_entry_leaves_a_dispatch_refusal_alone(exception_map: Any) -> None:
+    out = await _call("wire-sync", _server(DispatchError("no"), exception_map=exception_map))
+    assert tool_error(out)["type"] == "validation_error"
+
+
+async def test_an_entry_for_dispatch_error_reaches_a_bare_one() -> None:
+    server = _server(DispatchError("no"), exception_map={DispatchError: _handler("mine")})
+    assert tool_error(await _call("wire-sync", server))["type"] == "mine"
+
+
+# ----- what no entry reaches
+
+
+class _ProjectDenied(TenantGone, NotPermitted):
+    """A denial that is also a project's exception, its project base ahead in the MRO."""
+
+
+async def _outcome(route: str, server: Any) -> Any:
+    """What ``route`` answers, a raised exception's type standing for the answer."""
+    try:
+        out = await _call(route, server)
+    except Exception as exc:
+        return type(exc)
+    return out.code if isinstance(out, JsonRpcError) else out
+
+
+@pytest.mark.parametrize("route", ROUTES)
+@pytest.mark.parametrize(
+    "raised",
+    [PermissionDenied("x"), _ProjectDenied(), ImproperlyConfigured("x")],
+    ids=["django-denial", "project-denial", "configuration-error"],
+)
+@pytest.mark.parametrize(
+    "exception_map",
+    [{Exception: GONE}, {TenantGone: GONE}, {ServiceError: GONE}],
+    ids=["exception", "project-base", "service-error"],
+)
+async def test_no_entry_reaches_a_denial_or_a_configuration_error(
+    route: str, raised: Exception, exception_map: Any
+) -> None:
+    """A tool result would tell the client the tool ran, and hide the server's own
+    mistake: each answers on each route as it does with no map at all."""
+    answered = await _outcome(route, _server(raised, exception_map=exception_map))
+    assert answered == await _outcome(route, _server(raised))
+
+
+class _RaisesADenial(PermissionCheck):
+    def has_permission(self, principal: Any, spec: Any) -> bool:
+        raise _ProjectDenied()
+
+
+@pytest.mark.parametrize("route", ROUTES)
+async def test_a_check_raising_a_denial_a_project_base_maps_answers_as_a_denial(
+    route: str,
+) -> None:
+    def server(**overrides: Any) -> Any:
+        built = make_server(**overrides)
+        built.register_tool(
+            ServiceSpec(service=lambda: None, permissions=[_RaisesADenial()]), name=TOOL
+        )
+        return built
+
+    mapped = await _outcome(route, server(exception_map={TenantGone: GONE}))
+    assert mapped == await _outcome(route, server())
+
+
+@pytest.mark.parametrize(
+    "key",
+    [NotPermitted, PrincipalUnavailable, PermissionDenied, ImproperlyConfigured, _ProjectDenied],
+)
+def test_an_entry_for_what_no_handler_may_answer_is_refused_by_name(key: type[Exception]) -> None:
+    with pytest.raises(ImproperlyConfigured, match=key.__name__):
+        make_server(exception_map={key: GONE})
+
+
+def test_an_entry_that_cannot_be_called_is_refused() -> None:
+    with pytest.raises(ImproperlyConfigured, match="TenantGone"):
+        make_server(exception_map={TenantGone: None})
 
 
 @EVERY_BROAD_MAP
@@ -425,6 +522,129 @@ async def test_a_selector_raising_a_mapped_exception_answers_as_its_handler_says
     assert tool_error(await _call(route, server))["message"] == "from the selector"
 
 
+class _RaisesAfterRegistration(Validator):
+    """Declares nothing until ``armed``: registration reads the declaration too."""
+
+    def __init__(self) -> None:
+        self.armed = False
+
+    def parameters(self, *args: Any, **kwargs: Any) -> Parameters:
+        if self.armed:
+            raise TenantGone("from the declaration")
+        return Parameters([Parameter("project", "string")])
+
+    def validate(self, arguments: Any, context: Any) -> dict[str, Any]:
+        return dict(arguments)
+
+
+@pytest.mark.parametrize("route", ROUTES)
+async def test_a_validator_s_declaration_raising_a_mapped_exception_answers_as_its_handler_says(
+    route: str,
+) -> None:
+    """On every route alike, the wire's refusal scene reading it no sooner than the call."""
+    validator = _RaisesAfterRegistration()
+    server = make_server(exception_map={TenantGone: GONE})
+    server.register_tool(
+        ServiceSpec(
+            service=lambda *, project="": None, validator=validator, permissions=[Unrestricted()]
+        ),
+        name=TOOL,
+    )
+    validator.armed = True
+    assert tool_error(await _call(route, server))["message"] == "from the declaration"
+
+
+@pytest.mark.parametrize("route", ROUTES)
+async def test_a_declaration_read_to_lay_server_arguments_is_outside_the_map(route: str) -> None:
+    """Bound values are laid before the call starts, on every route."""
+    validator = _RaisesAfterRegistration()
+    server = make_server(exception_map={TenantGone: GONE})
+    server.register_tool(
+        ServiceSpec(
+            service=lambda *, project="": None, validator=validator, permissions=[Unrestricted()]
+        ),
+        name=TOOL,
+        server_arguments=ServerArguments(values={"project": "north"}),
+    )
+    validator.armed = True
+    with pytest.raises(TenantGone):
+        await _call(route, server)
+
+
+def _raising_rows() -> Iterator[int]:
+    yield 1
+    raise TenantGone("from the rows")
+
+
+class _RaisingQuerySet(QuerySet):
+    """A queryset whose read raises, as a failing database does: slicing it reads nothing."""
+
+    def _fetch_all(self) -> None:
+        raise TenantGone("from the rows")
+
+
+def _raising_queryset() -> QuerySet:
+    return _RaisingQuerySet(model=Invoice)
+
+
+class _Rows(Presenter):
+    def output(self, *, call_context: dict[str, Any] | None = None) -> Any:
+        return None
+
+    def present(self, value: Any) -> Any:
+        return {"id": value}
+
+
+def _list_server(selector: Any, *, max_page_size: int | None = 100, **registration: Any) -> Any:
+    config = replace(build_mcp_config(), max_page_size=max_page_size)
+    server = make_server(exception_map={TenantGone: GONE}, config=config)
+    server.register_tool(
+        SelectorSpec(
+            kind=SelectorKind.LIST,
+            selector=selector,
+            presenter=_Rows(),
+            permissions=[Unrestricted()],
+        ),
+        name=TOOL,
+        **registration,
+    )
+    return server
+
+
+@pytest.mark.parametrize("route", ROUTES)
+@pytest.mark.parametrize(
+    "selector", [_raising_rows, _raising_queryset], ids=["generator", "queryset"]
+)
+async def test_rows_raising_under_the_ceiling_answer_as_the_handler_says(
+    route: str, selector: Any
+) -> None:
+    """The ceiling's read is the first of a lazy result's, before the presenter's."""
+    out = await _call(route, _list_server(selector))
+    assert tool_error(out)["message"] == "from the rows"
+
+
+@pytest.mark.parametrize("route", ROUTES)
+async def test_rows_raising_with_no_ceiling_answer_as_the_handler_says(route: str) -> None:
+    out = await _call(route, _list_server(_raising_rows, max_page_size=None))
+    assert tool_error(out)["message"] == "from the rows"
+
+
+@pytest.mark.parametrize("route", ROUTES)
+async def test_rows_raising_on_a_paged_tool_answer_as_the_handler_says(route: str) -> None:
+    out = await _call(route, _list_server(lambda: _raising_queryset(), paginate=True))
+    assert tool_error(out)["message"] == "from the rows"
+
+
+@pytest.mark.parametrize("route", ROUTES)
+async def test_rows_raising_what_no_entry_holds_are_raised(route: str) -> None:
+    def rows() -> Iterator[int]:
+        raise KeyError("x")
+        yield 1
+
+    with pytest.raises(KeyError):
+        await _call(route, _list_server(rows))
+
+
 # ----- what a handler is and does
 
 
@@ -474,7 +694,8 @@ async def test_a_handler_may_answer_a_result_that_is_no_error() -> None:
 
 
 def test_the_map_is_a_copy_the_caller_cannot_edit() -> None:
-    mapping: dict[type[Exception], ExceptionHandler] = {}
+    # Seeded: an empty mapping would be replaced by ``or {}`` whether it was copied or not.
+    mapping: dict[type[Exception], ExceptionHandler] = {KeyError: GONE}
     server = _server(TenantGone("x"), exception_map=mapping)
     mapping[TenantGone] = GONE
     with pytest.raises(TenantGone):

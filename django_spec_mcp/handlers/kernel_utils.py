@@ -44,6 +44,7 @@ from django_service_specs import (
 from django_spec_mcp.config.types.mcp_config import MCPConfig
 from django_spec_mcp.elicitation.types.resolved_input import ResolvedInput
 from django_spec_mcp.handlers.answer_kernel_refusal import answer_kernel_refusal
+from django_spec_mcp.handlers.answer_mapped_exception import answer_mapped_exception
 from django_spec_mcp.handlers.exception_handler_for import exception_handler_for
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.types.exception_handler import ExceptionHandler
@@ -834,6 +835,9 @@ def bound_unpaginated_rows(
     result: DispatchResult,
     page: KernelPageRequest | None,
     config: MCPConfig,
+    *,
+    exception_map: Mapping[type[Exception], ExceptionHandler],
+    span: Any = None,
 ) -> DispatchResult | ToolResult:
     """``result`` with an unpaginated ``LIST`` tool's rows taken up to the row ceiling.
 
@@ -862,6 +866,10 @@ def bound_unpaginated_rows(
     page by ``test_a_model_supplied_limit_is_clamped_to_the_server_ceiling``, a
     tool that is no ``LIST`` by ``test_a_service_tool_returning_rows_is_not_row_bounded``
     and a disabled ceiling by ``test_a_disabled_ceiling_serves_an_unpaginated_list_whole``.
+
+    This read is the first of a lazy result's, so an exception ``exception_map`` holds
+    answers here as its handler says, a failing database's included
+    (``test_rows_raising_under_the_ceiling_answer_as_the_handler_says``).
     """
     max_rows = resolve_bound(binding.max_page_size, config.max_page_size)
     if page is not None or binding.kind is not SelectorKind.LIST or max_rows is None:
@@ -873,8 +881,17 @@ def bound_unpaginated_rows(
     rows: Any = result.value
     # ``rows[:n]`` on a QuerySet is a LIMIT, and ``len()`` evaluates it once;
     # any other iterable, a list or a generator, is windowed with ``islice``.
-    window: Any = rows[: max_rows + 1] if is_queryset(rows) else list(islice(rows, max_rows + 1))
-    if len(window) > max_rows:
+    try:
+        window: Any = (
+            rows[: max_rows + 1] if is_queryset(rows) else list(islice(rows, max_rows + 1))
+        )
+        over_the_ceiling = len(window) > max_rows
+    except Exception as exc:
+        handler = exception_handler_for(exc, exception_map)
+        if handler is None:
+            raise
+        return answer_mapped_exception(handler, exc, config=config, span=span)
+    if over_the_ceiling:
         return _over_row_ceiling(binding, max_rows)
     return replace(result, value=window)
 

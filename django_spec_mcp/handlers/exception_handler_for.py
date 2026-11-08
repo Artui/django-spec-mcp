@@ -4,6 +4,7 @@ from collections.abc import Mapping
 
 from django_spec_mcp.handlers.kernel_refusals import KERNEL_REFUSALS
 from django_spec_mcp.handlers.types.exception_handler import ExceptionHandler
+from django_spec_mcp.handlers.unmappable_exceptions import UNMAPPABLE_EXCEPTIONS
 
 
 def exception_handler_for(
@@ -22,7 +23,14 @@ def exception_handler_for(
     (``test_a_broad_entry_leaves_a_request_for_input_alone``). An entry at or
     below a row wins over it, which is how a project's own ``ServiceError`` subclass
     reaches its handler (``test_a_project_subclass_of_a_kernel_refusal_reaches_its_handler``).
+
+    What ``UNMAPPABLE_EXCEPTIONS`` holds is never looked up, ahead of the walk: Django's
+    ``PermissionDenied`` has no row to stop at, and a class that is a denial and a
+    project's exception too meets its project base first
+    (``test_no_entry_reaches_a_denial_or_a_configuration_error``).
     """
+    if isinstance(exc, UNMAPPABLE_EXCEPTIONS):
+        return None
     for klass in type(exc).__mro__:
         handler = exception_map.get(klass)
         if handler is not None:

@@ -49,9 +49,6 @@ async def run_kernel_tool_async(
     as it was.
     """
     dispatched, page = page_request(binding, arguments, context.config)
-    scene = tool_refusal_scene(
-        binding, arguments, prior, context, otel_span, admission.call_context
-    )
     try:
         result = await adispatch(
             binding.spec,
@@ -75,11 +72,25 @@ async def run_kernel_tool_async(
             return answer.to_dict()
         if not isinstance(exc, DispatchError | ServiceError):
             raise
+        # Built here, not ahead of the call: it reads the spec's declaration, and a
+        # declaration that raises is the call's to answer, on the same route as ``call_tool``
+        # (``test_a_validator_s_declaration_raising_a_mapped_exception_answers_as_its_handler_says``).
+        scene = tool_refusal_scene(
+            binding, arguments, prior, context, otel_span, admission.call_context
+        )
         return on_the_wire(answer_kernel_refusal(exc, scene))
     if result.kind == "not_found":
         return not_found_result(binding).to_dict()
     # Off the loop, as the presenter is: the bound's slice runs the query.
-    bounded = await acall(bound_unpaginated_rows, binding, result, page, context.config)
+    bounded = await acall(
+        bound_unpaginated_rows,
+        binding,
+        result,
+        page,
+        context.config,
+        exception_map=context.exception_map,
+        span=otel_span,
+    )
     if isinstance(bounded, ToolResult):
         return bounded.to_dict()
     payload: Any = await acall(

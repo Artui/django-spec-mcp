@@ -50,9 +50,6 @@ def run_kernel_tool(
     kernel refusal is raised as it was.
     """
     dispatched, page = page_request(binding, arguments, context.config)
-    scene = tool_refusal_scene(
-        binding, arguments, prior, context, otel_span, admission.call_context
-    )
     try:
         result = dispatch(
             binding.spec,
@@ -76,10 +73,23 @@ def run_kernel_tool(
             ).to_dict()
         if not isinstance(exc, DispatchError | ServiceError):
             raise
+        # Built here, not ahead of the call: it reads the spec's declaration, and a
+        # declaration that raises is the call's to answer, on the same route as ``call_tool``
+        # (``test_a_validator_s_declaration_raising_a_mapped_exception_answers_as_its_handler_says``).
+        scene = tool_refusal_scene(
+            binding, arguments, prior, context, otel_span, admission.call_context
+        )
         return on_the_wire(answer_kernel_refusal(exc, scene))
     if result.kind == "not_found":
         return not_found_result(binding).to_dict()
-    bounded = bound_unpaginated_rows(binding, result, page, context.config)
+    bounded = bound_unpaginated_rows(
+        binding,
+        result,
+        page,
+        context.config,
+        exception_map=context.exception_map,
+        span=otel_span,
+    )
     if isinstance(bounded, ToolResult):
         return bounded.to_dict()
     payload: Any = present_kernel_result(
