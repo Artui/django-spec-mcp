@@ -28,10 +28,8 @@ from django_service_specs import (
     PrincipalUnavailable,
     SelectorKind,
     ServiceError,
-    ServiceSpec,
     UnknownArguments,
-    authorize,
-    authorize_scope,
+    authorize_without_arguments,
     build_call_context,
     check_call,
     coerce_flat,
@@ -483,17 +481,16 @@ def admits_without_arguments(
     failing its shape has no checked ones, and ``None`` is the kernel's word
     for that.
 
-    Two questions, the two a call asks before it reads anything. ``authorize``
-    is the class-level one. ``authorize_scope`` of ``None`` is the scope-level
-    one dispatch asks of a create, a service spec with neither an instance nor
-    a collection selector, which resolves no row to ask about; any other spec's
-    scope question is of a row or a set that only the call's arguments name, and
-    stays unasked.
+    The questions are the kernel's ``authorize_without_arguments``: the two a
+    call asks before it reads anything, the second only of a create
+    (``test_a_selector_tool_is_not_asked_the_scope_of_nothing``,
+    ``test_a_service_with_a_target_is_not_asked_the_scope_of_nothing``). What
+    their answers mean here is this function's.
 
     Refused when either is (``NotPermitted``), when the principal is
-    deactivated (``PrincipalUnavailable``, which ``authorize`` raises when
-    handed pool seeds as dispatch does, ahead of any grant, so on an unguarded
-    spec too), and when a check cannot answer without the call's arguments and
+    deactivated (``PrincipalUnavailable``, which the kernel raises only because
+    it is handed the pool seeds, ahead of any grant, so on an unguarded spec
+    too), and when a check cannot answer without the call's arguments and
     raises on their absence. A configuration error (``ImproperlyConfigured``)
     is raised, as the call raises it.
     """
@@ -508,33 +505,14 @@ def admits_without_arguments(
         # without the permissions', every guarded spec is
         # (test_a_tool_whose_checks_admit_the_caller_is_listed).
         return False
-    # Whether dispatch asks this spec the scope question of nothing, as it does
-    # a create (``conclude_service`` in the kernel). One arc to coverage, so each
-    # conjunct is held by its own test: the first by
-    # test_a_selector_tool_is_not_asked_the_scope_of_nothing, the second by
-    # test_a_service_with_a_target_is_not_asked_the_scope_of_nothing.
-    asks_scope_of_nothing = (
-        isinstance(binding.spec, ServiceSpec) and binding.spec.target_selector_spec() is None
-    )
     try:
-        granted = authorize(
+        authorize_without_arguments(
             binding.spec,
             principal,
             grant=grant,
-            arguments=None,
-            pool_seeds=pool_seeds,
             call_context=call_context,
+            pool_seeds=pool_seeds,
         )
-        if asks_scope_of_nothing:
-            authorize_scope(
-                binding.spec,
-                principal,
-                None,
-                grant=granted,
-                arguments=None,
-                pool_seeds=pool_seeds,
-                call_context=call_context,
-            )
     except ImproperlyConfigured:
         # A configuration error the call raises as well, so the listing and
         # the call fail with it rather than refusing for it: without this

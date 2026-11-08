@@ -126,9 +126,11 @@ happens to live.
   service or selector, the presenter. Every tool and every kernel resource read
   runs through it, and every refusal it raises is answered through
   `KERNEL_REFUSALS` (`handlers/kernel_refusals.py`), one row per refusal class.
-- `authorize`, `authorize_scope` and `check_call` — a spec's checks asked outside a
+- `authorize_without_arguments` and `check_call` — a spec's checks asked outside a
   call: before the rate limit is charged, by the listing filter, and by a
-  subscription's grant. They are the checks `dispatch` asks.
+  subscription's grant. They are the checks `dispatch` asks. What an answer means
+  here stays local: `admits_without_arguments` keeps its early return and its
+  `except` clauses, so a call is refused exactly when the listing hides the tool.
 - `build_call_context` — every `call_context` this package builds, through the one
   builder `call_context` in `handlers/kernel_utils.py`, stamped `MCP_TRANSPORT`.
 - `check_seeds` and `check_server_arguments` — the registration checks: whether a

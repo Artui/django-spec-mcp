@@ -27,6 +27,11 @@ carries; releases up to 0.54.0 are in
 
 - **The floor on `django-service-specs` is 0.29.0**, from 0.26.0: the release that
   brings `build_call_context` and `authorize_without_arguments`.
+- **A listing, a completion and a call failing its shape ask the checks through the
+  kernel's `authorize_without_arguments`.** The answers do not change: a spec with no
+  permissions and no grant is still hidden rather than failing the listing, anything but
+  a configuration error still refuses, and a call is refused exactly when the listing
+  hides the tool.
 
 ## [0.9.1] — 2026-11-07
 
