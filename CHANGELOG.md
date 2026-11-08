@@ -22,6 +22,19 @@ carries; releases up to 0.54.0 are in
   agent reaches through spec-agents' MCP bridge reads `"mcp"`. The dict is built through
   the kernel's `build_call_context`, and the concepts page states the value and what a
   project overrides on this transport.
+- **`MCPServer(exception_map=)`: how a tool answers a project's own exception.** A
+  mapping of exception type to a handler, `ExceptionHandler`, which takes the exception
+  and returns the `ToolResult` the client gets, so a project's exception stops being a
+  `-32603` without inheriting from a kernel type. The most specific type wins. It covers
+  a tool's whole call, its check, seed, Validator, service, selector and presenter, on
+  both views, on `call_tool` and `acall_tool`, and in a task's worker. A handler runs off
+  the event loop on an async view, and returning anything but a `ToolResult` is a
+  `TypeError`, so a mapped exception never becomes a protocol error. The kernel's
+  refusals keep their answers: an entry for `Exception` or `ServiceError` leaves a
+  request for input and a refused argument as they were, an entry for a project's own
+  subclass of `ServiceError` reaches its handler, and an entry for a denial is refused
+  when the server is built. An exception nothing maps behaves as it did. A resource read
+  has no map. `RECORD_SERVICE_EXCEPTIONS` records a mapped exception on the call's span.
 
 ### Changed
 

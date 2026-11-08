@@ -12,3 +12,5 @@ selector as a resource.
 ::: django_spec_mcp.schema.types.agent_conventions.AgentConventions
 
 ::: django_spec_mcp.types.mcp_transport.MCP_TRANSPORT
+
+::: django_spec_mcp.handlers.types.exception_handler.ExceptionHandler

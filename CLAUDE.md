@@ -125,7 +125,10 @@ happens to live.
 - `dispatch` / `adispatch` — the call: the spec's checks, the argument check, the
   service or selector, the presenter. Every tool and every kernel resource read
   runs through it, and every refusal it raises is answered through
-  `KERNEL_REFUSALS` (`handlers/kernel_refusals.py`), one row per refusal class.
+  `KERNEL_REFUSALS` (`handlers/kernel_refusals.py`), one row per refusal class. A
+  project's own exception is answered through `MCPServer(exception_map=)`, asked first
+  at every arm of a tool's call (`handlers/exception_handler_for.py`), in one MRO walk
+  with those rows; a resource read has no map, since its answer is no tool result.
 - `authorize_without_arguments` and `check_call` — a spec's checks asked outside a
   call: before the rate limit is charged, by the listing filter, and by a
   subscription's grant. They are the checks `dispatch` asks. What an answer means

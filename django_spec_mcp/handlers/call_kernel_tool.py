@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from django.http import HttpRequest
@@ -7,6 +8,8 @@ from django_service_specs import DispatchError, PoolSeeds, ServiceError, dispatc
 
 from django_spec_mcp.config.types.mcp_config import MCPConfig
 from django_spec_mcp.handlers.answer_kernel_refusal import answer_kernel_refusal
+from django_spec_mcp.handlers.answer_mapped_exception import answer_mapped_exception
+from django_spec_mcp.handlers.exception_handler_for import exception_handler_for
 from django_spec_mcp.handlers.kernel_utils import (
     admit_kernel_call,
     bound_unpaginated_rows,
@@ -19,6 +22,7 @@ from django_spec_mcp.handlers.kernel_utils import (
     tool_result,
 )
 from django_spec_mcp.handlers.present_kernel_result import present_kernel_result
+from django_spec_mcp.handlers.types.exception_handler import ExceptionHandler
 from django_spec_mcp.handlers.types.kernel_refusal_scene import KernelRefusalScene
 from django_spec_mcp.handlers.utils import apply_tool_server_arguments
 from django_spec_mcp.protocol.types.tool_result import ToolResult
@@ -36,6 +40,7 @@ def call_kernel_tool(
     conventions: AgentConventions,
     pool_seeds: PoolSeeds,
     request_classes: dict[tuple[type, frozenset[str]], type],
+    exception_map: Mapping[type[Exception], ExceptionHandler],
 ) -> ToolResult:
     """The in-process ``call_tool`` of a kernel tool, through ``dispatch``.
 
@@ -55,7 +60,8 @@ def call_kernel_tool(
     ``NotPermitted`` or ``PrincipalUnavailable`` itself, for the caller to map
     to its own wire; every other refusal comes back as the ``isError`` result
     the wire serves. ``AdditionalInputRequired`` is a service error here, since
-    there is no further round to ask in.
+    there is no further round to ask in. An exception the server's ``exception_map``
+    holds answers as its handler says, as on the wire; any other is raised as it was.
 
     ``request_classes`` is the owning server's, the classes ``copy_request``
     makes its copies of a handed request from.
@@ -107,7 +113,13 @@ def call_kernel_tool(
             unknown_arguments=binding.unknown_arguments,
             call_context=admission.call_context,
         )
-    except (DispatchError, ServiceError) as exc:
+    except Exception as exc:
+        # One arm, for the reason ``run_kernel_tool`` gives.
+        handler = exception_handler_for(exc, exception_map)
+        if handler is not None:
+            return answer_mapped_exception(handler, exc, config=config)
+        if not isinstance(exc, DispatchError | ServiceError):
+            raise
         answer = answer_kernel_refusal(
             exc, KernelRefusalScene(arguments=arguments, config=config, conventions=conventions)
         )
@@ -120,7 +132,13 @@ def call_kernel_tool(
     if isinstance(bounded, ToolResult):
         return bounded
     payload: Any = present_kernel_result(
-        binding, bounded, page, arguments=arguments, config=config, conventions=conventions
+        binding,
+        bounded,
+        page,
+        arguments=arguments,
+        config=config,
+        conventions=conventions,
+        exception_map=exception_map,
     )
     if isinstance(payload, ToolResult):
         return payload

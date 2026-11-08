@@ -32,6 +32,8 @@ from django_spec_mcp import (
     PromptArgument,
     PromptMessage,
 )
+from django_spec_mcp.output import build_error_tool_result
+from django_spec_mcp.protocol import ToolResult
 from invoices.auth import DemoTokenBackend
 from invoices.filters import InvoiceFilterSet
 from invoices.forms import InvoiceForm
@@ -46,6 +48,7 @@ from invoices.selectors import (
     outstanding_total,
 )
 from invoices.services import (
+    InvoiceAlreadySent,
     apply_credit,
     create_invoice,
     mark_invoice_sent,
@@ -71,6 +74,10 @@ BY_NUMBER = SelectorSpec(
 )
 
 INVOICE = DataclassPresenter(InvoiceOutput)
+
+
+def _invoice_already_sent(exc: Exception) -> ToolResult:
+    return build_error_tool_result(str(exc), error_type="invoice_already_sent")
 
 
 def build_server() -> MCPServer:
@@ -104,6 +111,10 @@ def build_server() -> MCPServer:
                 "Look the invoice up with `invoices.list` if you do not have it."
             ),
         ),
+        # How a tool answers an exception of the project's own. Without an entry
+        # ``InvoiceAlreadySent`` would be a ``-32603``, which tells a model nothing it
+        # can act on; with one it is a tool result the model can read.
+        exception_map={InvoiceAlreadySent: _invoice_already_sent},
     )
 
     # ----- Service tools (mutations) -----

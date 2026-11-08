@@ -11,6 +11,7 @@ import json
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from itertools import islice
+from types import MappingProxyType
 from typing import Any
 
 from django.contrib.auth.models import AnonymousUser
@@ -43,7 +44,9 @@ from django_service_specs import (
 from django_spec_mcp.config.types.mcp_config import MCPConfig
 from django_spec_mcp.elicitation.types.resolved_input import ResolvedInput
 from django_spec_mcp.handlers.answer_kernel_refusal import answer_kernel_refusal
+from django_spec_mcp.handlers.exception_handler_for import exception_handler_for
 from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.handlers.types.exception_handler import ExceptionHandler
 from django_spec_mcp.handlers.types.kernel_input_round import KernelInputRound
 from django_spec_mcp.handlers.types.kernel_refusal_scene import KernelRefusalScene
 from django_spec_mcp.handlers.utils import (
@@ -544,6 +547,7 @@ def admit_kernel_call(
     pool_seeds: PoolSeeds,
     unknown_arguments: UnknownArguments,
     context: dict[str, Any],
+    exception_map: Mapping[type[Exception], ExceptionHandler] = MappingProxyType({}),
 ) -> KernelAdmission:
     """Ask a kernel spec's class-level checks about a call before the transport acts on it.
 
@@ -609,6 +613,11 @@ def admit_kernel_call(
     raised it after; on a streamed call that is still before the stream
     commits its status
     (``test_a_permission_preflight_that_raises_before_a_stream_is_a_json_rpc_error``).
+    Unless ``exception_map`` holds it: then it is left to dispatch as a ``ServiceError``
+    a check raises is, and the call's arm answers it as its handler says, on the same
+    route whichever of the call's callables raised it
+    (``test_a_check_raising_a_mapped_exception_answers_as_its_handler_says``). Only a
+    ``tools/call`` hands a map, since only a tool's answer is a tool result.
 
     ``context`` is the call's ``call_context``, which the caller has already
     read the spec under: ``admit_kernel_read`` asks its parameters with it
@@ -652,6 +661,10 @@ def admit_kernel_call(
         # One arc to coverage, each kind held by its case of
         # ``test_a_check_raising_a_refusal_that_is_no_denial_is_answered_as_before``.
         grant, seeds = unchecked, None
+    except Exception as exc:
+        if exception_handler_for(exc, exception_map) is None:
+            raise
+        grant, seeds = unchecked, None
     return KernelAdmission(principal=principal, grant=grant, call_context=context, seeds=seeds)
 
 
@@ -683,6 +696,7 @@ def admit_kernel_tool_call(
             pool_seeds=context.pool_seeds,
             unknown_arguments=binding.unknown_arguments,
             context=dispatch_context,
+            exception_map=context.exception_map,
         )
     except _DENIALS as exc:
         return resource_refusal(

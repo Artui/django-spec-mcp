@@ -238,6 +238,7 @@ _INVOICING_LOOKUP_EMPTY_IDEMPOTENT_SEEDS = _INVOICING_CLIENT + textwrap.dedent(
         "tools": tools,
         "set_amount": call("invoices.set_amount", {"number": "INV-A", "amount_cents": 250}),
         "no_number": call("invoices.set_amount", {"amount_cents": 250}),
+        "already_sent": call("invoices.set_amount", {"number": "INV-B", "amount_cents": 250}),
         "find_miss": call("invoices.find", {"number": "INV-404"}),
         "outstanding": call("invoices.outstanding", {}),
         "currency": call("invoices.outstanding", {"currency": "USD"}),
@@ -270,6 +271,13 @@ def test_invoicing_demonstrates_lookup_empty_result_idempotency_and_seeds() -> N
     assert set(set_amount["inputSchema"]["required"]) == {"number", "amount_cents"}
     assert set_amount["annotations"]["idempotentHint"] is True
     assert replies["set_amount"]["structuredContent"]["amount_cents"] == 250
+    # The project's own exception, answered as the example's ``exception_map=`` says.
+    already_sent = replies["already_sent"]
+    assert already_sent["isError"] is True
+    assert json.loads(already_sent["content"][0]["text"])["error"] == {
+        "type": "invoice_already_sent",
+        "message": "Invoice INV-B is already sent",
+    }
     # The lookup's ``number`` has no default, so a call leaving it out is
     # refused before the lookup would have raised ``TypeError``: named in the
     # message, and keyed in the detail the way a serializer keys a missing field.

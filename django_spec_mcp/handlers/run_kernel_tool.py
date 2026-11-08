@@ -6,6 +6,8 @@ from django_service_specs import DispatchError, ServiceError, dispatch
 
 from django_spec_mcp.elicitation.types.resolved_input import ResolvedInput
 from django_spec_mcp.handlers.answer_kernel_refusal import answer_kernel_refusal
+from django_spec_mcp.handlers.answer_mapped_exception import answer_mapped_exception
+from django_spec_mcp.handlers.exception_handler_for import exception_handler_for
 from django_spec_mcp.handlers.kernel_utils import (
     KernelAdmission,
     bound_unpaginated_rows,
@@ -43,7 +45,9 @@ def run_kernel_tool(
     resolves those seeds no second time (a call whose
     arguments failed it is counted in ``admit_kernel_call``), a refusal
     answered through ``KERNEL_REFUSALS``, a ``not_found`` worded by
-    ``not_found_result``, and the presented value as the tool result.
+    ``not_found_result``, and the presented value as the tool result. An exception the
+    server's ``exception_map`` holds answers as its handler says; any other that is no
+    kernel refusal is raised as it was.
     """
     dispatched, page = page_request(binding, arguments, context.config)
     scene = tool_refusal_scene(
@@ -61,7 +65,17 @@ def run_kernel_tool(
             progress=context.progress,
             call_context=admission.call_context,
         )
-    except (DispatchError, ServiceError) as exc:
+    except Exception as exc:
+        # One arm, because the map is asked first and declines by returning ``None``:
+        # as a leading clause of its own, its ``raise`` would leave the ``try``
+        # rather than reach the refusal arm below it.
+        handler = exception_handler_for(exc, context.exception_map)
+        if handler is not None:
+            return answer_mapped_exception(
+                handler, exc, config=context.config, span=otel_span
+            ).to_dict()
+        if not isinstance(exc, DispatchError | ServiceError):
+            raise
         return on_the_wire(answer_kernel_refusal(exc, scene))
     if result.kind == "not_found":
         return not_found_result(binding).to_dict()
@@ -75,6 +89,8 @@ def run_kernel_tool(
         arguments=arguments,
         config=context.config,
         conventions=context.conventions,
+        exception_map=context.exception_map,
+        span=otel_span,
     )
     if isinstance(payload, ToolResult):
         return payload.to_dict()

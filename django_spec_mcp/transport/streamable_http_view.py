@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
+from types import MappingProxyType
 from typing import Any
 
 from django.http import (
@@ -20,6 +21,7 @@ from django_spec_mcp.auth.types.auth_backend import MCPAuthBackend
 from django_spec_mcp.config.types.mcp_config import MCPConfig
 from django_spec_mcp.handlers.dispatch import dispatch
 from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.handlers.types.exception_handler import ExceptionHandler
 from django_spec_mcp.observability.get_logger import get_logger
 from django_spec_mcp.protocol.types.implementation import Implementation
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
@@ -187,6 +189,10 @@ class StreamableHttpView(View):
     # builds, so the wording it serves is that server's. The defaults for a
     # hand-wired view, which is what a server given none would say.
     conventions: AgentConventions = AgentConventions()
+    # The owning server's ``exception_map=``, read into every context this view
+    # builds. A read-only empty one for a hand-wired view, since this is the class
+    # body and nothing here may be shared and written to.
+    exception_map: Mapping[type[Exception], ExceptionHandler] = MappingProxyType({})
 
     @classonlymethod
     def as_view(cls, **initkwargs: Any) -> Callable[..., Any]:
@@ -428,6 +434,7 @@ class StreamableHttpView(View):
             config=self._require_config(),
             pool_seeds=self.pool_seeds,
             conventions=self.conventions,
+            exception_map=self.exception_map,
         )
 
     # ----- collaborator accessors -----

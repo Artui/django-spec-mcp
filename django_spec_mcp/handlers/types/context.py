@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -9,6 +10,7 @@ from django_service_specs import DEFAULT_POOL_SEEDS, PoolSeeds, ProgressReporter
 from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.config.types.mcp_config import MCPConfig
+from django_spec_mcp.handlers.types.exception_handler import ExceptionHandler
 from django_spec_mcp.protocol.types.implementation import Implementation
 from django_spec_mcp.registry.prompt_registry import PromptRegistry
 from django_spec_mcp.registry.resource_registry import ResourceRegistry
@@ -133,6 +135,11 @@ class MCPCallContext:
     ``isError`` results for the rest -- so two servers in one project can say
     different things. The defaults for a context built without a server, which
     is exactly what a server given no ``conventions=`` says."""
+
+    exception_map: Mapping[type[Exception], ExceptionHandler] = field(default_factory=dict)
+    """The owning server's ``exception_map=``: how a tool answers a project's own
+    exception. Read only on a ``tools/call``, whose answer is a tool result. Empty for a
+    context built without a server, which is what a server given none does."""
 
 
 __all__ = ["MCPCallContext"]

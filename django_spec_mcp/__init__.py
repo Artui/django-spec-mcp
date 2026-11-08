@@ -9,6 +9,7 @@ never pins a module path that is the kernel's to move.
 from django_spec_mcp.auth.types.auth_backend import MCPAuthBackend
 from django_spec_mcp.auth.types.self_checking import SelfChecking
 from django_spec_mcp.auth.types.token_info import TokenInfo
+from django_spec_mcp.handlers.types.exception_handler import ExceptionHandler
 from django_spec_mcp.protocol.types.icon import Icon
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.protocol.types.prompt_argument import PromptArgument
@@ -61,6 +62,7 @@ __all__ = [
     "MCP_TRANSPORT",
     "AgentConventions",
     "DjangoCacheSessionStore",
+    "ExceptionHandler",
     "InMemorySSEBroker",
     "InMemorySSEReplayBuffer",
     "Icon",

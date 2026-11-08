@@ -13,6 +13,13 @@ from django_service_specs import ServiceError, ServiceValidationError
 from invoices.models import Invoice
 
 
+class InvoiceAlreadySent(Exception):
+    """A project's own exception, which knows nothing of MCP or of the kernel.
+
+    ``invoices/mcp.py`` maps it to the answer a model gets, through ``exception_map=``.
+    """
+
+
 def create_invoice(*, number: str, amount_cents: int) -> Invoice:
     """Create a new invoice. Returns the created instance for presenting."""
     return Invoice.objects.create(number=number, amount_cents=amount_cents)
@@ -41,8 +48,11 @@ def set_invoice_amount(*, instance: Invoice, amount_cents: int) -> Invoice:
 
     Idempotent: the same call twice leaves the invoice as one call did, which
     the spec declares with ``idempotent=True`` and the tool lists as
-    ``idempotentHint``.
+    ``idempotentHint``. A sent invoice's amount is fixed: ``InvoiceAlreadySent`` is
+    answered as the server's ``exception_map=`` says.
     """
+    if instance.sent:
+        raise InvoiceAlreadySent(f"Invoice {instance.number} is already sent")
     instance.amount_cents = amount_cents
     instance.save(update_fields=["amount_cents"])
     return instance

@@ -206,8 +206,62 @@ base class to subclass:
 | Who the caller is | `auth_backend=` | `MCPServer` |
 | The names every spec on the mount may read | `pool_seeds=` | `MCPServer` |
 | The sentences written for a model | `conventions=` | `MCPServer` |
+| How a tool answers a project's own exception | [`exception_map=`](#exception-map) | `MCPServer` |
 | A scalar setting, per server | `config=` | `MCPServer` |
 | What one tool is called, shown as, bound to, gated and limited by | [its registration kwargs](#per-tool-registration-kwargs) | `register_tool` |
+
+### A project's own exceptions: `exception_map=` { #exception-map }
+
+An exception no refusal answers is the server's fault: it is logged, and the client
+gets a `-32603` that says nothing ([A tool call answers `Internal error`](troubleshooting.md#a-tool-call-answers-internal-error)).
+A project whose services raise exceptions of their own, in a domain that has no
+reason to know the kernel, says how each is answered:
+
+```python
+from django_spec_mcp import MCPServer
+from django_spec_mcp.output import build_error_tool_result
+from django_spec_mcp.protocol import ToolResult
+
+
+def tenant_gone(exc: Exception) -> ToolResult:
+    return build_error_tool_result(str(exc), error_type="tenant_gone")
+
+
+server = MCPServer(name="billing", exception_map={TenantGone: tenant_gone})
+```
+
+- **What it covers.** A tool's whole call: a check, a seed's resolver, the Validator,
+  the service, the selector and the presenter, on `tools/call` over either view, on
+  `call_tool` and `acall_tool`, and in a task's worker. A resource read is not covered,
+  since its answer is no tool result: its exception still raises.
+- **A handler takes the exception and returns a `ToolResult`.** It is synchronous, and
+  on an async view it runs off the event loop, as a presenter does, so it may read the
+  database. It always answers with a tool result, so a mapped exception is never a
+  protocol error: anything else returned, a `JsonRpcError` included, is a `TypeError`,
+  and a handler that raises is raised, for the backstop to answer as it answers any
+  other fault.
+- **The most specific type wins.** The lookup walks the exception's MRO, so a subclass
+  and its base can both be mapped in any order, and a subclass with no entry is answered
+  by its base.
+- **A kernel refusal keeps its answer unless the map names it or something below it.**
+  The kernel's own [refusals](#how-a-tool-is-called) take part in the same walk. So
+  `{Exception: handler}` or `{ServiceError: handler}` reaches what no refusal answers
+  more closely, and leaves a request for input, a refused argument or a
+  `ServiceValidationError` as they were. A project's own `ServiceError` subclass reaches
+  its handler, and so does `ServiceNotFound` when named. A denial cannot be mapped: an
+  entry for `NotPermitted` or `PrincipalUnavailable`, or a subclass of either, is an
+  `ImproperlyConfigured` when the server is built, since a tool result would tell the
+  client the tool ran. An `Exception` entry leaves a denial as it is, like the others.
+- **A check raising a mapped exception is answered after the charge.** It is left to
+  the call, as a check's `ServiceError` is, so the tool's rate limits are charged first,
+  and on a call carrying a `progressToken` it arrives on the stream rather than before it.
+- **The result you return is the one the rest of the call reads.** An `isError` result
+  announces no `invalidates=`, and one that is not an error reads as a completed call,
+  so its tool's resources are announced. A task's run completes either way, carrying
+  the result, as it does for a `ServiceError`.
+
+Under `RECORD_SERVICE_EXCEPTIONS` a mapped exception is recorded on the call's span, as
+a `ServiceError` is ([Observability](observability.md)).
 
 ### Project-wide seeds: `pool_seeds=` { #pool-seeds }
 

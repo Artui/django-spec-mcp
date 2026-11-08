@@ -44,6 +44,7 @@ def test_a_mount_hands_the_view_every_collaborator(is_async: bool) -> None:
         "subscription_broker": server._subscription_broker,
         "pool_seeds": server._pool_seeds,
         "conventions": server._conventions,
+        "exception_map": server._exception_map,
         "server_info": server._server_info,
         "config": server._config,
     }

@@ -137,4 +137,4 @@ See [What the package bounds](../performance.md#what-the-package-bounds).
 
 | Key | Default | What it does |
 |---|---|---|
-| `RECORD_SERVICE_EXCEPTIONS` | `False` | Record a `ServiceError` raised from a tool callable on the active OpenTelemetry span before mapping it to a JSON-RPC error. Off by default because services often raise `ServiceError` for routine business-rule denials, which would flood error pipelines. `ServiceValidationError` is *never* recorded — it is client input failure, not a server fault. See [Observability](../observability.md). |
+| `RECORD_SERVICE_EXCEPTIONS` | `False` | Record a `ServiceError` raised from a tool callable, or an exception the server's [`exception_map=`](../concepts.md#exception-map) answers, on the active OpenTelemetry span before mapping it to a JSON-RPC error. Off by default because services often raise `ServiceError` for routine business-rule denials, which would flood error pipelines. `ServiceValidationError` is *never* recorded — it is client input failure, not a server fault. See [Observability](../observability.md). |
