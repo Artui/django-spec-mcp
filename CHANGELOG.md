@@ -11,6 +11,8 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-11-08
+
 ### Added
 
 - **Every call says it came over MCP.** Each `call_context` this package builds now
@@ -888,7 +890,8 @@ carries; releases up to 0.54.0 are in
   running. The worker's run now enters below that decision. A client that did
   not declare the extension is still refused `-32021` by a `REQUIRED` tool.
 
-[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/Artui/django-spec-mcp/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/Artui/django-spec-mcp/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/Artui/django-spec-mcp/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/Artui/django-spec-mcp/compare/v0.8.0...v0.8.1
