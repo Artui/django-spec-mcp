@@ -38,10 +38,11 @@ classifiers = [
 dependencies = [
     "django>=4.2",
     # The kernel this package serves, and the one it imports its own names from.
-    # 0.26.0 is the floor: ``apply_server_arguments`` and ``server_owned_keys``
-    # take ``call_context=`` from that release, which every ``tools/call``
-    # route hands them, and below it the keyword raises ``TypeError``, so the
-    # suite holds it. It rests on two earlier behaviours the docs rely on: from
+    # 0.29.0 is the floor: ``build_call_context``, which every call's context is
+    # built through, and ``authorize_without_arguments``, which every listing
+    # asks, both arrive in that release, and below it the import fails. From
+    # 0.26.0 ``apply_server_arguments`` and ``server_owned_keys`` take
+    # ``call_context=``, which every ``tools/call`` route hands them. It rests on two earlier behaviours the docs rely on: from
     # 0.22.0 a ``ServiceSpec`` refuses a nested selector seat that declares
     # ``permissions``, so a spec the docs show is built the same way on every
     # kernel the package allows, and from 0.23.0 ``check_seeds`` reads a
@@ -60,7 +61,7 @@ dependencies = [
     # with this one whenever a raise changes what the kernel refuses: the two
     # routes reach one spec, and with only one raised the same selector can be a
     # not-found on one route and an error on the other.
-    "django-service-specs>=0.26.0",
+    "django-service-specs>=0.29.0",
 ]
 
 [project.optional-dependencies]
