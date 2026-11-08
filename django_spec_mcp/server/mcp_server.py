@@ -6,6 +6,7 @@ import sys
 from collections.abc import Callable, Generator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import replace
+from types import MappingProxyType
 from typing import Any, cast
 
 from asgiref.sync import sync_to_async
@@ -53,6 +54,8 @@ from django_spec_mcp.handlers.offered_tools import (
     unavailable_tools,
 )
 from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.handlers.types.exception_handler import ExceptionHandler
+from django_spec_mcp.handlers.unmappable_exceptions import UNMAPPABLE_EXCEPTIONS
 from django_spec_mcp.output.resolve_structured_output import resolve_structured_output
 from django_spec_mcp.protocol.build_server_info import build_server_info
 from django_spec_mcp.protocol.types.icon import Icon
@@ -166,6 +169,20 @@ class MCPServer:
 
     The server still decides where each sentence appears; the conventions
     decide what it says, on every route the seeds above reach.
+
+    How a tool answers a project's own exception is ``exception_map=``, a mapping of
+    exception types to handlers. A handler is handed the exception and returns the
+    tool's result, the most specific type winning:
+
+        def tenant_gone(exc: Exception) -> ToolResult:
+            return build_error_tool_result(str(exc), error_type="tenant_gone")
+
+        server = MCPServer(exception_map={TenantGone: tenant_gone})
+
+    An exception no entry holds behaves as it would with no map. A denial and a
+    configuration error are not mappable, and an entry naming one is refused here with
+    ``ImproperlyConfigured``: they answer as they would with no map, however broad an
+    entry is.
     """
 
     def __init__(
@@ -187,6 +204,7 @@ class MCPServer:
         subscription_broker: SubscriptionBroker | None = None,
         pool_seeds: PoolSeeds = DEFAULT_POOL_SEEDS,
         conventions: AgentConventions | None = None,
+        exception_map: Mapping[type[Exception], ExceptionHandler] | None = None,
         url_namespace: str = "mcp",
     ) -> None:
         # Identity is resolved once, here, so the instance is the single source
@@ -259,6 +277,12 @@ class MCPServer:
         # builds, in-process here and over HTTP by both views.
         self._conventions: AgentConventions = (
             conventions if conventions is not None else AgentConventions()
+        )
+        # How a tool answers a project's own exception, instance state for the reason
+        # the conventions are. Read by every tool route, in process and over HTTP, and
+        # copied so a mapping the caller keeps editing changes nothing here.
+        self._exception_map: Mapping[type[Exception], ExceptionHandler] = MappingProxyType(
+            _checked_exception_map(exception_map)
         )
         # The executor is the switch: supply one and a cache-backed store
         # appears (namespaced like the session store, for the same reason),
@@ -631,6 +655,7 @@ class MCPServer:
             conventions=self._conventions,
             pool_seeds=self._pool_seeds,
             request_classes=self._request_classes,
+            exception_map=self._exception_map,
         )
 
     # ----- in-process transport invocation -----
@@ -889,6 +914,7 @@ class MCPServer:
             subscriptions=self._subscription_broker,
             pool_seeds=self._pool_seeds,
             conventions=self._conventions,
+            exception_map=self._exception_map,
             enforce_rate_limits=enforce_rate_limits,
             in_task_worker=in_task_worker,
         )
@@ -1509,6 +1535,7 @@ class MCPServer:
             subscription_broker=self._subscription_broker,
             pool_seeds=self._pool_seeds,
             conventions=self._conventions,
+            exception_map=self._exception_map,
             server_info=self._server_info,
             instructions=self.description,
             config=self._config,
@@ -1605,6 +1632,31 @@ class MCPServer:
         if isinstance(self._auth_backend, SelfChecking):
             self._auth_backend.check_configuration()
         return self._auth_backend
+
+
+def _checked_exception_map(
+    exception_map: Mapping[type[Exception], ExceptionHandler] | None,
+) -> dict[type[Exception], ExceptionHandler]:
+    """``exception_map`` as a dict of its own, refusing an entry no handler could honour.
+
+    One naming what ``UNMAPPABLE_EXCEPTIONS`` holds could never be asked
+    (``test_an_entry_for_what_no_handler_may_answer_is_refused_by_name``). A broader entry
+    such as ``Exception`` is no such entry: it reaches everything else, in
+    ``exception_handler_for``. One that cannot be called would be found only by the first
+    call to raise its exception (``test_an_entry_that_cannot_be_called_is_refused``).
+    """
+    entries = dict(exception_map or {})
+    for klass, handler in entries.items():
+        if issubclass(klass, UNMAPPABLE_EXCEPTIONS):
+            raise ImproperlyConfigured(
+                f"exception_map cannot hold {klass.__name__}: a denial stays -32006 and a "
+                "configuration error stays the server's, so a handler could not answer it."
+            )
+        if not callable(handler):
+            raise ImproperlyConfigured(
+                f"exception_map's entry for {klass.__name__} is no callable."
+            )
+    return entries
 
 
 @contextmanager

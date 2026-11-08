@@ -11,7 +11,7 @@ rejection and no-OTel cases build no spec.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import replace
 from typing import Any
 
@@ -21,6 +21,7 @@ from django_service_specs import (
     DataclassValidator,
     Parameter,
     Parameters,
+    Presenter,
     SelectorKind,
     SelectorSpec,
     ServiceError,
@@ -39,7 +40,9 @@ from django_spec_mcp.handlers.handle_tasks_update import handle_tasks_update
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.output import build_error_tool_result
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.protocol.types.tool_result import ToolResult
 from django_spec_mcp.tasks.in_memory_task_store import InMemoryTaskStore
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
@@ -200,6 +203,63 @@ def test_service_error_not_recorded_by_default(
     settings.SPEC_MCP = {}
     tools_call({"name": "t.boom", "arguments": {}}, _ctx(_server_raising_service_error()))
     assert _exception_events(exporter) == []
+
+
+# ---------- a mapped exception, recorded as a ServiceError is ----------
+
+
+class _RaisingPresenter(Presenter):
+    def output(self, *, call_context: dict[str, Any] | None = None) -> Any:
+        return None
+
+    def present(self, value: Any) -> Any:
+        raise _TenantGone("from the presenter")
+
+
+class _TenantGone(Exception):
+    pass
+
+
+def _server_mapping_an_exception(*, raised_by: str) -> MCPServer:
+    def from_service() -> None:
+        raise _TenantGone("from the service")
+
+    def gone(exc: Exception) -> ToolResult:
+        return build_error_tool_result(str(exc), error_type="tenant_gone")
+
+    server = make_server(session_store=InMemorySessionStore(), exception_map={_TenantGone: gone})
+
+    def from_rows() -> Iterator[int]:
+        raise _TenantGone("from the rows")
+        yield 1
+
+    spec: Any = {
+        "service": ServiceSpec(service=from_service, permissions=OPEN),
+        "presenter": ServiceSpec(
+            service=lambda: {}, presenter=_RaisingPresenter(), permissions=OPEN
+        ),
+        "rows": SelectorSpec(kind=SelectorKind.LIST, selector=from_rows, permissions=OPEN),
+    }[raised_by]
+    server.register_tool(spec, name="t.boom")
+    return server
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("raised_by", ["service", "presenter", "rows"])
+@pytest.mark.parametrize("record", [True, False], ids=["asked", "by-default"])
+def test_a_mapped_exception_is_recorded_on_the_call_s_span_when_asked(
+    exporter: InMemorySpanExporter, settings, tools_call, raised_by: str, record: bool
+) -> None:
+    """The handler ends the call inside a well-formed result, so the tracer never sees
+    the exception leave; each of the call's arms hands the span along."""
+    settings.SPEC_MCP = {"RECORD_SERVICE_EXCEPTIONS": record}
+    server = _server_mapping_an_exception(raised_by=raised_by)
+    out = tools_call(
+        {"name": "t.boom", "arguments": {}},
+        replace(_ctx(server), exception_map=server._exception_map),
+    )
+    assert out["isError"] is True
+    assert _exception_events(exporter) == (["exception"] if record else [])
 
 
 # ---------- the task path ----------

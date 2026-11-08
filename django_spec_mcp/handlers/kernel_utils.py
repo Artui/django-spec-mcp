@@ -11,6 +11,7 @@ import json
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from itertools import islice
+from types import MappingProxyType
 from typing import Any
 
 from django.contrib.auth.models import AnonymousUser
@@ -28,10 +29,9 @@ from django_service_specs import (
     PrincipalUnavailable,
     SelectorKind,
     ServiceError,
-    ServiceSpec,
     UnknownArguments,
-    authorize,
-    authorize_scope,
+    authorize_without_arguments,
+    build_call_context,
     check_call,
     coerce_flat,
     is_queryset,
@@ -44,7 +44,10 @@ from django_service_specs import (
 from django_spec_mcp.config.types.mcp_config import MCPConfig
 from django_spec_mcp.elicitation.types.resolved_input import ResolvedInput
 from django_spec_mcp.handlers.answer_kernel_refusal import answer_kernel_refusal
+from django_spec_mcp.handlers.answer_mapped_exception import answer_mapped_exception
+from django_spec_mcp.handlers.exception_handler_for import exception_handler_for
 from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.handlers.types.exception_handler import ExceptionHandler
 from django_spec_mcp.handlers.types.kernel_input_round import KernelInputRound
 from django_spec_mcp.handlers.types.kernel_refusal_scene import KernelRefusalScene
 from django_spec_mcp.handlers.utils import (
@@ -63,6 +66,7 @@ from django_spec_mcp.protocol.types.tool_result import ToolResult
 from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
+from django_spec_mcp.types.mcp_transport import MCP_TRANSPORT
 
 logger = get_logger(__name__)
 
@@ -138,8 +142,14 @@ def call_context(request: Any, action: str) -> dict[str, Any]:
     resolved token as ``request.mcp_token``, or ``None`` off HTTP; there is no
     view and no format negotiation on this transport, and ``action`` is the
     tool or resource name, the role ``view.action`` plays for a view.
+
+    Built through the kernel's ``build_call_context``, which stamps
+    ``MCP_TRANSPORT`` last, so a callable reading ``call_transport`` reads ``mcp``
+    on every route: a call, a listing, a completion, a resource read, a watch and
+    a call proxied in process. Nothing in this package writes to the dict after
+    it is built, so the stamp is what every reader of one call sees.
     """
-    return {"request": request, "view": None, "format": None, "action": action}
+    return build_call_context(MCP_TRANSPORT, request=request, action=action)
 
 
 def tool_call_context(binding: Any, context: MCPCallContext) -> dict[str, Any]:
@@ -475,17 +485,16 @@ def admits_without_arguments(
     failing its shape has no checked ones, and ``None`` is the kernel's word
     for that.
 
-    Two questions, the two a call asks before it reads anything. ``authorize``
-    is the class-level one. ``authorize_scope`` of ``None`` is the scope-level
-    one dispatch asks of a create, a service spec with neither an instance nor
-    a collection selector, which resolves no row to ask about; any other spec's
-    scope question is of a row or a set that only the call's arguments name, and
-    stays unasked.
+    The questions are the kernel's ``authorize_without_arguments``: the two a
+    call asks before it reads anything, the second only of a create
+    (``test_a_selector_tool_is_not_asked_the_scope_of_nothing``,
+    ``test_a_service_with_a_target_is_not_asked_the_scope_of_nothing``). What
+    their answers mean here is this function's.
 
     Refused when either is (``NotPermitted``), when the principal is
-    deactivated (``PrincipalUnavailable``, which ``authorize`` raises when
-    handed pool seeds as dispatch does, ahead of any grant, so on an unguarded
-    spec too), and when a check cannot answer without the call's arguments and
+    deactivated (``PrincipalUnavailable``, which the kernel raises only because
+    it is handed the pool seeds, ahead of any grant, so on an unguarded spec
+    too), and when a check cannot answer without the call's arguments and
     raises on their absence. A configuration error (``ImproperlyConfigured``)
     is raised, as the call raises it.
     """
@@ -500,33 +509,14 @@ def admits_without_arguments(
         # without the permissions', every guarded spec is
         # (test_a_tool_whose_checks_admit_the_caller_is_listed).
         return False
-    # Whether dispatch asks this spec the scope question of nothing, as it does
-    # a create (``conclude_service`` in the kernel). One arc to coverage, so each
-    # conjunct is held by its own test: the first by
-    # test_a_selector_tool_is_not_asked_the_scope_of_nothing, the second by
-    # test_a_service_with_a_target_is_not_asked_the_scope_of_nothing.
-    asks_scope_of_nothing = (
-        isinstance(binding.spec, ServiceSpec) and binding.spec.target_selector_spec() is None
-    )
     try:
-        granted = authorize(
+        authorize_without_arguments(
             binding.spec,
             principal,
             grant=grant,
-            arguments=None,
-            pool_seeds=pool_seeds,
             call_context=call_context,
+            pool_seeds=pool_seeds,
         )
-        if asks_scope_of_nothing:
-            authorize_scope(
-                binding.spec,
-                principal,
-                None,
-                grant=granted,
-                arguments=None,
-                pool_seeds=pool_seeds,
-                call_context=call_context,
-            )
     except ImproperlyConfigured:
         # A configuration error the call raises as well, so the listing and
         # the call fail with it rather than refusing for it: without this
@@ -558,6 +548,7 @@ def admit_kernel_call(
     pool_seeds: PoolSeeds,
     unknown_arguments: UnknownArguments,
     context: dict[str, Any],
+    exception_map: Mapping[type[Exception], ExceptionHandler] = MappingProxyType({}),
 ) -> KernelAdmission:
     """Ask a kernel spec's class-level checks about a call before the transport acts on it.
 
@@ -623,6 +614,11 @@ def admit_kernel_call(
     raised it after; on a streamed call that is still before the stream
     commits its status
     (``test_a_permission_preflight_that_raises_before_a_stream_is_a_json_rpc_error``).
+    Unless ``exception_map`` holds it: then it is left to dispatch as a ``ServiceError``
+    a check raises is, and the call's arm answers it as its handler says, on the same
+    route whichever of the call's callables raised it
+    (``test_a_check_raising_a_mapped_exception_answers_as_its_handler_says``). Only a
+    ``tools/call`` hands a map, since only a tool's answer is a tool result.
 
     ``context`` is the call's ``call_context``, which the caller has already
     read the spec under: ``admit_kernel_read`` asks its parameters with it
@@ -666,6 +662,10 @@ def admit_kernel_call(
         # One arc to coverage, each kind held by its case of
         # ``test_a_check_raising_a_refusal_that_is_no_denial_is_answered_as_before``.
         grant, seeds = unchecked, None
+    except Exception as exc:
+        if exception_handler_for(exc, exception_map) is None:
+            raise
+        grant, seeds = unchecked, None
     return KernelAdmission(principal=principal, grant=grant, call_context=context, seeds=seeds)
 
 
@@ -697,6 +697,7 @@ def admit_kernel_tool_call(
             pool_seeds=context.pool_seeds,
             unknown_arguments=binding.unknown_arguments,
             context=dispatch_context,
+            exception_map=context.exception_map,
         )
     except _DENIALS as exc:
         return resource_refusal(
@@ -834,6 +835,9 @@ def bound_unpaginated_rows(
     result: DispatchResult,
     page: KernelPageRequest | None,
     config: MCPConfig,
+    *,
+    exception_map: Mapping[type[Exception], ExceptionHandler],
+    span: Any = None,
 ) -> DispatchResult | ToolResult:
     """``result`` with an unpaginated ``LIST`` tool's rows taken up to the row ceiling.
 
@@ -862,6 +866,10 @@ def bound_unpaginated_rows(
     page by ``test_a_model_supplied_limit_is_clamped_to_the_server_ceiling``, a
     tool that is no ``LIST`` by ``test_a_service_tool_returning_rows_is_not_row_bounded``
     and a disabled ceiling by ``test_a_disabled_ceiling_serves_an_unpaginated_list_whole``.
+
+    This read is the first of a lazy result's, so an exception ``exception_map`` holds
+    answers here as its handler says, a failing database's included
+    (``test_rows_raising_under_the_ceiling_answer_as_the_handler_says``).
     """
     max_rows = resolve_bound(binding.max_page_size, config.max_page_size)
     if page is not None or binding.kind is not SelectorKind.LIST or max_rows is None:
@@ -873,8 +881,17 @@ def bound_unpaginated_rows(
     rows: Any = result.value
     # ``rows[:n]`` on a QuerySet is a LIMIT, and ``len()`` evaluates it once;
     # any other iterable, a list or a generator, is windowed with ``islice``.
-    window: Any = rows[: max_rows + 1] if is_queryset(rows) else list(islice(rows, max_rows + 1))
-    if len(window) > max_rows:
+    try:
+        window: Any = (
+            rows[: max_rows + 1] if is_queryset(rows) else list(islice(rows, max_rows + 1))
+        )
+        over_the_ceiling = len(window) > max_rows
+    except Exception as exc:
+        handler = exception_handler_for(exc, exception_map)
+        if handler is None:
+            raise
+        return answer_mapped_exception(handler, exc, config=config, span=span)
+    if over_the_ceiling:
         return _over_row_ceiling(binding, max_rows)
     return replace(result, value=window)
 

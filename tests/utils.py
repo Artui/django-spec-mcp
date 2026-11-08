@@ -97,6 +97,7 @@ def call_context(server: MCPServer, **overrides: Any) -> MCPCallContext:
         "tasks": server.task_store,
         "subscriptions": server.subscription_broker,
         "config": server._config,
+        "exception_map": server._exception_map,
     }
     base.update(overrides)
     return MCPCallContext(**base)

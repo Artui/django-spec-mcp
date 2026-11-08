@@ -7,6 +7,8 @@ from django_service_specs import DispatchError, ServiceError, adispatch
 from django_spec_mcp._compat.acall import acall
 from django_spec_mcp.elicitation.types.resolved_input import ResolvedInput
 from django_spec_mcp.handlers.answer_kernel_refusal import answer_kernel_refusal
+from django_spec_mcp.handlers.answer_mapped_exception import answer_mapped_exception
+from django_spec_mcp.handlers.exception_handler_for import exception_handler_for
 from django_spec_mcp.handlers.kernel_utils import (
     KernelAdmission,
     bound_unpaginated_rows,
@@ -41,12 +43,12 @@ async def run_kernel_tool_async(
     limits, so this is only the call: the kernel's ``adispatch`` under
     ``admission``, as in the sync sibling, a refusal answered through
     ``KERNEL_REFUSALS``, a ``not_found`` worded by ``not_found_result``, and the
-    presented value as the tool result.
+    presented value as the tool result. An exception the server's ``exception_map``
+    holds answers as its handler says, off the event loop as the presenter is, since
+    a handler may read the database; any other that is no kernel refusal is raised
+    as it was.
     """
     dispatched, page = page_request(binding, arguments, context.config)
-    scene = tool_refusal_scene(
-        binding, arguments, prior, context, otel_span, admission.call_context
-    )
     try:
         result = await adispatch(
             binding.spec,
@@ -59,12 +61,36 @@ async def run_kernel_tool_async(
             progress=context.progress,
             call_context=admission.call_context,
         )
-    except (DispatchError, ServiceError) as exc:
+    except Exception as exc:
+        # ``CancelledError`` is no ``Exception``, so a deadline cancelling this call
+        # meets no handler. One arm for the reason the sync sibling gives.
+        handler = exception_handler_for(exc, context.exception_map)
+        if handler is not None:
+            answer: ToolResult = await acall(
+                answer_mapped_exception, handler, exc, config=context.config, span=otel_span
+            )
+            return answer.to_dict()
+        if not isinstance(exc, DispatchError | ServiceError):
+            raise
+        # Built here, not ahead of the call: it reads the spec's declaration, and a
+        # declaration that raises is the call's to answer, on the same route as ``call_tool``
+        # (``test_a_validator_s_declaration_raising_a_mapped_exception_answers_as_its_handler_says``).
+        scene = tool_refusal_scene(
+            binding, arguments, prior, context, otel_span, admission.call_context
+        )
         return on_the_wire(answer_kernel_refusal(exc, scene))
     if result.kind == "not_found":
         return not_found_result(binding).to_dict()
     # Off the loop, as the presenter is: the bound's slice runs the query.
-    bounded = await acall(bound_unpaginated_rows, binding, result, page, context.config)
+    bounded = await acall(
+        bound_unpaginated_rows,
+        binding,
+        result,
+        page,
+        context.config,
+        exception_map=context.exception_map,
+        span=otel_span,
+    )
     if isinstance(bounded, ToolResult):
         return bounded.to_dict()
     payload: Any = await acall(
@@ -75,6 +101,8 @@ async def run_kernel_tool_async(
         arguments=arguments,
         config=context.config,
         conventions=context.conventions,
+        exception_map=context.exception_map,
+        span=otel_span,
     )
     if isinstance(payload, ToolResult):
         return payload.to_dict()

@@ -207,6 +207,10 @@ is answered as an `isError` `validation_error` result, the same as any other
 validation failure, so declaring the shape's `choices` on its
 `Parameter` turns this `500` into a correctable answer.
 
+An exception of the project's own that a client should be told about is answered by
+naming it in the server's [`exception_map=`](concepts.md#exception-map), which turns
+this `500` into a tool result of the project's own.
+
 A `PermissionDenied` raised inside the call is the exception: it is a refusal,
 not a server fault, so it is answered `-32006` under `403` with the
 `WWW-Authenticate` challenge, exactly like a permission check that answered

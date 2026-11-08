@@ -106,7 +106,8 @@ transport what it means on any other:
 - **The call is the kernel's `dispatch` / `adispatch`.** The principal is the
   token's user, an `AnonymousUser` for a token naming no one and for
   `call_tool(..., user=None)`. The call context holds `request`, `view` (always
-  `None` here), `format` and `action`, the tool's name. Over HTTP,
+  `None` here), `format`, `action`, the tool's name, and
+  [`transport`](#transport), `"mcp"`. Over HTTP,
   `call_context["request"]` is the transport's Django `HttpRequest`, with the
   resolved token as `request.mcp_token` and the token's principal as
   `request.user`. An in-process call has no HTTP request of its own:
@@ -173,6 +174,104 @@ transport what it means on any other:
   `max_page_size=` on a service tool or a `RETRIEVE`, `invalidates=` on a
   selector tool, and `UnknownArguments.PASSTHROUGH`. `task_policy=` is taken by
   either kind of tool, as [Opting a tool in](#opting-a-tool-in) describes.
+
+### What a callable reads here, and what a project overrides { #transport }
+
+Every `call_context` this package builds is built through the kernel's
+`build_call_context`, and carries `MCP_TRANSPORT`, the plain string `"mcp"`, under
+the kernel's `TRANSPORT_KEY`. A check, a Validator, a seed's resolver, a service, a
+selector or a presenter reads it through the kernel's `call_transport`:
+
+```python
+from django_service_specs import call_transport
+from django_spec_mcp import MCP_TRANSPORT
+
+
+def wants_terse_rows(*, call_context):
+    return call_transport(call_context) == MCP_TRANSPORT
+```
+
+One value for every reader of a call, and on every route that builds a context: a
+`tools/call`, a resource read, a filtered listing, a completion and a resource
+watch. It names the transport the call came in on, so `call_tool` and `acall_tool`
+read `"mcp"` too. That includes a tool an agent reaches through spec-agents' MCP
+bridge, which calls `acall_tool`, when this release is the `django-spec-mcp`
+installed: one before 0.10.0 stamps nothing. A call of a spec through any other
+transport reads what that transport stamps at its installed version, or `None` from a
+dict nobody stamped.
+
+What a project overrides on this transport, all of it per server or per tool, with no
+base class to subclass:
+
+| To change | Pass | To |
+| --- | --- | --- |
+| Who the caller is | `auth_backend=` | `MCPServer` |
+| The names every spec on the mount may read | `pool_seeds=` | `MCPServer` |
+| The sentences written for a model | `conventions=` | `MCPServer` |
+| How a tool answers a project's own exception | [`exception_map=`](#exception-map) | `MCPServer` |
+| A scalar setting, per server | `config=` | `MCPServer` |
+| What one tool is called, shown as, bound to, gated and limited by | [its registration kwargs](#per-tool-registration-kwargs) | `register_tool` |
+
+### A project's own exceptions: `exception_map=` { #exception-map }
+
+An exception no refusal answers is the server's fault: it is logged, and the client
+gets a `-32603` that says nothing ([A tool call answers `Internal error`](troubleshooting.md#a-tool-call-answers-internal-error)).
+A project whose services raise exceptions of their own, in a domain that has no
+reason to know the kernel, says how each is answered:
+
+```python
+from django_spec_mcp import MCPServer
+from django_spec_mcp.output import build_error_tool_result
+from django_spec_mcp.protocol import ToolResult
+
+
+def tenant_gone(exc: Exception) -> ToolResult:
+    return build_error_tool_result(str(exc), error_type="tenant_gone")
+
+
+server = MCPServer(name="billing", exception_map={TenantGone: tenant_gone})
+```
+
+- **What it covers.** A tool's whole call: a check, a seed's resolver, the Validator,
+  the service, the selector, the rows of a lazy result and the presenter, on
+  `tools/call` over either view, on `call_tool` and `acall_tool`, and in a task's worker.
+  Two things are outside it and still raise: a resource read, since its answer is no
+  tool result, and a Validator's `parameters()` when it is read to lay a tool's
+  `server_arguments`, which happens before the call starts.
+- **A handler takes the exception and returns a `ToolResult`.** It is synchronous, and
+  on an async view it runs off the event loop, as a presenter does, so it may read the
+  database. It always answers with a tool result, so a mapped exception is never a
+  protocol error: anything else returned, a `JsonRpcError` included, is a `TypeError`,
+  and a handler that raises is raised, for the backstop to answer as it answers any
+  other fault.
+- **The most specific type wins.** The lookup walks the exception's MRO, so a subclass
+  and its base can both be mapped in any order, and a subclass with no entry is answered
+  by its base.
+- **A kernel refusal keeps its answer unless the map names it or something below it.**
+  The kernel's own [refusals](#how-a-tool-is-called) take part in the same walk. So
+  `{Exception: handler}` or `{ServiceError: handler}` reaches what no refusal answers
+  more closely, and leaves a request for input, a refused argument or a
+  `ServiceValidationError` as they were. A project's own `ServiceError` subclass reaches
+  its handler, and so does `ServiceNotFound` when named.
+- **No entry reaches a denial or a configuration error.** `NotPermitted`,
+  `PrincipalUnavailable`, Django's `PermissionDenied` and `ImproperlyConfigured`, and
+  their subclasses, answer as they do with no map, however broad an entry is. A tool
+  result would tell the client the tool ran, or hide the server's own mistake. An entry
+  naming one is an `ImproperlyConfigured` when the server is built, as is an entry that
+  cannot be called.
+- **A check raising a mapped exception is answered after the charge.** It is left to
+  the call, as a check's `ServiceError` is, so the tool's rate limits are charged first,
+  and on a call carrying a `progressToken` it arrives on the stream rather than before it.
+- **The result you return is the one the rest of the call reads.** An `isError` result
+  announces no `invalidates=`, and one that is not an error reads as a completed call,
+  so its tool's resources are announced. A task's run completes either way, carrying
+  the result, as it does for a `ServiceError`.
+
+A handler owns its exception's logging. An exception it answers is not logged at `ERROR`
+and is no `500`, so an entry as broad as `Exception` takes faults out of the logs and out
+of an error rate unless its handler logs them. Under `RECORD_SERVICE_EXCEPTIONS` a mapped
+exception is recorded on the call's span, as a `ServiceError` is
+([Observability](observability.md)).
 
 ### Project-wide seeds: `pool_seeds=` { #pool-seeds }
 

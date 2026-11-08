@@ -125,10 +125,17 @@ happens to live.
 - `dispatch` / `adispatch` — the call: the spec's checks, the argument check, the
   service or selector, the presenter. Every tool and every kernel resource read
   runs through it, and every refusal it raises is answered through
-  `KERNEL_REFUSALS` (`handlers/kernel_refusals.py`), one row per refusal class.
-- `authorize`, `authorize_scope` and `check_call` — a spec's checks asked outside a
+  `KERNEL_REFUSALS` (`handlers/kernel_refusals.py`), one row per refusal class. A
+  project's own exception is answered through `MCPServer(exception_map=)`, asked first
+  at every arm of a tool's call (`handlers/exception_handler_for.py`), in one MRO walk
+  with those rows; a resource read has no map, since its answer is no tool result.
+- `authorize_without_arguments` and `check_call` — a spec's checks asked outside a
   call: before the rate limit is charged, by the listing filter, and by a
-  subscription's grant. They are the checks `dispatch` asks.
+  subscription's grant. They are the checks `dispatch` asks. What an answer means
+  here stays local: `admits_without_arguments` keeps its early return and its
+  `except` clauses, so a call is refused exactly when the listing hides the tool.
+- `build_call_context` — every `call_context` this package builds, through the one
+  builder `call_context` in `handlers/kernel_utils.py`, stamped `MCP_TRANSPORT`.
 - `check_seeds` and `check_server_arguments` — the registration checks: whether a
   spec can be called at all under the server's `pool_seeds`, and whether a tool's
   `server_arguments` can hold for its spec.

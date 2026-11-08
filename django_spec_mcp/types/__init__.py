@@ -14,6 +14,7 @@ from django_spec_mcp.types.json_rpc_id import JsonRpcId
 from django_spec_mcp.types.jsonrpc_version import JSONRPC_VERSION
 from django_spec_mcp.types.max_completion_values import MAX_COMPLETION_VALUES
 from django_spec_mcp.types.mcp_error_header import MCP_ERROR_HEADER
+from django_spec_mcp.types.mcp_transport import MCP_TRANSPORT
 from django_spec_mcp.types.modern_protocol_versions import MODERN_PROTOCOL_VERSIONS
 from django_spec_mcp.types.namespace_digest_chars import NAMESPACE_DIGEST_CHARS
 from django_spec_mcp.types.notification_kind import NotificationKind
@@ -60,6 +61,7 @@ __all__ = [
     "JsonRpcId",
     "MAX_COMPLETION_VALUES",
     "MCP_ERROR_HEADER",
+    "MCP_TRANSPORT",
     "MODERN_PROTOCOL_VERSIONS",
     "NAMESPACE_DIGEST_CHARS",
     "NotificationKind",

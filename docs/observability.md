@@ -137,7 +137,9 @@ The MCP package keeps the surface minimal in v1:
     error. `ServiceValidationError` is deliberately *not* recorded — it
     represents client-side input failure and would clutter alerting
     pipelines. Resource and prompt errors stay un-recorded too; they're
-    tool-call-specific.
+    tool-call-specific. An exception the server's
+    [`exception_map=`](concepts.md#exception-map) answers is recorded the same way,
+    whether its handler's result is an error or not.
 
 ## Without `[otel]` installed
 
