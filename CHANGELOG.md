@@ -11,6 +11,47 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-11-09
+
+### Fixed
+
+- **`tools/list` offers what a Validator declares to an MCP call.** A Validator
+  declaring `parameters(self, *, call_context=None)` was asked with no context by the
+  listing and under one stamped `mcp` by `tools/call`, so a field it declared only under
+  `mcp` was taken and never advertised, and a required one was refused of every client
+  following the schema. The listing now reads the spec under that stamp, on the HTTP
+  routes and `list_tools` alike, so the field is in `properties` and `required`, and a
+  field declared only to another transport stays out. It hands the stamp alone, with
+  `request` `None`, because a schema that varied by caller would make a listing's shared
+  `cacheScope` false: a field declared per caller stays unoffered, as it was, and the
+  call still takes it.
+
+### Changed
+
+- **A declaration that fails under `mcp` now fails the server's startup.**
+  `register_tool` compiles the schema under the same stamp, so a field named `user` that
+  a Validator declares only to an MCP call raises `ImproperlyConfigured` there. So does
+  anything else a description raises under it: **a Validator guarding
+  `call_context is None` and then reading `call_context["request"].user` passes on
+  0.10.0 and raises `AttributeError` at `register_tool` on this release**, since
+  `request` is `None` where nothing gave one. Guard it too, with
+  `call_context["request"] is not None`; `call_transport` cannot tell a listing from a
+  call, since both read `mcp`. A binding built by hand and passed to
+  `server.tools.register` skips the compile, and the same read raises out of `tools/list`.
+- **Requires `django-service-specs` 0.30.0**, whose `spec_caller_input_schema` and
+  `spec_input_schema` take `call_context=`.
+
+### Documentation
+
+- **The `exception_map=` page says how it differs from `django-spec-agents`' map.** This
+  package walks the exception's MRO once with the kernel's refusal rows in it, so a broad
+  entry loses to a more specific refusal; spec-agents consults its map strictly first,
+  so the same entry takes the refusal. The invoicing example's `mark_invoice_sent`
+  docstring no longer says a `ServiceError` is mapped to `-32000`: it is answered as an
+  `isError` tool result of type `service_error`.
+- **The invoicing example shows a Validator declaring itself per transport.**
+  `invoices.write_off` asks `reason` of a caller over MCP alone, and `tools/list` lists it.
+
 ## [0.10.0] — 2026-11-08
 
 ### Added
@@ -895,7 +936,8 @@ carries; releases up to 0.54.0 are in
   running. The worker's run now enters below that decision. A client that did
   not declare the extension is still refused `-32021` by a `REQUIRED` tool.
 
-[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/Artui/django-spec-mcp/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/Artui/django-spec-mcp/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/Artui/django-spec-mcp/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/Artui/django-spec-mcp/compare/v0.8.1...v0.9.0

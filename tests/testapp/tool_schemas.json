@@ -483,6 +483,53 @@
         ],
         "type": "object"
       }
+    },
+    {
+      "annotations": {
+        "destructiveHint": true,
+        "readOnlyHint": false
+      },
+      "description": "Create an invoice, naming the session it came from.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "type": "integer"
+          },
+          "session_ref": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "amount",
+          "session_ref"
+        ],
+        "type": "object"
+      },
+      "name": "invoices.create_per_transport",
+      "outputSchema": {
+        "properties": {
+          "amount_cents": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "number": {
+            "type": "string"
+          },
+          "sent": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "amount_cents",
+          "sent"
+        ],
+        "type": "object"
+      }
     }
   ]
 }

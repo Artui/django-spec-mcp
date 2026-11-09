@@ -454,6 +454,53 @@ def test_invoicing_serves_its_resource_prompt_and_send_tool() -> None:
     }
 
 
+_INVOICING_PER_TRANSPORT = _INVOICING_CLIENT + textwrap.dedent(
+    """
+    from django_service_specs import build_call_context
+    from invoices.validators import WriteOffValidator
+
+    validator = WriteOffValidator()
+    print(json.dumps({
+        "write_off": tools["invoices.write_off"],
+        "without_reason": call("invoices.write_off", {"number": "INV-A"}),
+        "with_reason": call("invoices.write_off", {"number": "INV-A", "reason": "Duplicate."}),
+        "left": Invoice.objects.filter(number="INV-A").count(),
+        "to_no_call": sorted(validator.parameters().names()),
+        "to_another_transport": sorted(
+            validator.parameters(call_context=build_call_context("cli")).names()
+        ),
+    }))
+    """
+)
+
+
+def test_invoicing_lists_a_field_its_validator_declares_only_to_mcp() -> None:
+    """``invoices.write_off`` asks ``reason`` of a caller over MCP, and of no one else.
+
+    ``tools/list`` reads the Validator under the stamp ``tools/call`` dispatches
+    under, so the field is listed and required, and the call agrees: it refuses a
+    client leaving it out and takes one sending it. The last two assertions hold
+    that the field is the transport's: declared to neither no call nor another.
+    """
+    replies = json.loads(_run_in_example("invoicing", _INVOICING_PER_TRANSPORT))
+
+    schema = replies["write_off"]["inputSchema"]
+    assert set(schema["properties"]) == {"number", "reason"}
+    assert set(schema["required"]) == {"number", "reason"}
+
+    without_reason = replies["without_reason"]
+    assert without_reason["isError"] is True
+    assert json.loads(without_reason["content"][0]["text"])["error"]["detail"] == {
+        "reason": ["This field is required."]
+    }
+    assert not replies["with_reason"].get("isError"), replies["with_reason"]
+    assert replies["with_reason"]["structuredContent"] == {}
+    assert replies["left"] == 0
+
+    assert replies["to_no_call"] == ["number"]
+    assert replies["to_another_transport"] == ["number"]
+
+
 # Runs inside the invoicing project with a client carrying no token of its
 # own, so each request names the token it sends: none, one the backend does
 # not know, one without the prompt's scope, and the clerk's. The status, the

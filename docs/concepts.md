@@ -192,7 +192,7 @@ def wants_terse_rows(*, call_context):
 ```
 
 One value for every reader of a call, and on every route that builds a context: a
-`tools/call`, a resource read, a filtered listing, a completion and a resource
+`tools/call`, a resource read, a listing, a completion and a resource
 watch. It names the transport the call came in on, so `call_tool` and `acall_tool`
 read `"mcp"` too. That includes a tool an agent reaches through spec-agents' MCP
 bridge, which calls `acall_tool`, when this release is the `django-spec-mcp`
@@ -253,6 +253,17 @@ server = MCPServer(name="billing", exception_map={TenantGone: tenant_gone})
   more closely, and leaves a request for input, a refused argument or a
   `ServiceValidationError` as they were. A project's own `ServiceError` subclass reaches
   its handler, and so does `ServiceNotFound` when named.
+- **This is not the precedence of `django-spec-agents`' `exception_map=`.** Here the
+  kernel's refusals share the MRO walk with your entries, so a broad entry loses to a
+  more specific refusal row: `{ServiceError: handler}` leaves a `ServiceValidationError`
+  and a refused argument with the kernel's answer. In spec-agents the map is consulted
+  strictly first, ahead of every built-in arm, and the first match along the MRO wins,
+  so the same `{ServiceError: handler}` receives a `ServiceValidationError` too. A
+  project serving one spec over both writes a map for each (a handler returns a
+  `ToolResult` here, and there it returns the tool's value or raises `ModelRetry` or
+  `ToolFailed`), and a broad
+  entry in the agent side's map takes what this side's leaves to the kernel: to answer
+  a refusal the same on both, name it (`{ServiceValidationError: handler}`).
 - **No entry reaches a denial or a configuration error.** `NotPermitted`,
   `PrincipalUnavailable`, Django's `PermissionDenied` and `ImproperlyConfigured`, and
   their subclasses, answer as they do with no map, however broad an entry is. A tool
@@ -390,6 +401,24 @@ spec = SelectorSpec(
     permissions=[IsBillingStaff()],
 )  # inputSchema: {"pk"}, required ["pk"]
 ```
+
+**A listing reads the spec under the `mcp` stamp, and nothing else about the
+caller.** A Validator declaring `parameters(self, *, call_context=None)` is asked
+under a dict carrying [`transport`](#transport), `"mcp"`, and the tool's name as
+`action`, with `request` `None`, on the HTTP routes and `list_tools` alike. So a
+field it declares only to an MCP call is offered, and required if it says so, and
+a field it declares only to another transport is not. A field it declares per
+caller stays unoffered, and is still taken by a `tools/call` that sends it: a
+listing that varied by caller would make its `cacheScope` false. A Validator
+reading `call_context` guards `request` as well as the `None` of a declaration made
+to no call, and `call_transport` cannot tell a listing from a call: one that reads
+`call_context["request"].user` raises `AttributeError`.
+
+`register_tool` compiles the schema under the same dict, so a declaration that
+cannot be described under `mcp`, a field named `user` or that read of `None`,
+fails the server's startup, and not its first listing. A binding built by hand and
+passed to `server.tools.register` skips that compile and raises out of
+`tools/list`, as any description that raises does.
 
 **A call that leaves out a required argument is refused before the callable
 runs**, with a `validation_error` result naming what is missing, keyed in
@@ -544,9 +573,9 @@ server.register_tool(
   route, the in-process `call_tool` included, lays the values under the call's
   `call_context`, the dict the call is then dispatched with. A value that
   declaration refuses raises `ImproperlyConfigured` on the call, the server's
-  mistake rather than the caller's invalid argument. Registration reads the
-  declaration made to no call, so a name a Validator declares only to a call is
-  refused there: declare it to no call too.
+  mistake rather than the caller's invalid argument. Registration checks them
+  against the declaration made to no call, so a name a Validator declares only to
+  a call is refused there: declare it to no call too.
 
 The values are **static** for the life of the binding. A value computed per
 request - the project the signed-in user belongs to - is not something

@@ -53,8 +53,10 @@ from invoices.services import (
     create_invoice,
     mark_invoice_sent,
     set_invoice_amount,
+    write_off_invoice,
 )
 from invoices.shapes import InvoiceOutput, OutstandingTotal
+from invoices.validators import WriteOffValidator
 
 # Permissions are **required**: a spec declaring none is refused at
 # registration, so an omission is an error rather than an open tool.
@@ -184,6 +186,21 @@ def build_server() -> MCPServer:
             "Take a credit off the invoice with the given number; "
             "an empty object when the credit settles it."
         ),
+    )
+
+    server.register_tool(
+        ServiceSpec(
+            service=write_off_invoice,
+            # Declares ``reason`` to a call over MCP alone. The listing reads it
+            # under the same ``mcp`` stamp the call dispatches under, so the
+            # ``inputSchema`` lists it and a client following the schema sends it.
+            validator=WriteOffValidator(),
+            presenter=INVOICE,
+            allow_none=True,
+            permissions=OPEN,
+        ),
+        name="invoices.write_off",
+        description="Delete the invoice with the given number, saying why.",
     )
 
     # ----- Selector tools (reads) -----

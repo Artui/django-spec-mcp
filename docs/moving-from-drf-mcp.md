@@ -47,7 +47,7 @@ The root still exports what it exported from `constants`, apart from four names
 that are gone: `UnknownArguments` (import it from the kernel), and
 `ArgumentBinding`, `OutputFormat` and `ToolKind`, which the sections below
 cover.
-`django-service-specs` **0.29.0** is the kernel release the package
+`django-service-specs` **0.30.0** is the kernel release the package
 requires. It reserves `shapes` as a pool name, so a `PoolSeeds` entry named
 `shapes` is refused with a `ValueError` when it is built, as one named `user` is.
 A `ServiceSpec` refuses, when it is built, a nested selector seat
@@ -56,7 +56,7 @@ whose `SelectorSpec` declares `permissions`: the service's own `permissions`
 decide the call, so a seat leaves `permissions` at its default, `None`.
 `register_tool` also refuses, with `ImproperlyConfigured` at registration, a spec
 whose precondition or condition names a seed nothing fills, which already failed on
-every call. The kernel's changelog for 0.21.0 to 0.29.0 has the rest: a `parameters`
+every call. The kernel's changelog for 0.21.0 to 0.30.0 has the rest: a `parameters`
 override on a spec subclass must accept `call_context`, `PydanticValidator` hands a
 service declaring `data` the model instance rather than a dict of its fields, a read
 a provider requires itself is asked of the caller (`tools/list` marks it required, and

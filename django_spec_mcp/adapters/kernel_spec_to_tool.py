@@ -17,6 +17,7 @@ from django_service_specs import (
 )
 
 from django_spec_mcp.adapters.utils import merge_tool_annotations
+from django_spec_mcp.handlers.kernel_utils import call_context
 from django_spec_mcp.protocol.types.icon import Icon
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from django_spec_mcp.registry.types.utils import scope_names
@@ -66,7 +67,9 @@ def kernel_spec_to_tool(
 
     Then compiles the spec's two schemas, so a declaration the kernel cannot
     describe fails here rather than taking every later ``tools/list`` down
-    with it.
+    with it. The input schema reads under the stamp a listing reads under, so what
+    a Validator declares only to an MCP call fails here too
+    (``test_a_field_failing_assembly_under_mcp_alone_raises_at_register_tool``).
 
     The MCP hints are derived by ``merge_tool_annotations``: a selector tool is read-only, a service tool
     destructive with its declared ``idempotent`` as ``idempotentHint``, and a
@@ -86,7 +89,9 @@ def kernel_spec_to_tool(
         )
     # Compiled here for what they raise: a declaration the kernel cannot describe
     # fails the server's startup, not the first listing.
-    spec_input_schema(spec, unknown_arguments=unknown_arguments)
+    spec_input_schema(
+        spec, unknown_arguments=unknown_arguments, call_context=call_context(None, name)
+    )
     spec_output_schema(spec, paginate=paginate)
     return KernelToolBinding(
         name=name,

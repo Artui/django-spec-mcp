@@ -139,9 +139,10 @@ def call_context(request: Any, action: str) -> dict[str, Any]:
 
     One dict per call, built fresh so nothing a spec writes into it reaches
     another call. ``request`` is the transport's ``HttpRequest``, carrying the
-    resolved token as ``request.mcp_token``, or ``None`` off HTTP; there is no
-    view and no format negotiation on this transport, and ``action`` is the
-    tool or resource name, the role ``view.action`` plays for a view.
+    resolved token as ``request.mcp_token``, or ``None`` off HTTP and for the
+    stamp a ``tools/list`` entry describes its spec under; there is no view and no
+    format negotiation on this transport, and ``action`` is the tool or resource
+    name, the role ``view.action`` plays for a view.
 
     Built through the kernel's ``build_call_context``, which stamps
     ``MCP_TRANSPORT`` last, so a callable reading ``call_transport`` reads ``mcp``
