@@ -80,7 +80,9 @@ async def handle_resources_read_async(
             )
         # See the sync sibling: the kernel's pool, seeded under the call's
         # context, with the transport's request as the default for ``request``:
-        # a registered seed outranks it and it outranks a URI-template variable.
+        # a registered seed outranks it and it outranks a URI-template variable;
+        # a seed whose resolver declares ``request``, ``view`` or ``call_context``
+        # is asked for it, the context read under the resource's name.
         # The selector goes through ``arun_selector_sync_safe`` and the encoding
         # through ``acall``, so neither a template it renders nor a lazy value
         # ``JSON`` encoding iterates is read on the loop.

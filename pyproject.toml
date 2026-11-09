@@ -38,9 +38,11 @@ classifiers = [
 dependencies = [
     "django>=4.2",
     # The kernel this package serves, and the one it imports its own names from.
-    # 0.30.0 is the floor: from it ``spec_input_schema`` and
-    # ``spec_caller_input_schema`` take ``call_context=``, and below it
-    # ``register_tool`` raises ``TypeError`` on the keyword. From 0.29.0
+    # 0.31.0 is the floor: from it ``seeded_pool``, which the view read and
+    # ``tools/list``'s conditioned-tool pool import from the root, is there, and a
+    # labelled filter is advertised as ``anyOf``, the shape the docs show. From 0.30.0
+    # ``spec_input_schema`` and ``spec_caller_input_schema`` take ``call_context=``,
+    # and below it ``register_tool`` raises ``TypeError`` on the keyword. From 0.29.0
     # ``build_call_context``, which every call's context is built through, and
     # ``authorize_without_arguments``, which every listing asks, are there to
     # import. From 0.26.0 ``apply_server_arguments`` and ``server_owned_keys`` take

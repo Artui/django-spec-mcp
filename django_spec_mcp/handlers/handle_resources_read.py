@@ -87,10 +87,15 @@ def handle_resources_read(
         # ``HttpRequest`` with the token on it, which a seed declaring
         # ``request`` receives
         # (``test_a_pool_seed_resolved_on_a_view_read_is_handed_the_transports_request``).
-        # The seeds resolve under the call's context, as a kernel read's do, so a
-        # seed registered as ``request`` or ``view`` is the value rather than a
-        # collision with the transport's own request
-        # (``test_a_registered_request_seed_is_the_value_a_view_receives``). The
+        # The seeds resolve under the call's context, read under the resource's
+        # name, as a kernel resource read's do. So a seed registered as
+        # ``request`` is the value rather than a collision with the transport's
+        # own request
+        # (``test_a_registered_request_seed_is_the_value_a_view_receives``), and
+        # a seed whose resolver declares ``request``, ``view`` or
+        # ``call_context`` is asked for it rather than raising ``TypeError``
+        # (``test_a_seed_resolver_declaring_view_is_resolved``,
+        # ``test_a_seed_resolver_declaring_call_context_reads_the_resource``). The
         # transport's request is added to the seeded pool, and only then do the
         # URI-template variables go under it, so none can be shadowed from the
         # URI, a variable named ``request`` included

@@ -15,12 +15,15 @@ carries; releases up to 0.54.0 are in
 
 ### Fixed
 
-- **A registered `request` or `view` pool seed no longer raises `TypeError` on a view
-  read.** `resources/read` of an interactive view spread the transport's request beside
-  the server's seeds, and the kernel refuses a seed registered as `request` beside an
-  entry that already holds the name, so the read failed for every client on a server
-  that registered one. The read now resolves its seeds under the call's context, as a
-  kernel resource's read does: a seed registered as `request` or `view` is the value a
+- **A registered `request` pool seed, or a seed whose resolver declares `request`,
+  `view` or `call_context`, no longer breaks a view read.** `resources/read` of an
+  interactive view spread the transport's request beside the server's seeds, and the
+  kernel refuses a seed registered as `request` beside an entry that already holds the
+  name, so the read raised `TypeError` for every client on a server that registered
+  one. A seed whose resolver declared `view` or `call_context` raised `TypeError` too
+  (a missing positional argument), since the read asked it under no context. The read
+  now resolves its seeds under the call's context, read under the view's registered
+  name, as a kernel resource's read does: a seed registered as `request` is the value a
   view declaring that name receives, and with none registered a view still gets the
   transport's `HttpRequest`, the token on it as `request.mcp_token`. A URI-template
   variable named `request` still cannot shadow either. `tools/list` builds the pool for

@@ -47,16 +47,18 @@ The root still exports what it exported from `constants`, apart from four names
 that are gone: `UnknownArguments` (import it from the kernel), and
 `ArgumentBinding`, `OutputFormat` and `ToolKind`, which the sections below
 cover.
-`django-service-specs` **0.30.0** is the kernel release the package
-requires. It reserves `shapes` as a pool name, so a `PoolSeeds` entry named
-`shapes` is refused with a `ValueError` when it is built, as one named `user` is.
+`django-service-specs` **0.31.0** is the kernel release the package
+requires: it ships `seeded_pool`, which a view read and `tools/list`'s
+conditioned-tool pool build their pool through, and it advertises a labelled filter
+as `anyOf` rather than `enum`. It reserves `shapes` as a pool name, so a
+`PoolSeeds` entry named `shapes` is refused with a `ValueError` when it is built, as one named `user` is.
 A `ServiceSpec` refuses, when it is built, a nested selector seat
 (`instance_selector_spec`, `collection_selector_spec` or `output_selector_spec`)
 whose `SelectorSpec` declares `permissions`: the service's own `permissions`
 decide the call, so a seat leaves `permissions` at its default, `None`.
 `register_tool` also refuses, with `ImproperlyConfigured` at registration, a spec
 whose precondition or condition names a seed nothing fills, which already failed on
-every call. The kernel's changelog for 0.21.0 to 0.30.0 has the rest: a `parameters`
+every call. The kernel's changelog for 0.21.0 to 0.31.0 has the rest: a `parameters`
 override on a spec subclass must accept `call_context`, `PydanticValidator` hands a
 service declaring `data` the model instance rather than a dict of its fields, a read
 a provider requires itself is asked of the caller (`tools/list` marks it required, and
@@ -312,9 +314,10 @@ render reads the prompt's arguments by name, and a completer reads what was
 typed from `value` and the client's resolved siblings from `arguments`.
 
 **A callable written for DRF that reads `request.query_params` raises
-`AttributeError` here, by design.** Every `request` this transport hands out is
-Django's `HttpRequest`, which has no `query_params`: the one a pool seed's resolver
-declaring `request` is handed, `call_context["request"]` in a spec's callable, and
+`AttributeError` here, by design.** Every `request` this transport hands out over
+the wire, on its HTTP routes, is Django's `HttpRequest`, which has no
+`query_params`: the one a pool seed's
+resolver declaring `request` is handed, `call_context["request"]` in a spec's callable, and
 the one a prompt's `render` and a completer receive. `request.GET` is no substitute:
 it is the query string of the one JSON-RPC endpoint every call posts to, not the
 arguments of the call. Declare the input where this transport takes it, as a tool's
@@ -322,7 +325,9 @@ or prompt's argument, or as a URI-template variable for a resource, and the call
 declares a parameter of that name and is handed the value. A seed that picked a
 value off the query string reads it off the user or the token
 (`request.mcp_token`) instead. A view's `render=` is handed nothing at all: it takes
-no arguments.
+no arguments. The exception is in-process: `call_tool` and `acall_tool` copy the
+request their caller hands in, and a copy of DRF's `Request` is still DRF's
+`Request`, so what the caller hands `call_tool` is what the spec reads.
 
 **A `user` seed for a token naming no one is `AnonymousUser`**, not `None`, so
 a render testing `user is None` tests `user.is_authenticated` instead.
