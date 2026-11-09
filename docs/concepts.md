@@ -253,6 +253,16 @@ server = MCPServer(name="billing", exception_map={TenantGone: tenant_gone})
   more closely, and leaves a request for input, a refused argument or a
   `ServiceValidationError` as they were. A project's own `ServiceError` subclass reaches
   its handler, and so does `ServiceNotFound` when named.
+- **This is not the precedence of `django-spec-agents`' `exception_map=`.** Here the
+  kernel's refusals share the MRO walk with your entries, so a broad entry loses to a
+  more specific refusal row: `{ServiceError: handler}` leaves a `ServiceValidationError`
+  and a refused argument with the kernel's answer. In spec-agents the map is consulted
+  strictly first, ahead of every built-in arm, and the first match along the MRO wins,
+  so the same `{ServiceError: handler}` receives a `ServiceValidationError` too. A
+  project serving one spec over both writes a map for each (a handler returns a
+  `ToolResult` here and the tool's return value or a `ModelRetry` there), and a broad
+  entry in the agent side's map takes what this side's leaves to the kernel: to answer
+  a refusal the same on both, name it (`{ServiceValidationError: handler}`).
 - **No entry reaches a denial or a configuration error.** `NotPermitted`,
   `PrincipalUnavailable`, Django's `PermissionDenied` and `ImproperlyConfigured`, and
   their subclasses, answer as they do with no map, however broad an entry is. A tool

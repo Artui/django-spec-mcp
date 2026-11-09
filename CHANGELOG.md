@@ -39,6 +39,15 @@ carries; releases up to 0.54.0 are in
 - **Requires `django-service-specs` 0.30.0**, whose `spec_caller_input_schema` and
   `spec_input_schema` take `call_context=`.
 
+### Documentation
+
+- **The `exception_map=` page says how it differs from `django-spec-agents`' map.** This
+  package walks the exception's MRO once with the kernel's refusal rows in it, so a broad
+  entry loses to a more specific refusal; spec-agents consults its map strictly first,
+  so the same entry takes the refusal. The invoicing example's `mark_invoice_sent`
+  docstring no longer says a `ServiceError` is mapped to `-32000`: it is answered as an
+  `isError` tool result of type `service_error`.
+
 ## [0.10.0] — 2026-11-08
 
 ### Added

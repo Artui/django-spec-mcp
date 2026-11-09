@@ -28,9 +28,12 @@ def create_invoice(*, number: str, amount_cents: int) -> Invoice:
 def mark_invoice_sent(*, pk: int) -> Invoice:
     """Flip the ``sent`` flag on an existing invoice.
 
-    Raises ``ServiceError`` (mapped to ``-32000`` at the MCP boundary)
-    when the invoice doesn't exist or is already sent — both are
-    semantic errors, not input-shape errors.
+    Raises ``ServiceError`` when the invoice doesn't exist or is already sent —
+    both are semantic errors, not input-shape errors. The MCP boundary answers
+    it as an ``isError`` tool result, not a JSON-RPC error: its text is the JSON
+    object ``{"error": {"type": "service_error", "message": ...}}``, which the
+    model reads and can act on (``tests/test_examples_smoke.py`` holds the
+    second-call answer).
     """
     try:
         invoice: Invoice = Invoice.objects.get(pk=pk)
