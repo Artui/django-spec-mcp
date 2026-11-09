@@ -15,8 +15,8 @@ carries; releases up to 0.54.0 are in
 
 ### Fixed
 
-- **A registered `request` pool seed, or a seed whose resolver declares `request`,
-  `view` or `call_context`, no longer breaks a view read.** `resources/read` of an
+- **A registered `request` pool seed, or a seed whose resolver declares `view` or
+  `call_context`, no longer breaks a view read.** `resources/read` of an
   interactive view spread the transport's request beside the server's seeds, and the
   kernel refuses a seed registered as `request` beside an entry that already holds the
   name, so the read raised `TypeError` for every client on a server that registered

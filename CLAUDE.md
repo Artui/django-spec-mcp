@@ -213,9 +213,9 @@ The direct paths are direct for structural reasons, not by neglect:
   `call_context(carry_token(...), binding.name)` with `setdefault("request",
   request)` on the seeded pool, spread after the URI-template variables (so no
   variable shadows a seed or the request), `resolve_callable_kwargs`,
-  `run_selector` (`arun_selector_sync_safe` on the async transport), then `build_resource_contents` to encode. A kernel resource
-  encodes through the same `encode_resource_contents` step, so the two cannot
-  drift.
+  `run_selector` (`arun_selector_sync_safe` on the async transport), then
+  `build_resource_contents` to encode. A kernel resource encodes through the same
+  `encode_resource_contents` step, so the two cannot drift.
 - **`prompts/get` and `completion/complete`.** Neither target is a spec: a prompt's
   `render` and a completer are bare callables. They dispatch through the kernel's
   `resolve_callable_kwargs`, with `request` the Django `HttpRequest` `carry_token`

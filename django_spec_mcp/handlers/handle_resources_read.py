@@ -92,8 +92,8 @@ def handle_resources_read(
         # ``request`` is the value rather than a collision with the transport's
         # own request
         # (``test_a_registered_request_seed_is_the_value_a_view_receives``), and
-        # a seed whose resolver declares ``request``, ``view`` or
-        # ``call_context`` is asked for it rather than raising ``TypeError``
+        # a seed whose resolver declares ``view`` or ``call_context`` is asked
+        # for it rather than raising ``TypeError``
         # (``test_a_seed_resolver_declaring_view_is_resolved``,
         # ``test_a_seed_resolver_declaring_call_context_reads_the_resource``). The
         # transport's request is added to the seeded pool, and only then do the

@@ -51,7 +51,8 @@ cover.
 requires: it ships `seeded_pool`, which a view read and `tools/list`'s
 conditioned-tool pool build their pool through, and it advertises a labelled filter
 as `anyOf` rather than `enum`. It reserves `shapes` as a pool name, so a
-`PoolSeeds` entry named `shapes` is refused with a `ValueError` when it is built, as one named `user` is.
+`PoolSeeds` entry named `shapes` is refused with a `ValueError` when it is built, as
+one named `user` is.
 A `ServiceSpec` refuses, when it is built, a nested selector seat
 (`instance_selector_spec`, `collection_selector_spec` or `output_selector_spec`)
 whose `SelectorSpec` declares `permissions`: the service's own `permissions`
