@@ -11,6 +11,42 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+### Fixed
+
+- **A registered `request` or `view` pool seed no longer raises `TypeError` on a view
+  read.** `resources/read` of an interactive view spread the transport's request beside
+  the server's seeds, and the kernel refuses a seed registered as `request` beside an
+  entry that already holds the name, so the read failed for every client on a server
+  that registered one. The read now resolves its seeds under the call's context, as a
+  kernel resource's read does: a seed registered as `request` or `view` is the value a
+  view declaring that name receives, and with none registered a view still gets the
+  transport's `HttpRequest`, the token on it as `request.mcp_token`. A URI-template
+  variable named `request` still cannot shadow either. `tools/list` builds the pool for
+  a tool's availability condition the same way, through the kernel's `seeded_pool`; its
+  answers are unchanged.
+
+### Changed
+
+- **`tools/list` advertises a labelled filter as `anyOf` rather than `enum`.** A filter
+  with labelled choices, an `OrderingFilter`'s `ordering` included, now lists each as
+  `{"const": "amount", "title": "Amount"}` under `anyOf`, where it listed
+  `"enum": ["amount", "-amount"]`; `title` is the label django-filter gives the choice,
+  such as `Amount (descending)` for `-amount`. The values a call accepts are unchanged,
+  as are `type: "string"` and `maxItems` on an ordering. A client that reads the
+  accepted values off `enum` reads them off each `const` instead. The change is the
+  kernel's.
+- **Requires `django-service-specs` 0.31.0**, which ships `seeded_pool` and writes the
+  `anyOf` shape.
+
+### Documentation
+
+- **The moving guide says what a DRF-style `request.query_params` read meets.** A
+  prompt's `render` or a completer reading it raises `AttributeError`, since this
+  transport hands a Django `HttpRequest`, and `request.GET` is the JSON-RPC endpoint's
+  query string, not the prompt's arguments; the input is a prompt argument or a
+  URI-template variable, reaching the callable by name.
+- **The filterset recipe shows the `anyOf` ordering.**
+
 ## [0.11.0] — 2026-11-09
 
 ### Fixed

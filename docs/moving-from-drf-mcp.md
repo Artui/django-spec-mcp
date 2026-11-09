@@ -311,6 +311,15 @@ check that raised DRF's class returns `False` or raises Django's.
 render reads the prompt's arguments by name, and a completer reads what was
 typed from `value` and the client's resolved siblings from `arguments`.
 
+**A callable written for DRF that reads `request.query_params` raises
+`AttributeError` here, by design.** A prompt's `render` and a completer get Django's
+`HttpRequest`, which has no `query_params`, and `request.GET` is no substitute: it is
+the query string of the one JSON-RPC endpoint every call posts to, not the
+arguments of the prompt. Declare the input where this transport takes it, as a
+prompt argument, or as a URI-template variable for a resource, and the callable
+declares a parameter of that name and is handed the value. A view's `render=` is
+handed nothing at all: it takes no arguments.
+
 **A `user` seed for a token naming no one is `AnonymousUser`**, not `None`, so
 a render testing `user is None` tests `user.is_authenticated` instead.
 
