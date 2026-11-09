@@ -28,7 +28,7 @@ from django_service_specs import (
     SelectorSpec,
     ServiceSpec,
     Unrestricted,
-    base_pool,
+    seeded_pool,
 )
 
 from django_spec_mcp import MCPServer
@@ -36,8 +36,8 @@ from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from tests.testapp.models import Invoice
 from tests.utils import make_server
 
-_POOL = "django_spec_mcp.handlers.offered_tools.base_pool"
-"""Where a pass looks ``base_pool`` up, so a spy there sees every pool it builds."""
+_POOL = "django_spec_mcp.handlers.offered_tools.seeded_pool"
+"""Where a pass looks ``seeded_pool`` up, so a spy there sees every pool it builds."""
 
 _HOP = "django_spec_mcp.server.mcp_server.sync_to_async"
 """Where the server looks ``sync_to_async`` up, so a spy there sees every hop."""
@@ -103,7 +103,7 @@ def _pool_spy(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     built: list[dict[str, Any]] = []
 
     def spy(**kwargs: Any) -> dict[str, Any]:
-        pool = base_pool(**kwargs)
+        pool = seeded_pool(**kwargs)
         built.append(pool)
         return pool
 
