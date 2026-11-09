@@ -11,6 +11,8 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-11-09
+
 ### Fixed
 
 - **A registered `request` or `view` pool seed no longer raises `TypeError` on a view
@@ -972,7 +974,8 @@ carries; releases up to 0.54.0 are in
   running. The worker's run now enters below that decision. A client that did
   not declare the extension is still refused `-32021` by a `REQUIRED` tool.
 
-[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/Artui/django-spec-mcp/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/Artui/django-spec-mcp/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/Artui/django-spec-mcp/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/Artui/django-spec-mcp/compare/v0.9.0...v0.9.1
