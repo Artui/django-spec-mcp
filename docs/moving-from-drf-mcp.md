@@ -47,7 +47,7 @@ The root still exports what it exported from `constants`, apart from four names
 that are gone: `UnknownArguments` (import it from the kernel), and
 `ArgumentBinding`, `OutputFormat` and `ToolKind`, which the sections below
 cover.
-`django-service-specs` **0.29.0** is the kernel release the package
+`django-service-specs` **0.30.0** is the kernel release the package
 requires. It reserves `shapes` as a pool name, so a `PoolSeeds` entry named
 `shapes` is refused with a `ValueError` when it is built, as one named `user` is.
 A `ServiceSpec` refuses, when it is built, a nested selector seat

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from django_spec_mcp.handlers.kernel_utils import call_context
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.handlers.utils import render_convention, resolve_bound
 from django_spec_mcp.output.resolve_structured_output import resolve_structured_output
@@ -20,6 +21,14 @@ def kernel_tool_entry(binding: KernelToolBinding, context: MCPCallContext) -> di
     server's settings: the ``outputSchema``
     behind ``include_output_schema``, the handle convention appended to the
     description, and ``annotations`` / ``_meta`` as registered.
+
+    The ``inputSchema`` reads the spec under the stamp ``tools/call`` dispatches
+    under, so a field a Validator declares only to an MCP call is offered
+    (``test_a_required_field_declared_only_under_mcp_is_listed``). The stamp alone,
+    with the request this listing holds left out: a schema that varied by caller
+    would make the shared ``cacheScope`` of a listing false, and a stamp varies by
+    transport only (``test_the_listing_hands_a_validator_the_stamp_and_no_request``).
+    A description that raises is not caught, so it raises out of ``tools/list``.
     """
     emit_output_schema, _emit_structured_content = resolve_structured_output(
         include_output_schema_override=binding.include_output_schema,
@@ -50,6 +59,7 @@ def kernel_tool_entry(binding: KernelToolBinding, context: MCPCallContext) -> di
             max_page_size=resolve_bound(binding.max_page_size, context.config.max_page_size),
             pool_seeds=context.pool_seeds,
             query_param_on_pages=render_convention(context.conventions.query_param_on_pages),
+            call_context=call_context(None, binding.name),
         ),
         output_schema=output_schema,
         annotations=dict(binding.annotations) or None,

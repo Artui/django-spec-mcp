@@ -28,6 +28,7 @@ from __future__ import annotations
 import difflib
 import json
 import os
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -45,9 +46,13 @@ from django_service_specs import (
     ServiceSpec,
     UnknownArguments,
     Unrestricted,
+    ValidationContext,
+    Validator,
+    call_transport,
 )
 
 from django_spec_mcp import (
+    MCP_TRANSPORT,
     Icon,
     IconTheme,
     MCPServer,
@@ -106,6 +111,21 @@ def _maybe_invoices() -> list[Invoice] | None:
 def _chart() -> bytes:
     """A service whose result is an image rather than JSON text."""
     return b""
+
+
+class _PerTransport(Validator):
+    """``amount`` to anyone, and a required field to each of two transports."""
+
+    def parameters(self, *, call_context: dict[str, Any] | None = None) -> Parameters:
+        declared = [Parameter("amount", "integer", required=True)]
+        if call_context is not None and call_transport(call_context) == MCP_TRANSPORT:
+            declared.append(Parameter("session_ref", "string", required=True))
+        if call_context is not None and call_transport(call_context) == "cli":
+            declared.append(Parameter("operator", "string", required=True))
+        return Parameters(declared)
+
+    def validate(self, arguments: Mapping[str, Any], context: ValidationContext) -> dict[str, Any]:
+        return dict(arguments)
 
 
 def _server() -> MCPServer:
@@ -274,6 +294,18 @@ def _server() -> MCPServer:
         ),
         name="invoices.create_many",
         description="Create several invoices.",
+    )
+    # A Validator declaring itself per transport: the listing reads it under the
+    # ``mcp`` stamp, so ``session_ref`` is asked for and ``operator`` is not.
+    server.register_tool(
+        ServiceSpec(
+            service=record_invoice,
+            validator=_PerTransport(),
+            presenter=DataclassPresenter(InvoiceOutput),
+            permissions=[Unrestricted()],
+        ),
+        name="invoices.create_per_transport",
+        description="Create an invoice, naming the session it came from.",
     )
     return server
 

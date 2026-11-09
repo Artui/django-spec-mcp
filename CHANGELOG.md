@@ -11,6 +11,34 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+### Fixed
+
+- **`tools/list` offers what a Validator declares to an MCP call.** A Validator
+  declaring `parameters(self, *, call_context=None)` was asked with no context by the
+  listing and under one stamped `mcp` by `tools/call`, so a field it declared only under
+  `mcp` was taken and never advertised, and a required one was refused of every client
+  following the schema. The listing now reads the spec under that stamp, on the HTTP
+  routes and `list_tools` alike, so the field is in `properties` and `required`, and a
+  field declared only to another transport stays out. It hands the stamp alone, with
+  `request` `None`, because a schema that varied by caller would make a listing's shared
+  `cacheScope` false: a field declared per caller stays unoffered, as it was, and the
+  call still takes it.
+
+### Changed
+
+- **A declaration that fails under `mcp` now fails the server's startup.**
+  `register_tool` compiles the schema under the same stamp, so a field named `user` that
+  a Validator declares only to an MCP call raises `ImproperlyConfigured` there. So does
+  anything else a description raises under it: **a Validator guarding
+  `call_context is None` and then reading `call_context["request"].user` passes on
+  0.10.0 and raises `AttributeError` at `register_tool` on this release**, since
+  `request` is `None` where nothing gave one. Guard it too, with
+  `call_context["request"] is not None` or `call_transport`. A binding built by hand and
+  passed to `server.tools.register` skips the compile, and the same read raises out of
+  `tools/list`.
+- **Requires `django-service-specs` 0.30.0**, whose `spec_caller_input_schema` and
+  `spec_input_schema` take `call_context=`.
+
 ## [0.10.0] — 2026-11-08
 
 ### Added

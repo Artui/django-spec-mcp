@@ -368,6 +368,23 @@ someone, and the server leaves out of the schema what it answers itself:
   one nothing it reaches is required. Annotate the provider to have the rest
   inferred.
 
+**A listing reads the spec under the `mcp` stamp, and nothing else about the
+caller.** A Validator declaring `parameters(self, *, call_context=None)` is asked
+under a dict carrying [`transport`](#transport), `"mcp"`, and the tool's name as
+`action`, with `request` `None`, on the HTTP routes and `list_tools` alike. So a
+field it declares only to an MCP call is offered, and required if it says so, and
+a field it declares only to another transport is not. A field it declares per
+caller stays unoffered, and is still taken by a `tools/call` that sends it: a
+listing that varied by caller would make its `cacheScope` false. A Validator
+reading `call_context` guards `request` as well as the `None` of a declaration made
+to no call: one that reads `call_context["request"].user` raises `AttributeError`.
+
+`register_tool` compiles the schema under the same dict, so a declaration that
+cannot be described under `mcp`, a field named `user` or that read of `None`,
+fails the server's startup, and not its first listing. A binding built by hand and
+passed to `server.tools.register` skips that compile and raises out of
+`tools/list`, as any description that raises does.
+
 ```python
 from typing_extensions import TypedDict
 
@@ -544,9 +561,9 @@ server.register_tool(
   route, the in-process `call_tool` included, lays the values under the call's
   `call_context`, the dict the call is then dispatched with. A value that
   declaration refuses raises `ImproperlyConfigured` on the call, the server's
-  mistake rather than the caller's invalid argument. Registration reads the
-  declaration made to no call, so a name a Validator declares only to a call is
-  refused there: declare it to no call too.
+  mistake rather than the caller's invalid argument. Registration checks them
+  against the declaration made to no call, so a name a Validator declares only to
+  a call is refused there: declare it to no call too.
 
 The values are **static** for the life of the binding. A value computed per
 request - the project the signed-in user belongs to - is not something

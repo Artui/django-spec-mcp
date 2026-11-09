@@ -1116,7 +1116,8 @@ class MCPServer:
         # the kernel's list of the server's names, the one ``admitted_arguments``
         # subtracts for a tool.
         owned = server_owned_keys(spec, pool_seeds=self._pool_seeds)
-        # No call_context: registration has no call, and the kernel's input schema asks the same.
+        # No call_context: a paged tool is a LIST selector, whose reads no Validator declares
+        # per transport, so the declaration made to no call is the one the listing makes.
         undeclared = sorted(set(template_variables) - spec.parameters().names())
         filled = sorted(set(template_variables) & owned)
         refusals: list[str] = []
@@ -1705,7 +1706,8 @@ def _refuse_pagination_named_reads(binding: KernelToolBinding) -> None:
     """
     if not binding.paginate:
         return
-    # No call_context: registration has no call, and the kernel's input schema asks the same.
+    # No call_context: a paged tool is a LIST selector, whose reads no Validator declares
+    # per transport, so the declaration made to no call is the one the listing makes.
     taken = sorted(binding.spec.parameters().names() & RESERVED_POST_FETCH_KEYS)
     if taken:
         raise ImproperlyConfigured(

@@ -15,6 +15,7 @@ def kernel_tool_input_schema(
     max_page_size: int | None,
     pool_seeds: PoolSeeds = DEFAULT_POOL_SEEDS,
     query_param_on_pages: str | None = PAGED_QUERY_PARAM_SCOPE,
+    call_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """The ``inputSchema`` a kernel tool advertises.
 
@@ -44,12 +45,18 @@ def kernel_tool_input_schema(
     the kernel's schema, so one spec asks the same of a caller on both. A
     ``many`` spec's rows differ until that route reads them through
     ``spec_caller_input_schema`` too: there they are asked as declared.
+
+    ``call_context`` is the dict a Validator declaring one is asked under, and the
+    caller builds it. ``None``, the default, reads the declaration made to no call
+    (``test_with_no_context_the_schema_is_the_declaration_made_to_no_call``);
+    ``kernel_tool_entry`` hands the stamp a listing describes under.
     """
     schema = spec_caller_input_schema(
         binding.spec,
         pool_seeds=pool_seeds,
         server_arguments=binding.server_arguments,
         unknown_arguments=binding.unknown_arguments,
+        call_context=call_context,
     )
     if binding.paginate:
         # ``spec_caller_input_schema`` builds the top level and its
