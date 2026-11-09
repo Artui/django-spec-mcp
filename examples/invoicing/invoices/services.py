@@ -8,9 +8,13 @@ through the spec's ``presenter``.
 
 from __future__ import annotations
 
+import logging
+
 from django_service_specs import ServiceError, ServiceValidationError
 
 from invoices.models import Invoice
+
+logger = logging.getLogger(__name__)
 
 
 class InvoiceAlreadySent(Exception):
@@ -59,6 +63,18 @@ def set_invoice_amount(*, instance: Invoice, amount_cents: int) -> Invoice:
     instance.amount_cents = amount_cents
     instance.save(update_fields=["amount_cents"])
     return instance
+
+
+def write_off_invoice(*, number: str, reason: str = "") -> None:
+    """Delete an invoice, logging why. ``reason`` is asked of a caller over MCP alone.
+
+    ``WriteOffValidator`` declares it to that transport, so a call through any other
+    leaves it out and this default stands.
+    """
+    deleted, _ = Invoice.objects.filter(number=number).delete()
+    if not deleted:
+        raise ServiceError(f"Invoice {number} not found")
+    logger.info("Wrote off invoice %s: %s", number, reason)
 
 
 def apply_credit(*, instance: Invoice, credit_cents: int) -> Invoice | None:

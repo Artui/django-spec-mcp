@@ -49,6 +49,8 @@ carries; releases up to 0.54.0 are in
   so the same entry takes the refusal. The invoicing example's `mark_invoice_sent`
   docstring no longer says a `ServiceError` is mapped to `-32000`: it is answered as an
   `isError` tool result of type `service_error`.
+- **The invoicing example shows a Validator declaring itself per transport.**
+  `invoices.write_off` asks `reason` of a caller over MCP alone, and `tools/list` lists it.
 
 ## [0.10.0] — 2026-11-08
 
