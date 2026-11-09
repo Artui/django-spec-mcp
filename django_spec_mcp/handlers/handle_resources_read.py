@@ -2,11 +2,16 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from django_service_specs import base_pool, resolve_callable_kwargs, run_selector
+from django_service_specs import resolve_callable_kwargs, run_selector, seeded_pool
 
 from django_spec_mcp._compat.tracing import span
 from django_spec_mcp.handlers.judge_binding import judge_binding
-from django_spec_mcp.handlers.kernel_utils import KernelAdmission, admit_kernel_read, carry_token
+from django_spec_mcp.handlers.kernel_utils import (
+    KernelAdmission,
+    admit_kernel_read,
+    call_context,
+    carry_token,
+)
 from django_spec_mcp.handlers.read_kernel_resource import read_kernel_resource
 from django_spec_mcp.handlers.runs_on_kernel import runs_on_kernel
 from django_spec_mcp.handlers.types.context import MCPCallContext
@@ -82,13 +87,27 @@ def handle_resources_read(
         # ``HttpRequest`` with the token on it, which a seed declaring
         # ``request`` receives
         # (``test_a_pool_seed_resolved_on_a_view_read_is_handed_the_transports_request``).
-        # The transport's seeds land after the URI-template variables, so none
-        # can be shadowed from the URI.
+        # The seeds resolve under the call's context, read under the resource's
+        # name, as a kernel resource read's do. So a seed registered as
+        # ``request`` is the value rather than a collision with the transport's
+        # own request
+        # (``test_a_registered_request_seed_is_the_value_a_view_receives``), and
+        # a seed whose resolver declares ``view`` or ``call_context`` is asked
+        # for it rather than raising ``TypeError``
+        # (``test_a_seed_resolver_declaring_view_is_resolved``,
+        # ``test_a_seed_resolver_declaring_call_context_reads_the_resource``). The
+        # transport's request is added to the seeded pool, and only then do the
+        # URI-template variables go under it, so none can be shadowed from the
+        # URI, a variable named ``request`` included
+        # (``test_a_uri_variable_named_request_never_shadows_the_transports_entry``).
         request = carry_token(context.http_request, context.token)
-        pool: dict[str, Any] = {
-            **vars_,
-            **base_pool(user=context.token.user, request=request, seeds=context.pool_seeds),
-        }
+        seeded = seeded_pool(
+            user=context.token.user,
+            seeds=context.pool_seeds,
+            call_context=call_context(request, binding.name),
+        )
+        seeded.setdefault("request", request)
+        pool: dict[str, Any] = {**vars_, **seeded}
         raw: Any = run_selector(binding.selector, resolve_callable_kwargs(binding.selector, pool))
         contents: ResourceContents | JsonRpcError = build_resource_contents(
             binding=binding, uri=uri, raw=raw

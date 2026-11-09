@@ -2,13 +2,18 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from django_service_specs import base_pool, resolve_callable_kwargs
+from django_service_specs import resolve_callable_kwargs, seeded_pool
 
 from django_spec_mcp._compat.acall import acall
 from django_spec_mcp._compat.tracing import span
 from django_spec_mcp._compat.utils import arun_selector_sync_safe
 from django_spec_mcp.handlers.judge_binding import judge_binding
-from django_spec_mcp.handlers.kernel_utils import KernelAdmission, admit_kernel_read, carry_token
+from django_spec_mcp.handlers.kernel_utils import (
+    KernelAdmission,
+    admit_kernel_read,
+    call_context,
+    carry_token,
+)
 from django_spec_mcp.handlers.read_kernel_resource_async import read_kernel_resource_async
 from django_spec_mcp.handlers.runs_on_kernel import runs_on_kernel
 from django_spec_mcp.handlers.types.context import MCPCallContext
@@ -73,15 +78,22 @@ async def handle_resources_read_async(
             return await read_kernel_resource_async(
                 cast(KernelResourceBinding, binding), uri, vars_, admission, context
             )
-        # See the sync sibling: the kernel's pool and the transport's request.
+        # See the sync sibling: the kernel's pool, seeded under the call's
+        # context, with the transport's request as the default for ``request``:
+        # a registered seed outranks it and it outranks a URI-template variable;
+        # a seed whose resolver declares ``request``, ``view`` or ``call_context``
+        # is asked for it, the context read under the resource's name.
         # The selector goes through ``arun_selector_sync_safe`` and the encoding
         # through ``acall``, so neither a template it renders nor a lazy value
         # ``JSON`` encoding iterates is read on the loop.
         request = carry_token(context.http_request, context.token)
-        pool: dict[str, Any] = {
-            **vars_,
-            **base_pool(user=context.token.user, request=request, seeds=context.pool_seeds),
-        }
+        seeded = seeded_pool(
+            user=context.token.user,
+            seeds=context.pool_seeds,
+            call_context=call_context(request, binding.name),
+        )
+        seeded.setdefault("request", request)
+        pool: dict[str, Any] = {**vars_, **seeded}
         raw: Any = await arun_selector_sync_safe(
             binding.selector, resolve_callable_kwargs(binding.selector, pool)
         )

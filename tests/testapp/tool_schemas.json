@@ -132,9 +132,15 @@
           },
           "ordering": {
             "items": {
-              "enum": [
-                "amount",
-                "-amount"
+              "anyOf": [
+                {
+                  "const": "amount",
+                  "title": "Amount"
+                },
+                {
+                  "const": "-amount",
+                  "title": "Amount (descending)"
+                }
               ],
               "type": "string"
             },

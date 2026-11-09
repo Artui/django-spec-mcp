@@ -219,7 +219,15 @@ every transport.
     },
     "ordering": {
       "type": "array",
-      "items": {"type": "string", "enum": ["created", "-created", "amount", "-amount"]},
+      "items": {
+        "type": "string",
+        "anyOf": [
+          {"const": "created", "title": "Created"},
+          {"const": "-created", "title": "Created (descending)"},
+          {"const": "amount", "title": "Amount"},
+          {"const": "-amount", "title": "Amount (descending)"}
+        ]
+      },
       "maxItems": 1000
     },
     "page": {"type": "integer", "minimum": 1},
@@ -232,7 +240,9 @@ every transport.
 Filter properties are always optional — they narrow the queryset but
 aren't required to call the tool. Ordering takes a list of names, each
 ascending (`field`) or descending (`-field`): `["-amount"]` is the largest
-first. `page` defaults to `1` and `limit` to `100` when the model omits it.
+first. The accepted names are the `const` of each `anyOf` entry, and the
+`title` is the label django-filter gives the choice; a client that read the
+names off an `enum` reads them off the `const`s. `page` defaults to `1` and `limit` to `100` when the model omits it.
 
 A number filter is a `decimal` string, which its form field reads exactly; a
 JSON number is still taken. The `description` on `min_amount`, `max_amount`

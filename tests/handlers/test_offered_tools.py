@@ -32,7 +32,7 @@ from django_service_specs import (
     SelectorSpec,
     ServiceSpec,
     Unrestricted,
-    base_pool,
+    seeded_pool,
 )
 
 from django_spec_mcp import MCPServer
@@ -44,8 +44,8 @@ from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from tests.utils import call_context, make_server, tool_error
 
-_POOL = "django_spec_mcp.handlers.offered_tools.base_pool"
-"""Where the filter looks ``base_pool`` up, so a spy there sees every pool it builds."""
+_POOL = "django_spec_mcp.handlers.offered_tools.seeded_pool"
+"""Where the filter looks ``seeded_pool`` up, so a spy there sees every pool it builds."""
 
 _CLOSED = Affordance(code="books_closed", reason="The books are closed.", when=lambda: False)
 _OPEN = Affordance(code="books_open", reason="The books are open.", when=lambda: True)
@@ -120,7 +120,7 @@ def _pool_spy(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
     built: list[dict[str, Any]] = []
 
     def spy(**kwargs: Any) -> dict[str, Any]:
-        pool = base_pool(**kwargs)
+        pool = seeded_pool(**kwargs)
         built.append(pool)
         return pool
 

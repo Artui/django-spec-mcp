@@ -11,6 +11,47 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-11-09
+
+### Fixed
+
+- **A registered `request` pool seed, or a seed whose resolver declares `view` or
+  `call_context`, no longer breaks a view read.** `resources/read` of an
+  interactive view spread the transport's request beside the server's seeds, and the
+  kernel refuses a seed registered as `request` beside an entry that already holds the
+  name, so the read raised `TypeError` for every client on a server that registered
+  one. A seed whose resolver declared `view` or `call_context` raised `TypeError` too
+  (a missing positional argument), since the read asked it under no context. The read
+  now resolves its seeds under the call's context, read under the view's registered
+  name, as a kernel resource's read does: a seed registered as `request` is the value a
+  view declaring that name receives, and with none registered a view still gets the
+  transport's `HttpRequest`, the token on it as `request.mcp_token`. A URI-template
+  variable named `request` still cannot shadow either. `tools/list` builds the pool for
+  a tool's availability condition the same way, through the kernel's `seeded_pool`; its
+  answers are unchanged.
+
+### Changed
+
+- **`tools/list` advertises a labelled filter as `anyOf` rather than `enum`.** A filter
+  with labelled choices, an `OrderingFilter`'s `ordering` included, now lists each as
+  `{"const": "amount", "title": "Amount"}` under `anyOf`, where it listed
+  `"enum": ["amount", "-amount"]`; `title` is the label django-filter gives the choice,
+  such as `Amount (descending)` for `-amount`. The values a call accepts are unchanged,
+  as are `type: "string"` and `maxItems` on an ordering. A client that reads the
+  accepted values off `enum` reads them off each `const` instead. The change is the
+  kernel's.
+- **Requires `django-service-specs` 0.31.0**, which ships `seeded_pool` and writes the
+  `anyOf` shape.
+
+### Documentation
+
+- **The moving guide says what a DRF-style `request.query_params` read meets.** A
+  prompt's `render` or a completer reading it raises `AttributeError`, since this
+  transport hands a Django `HttpRequest`, and `request.GET` is the JSON-RPC endpoint's
+  query string, not the prompt's arguments; the input is a prompt argument or a
+  URI-template variable, reaching the callable by name.
+- **The filterset recipe shows the `anyOf` ordering.**
+
 ## [0.11.0] — 2026-11-09
 
 ### Fixed
@@ -936,7 +977,8 @@ carries; releases up to 0.54.0 are in
   running. The worker's run now enters below that decision. A client that did
   not declare the extension is still refused `-32021` by a `REQUIRED` tool.
 
-[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/Artui/django-spec-mcp/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/Artui/django-spec-mcp/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/Artui/django-spec-mcp/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/Artui/django-spec-mcp/compare/v0.9.0...v0.9.1

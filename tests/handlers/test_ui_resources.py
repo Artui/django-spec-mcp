@@ -13,11 +13,13 @@ from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
 from django_spec_mcp.handlers.handle_resources_read_async import handle_resources_read_async
 from django_spec_mcp.handlers.types.context import MCPCallContext
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.registry.types.resource_binding import ResourceBinding
 from django_spec_mcp.registry.types.ui_csp import UICsp
 from django_spec_mcp.registry.types.ui_resource_meta import UIResourceMeta
 from django_spec_mcp.server.mcp_server import MCPServer
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
+from django_spec_mcp.types.resource_encoding import ResourceEncoding
 from django_spec_mcp.types.ui_meta_key import UI_META_KEY
 from django_spec_mcp.types.ui_resource_mime_type import UI_RESOURCE_MIME_TYPE
 from tests.utils import RefusingRateLimit, call_context, make_server
@@ -188,6 +190,180 @@ async def test_a_pool_seed_resolved_on_a_view_read_is_handed_the_transports_requ
     assert _contents(out)["text"] == VIEW
     assert seen == [http_request]
     assert seen[0].mcp_token is ctx.token
+
+
+def _callable_view_server(selector: Any, uri: str = URI) -> MCPServer:
+    # A view over a plain callable that declares what it wants of the pool.
+    # ``register_ui_resource`` refuses a ``render`` taking any parameter, so such
+    # a binding is built by hand, the way a binding of the kernel's own kinds is
+    # not.
+    server = make_server(name="test", description="d", session_store=InMemorySessionStore())
+    server.resources.register(
+        ResourceBinding(
+            name="callable_view",
+            uri_template=uri,
+            description=None,
+            selector=selector,
+            mime_type="text/html",
+            encoding=ResourceEncoding.TEXT,
+        )
+    )
+    return server
+
+
+async def _read_uri(reader: str, ctx: MCPCallContext, uri: str) -> Any:
+    if reader == "sync":
+        return handle_resources_read({"uri": uri}, ctx)
+    return await handle_resources_read_async({"uri": uri}, ctx)
+
+
+@pytest.mark.parametrize("reader", ["sync", "async"])
+async def test_a_registered_request_seed_is_the_value_a_view_receives(reader: str) -> None:
+    # A seed registered under ``request`` is the value a view declaring it is
+    # handed, as on a kernel tool or resource, and the read does not raise
+    # ``TypeError`` for the transport's own request beside it.
+    sentinel = object()
+    seen: list[Any] = []
+
+    def view(request: Any) -> str:
+        seen.append(request)
+        return VIEW
+
+    server = _callable_view_server(view)
+    ctx = call_context(server, pool_seeds=PoolSeeds().extend(request=lambda: sentinel))
+
+    out = await _read(reader, ctx)
+
+    assert _contents(out)["text"] == VIEW
+    assert seen == [sentinel]
+
+
+@pytest.mark.parametrize("reader", ["sync", "async"])
+async def test_a_registered_view_seed_is_the_value_a_view_receives(reader: str) -> None:
+    # A guard, not a falsification: the read never spread a ``view`` of its own,
+    # so a seed registered under that name never collided, on main either. It
+    # holds that the seed stays the only value the name can take.
+    sentinel = object()
+    seen: list[Any] = []
+
+    def view(view: Any) -> str:
+        seen.append(view)
+        return VIEW
+
+    server = _callable_view_server(view)
+    ctx = call_context(server, pool_seeds=PoolSeeds().extend(view=lambda: sentinel))
+
+    out = await _read(reader, ctx)
+
+    assert _contents(out)["text"] == VIEW
+    assert seen == [sentinel]
+
+
+@pytest.mark.parametrize("reader", ["sync", "async"])
+async def test_a_view_with_no_request_seed_receives_the_transports_request(reader: str) -> None:
+    # With nothing registered under ``request``, a view declaring it is handed
+    # the carried ``HttpRequest``, the token on it.
+    seen: list[Any] = []
+
+    def view(request: Any) -> str:
+        seen.append(request)
+        return VIEW
+
+    server = _callable_view_server(view)
+    http_request = HttpRequest()
+    ctx = call_context(server, http_request=http_request)
+
+    out = await _read(reader, ctx)
+
+    assert _contents(out)["text"] == VIEW
+    assert seen == [http_request]
+    assert seen[0].mcp_token is ctx.token
+
+
+@pytest.mark.parametrize("reader", ["sync", "async"])
+async def test_a_view_registered_publicly_reads_beside_a_request_seed(reader: str) -> None:
+    # The route a project takes, ``register_ui_resource``, on a server whose seeds
+    # hold ``request``: the read used to raise ``TypeError`` (base_pool() got a
+    # registered pool seed 'request' that an entry already occupies).
+    ctx = call_context(_server(), pool_seeds=PoolSeeds().extend(request=lambda: object()))
+
+    out = await _read(reader, ctx)
+
+    assert _contents(out)["text"] == VIEW
+
+
+@pytest.mark.parametrize("reader", ["sync", "async"])
+async def test_a_seed_resolver_declaring_view_is_resolved(reader: str) -> None:
+    # A seed whose resolver declares ``view`` is asked under the call's context,
+    # which has none for a view read: it receives ``None``. Before, the resolver
+    # was never given the name, and every view read on such a server raised
+    # ``TypeError`` (missing 1 required positional argument: 'view').
+    seen: list[Any] = []
+
+    def tenant(view: Any) -> str:
+        seen.append(view)
+        return "acme"
+
+    ctx = call_context(_server(), pool_seeds=PoolSeeds().extend(tenant=tenant))
+
+    out = await _read(reader, ctx)
+
+    assert _contents(out)["text"] == VIEW
+    assert seen == [None]
+
+
+@pytest.mark.parametrize("reader", ["sync", "async"])
+async def test_a_seed_resolver_declaring_call_context_reads_the_resource(reader: str) -> None:
+    # The resolver reads the read's context under the resource's name, as a
+    # kernel resource read's does: ``action`` is the view's registered name and
+    # ``request`` the request the read arrived on, the token on it. Before, the
+    # read raised ``TypeError`` (missing 1 required positional argument:
+    # 'call_context').
+    seen: list[Any] = []
+
+    def tenant(call_context: Any) -> str:
+        seen.append(call_context)
+        return "acme"
+
+    http_request = HttpRequest()
+    ctx = call_context(
+        _server(), http_request=http_request, pool_seeds=PoolSeeds().extend(tenant=tenant)
+    )
+
+    out = await _read(reader, ctx)
+
+    assert _contents(out)["text"] == VIEW
+    assert len(seen) == 1
+    assert seen[0]["action"] == "invoices_table"
+    assert seen[0]["request"] is http_request
+    assert seen[0]["request"].mcp_token is ctx.token
+
+
+@pytest.mark.parametrize("reader", ["sync", "async"])
+@pytest.mark.parametrize("seeded", [False, True], ids=["unseeded", "seeded"])
+async def test_a_uri_variable_named_request_never_shadows_the_transports_entry(
+    reader: str, seeded: bool
+) -> None:
+    # ``register_ui_resource`` runs no reserved-variable guard, so a templated
+    # URI of a hand-built binding may name ``request``. Its variable lands
+    # first and loses to the transport's request, or to the seed registered
+    # under that name.
+    sentinel = object()
+    seen: list[Any] = []
+
+    def view(request: Any) -> str:
+        seen.append(request)
+        return VIEW
+
+    server = _callable_view_server(view, uri="docs://{request}")
+    http_request = HttpRequest()
+    seeds = PoolSeeds().extend(request=lambda: sentinel) if seeded else PoolSeeds()
+    ctx = call_context(server, http_request=http_request, pool_seeds=seeds)
+
+    out = await _read_uri(reader, ctx, "docs://forged")
+
+    assert _contents(out)["text"] == VIEW
+    assert seen == [sentinel if seeded else http_request]
 
 
 _SOURCES: dict[str, dict[str, Any]] = {

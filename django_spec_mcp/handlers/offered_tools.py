@@ -31,8 +31,8 @@ from typing import Any
 from django_service_specs import (
     Affordance,
     ServiceSpec,
-    base_pool,
     operation_affordances,
+    seeded_pool,
     unmet_operation_affordance,
 )
 
@@ -119,12 +119,12 @@ def _kernel_unmet(binding: KernelToolBinding, context: MCPCallContext) -> Afford
     (``test_the_condition_sees_the_context_and_user_a_call_would``).
 
     **The pool is built per tool, from that same context**, as the call's
-    dispatch builds it (the kernel's ``seeded_base``): ``base_pool`` with the
-    context in, so a seed's resolver declaring ``request`` or ``view`` reads
-    the context's, then the context taken back out, since it is no seed and
-    the condition is handed it beside the pool. Built with no context, a
-    resolver declaring ``request`` raised ``TypeError`` for the whole listing
-    (test_a_seed_reading_the_request_is_resolved_for_the_listing_as_for_the_call),
+    dispatch builds it: the kernel's ``seeded_pool``, which resolves the seeds
+    under the context, so a seed's resolver declaring ``request`` or ``view``
+    reads the context's, and hands back the pool without the context, since it
+    is no seed and the condition is handed it beside the pool. Built with no
+    context, a resolver declaring ``request`` raised ``TypeError`` for the whole
+    listing (test_a_seed_reading_the_request_is_resolved_for_the_listing_as_for_the_call),
     and one defaulting it hid a tool the call admits
     (test_a_seed_defaulting_the_request_does_not_hide_a_tool_the_call_admits).
     Per tool rather than once per listing because a resolver may declare
@@ -134,16 +134,11 @@ def _kernel_unmet(binding: KernelToolBinding, context: MCPCallContext) -> Afford
     resolve once per conditioned tool, as they resolve once per call.
     """
     tool_context = call_context(carry_token(context.http_request, context.token), binding.name)
-    pool = base_pool(
+    pool = seeded_pool(
         user=principal_of(context.token.user),
         seeds=context.pool_seeds,
         call_context=tool_context,
     )
-    # The key ``base_pool`` was handed it under; the condition is handed the
-    # same dict as ``call_context=`` instead, and the kernel refuses a pool
-    # carrying a context beside a different one
-    # (test_a_pool_is_built_per_conditioned_tool fails without this line).
-    del pool["call_context"]
     return unmet_operation_affordance(
         binding.spec, pool, reserved=context.pool_seeds.reserved, call_context=tool_context
     )

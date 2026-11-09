@@ -141,8 +141,9 @@ happens to live.
   `server_arguments` can hold for its spec.
 - `resolve_callable_kwargs` — kwarg-pool dispatch for a bare callable. Picks the
   subset of a kwarg pool matching the callable's declared parameters; if the
-  callable declares `**kwargs` the entire pool is passed. `base_pool` builds the
-  pool's reserved half (the principal, the request and the server's seeds).
+  callable declares `**kwargs` the entire pool is passed. `seeded_pool` builds
+  the pool's reserved half (the principal and the server's seeds, resolved under a
+  call context).
 - `run_selector` / `arun_selector` — a view resource's bare selector, with
   sync/async transparency (`_compat/utils.arun_selector_sync_safe` keeps a sync
   selector off the event loop).
@@ -208,12 +209,13 @@ The direct paths are direct for structural reasons, not by neglect:
 - **`resources/read` of a view.** A `ResourceBinding` that is not a
   `KernelResourceBinding` (an MCP Apps UI resource, or one built by hand over a
   plain callable) holds a bare selector, not a spec, so there is nothing to
-  dispatch. It reads on the kernel's leaves: `carry_token`, then the URI-template
-  variables with `base_pool` laid over them (so no variable shadows a seed),
-  `resolve_callable_kwargs`, `run_selector` (`arun_selector_sync_safe` on the
-  async transport), then `build_resource_contents` to encode. A kernel resource
-  encodes through the same `encode_resource_contents` step, so the two cannot
-  drift.
+  dispatch. It reads on the kernel's leaves: `seeded_pool` under
+  `call_context(carry_token(...), binding.name)` with `setdefault("request",
+  request)` on the seeded pool, spread after the URI-template variables (so no
+  variable shadows a seed or the request), `resolve_callable_kwargs`,
+  `run_selector` (`arun_selector_sync_safe` on the async transport), then
+  `build_resource_contents` to encode. A kernel resource encodes through the same
+  `encode_resource_contents` step, so the two cannot drift.
 - **`prompts/get` and `completion/complete`.** Neither target is a spec: a prompt's
   `render` and a completer are bare callables. They dispatch through the kernel's
   `resolve_callable_kwargs`, with `request` the Django `HttpRequest` `carry_token`
