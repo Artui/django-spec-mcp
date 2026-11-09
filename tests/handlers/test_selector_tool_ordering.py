@@ -93,9 +93,18 @@ def three_invoices(db: None) -> None:
 
 
 def test_the_filters_ordering_is_advertised_with_nothing_declared() -> None:
+    # The vocabulary is the filter's own, ``amount`` and ``-amount``, and the
+    # kernel advertises a labelled choice as ``anyOf`` of ``const`` + ``title``
+    # rather than an ``enum``, the labels being django-filter's.
     assert _properties(_filtered())["ordering"] == {
         "type": "array",
-        "items": {"type": "string", "enum": ["amount", "-amount"]},
+        "items": {
+            "type": "string",
+            "anyOf": [
+                {"const": "amount", "title": "Amount"},
+                {"const": "-amount", "title": "Amount (descending)"},
+            ],
+        },
         "maxItems": 1000,
     }
 
