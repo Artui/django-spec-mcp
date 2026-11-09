@@ -3017,7 +3017,7 @@ selector or a presenter reads it through the kernel's <code>call_transport</code
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>    <span class="k">return</span> <span class="n">call_transport</span><span class="p">(</span><span class="n">call_context</span><span class="p">)</span> <span class="o">==</span> <span class="n">MCP_TRANSPORT</span>
 </span></code></pre></div>
 <p>One value for every reader of a call, and on every route that builds a context: a
-<code>tools/call</code>, a resource read, a filtered listing, a completion and a resource
+<code>tools/call</code>, a resource read, a listing, a completion and a resource
 watch. It names the transport the call came in on, so <code>call_tool</code> and <code>acall_tool</code>
 read <code>"mcp"</code> too. That includes a tool an agent reaches through spec-agents' MCP
 bridge, which calls <code>acall_tool</code>, when this release is the <code>django-spec-mcp</code>
@@ -3105,6 +3105,17 @@ reason to know the kernel, says how each is answered:</p>
   more closely, and leaves a request for input, a refused argument or a
   <code>ServiceValidationError</code> as they were. A project's own <code>ServiceError</code> subclass reaches
   its handler, and so does <code>ServiceNotFound</code> when named.</li>
+<li><strong>This is not the precedence of <code>django-spec-agents</code>' <code>exception_map=</code>.</strong> Here the
+  kernel's refusals share the MRO walk with your entries, so a broad entry loses to a
+  more specific refusal row: <code>{ServiceError: handler}</code> leaves a <code>ServiceValidationError</code>
+  and a refused argument with the kernel's answer. In spec-agents the map is consulted
+  strictly first, ahead of every built-in arm, and the first match along the MRO wins,
+  so the same <code>{ServiceError: handler}</code> receives a <code>ServiceValidationError</code> too. A
+  project serving one spec over both writes a map for each (a handler returns a
+  <code>ToolResult</code> here, and there it returns the tool's value or raises <code>ModelRetry</code> or
+  <code>ToolFailed</code>), and a broad
+  entry in the agent side's map takes what this side's leaves to the kernel: to answer
+  a refusal the same on both, name it (<code>{ServiceValidationError: handler}</code>).</li>
 <li><strong>No entry reaches a denial or a configuration error.</strong> <code>NotPermitted</code>,
   <code>PrincipalUnavailable</code>, Django's <code>PermissionDenied</code> and <code>ImproperlyConfigured</code>, and
   their subclasses, answer as they do with no map, however broad an entry is. A tool
@@ -3233,6 +3244,22 @@ someone, and the server leaves out of the schema what it answers itself:</p>
 </span><span id="__span-4-19"><a id="__codelineno-4-19" name="__codelineno-4-19" href="#__codelineno-4-19"></a>    <span class="n">permissions</span><span class="o">=</span><span class="p">[</span><span class="n">IsBillingStaff</span><span class="p">()],</span>
 </span><span id="__span-4-20"><a id="__codelineno-4-20" name="__codelineno-4-20" href="#__codelineno-4-20"></a><span class="p">)</span>  <span class="c1"># inputSchema: {&quot;pk&quot;}, required [&quot;pk&quot;]</span>
 </span></code></pre></div>
+<p><strong>A listing reads the spec under the <code>mcp</code> stamp, and nothing else about the
+caller.</strong> A Validator declaring <code>parameters(self, *, call_context=None)</code> is asked
+under a dict carrying <a href="#transport"><code>transport</code></a>, <code>"mcp"</code>, and the tool's name as
+<code>action</code>, with <code>request</code> <code>None</code>, on the HTTP routes and <code>list_tools</code> alike. So a
+field it declares only to an MCP call is offered, and required if it says so, and
+a field it declares only to another transport is not. A field it declares per
+caller stays unoffered, and is still taken by a <code>tools/call</code> that sends it: a
+listing that varied by caller would make its <code>cacheScope</code> false. A Validator
+reading <code>call_context</code> guards <code>request</code> as well as the <code>None</code> of a declaration made
+to no call, and <code>call_transport</code> cannot tell a listing from a call: one that reads
+<code>call_context["request"].user</code> raises <code>AttributeError</code>.</p>
+<p><code>register_tool</code> compiles the schema under the same dict, so a declaration that
+cannot be described under <code>mcp</code>, a field named <code>user</code> or that read of <code>None</code>,
+fails the server's startup, and not its first listing. A binding built by hand and
+passed to <code>server.tools.register</code> skips that compile and raises out of
+<code>tools/list</code>, as any description that raises does.</p>
 <p><strong>A call that leaves out a required argument is refused before the callable
 runs</strong>, with a <code>validation_error</code> result naming what is missing, keyed in
 <code>detail</code> by the missing name, on every route (both transports and eras,
@@ -3370,9 +3397,9 @@ and each route checks it the same way:</p>
   route, the in-process <code>call_tool</code> included, lays the values under the call's
   <code>call_context</code>, the dict the call is then dispatched with. A value that
   declaration refuses raises <code>ImproperlyConfigured</code> on the call, the server's
-  mistake rather than the caller's invalid argument. Registration reads the
-  declaration made to no call, so a name a Validator declares only to a call is
-  refused there: declare it to no call too.</li>
+  mistake rather than the caller's invalid argument. Registration checks them
+  against the declaration made to no call, so a name a Validator declares only to
+  a call is refused there: declare it to no call too.</li>
 </ul>
 <p>The values are <strong>static</strong> for the life of the binding. A value computed per
 request - the project the signed-in user belongs to - is not something
