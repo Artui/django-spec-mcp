@@ -1674,16 +1674,19 @@ holds no session to lose.</p>
 that are gone: <code>UnknownArguments</code> (import it from the kernel), and
 <code>ArgumentBinding</code>, <code>OutputFormat</code> and <code>ToolKind</code>, which the sections below
 cover.
-<code>django-service-specs</code> <strong>0.30.0</strong> is the kernel release the package
-requires. It reserves <code>shapes</code> as a pool name, so a <code>PoolSeeds</code> entry named
-<code>shapes</code> is refused with a <code>ValueError</code> when it is built, as one named <code>user</code> is.
+<code>django-service-specs</code> <strong>0.31.0</strong> is the kernel release the package
+requires: it ships <code>seeded_pool</code>, which a view read and <code>tools/list</code>'s
+conditioned-tool pool build their pool through, and it advertises a labelled filter
+as <code>anyOf</code> rather than <code>enum</code>. It reserves <code>shapes</code> as a pool name, so a
+<code>PoolSeeds</code> entry named <code>shapes</code> is refused with a <code>ValueError</code> when it is built, as
+one named <code>user</code> is.
 A <code>ServiceSpec</code> refuses, when it is built, a nested selector seat
 (<code>instance_selector_spec</code>, <code>collection_selector_spec</code> or <code>output_selector_spec</code>)
 whose <code>SelectorSpec</code> declares <code>permissions</code>: the service's own <code>permissions</code>
 decide the call, so a seat leaves <code>permissions</code> at its default, <code>None</code>.
 <code>register_tool</code> also refuses, with <code>ImproperlyConfigured</code> at registration, a spec
 whose precondition or condition names a seed nothing fills, which already failed on
-every call. The kernel's changelog for 0.21.0 to 0.30.0 has the rest: a <code>parameters</code>
+every call. The kernel's changelog for 0.21.0 to 0.31.0 has the rest: a <code>parameters</code>
 override on a spec subclass must accept <code>call_context</code>, <code>PydanticValidator</code> hands a
 service declaring <code>data</code> the model instance rather than a dict of its fields, a read
 a provider requires itself is asked of the caller (<code>tools/list</code> marks it required, and
@@ -1964,6 +1967,21 @@ check that raised DRF's class returns <code>False</code> or raises Django's.</p>
 <code>request.mcp_token</code>. There is no <code>request.data</code> or <code>request.query_params</code>: a
 render reads the prompt's arguments by name, and a completer reads what was
 typed from <code>value</code> and the client's resolved siblings from <code>arguments</code>.</p>
+<p><strong>A callable written for DRF that reads <code>request.query_params</code> raises
+<code>AttributeError</code> here, by design.</strong> Every <code>request</code> this transport hands out over
+the wire, on its HTTP routes, is Django's <code>HttpRequest</code>, which has no
+<code>query_params</code>: the one a pool seed's
+resolver declaring <code>request</code> is handed, <code>call_context["request"]</code> in a spec's callable, and
+the one a prompt's <code>render</code> and a completer receive. <code>request.GET</code> is no substitute:
+it is the query string of the one JSON-RPC endpoint every call posts to, not the
+arguments of the call. Declare the input where this transport takes it, as a tool's
+or prompt's argument, or as a URI-template variable for a resource, and the callable
+declares a parameter of that name and is handed the value. A seed that picked a
+value off the query string reads it off the user or the token
+(<code>request.mcp_token</code>) instead. A view's <code>render=</code> is handed nothing at all: it takes
+no arguments. The exception is in-process: <code>call_tool</code> and <code>acall_tool</code> copy the
+request their caller hands in, and a copy of DRF's <code>Request</code> is still DRF's
+<code>Request</code>, so what the caller hands <code>call_tool</code> is what the spec reads.</p>
 <p><strong>A <code>user</code> seed for a token naming no one is <code>AnonymousUser</code></strong>, not <code>None</code>, so
 a render testing <code>user is None</code> tests <code>user.is_authenticated</code> instead.</p>
 <p><strong>A completer is handed a sibling argument named <code>serializer</code></strong> like any other;
