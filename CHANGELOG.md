@@ -35,9 +35,9 @@ carries; releases up to 0.54.0 are in
   `call_context is None` and then reading `call_context["request"].user` passes on
   0.10.0 and raises `AttributeError` at `register_tool` on this release**, since
   `request` is `None` where nothing gave one. Guard it too, with
-  `call_context["request"] is not None` or `call_transport`. A binding built by hand and
-  passed to `server.tools.register` skips the compile, and the same read raises out of
-  `tools/list`.
+  `call_context["request"] is not None`; `call_transport` cannot tell a listing from a
+  call, since both read `mcp`. A binding built by hand and passed to
+  `server.tools.register` skips the compile, and the same read raises out of `tools/list`.
 - **Requires `django-service-specs` 0.30.0**, whose `spec_caller_input_schema` and
   `spec_input_schema` take `call_context=`.
 

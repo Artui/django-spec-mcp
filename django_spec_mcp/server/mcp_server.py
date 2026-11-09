@@ -1116,8 +1116,8 @@ class MCPServer:
         # the kernel's list of the server's names, the one ``admitted_arguments``
         # subtracts for a tool.
         owned = server_owned_keys(spec, pool_seeds=self._pool_seeds)
-        # No call_context: a paged tool is a LIST selector, whose reads no Validator declares
-        # per transport, so the declaration made to no call is the one the listing makes.
+        # No call_context: a resource is a RETRIEVE selector, whose reads no Validator
+        # declares per transport, so no call can declare a variable differently.
         undeclared = sorted(set(template_variables) - spec.parameters().names())
         filled = sorted(set(template_variables) & owned)
         refusals: list[str] = []

@@ -223,6 +223,21 @@ def test_the_listing_hands_a_validator_the_stamp_and_no_request() -> None:
         assert handed["action"] == TOOL
 
 
+def test_registration_compiles_under_the_stamp_a_listing_hands() -> None:
+    # The checks made to no call hand ``None``, so what the compile hands is what
+    # is left, and it is the same dict a listing reads under.
+    validator = _to_mcp()
+    _server(validator)
+
+    stamped = [handed for handed in validator.handed if handed is not None]
+
+    assert stamped
+    for handed in stamped:
+        assert call_transport(handed) == MCP_TRANSPORT
+        assert handed["request"] is None
+        assert handed["action"] == TOOL
+
+
 @pytest.mark.django_db
 def test_a_field_declared_per_caller_stays_unoffered() -> None:
     # Offered only to a dict carrying a request, which a listing never hands. The
