@@ -40,58 +40,8 @@ body {
 
 
 def build_app_document(body: str, *, title: str, diagnostics: bool | None = None) -> str:
-    """Wrap a view's markup in a complete MCP Apps document.
-
-    ``body`` is a *fragment* -- the view's own markup, styles and scripts, with
-    no ``<html>`` around it. What comes back is the whole document: the element
-    structure a sandbox expects, a minimal theme-inheriting stylesheet, and the
-    ``ui/*`` postMessage bridge inlined ahead of the fragment so the fragment can
-    assign ``mcpApp.onToolResult`` while the parser is still running.
-
-    Reached most easily through ``register_ui_resource(body_template_name=...)``,
-    which renders a Django template into ``body``. It is public because the other
-    content sources deserve the same shell: a project assembling its markup some
-    other way can wrap the result and pass it as ``html=`` or return it from a
-    ``render=``.
-
-    Three properties are structural rather than advisory, because each of them
-    cost a consumer at least one debugging round:
-
-    - **``<html>``, ``<head>`` and ``<body>`` are written out.** HTML5 infers all
-      three and browsers do not care, but the sandbox loads this document as raw
-      HTML and applies a CSP to it, and a sandbox injecting anything into
-      ``<head>`` has nowhere to put it when the element is implied.
-    - **Nothing is fetched.** No CDN, no module import, no external stylesheet --
-      which is the extension's own advice, and means a view needs no
-      ``resource_domains`` in its CSP just to boot.
-    - **The bridge always completes its handshake**, so the frame is always
-      revealed and a broken view can say what is wrong -- to the console
-      always, and into the document when ``diagnostics`` is on. See
-      ``bridge.js``.
-
-    Args:
-        body: The view's markup. Inserted verbatim -- it is HTML by definition,
-            and it is the project's own template output, not caller input.
-        title: The document title. Escaped.
-        diagnostics: Whether a protocol failure is written into the document as
-            well as logged to the console. ``None`` follows ``settings.DEBUG``.
-
-            The text is written for whoever wrote the view, and the audience of
-            a rendered view is whoever is using the product -- so it is off
-            where that audience is real. A failed handshake is not necessarily
-            a failed view either: a host that errors on ``ui/initialize`` may
-            still deliver the tool result, which would leave a working view
-            under a banner of raw protocol text. The bridge cannot tell those
-            apart, so the default resolves toward saying nothing to end users
-            and logging in both cases.
-
-    Returns:
-        A complete ``text/html`` document.
-    """
+    """Wrap a view's markup in a complete MCP Apps document."""
     show = settings.DEBUG if diagnostics is None else diagnostics
-    # Stamped on the root element rather than handed over as a global, so it is
-    # visible to anyone reading the served document. Nested quotes are kept out
-    # of the f-string below because that spelling needs Python 3.12.
     flag = ' data-mcp-diagnostics="1"' if show else ""
     return (
         "<!doctype html>\n"
@@ -112,12 +62,7 @@ def build_app_document(body: str, *, title: str, diagnostics: bool | None = None
 
 @lru_cache(maxsize=1)
 def _bridge_source() -> str:
-    """The bridge, read from the packaged file once per process.
-
-    Cached because a view is composed on every ``resources/read``, and the file
-    cannot change under a running process the way a Django template can -- it
-    ships in the wheel.
-    """
+    """The bridge, read from the packaged file once per process."""
     return files("django_spec_mcp.ui").joinpath("bridge.js").read_text(encoding="utf-8")
 
 
