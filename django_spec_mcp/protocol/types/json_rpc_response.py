@@ -35,12 +35,7 @@ class JsonRpcResponse:
         return out
 
     def _typed_result(self) -> Any:
-        """The result object with ``resultType`` stamped in.
-
-        Non-dict results pass through untouched. Every MCP result is an object,
-        but a JSON-RPC result may legally be any JSON value, and corrupting one
-        would be worse than omitting a field a legacy client ignores anyway.
-        """
+        """The result object with ``resultType`` stamped in."""
         if not isinstance(self.result, dict) or "resultType" in self.result:
             return self.result
         return {"resultType": self.result_type.value, **self.result}

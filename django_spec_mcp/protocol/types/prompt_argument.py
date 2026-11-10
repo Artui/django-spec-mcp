@@ -6,12 +6,7 @@ from typing import Any
 
 @dataclass(frozen=True)
 class PromptArgument:
-    """One declared input to an MCP prompt.
-
-    Mirrors the spec's ``PromptArgument``: a name plus optional description,
-    with a flag for whether the client must supply it. Advertised in
-    ``prompts/list``.
-    """
+    """One declared input to an MCP prompt."""
 
     name: str
     description: str | None = None

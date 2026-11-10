@@ -6,11 +6,7 @@ from typing import Any
 
 @dataclass(frozen=True)
 class ResourceContents:
-    """One ``contents`` entry returned by ``resources/read``.
-
-    Either ``text`` or ``blob`` is set — never both. ``blob`` is base64-
-    encoded per the MCP spec.
-    """
+    """One ``contents`` entry returned by ``resources/read``."""
 
     uri: str
     mime_type: str | None = None

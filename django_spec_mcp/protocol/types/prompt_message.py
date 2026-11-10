@@ -8,13 +8,7 @@ from django_spec_mcp.protocol.types.tool_content_block import ToolContentBlock
 
 @dataclass(frozen=True)
 class PromptMessage:
-    """One conversation turn returned by ``prompts/get``.
-
-    The spec accepts ``user`` or ``assistant`` for ``role``, and ``content`` is
-    one content block — ``text``, ``image``, ``audio`` or an embedded
-    ``resource``. It stays a plain dict because that is exactly the wire shape;
-    ``block`` is the typed way in and ``text`` covers the common case.
-    """
+    """One conversation turn returned by ``prompts/get``."""
 
     role: str
     content: dict[str, Any]
@@ -29,13 +23,7 @@ class PromptMessage:
 
     @classmethod
     def block(cls, role: str, block: ToolContentBlock) -> PromptMessage:
-        """Build a turn from any content block.
-
-        The spec uses one content vocabulary across tool results and prompt messages, so
-        this reuses
-        [`ToolContentBlock`][django_spec_mcp.protocol.types.tool_content_block.ToolContentBlock]
-        rather than growing a parallel set. ``resource_link`` is the one member prompts
-        do not accept — a prompt message embeds content, it does not point at it."""
+        """Build a turn from any content block."""
         return cls(role=role, content=block.to_dict())
 
 

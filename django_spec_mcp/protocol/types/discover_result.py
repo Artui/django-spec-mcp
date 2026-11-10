@@ -10,24 +10,7 @@ from django_spec_mcp.types.server_info_meta_key import SERVER_INFO_META_KEY
 
 @dataclass(frozen=True)
 class DiscoverResult:
-    """The server's response to a ``server/discover`` request.
-
-    ``server/discover`` is the ``2026-07-28`` revision's replacement for the
-    ``initialize`` handshake: the same three answers, but as an ordinary request
-    rather than a stateful negotiation, so it can be cached, repeated or
-    skipped.
-
-    Two shape differences from
-    [`InitializeResult`][django_spec_mcp.protocol.types.initialize_result.InitializeResult],
-    neither cosmetic:
-
-    - ``supportedVersions`` is a **list**, not a negotiated single version.
-      Nothing is agreed here; the client picks one and puts it on subsequent
-      requests.
-    - ``serverInfo`` moves into ``_meta`` under a reserved key, because it is
-      self-reported and unverified and clients **SHOULD NOT** change behaviour
-      or make security decisions from it.
-    """
+    """The server's response to a ``server/discover`` request."""
 
     supported_versions: tuple[str, ...]
     capabilities: ServerCapabilities

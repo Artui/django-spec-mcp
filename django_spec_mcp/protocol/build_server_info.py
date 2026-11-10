@@ -9,9 +9,6 @@ from django_spec_mcp.types.icon_theme import IconTheme
 from django_spec_mcp.version import __version__ as package_version
 
 
-# Lives here rather than beside ``handle_initialize`` because ``MCPServer`` needs
-# it too and ``server`` already imports ``handlers``; the other direction would
-# cycle.
 def build_server_info(
     name: str | None = None,
     version: str | None = None,
@@ -19,27 +16,7 @@ def build_server_info(
     website_url: str | None = None,
     icons: tuple[Icon, ...] | None = None,
 ) -> Implementation:
-    """Resolve a server's wire identity, falling back to the ``SERVER_INFO`` setting.
-
-    Called once per server from ``MCPServer.__init__``, so the settings read
-    happens at construction rather than on every ``initialize`` and two servers
-    mounted in one project answer with their own names.
-
-    Any field may be ``None`` to take that value from ``SERVER_INFO`` and, failing
-    that, the package defaults. ``title`` / ``website_url`` / ``icons`` have no
-    default — absent means absent, and the client falls back to ``name`` per the
-    spec.
-
-    ``description`` is deliberately settings-only, with no parameter here: ``MCPServer``
-    already spends the name ``description=`` on the ``initialize`` ``instructions``
-    string.
-    [`Implementation`][django_spec_mcp.protocol.types.implementation.Implementation]
-    documents the distinction.
-
-    ``icons`` arriving from ``SERVER_INFO`` are plain data, so dicts are accepted
-    alongside [`Icon`][django_spec_mcp.protocol.types.icon.Icon] instances and
-    normalised here — ``Icon``'s scheme validation runs whichever form the project used.
-    """
+    """Resolve a server's wire identity, falling back to the ``SERVER_INFO`` setting."""
     server_info_settings: dict[str, Any] = get_setting("SERVER_INFO")
     return Implementation(
         name=name if name is not None else server_info_settings.get("name", "django-spec-mcp"),
@@ -56,21 +33,14 @@ def build_server_info(
 
 
 def _coerce_icons(raw: Any) -> tuple[Icon, ...]:
-    """Normalise the ``SERVER_INFO`` representation of ``icons`` into
-    [`Icon`][django_spec_mcp.protocol.types.icon.Icon]s."""
+    """Normalise the ``SERVER_INFO`` representation of ``icons``."""
     if not raw:
         return ()
     return tuple(item if isinstance(item, Icon) else _icon_from_mapping(item) for item in raw)
 
 
 def _icon_from_mapping(item: Any) -> Icon:
-    """Build an [`Icon`][django_spec_mcp.protocol.types.icon.Icon] from settings
-    data, which uses the wire spellings.
-
-    Fields are read by name rather than splatted so ``mimeType`` maps to
-    ``mime_type``, and so a stray settings key is an ignored extra rather than a
-    confusing ``TypeError`` from the dataclass initialiser.
-    """
+    """Build an icon from settings data, which uses the wire spellings."""
     theme: Any = item.get("theme")
     return Icon(
         src=item["src"],
