@@ -21,7 +21,6 @@ _CONFIGURED: dict[str, str] = {"name": "configured", "version": "9.9"}
             id="explicit-values-win-over-settings",
         ),
         # ``SERVER_INFO`` stays the default source, so a project that configures
-        # it and never passes ``name=`` keeps its wire identity.
         pytest.param(_CONFIGURED, {}, ("configured", "9.9"), id="omitted-fields-read-the-setting"),
         pytest.param(
             _CONFIGURED,
