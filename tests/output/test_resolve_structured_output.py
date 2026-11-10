@@ -14,12 +14,7 @@ def _resolve(
     default_schema: bool = True,
     default_content: bool = True,
 ) -> tuple[bool, bool]:
-    """Resolve the tri-state overrides against the server-level defaults.
-
-    The defaults arrive as plain booleans (from the owning server's
-    ``MCPConfig``) rather than being read from settings here, so these are
-    unit tests of the collapse rule with no Django settings in the loop.
-    """
+    """Resolve the tri-state overrides against the server-level defaults."""
     return resolve_structured_output(
         include_output_schema_override=schema,
         include_structured_content_override=content,
@@ -33,20 +28,18 @@ def _resolve(
 
 
 # ``None`` inherits the server-level default; ``True`` / ``False`` win over it. Each
-# override is held in each state against a default that disagrees with it, so
-# neither the override branch nor the inherit branch can be dropped unseen.
 @pytest.mark.parametrize(
     ("schema", "content", "default_schema", "default_content", "resolved"),
     [
-        (False, True, True, False, (False, True)),  # content True wins over default off
-        (False, False, True, True, (False, False)),  # content False wins over default on
-        (False, None, True, True, (False, True)),  # content inherits default on
-        (None, None, False, False, (False, False)),  # content inherits default off
-        (False, True, True, True, (False, True)),  # schema False wins over default on
-        (None, True, True, True, (True, True)),  # schema inherits default on
-        (None, True, False, True, (False, True)),  # schema inherits default off
-        (None, None, True, True, (True, True)),  # the package defaults: both on
-        (None, None, False, True, (False, True)),  # content without a schema is spec-allowed
+        (False, True, True, False, (False, True)),
+        (False, False, True, True, (False, False)),
+        (False, None, True, True, (False, True)),
+        (None, None, False, False, (False, False)),
+        (False, True, True, True, (False, True)),
+        (None, True, True, True, (True, True)),
+        (None, True, False, True, (False, True)),
+        (None, None, True, True, (True, True)),
+        (None, None, False, True, (False, True)),
     ],
 )
 def test_overrides_win_and_none_inherits_the_default(

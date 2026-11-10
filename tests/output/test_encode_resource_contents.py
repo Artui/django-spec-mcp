@@ -1,24 +1,3 @@
-"""How a kernel resource's presented value becomes its ``resources/read`` body.
-
-``encode_resource_contents`` is the one encode step both reads share: a
-view's read calls it on its body, and a kernel read after the spec's
-presenter. Its questions are asked here of ``resources/read`` on a registered
-kernel resource, which is the answer a client gets, so they hold for any
-caller of the step:
-
-- ``TEXT`` serves the presented ``str`` verbatim, under the mime type
-  registered, including the default ``application/json``, on a binding built
-  by hand as on a registered one;
-- ``BLOB`` base64-encodes presented bytes into ``blob`` and sets no ``text``;
-- a value of the wrong type is a well-formed ``INTERNAL_ERROR`` naming the
-  presenter, never a serializer knob the form lacks;
-- the result ceiling and the cache hints apply as they do to ``JSON``;
-- a presenter refusing a shape the URI carried, and a missing row, are answered
-  as on a ``JSON`` resource.
-
-A view's questions of the same step are in ``test_build_resource_contents.py``.
-"""
-
 from __future__ import annotations
 
 import base64
@@ -63,10 +42,7 @@ def _note(*, pk: int) -> _Note | None:
 
 
 class _Document(Presenter):
-    """A presenter answering one document rather than an object of fields.
-
-    It declares no output fields: what it renders is a body, not a row.
-    """
+    """A presenter answering one document rather than an object of fields."""
 
     def output(self) -> Output:
         return Output()
@@ -164,7 +140,6 @@ class TestText:
 
     def test_under_the_default_json_mime_the_str_is_still_verbatim(self, is_async: bool) -> None:
         # A presenter that encodes its own JSON: TEXT never re-encodes it, and the
-        # mime type is the one registered, never inferred from the encoding.
         server = _server(_Answers('{"compact":true}'), encoding=ResourceEncoding.TEXT)
         block = _block(server, "notes://1", is_async=is_async)
         assert (block["mimeType"], block["text"]) == ("application/json", '{"compact":true}')
@@ -193,7 +168,6 @@ class TestText:
 
 class TestBlob:
     # Each member of the isinstance tuple is held by its own case: the tuple is
-    # one branch arc, so coverage would not notice one deleted.
     @pytest.mark.parametrize("kind", [bytes, bytearray, memoryview])
     def test_bytes_like_are_base64_in_blob_with_no_text(self, kind: type, is_async: bool) -> None:
         server = _server(_Answers(kind(PNG)), mime_type="image/png", encoding=ResourceEncoding.BLOB)

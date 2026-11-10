@@ -1,16 +1,3 @@
-"""Non-text content blocks: the vocabulary, and the paths that produce it.
-
-Asked here of kernel specs: the tools are kernel ``ServiceSpec`` and
-``SelectorSpec`` objects registered with ``register_tool``, and their call runs
-through the kernel's ``dispatch``. The vocabulary questions name no spec and are
-asked without one.
-
-The binary-resource questions, a base64 body and a non-bytes return under
-``encoding=BLOB`` with its ``mime_type``, are asked of a kernel resource in
-``tests/output/test_encode_resource_contents.py``, since both reads encode
-through ``encode_resource_contents``.
-"""
-
 from __future__ import annotations
 
 import base64
@@ -200,7 +187,6 @@ def test_a_single_mapping_is_accepted_as_one_link() -> None:
 @pytest.mark.parametrize(
     ("kind", "payload", "says"),
     [
-        # A binding declaring IMAGE whose service returns a dict is a server bug.
         (ToolContentKind.IMAGE, {"not": "bytes"}, "content_kind=IMAGE but produced dict"),
         (
             ToolContentKind.RESOURCE_LINK,
@@ -214,8 +200,7 @@ def test_a_single_mapping_is_accepted_as_one_link() -> None:
 def test_a_payload_the_declared_kind_cannot_carry_is_a_tool_level_error(
     kind: ToolContentKind, payload: Any, says: str
 ) -> None:
-    """It surfaces as ``isError`` rather than an exception so the client still
-    gets a well-formed response, and the message names the declaration."""
+    """It surfaces as ``isError``, so the client still gets a well-formed response."""
     server = make_server(session_store=InMemorySessionStore())
     server.register_tool(
         _spec(lambda: payload),
@@ -290,24 +275,17 @@ def _link_result(uri: Any) -> dict[str, Any]:
     ],
 )
 def test_a_script_bearing_resource_link_scheme_is_refused(uri: str) -> None:
-    """The payload field holding a URI is usually a value some end user stored.
-
-    A bookmarks or attachments table is readable by one user and writable by
-    another; emitting the row verbatim hands an MCP host a link it may render as
-    a clickable anchor in its own origin, or fetch to build a preview.
-    """
+    """The payload field holding a URI is usually a value some end user stored."""
     result = _link_result(uri)
     assert result["isError"] is True
     assert "content_kind=RESOURCE_LINK" in result["content"][0]["text"]
 
 
 # Each case holds one arc of ``_refuse_link_uri``: the type check, the ``urlsplit``
-# failure and the missing scheme.
 @pytest.mark.parametrize(
     ("uri", "says"),
     [
         ("/invoices/1", "absolute URI"),
-        # ``urlsplit`` raises on an unclosed IPv6 literal; unparseable is unlinkable.
         ("http://[::1", "absolute URI"),
         (42, "not a string"),
     ],
@@ -324,11 +302,7 @@ def test_a_resource_link_uri_that_is_not_an_absolute_uri_is_refused(uri: Any, sa
     ["https://example.test/doc", "http://localhost:8000/doc", "reports://q3", "ui://widget/x"],
 )
 def test_ordinary_and_server_registered_schemes_still_pass(uri: str) -> None:
-    """An allowlist would have to enumerate every scheme a server registers.
-
-    ``build_content_blocks`` cannot see the resource registry, so refusing an
-    unknown scheme would break the ordinary case to guard against nothing.
-    """
+    """An allowlist would have to enumerate every scheme a server registers."""
     result = _link_result(uri)
     assert "isError" not in result
     assert result["content"][0]["uri"] == uri
