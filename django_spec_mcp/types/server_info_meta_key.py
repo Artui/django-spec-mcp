@@ -1,5 +1,3 @@
-"""``SERVER_INFO_META_KEY`` - reserved _meta key carrying the server's self-reported identity."""
-
 from __future__ import annotations
 
 SERVER_INFO_META_KEY: str = "io.modelcontextprotocol/serverInfo"

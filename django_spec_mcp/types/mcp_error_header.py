@@ -1,5 +1,3 @@
-"""``MCP_ERROR_HEADER`` - response header naming the class of a transport-level rejection."""
-
 from __future__ import annotations
 
 MCP_ERROR_HEADER: str = "MCP-Error"

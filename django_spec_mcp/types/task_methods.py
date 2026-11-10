@@ -1,5 +1,3 @@
-"""``TASK_METHODS`` - the extension's three methods."""
-
 from __future__ import annotations
 
 TASK_METHODS: frozenset[str] = frozenset({"tasks/get", "tasks/update", "tasks/cancel"})

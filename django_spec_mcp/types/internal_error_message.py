@@ -1,5 +1,3 @@
-"""``INTERNAL_ERROR_MESSAGE`` - the whole message a client reads when a dispatch raised instead of returning."""
-
 from __future__ import annotations
 
 INTERNAL_ERROR_MESSAGE: str = "Internal error"

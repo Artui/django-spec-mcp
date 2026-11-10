@@ -1,5 +1,3 @@
-"""``CLIENT_CAPABILITIES_META_KEY`` - per-request _meta key declaring what the client supports."""
-
 from __future__ import annotations
 
 CLIENT_CAPABILITIES_META_KEY: str = "io.modelcontextprotocol/clientCapabilities"

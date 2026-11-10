@@ -1,24 +1,10 @@
-"""``TaskStatus`` - lifecycle of a task, per the extension."""
-
 from __future__ import annotations
 
 from enum import Enum
 
 
 class TaskStatus(str, Enum):
-    """Lifecycle of a task, per the extension.
-
-    ``WORKING`` and ``INPUT_REQUIRED`` are live; the other three are terminal
-    and a task never leaves them.
-
-    **``FAILED`` is narrower than it looks.** The spec forbids using the status
-    to represent non-JSON-RPC errors. A tool that raises ``ServiceError`` has
-    *completed* — it produced a well-formed ``CallToolResult`` carrying
-    ``isError: true``. ``FAILED`` is for the task machinery itself failing: the
-    worker died, the payload could not be revived. Getting this backwards would
-    hide every tool error behind a status the client reads as "the server
-    broke".
-    """
+    """Lifecycle of a task, per the extension."""
 
     WORKING = "working"
     INPUT_REQUIRED = "input_required"

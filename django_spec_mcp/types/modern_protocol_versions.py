@@ -1,5 +1,3 @@
-"""``MODERN_PROTOCOL_VERSIONS`` - protocol revisions that carry version, identity and capabilities per request."""
-
 from __future__ import annotations
 
 MODERN_PROTOCOL_VERSIONS: frozenset[str] = frozenset({"2026-07-28"})

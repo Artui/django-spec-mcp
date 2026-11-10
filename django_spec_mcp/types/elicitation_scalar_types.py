@@ -1,5 +1,3 @@
-"""``ELICITATION_SCALAR_TYPES`` - the JSON-Schema type values a form field may declare."""
-
 from __future__ import annotations
 
 ELICITATION_SCALAR_TYPES: frozenset[str] = frozenset({"string", "number", "integer", "boolean"})

@@ -1,5 +1,3 @@
-"""``JSONRPC_VERSION`` - the JSON-RPC protocol version this server speaks."""
-
 from __future__ import annotations
 
 JSONRPC_VERSION: str = "2.0"

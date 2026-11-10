@@ -1,5 +1,3 @@
-"""``UI_RESOURCE_MIME_TYPE`` - mime type identifying a resource as an interactive HTML view."""
-
 from __future__ import annotations
 
 UI_RESOURCE_MIME_TYPE: str = "text/html;profile=mcp-app"

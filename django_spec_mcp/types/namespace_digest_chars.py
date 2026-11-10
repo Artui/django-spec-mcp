@@ -1,5 +1,3 @@
-"""``NAMESPACE_DIGEST_CHARS`` - how many hex characters of a namespace digest a key keeps."""
-
 from __future__ import annotations
 
 NAMESPACE_DIGEST_CHARS: int = 12

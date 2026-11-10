@@ -1,5 +1,3 @@
-"""``SUBSCRIPTIONS_LISTEN_METHOD`` - the method that opens a notification stream."""
-
 from __future__ import annotations
 
 SUBSCRIPTIONS_LISTEN_METHOD: str = "subscriptions/listen"
