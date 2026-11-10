@@ -1,11 +1,3 @@
-"""``invalidates=`` — the write path announcing its own changes.
-
-Asked here of kernel service tools registered with ``register_tool``: their
-arguments validate through a dataclass and reach the service spread, a refusal
-is a kernel ``PermissionCheck``, and a selector tool is a kernel
-``SelectorSpec``. The rendering questions name no spec.
-"""
-
 from __future__ import annotations
 
 import json
@@ -54,7 +46,6 @@ from tests.utils import call_context
             id="a-placeholder-is-filled-from-the-result",
         ),
         # The delete case: the call returns nothing and ``{pk}`` lives only in
-        # the input.
         pytest.param(
             ("invoices://{pk}",),
             {"structuredContent": {}},
@@ -62,8 +53,6 @@ from tests.utils import call_context
             ("invoices://3",),
             id="the-arguments-fill-what-the-result-lacks",
         ),
-        # After a write the result is authoritative: a service that reassigns a
-        # key leaves the argument stale.
         pytest.param(
             ("invoices://{pk}",),
             {"structuredContent": {"pk": "new"}},
@@ -71,17 +60,12 @@ from tests.utils import call_context
             ("invoices://new",),
             id="the-result-wins-over-the-arguments",
         ),
-        # Which is why there is one mechanism rather than a separate static list.
         pytest.param(
             ("invoices://",), {}, {}, ("invoices://",), id="no-placeholders-is-the-static-case"
         ),
-        # By now the write has committed. Failing the call over a formatting
-        # mistake would report failure for work that succeeded.
         pytest.param(
             ("invoices://{nope}",), {}, {}, (), id="an-unfillable-template-is-dropped-not-raised"
         ),
-        # Rendering it would publish the literal topic ``invoices://None``, which
-        # nobody could have subscribed to.
         pytest.param(
             ("invoices://{pk}",),
             {"structuredContent": {"pk": None}},
@@ -103,9 +87,6 @@ from tests.utils import call_context
             ("b://1", "a://"),
             id="duplicates-collapse-and-order-is-kept",
         ),
-        # ``{pk}`` over many rows has no single answer, and guessing one would
-        # publish a URI for an arbitrary member. A list is served under
-        # ``items``, so no row's ``pk`` is a key of the result.
         pytest.param(
             ("invoices://{pk}",),
             {"structuredContent": {"items": [{"pk": 1}]}},
@@ -176,9 +157,7 @@ async def test_a_successful_call_announces_both_declared_uris() -> None:
 
 @pytest.mark.django_db(transaction=True)
 async def test_a_failed_tool_announces_nothing() -> None:
-    """Checked on ``isError``, not on the result being present — a
-    ``ServiceError`` produces a perfectly well-formed result, which is the
-    package's whole error contract."""
+    """Checked on ``isError``, not on the result being present."""
     broker = InMemorySubscriptionBroker()
     server = _server(broker)
     queue = await broker.subscribe(frozenset({topic_for_resource("invoices://1")}))
@@ -213,16 +192,13 @@ class _ConfirmInput:
 async def test_only_a_completed_result_announces(
     is_async: bool, arguments: dict[str, Any], announced: int
 ) -> None:
-    """A result asking for more input ran nothing, so nothing changed: it has no
-    ``isError`` to fail on, which is why the check is on the result completing."""
+    """A result asking for more input ran nothing, so nothing changed."""
     broker = InMemorySubscriptionBroker()
     server = MCPServer(name="inval", auth_backend=AllowAnyBackend(), subscription_broker=broker)
     server.register_tool(
         _spec(_confirming, _ConfirmInput),
         name="invoices.confirm",
         description="x",
-        # Static, so the template is fillable from any result, a request for
-        # input included: what stops the announcement is the check under test.
         invalidates=("invoices://",),
     )
     queue = await broker.subscribe(frozenset({topic_for_resource("invoices://")}))
@@ -283,8 +259,7 @@ async def test_an_unknown_tool_does_not_reach_the_publisher() -> None:
 
 @pytest.mark.django_db(transaction=True)
 def test_the_sync_path_announces_too() -> None:
-    """The two ``tools/call`` handlers are parallel implementations, so the
-    hook has to exist in both."""
+    """The two ``tools/call`` handlers are parallel implementations."""
     broker = InMemorySubscriptionBroker()
     server = _server(broker)
     from asgiref.sync import async_to_sync
@@ -296,10 +271,7 @@ def test_the_sync_path_announces_too() -> None:
 
 @pytest.mark.django_db(transaction=True)
 def test_nothing_is_published_until_the_transaction_commits() -> None:
-    """The failure this prevents: a subscriber re-reads on the notification
-    and sees the old value, having been told it was new. A missed notification
-    is recovered by the next read; a wrong one teaches the client something
-    false."""
+    """Otherwise a subscriber re-reads on the notice and sees the old value."""
     broker = InMemorySubscriptionBroker()
     server = _server(broker)
     from asgiref.sync import async_to_sync
@@ -331,14 +303,7 @@ def test_a_rolled_back_write_announces_nothing() -> None:
 
 @pytest.mark.django_db(transaction=True)
 def test_the_async_path_announces_on_the_thread_that_did_the_write() -> None:
-    """The bug this pins. Django connections are thread-local: under ASGI the
-    ORM work runs on a ``sync_to_async`` worker while the coroutine resumes on
-    the event loop thread. Checking the transaction from the loop reads a
-    *different* connection, sees none open, and publishes a write that has not
-    committed — the exact failure the commit hook exists to prevent.
-
-    Driven from a sync test because the atomic block has to be real.
-    """
+    """The bug this pins."""
     from asgiref.sync import async_to_sync
 
     broker = InMemorySubscriptionBroker()
@@ -363,9 +328,7 @@ async def test_publishing_nothing_is_a_no_op_on_both_paths() -> None:
 
 @pytest.mark.django_db(transaction=True)
 async def test_a_server_with_no_broker_is_unaffected() -> None:
-    """``invalidates=`` on a server that pushes nothing is inert, not an
-    error — otherwise the declaration could not be written once and deployed
-    both ways."""
+    """``invalidates=`` on a server that pushes nothing is inert, not an error."""
     server = MCPServer(name="nobroker", auth_backend=AllowAnyBackend())
     server.register_tool(
         _spec(_service), name="invoices.create", description="x", invalidates=("invoices://{pk}",)
@@ -380,9 +343,7 @@ async def test_a_server_with_no_broker_is_unaffected() -> None:
 
 
 def test_a_selector_tool_refuses_invalidates() -> None:
-    """A read changes nothing, and accepting the knob would invite using it.
-    ``register_tool`` takes both kinds of spec, so the knob is a keyword of it
-    and a selector spec is refused at registration."""
+    """A read changes nothing, and accepting the knob would invite using it."""
     server = MCPServer(name="sel", auth_backend=AllowAnyBackend())
     with pytest.raises(ImproperlyConfigured, match="invalidates belongs to a service tool"):
         server.register_tool(
@@ -396,18 +357,7 @@ def test_a_selector_tool_refuses_invalidates() -> None:
 
 @pytest.mark.django_db(transaction=True)
 def test_the_wsgi_transport_hands_the_handler_a_broker() -> None:
-    """The announcement is dead on WSGI unless the *transport* passes the broker.
-
-    Every sync ``MCPCallContext`` the server builds itself — ``call_tool``, the
-    task worker — carries ``subscriptions``, so the sync handler chain is
-    expected to publish. The sync view built its context without one, and
-    ``publish_invalidations(None, uris)`` returns without touching the broker:
-    a tool declaring ``invalidates=`` committed its write and told nobody, in a
-    way indistinguishable from the resource never having changed. The natural
-    deployment is exactly this split — POSTs served by WSGI while an ASGI
-    process holds the subscribers' streams — which is what a cross-process
-    broker is for.
-    """
+    """The announcement is dead on WSGI unless the *transport* passes the broker."""
     from asgiref.sync import async_to_sync
     from django.test import RequestFactory
 
@@ -449,15 +399,7 @@ def test_the_wsgi_transport_hands_the_handler_a_broker() -> None:
 
 @pytest.mark.django_db(transaction=True)
 def test_the_mounted_wsgi_urls_hand_the_handler_a_broker() -> None:
-    """The same guarantee, reached the way a project actually mounts the server.
-
-    The sibling test above builds the view by hand, so it passes as soon as
-    ``StreamableHttpView`` accepts the broker -- and stays passing while
-    ``MCPServer.urls`` forgets to pass it, which is the only path a project
-    takes. ``async_urls`` always passed it, so the gap was visible on ASGI and
-    invisible on WSGI: the announcement was dropped for every mounted sync
-    deployment while both suites stayed green.
-    """
+    """The same guarantee, reached the way a project actually mounts the server."""
     import json as _json
 
     from asgiref.sync import async_to_sync
@@ -465,8 +407,6 @@ def test_the_mounted_wsgi_urls_hand_the_handler_a_broker() -> None:
 
     broker = InMemorySubscriptionBroker()
     server = _server(broker)
-    # Same permissive config the hand-wired sibling passes, so this test isolates
-    # the broker wiring rather than re-testing the origin and session policies.
     server._config = build_mcp_config(allowed_origins=["*"], sessions_enabled=False)
     queue = async_to_sync(broker.subscribe)(frozenset({topic_for_resource("invoices://")}))
 

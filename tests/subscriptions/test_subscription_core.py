@@ -1,17 +1,3 @@
-"""The filter, the topics, the broker, and who is allowed to watch what.
-
-Asked here of kernel specs: the resources a subscription names are kernel
-``RETRIEVE`` selectors registered with ``register_resource``, and the tools that
-make ``toolsListChanged`` grantable are kernel service specs registered with
-``register_tool``. The filter, topic and broker questions name no spec.
-
-**Who may watch a kernel resource is who may read it**, and a kernel read is
-judged by the spec's own permissions in the kernel's ``dispatch``, not by the
-binding's ``permissions``, which hold only its scope gate. So the denied
-caller, the deactivated one and a hand-built unguarded binding are each asked
-here as well as the scope gate.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -57,8 +43,7 @@ from tests.utils import call_context
 
 
 def test_only_true_opts_in() -> None:
-    """Every type is opt-in and the server MUST NOT send what was not asked
-    for, so anything other than an explicit ``true`` is a refusal."""
+    """Every type is opt-in: anything other than an explicit true is a refusal."""
     parsed = SubscriptionFilter.from_params(
         {"toolsListChanged": True, "promptsListChanged": False, "resourcesListChanged": "yes"}
     )
@@ -93,9 +78,7 @@ def test_task_ids_come_from_the_extensions_field() -> None:
 
 
 def test_the_wire_form_omits_everything_not_granted() -> None:
-    """The acknowledgement reads as "these are the things you will receive", so
-    a ``false`` or an empty list in it would read as a promise about
-    something."""
+    """The acknowledgement reads as 'these are the things you will receive'."""
     assert SubscriptionFilter().to_dict() == {}
 
 
@@ -114,8 +97,7 @@ def test_an_empty_filter_is_falsy() -> None:
 
 
 def test_every_kind_has_a_distinct_filter_field_and_method() -> None:
-    """The two are kept mechanically related so a new kind cannot be added to
-    one and forgotten in the other."""
+    """The two are kept mechanically related so a new kind cannot be added to one only."""
     fields = {kind.filter_field for kind in NotificationKind}
     methods = {kind.method for kind in NotificationKind}
     assert len(fields) == len(methods) == len(list(NotificationKind))
@@ -131,9 +113,7 @@ def test_topics_are_namespaced_so_one_kind_cannot_collide_with_another() -> None
 
 
 def test_resource_topics_are_exact_not_prefixes() -> None:
-    """A prefix rule would match ``invoices://1`` against ``invoices://11``,
-    and would miss a tenant-scoped scheme entirely. Publishers name the
-    collection explicitly instead."""
+    """A prefix rule would match ``invoices://1`` against ``invoices://11``."""
     assert topic_for_resource("invoices://1") != topic_for_resource("invoices://11")
 
 
@@ -141,9 +121,7 @@ def test_resource_topics_are_exact_not_prefixes() -> None:
 
 
 async def test_a_payload_reaches_every_subscriber_of_a_topic() -> None:
-    """The session broker replaces the previous subscriber; this one must not,
-    or a second client watching the same resource silently disconnects the
-    first."""
+    """The session broker replaces the previous subscriber."""
     broker = InMemorySubscriptionBroker()
     a = await broker.subscribe(frozenset({"t"}))
     b = await broker.subscribe(frozenset({"t"}))
@@ -165,8 +143,7 @@ async def test_publishing_to_nobody_is_not_an_error() -> None:
 
 
 async def test_unsubscribing_stops_delivery_and_frees_the_topic() -> None:
-    """Topics are caller-named and unbounded, so an emptied one is removed —
-    otherwise a long-lived server accumulates an entry per URI ever watched."""
+    """Topics are caller-named and unbounded, so an emptied one is removed."""
     broker = InMemorySubscriptionBroker()
     queue = await broker.subscribe(frozenset({"t"}))
     broker.unsubscribe(queue)
@@ -276,19 +253,13 @@ async def _listen(uris: list[str]) -> Any:
     [
         pytest.param(("open://1",), ("open://1",), id="a-readable-resource-is-granted"),
         # Indistinguishable from a forbidden one on purpose: erroring on one and
-        # not the other would make the endpoint an oracle for which resources
-        # exist.
         pytest.param(("nope://thing",), (), id="an-unregistered-uri-is-refused"),
         pytest.param(
             ("gated://1", "open://1"),
             ("open://1",),
             id="a-refused-entry-does-not-take-the-rest-with-it",
         ),
-        # The binding's own gate, judged before the spec's: a token without
-        # ``things:read`` is refused the read, so it is refused the watch.
         pytest.param(("scoped://1",), (), id="a-resource-outside-the-callers-scopes"),
-        # ``abc`` is no integer ``pk``, so the read would refuse it; the watch
-        # drops that one entry rather than failing the stream on it.
         pytest.param(
             ("open://abc", "open://1"),
             ("open://1",),
@@ -307,9 +278,7 @@ def test_a_resource_is_watchable_exactly_when_it_is_readable(
 
 
 def test_a_resource_the_caller_cannot_read_is_not_watchable() -> None:
-    """Otherwise a subscription is a side channel around ``resources/read``:
-    a caller denied the body still learns every time it changes, and *when*
-    something changes is often the more sensitive signal."""
+    """Otherwise a subscription is a side channel around ``resources/read``."""
     server = _server()
     granted, topics = grant_subscription(
         SubscriptionFilter(resource_uris=("gated://1",)), call_context(server)
@@ -327,8 +296,7 @@ def test_a_resource_inside_the_callers_scopes_is_watchable() -> None:
 
 
 def test_a_deactivated_principal_cannot_watch_what_it_cannot_read() -> None:
-    """The kernel refuses a deactivated principal before any permission is
-    asked, with or without a grant, so the read is refused and the watch is."""
+    """The kernel refuses a deactivated principal before any permission is asked."""
     principal = _Inactive()
     request = HttpRequest()
     request.method = "POST"
@@ -342,13 +310,7 @@ def test_a_deactivated_principal_cannot_watch_what_it_cannot_read() -> None:
 
 @pytest.mark.django_db(transaction=True)
 async def test_a_handbuilt_unguarded_kernel_resource_fails_the_watch_as_the_read_fails() -> None:
-    """A binding nobody marked unguarded is read under no grant, and the kernel
-    refuses its unguarded spec, so its read answers -32603 and never runs
-    (``test_a_handbuilt_unguarded_kernel_resource_is_never_read``). The watch is
-    a misconfiguration too, not a caller the spec turned away: it answers -32603
-    rather than dropping the entry, which would leave a client believing it
-    watches a resource it is not told about. The control on the same mount is
-    the guarded neighbour, granted."""
+    """A binding nobody marked unguarded is read under no grant."""
     server = _server(subscription_broker=InMemorySubscriptionBroker())
     server.resources.register(
         KernelResourceBinding(
@@ -369,8 +331,7 @@ async def test_a_handbuilt_unguarded_kernel_resource_fails_the_watch_as_the_read
 
 
 def test_a_registered_unguarded_kernel_resource_is_watchable_with_the_setting_off() -> None:
-    """The registrar marks it unguarded, the read carries a grant bound to it,
-    and so the watch does: the same caller reads it and may watch it."""
+    """The registrar marks it unguarded, so the watch carries the same grant as the read."""
     config = build_mcp_config(require_tool_permissions=False)
     server = MCPServer(name="subs", auth_backend=AllowAnyBackend(), config=config)
     with pytest.warns(UserWarning):
@@ -404,10 +365,7 @@ def _flag(*, v: bool) -> dict[str, bool]:
 
 
 def test_a_subscription_resolves_the_servers_pool_seeds() -> None:
-    """``pool_seeds=`` of ``_kernel_read_admits``: a check naming ``tenant`` is
-    handed what the server's own seeds resolve, as the read hands it, so a
-    caller the read admits as ``acme`` may watch, and one resolving to another
-    tenant may not."""
+    """A check naming tenant is handed what the server's seeds resolve, as the read is."""
     server = _server(
         pool_seeds=DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme"),
     )
@@ -431,9 +389,7 @@ def test_a_subscription_resolves_the_servers_pool_seeds() -> None:
 
 
 def test_a_subscription_hands_the_check_the_call_context_the_read_does() -> None:
-    """``call_context=`` of ``_kernel_read_admits``: a check reading
-    ``call_context["request"]`` sees the request being judged, so one admitting
-    on it grants the watch, and the same check refuses a request without it."""
+    """``call_context=`` of ``_kernel_read_admits``."""
     server = _server()
     server.register_resource(
         _resource([_OnlyMarkedRequests()]), name="marked", uri_template="marked://{pk}"
@@ -454,9 +410,7 @@ def test_a_subscription_hands_the_check_the_call_context_the_read_does() -> None
 
 
 def test_a_uri_variable_is_coerced_to_the_type_the_spec_declares() -> None:
-    """``coerce_flat(...)`` of ``_kernel_read_admits``: ``true`` in a URI is the
-    text of a boolean, and the read admits it as ``True``; handed through
-    as text the argument check would refuse it and the watch would be dropped."""
+    """``coerce_flat(...)`` of ``_kernel_read_admits``."""
     server = _server()
     server.register_resource(
         SelectorSpec(
@@ -475,8 +429,7 @@ def test_a_uri_variable_is_coerced_to_the_type_the_spec_declares() -> None:
 
 
 def test_a_list_changed_kind_needs_a_registry_behind_it() -> None:
-    """Same rule as capability advertisement: promising an event this server
-    cannot produce leaves the client waiting forever."""
+    """As with capabilities: promising an event this server cannot produce strands clients."""
     server = _server()
     granted, _ = grant_subscription(
         SubscriptionFilter(
@@ -500,8 +453,7 @@ def test_tools_list_changed_is_granted_when_tools_exist() -> None:
 
 
 def test_a_task_is_watchable_only_by_the_principal_that_created_it() -> None:
-    """A task's status is as revealing as its result — knowing someone else's
-    export finished is knowing they ran one."""
+    """A task's status is as revealing as its result."""
     store = InMemoryTaskStore()
     server = _server(task_store=store, task_executor=RecordingExecutor(store))
     task = create_task(
@@ -542,8 +494,7 @@ def test_a_server_running_no_tasks_grants_no_task_subscriptions() -> None:
 
 
 def test_granted_and_topics_cannot_disagree() -> None:
-    """They are produced together precisely so one cannot promise what the
-    other does not deliver."""
+    """They are produced together so one cannot promise what the other does not deliver."""
     store = InMemoryTaskStore()
     server = _server(task_store=store, task_executor=RecordingExecutor(store))
     server.register_tool(_tool(), name="t", description="x")
@@ -576,8 +527,7 @@ async def test_notify_resource_updated_reaches_a_watcher() -> None:
 
 @pytest.mark.asyncio
 async def test_notifying_on_a_server_with_no_broker_is_a_no_op() -> None:
-    """Safe to call unconditionally from a service, which is what makes it
-    usable as the write path's own trigger."""
+    """Safe to call unconditionally from a service, so usable as the write path's trigger."""
     assert await _server().notify_resource_updated("open://1") == 0
 
 
@@ -593,6 +543,5 @@ async def test_notify_list_changed_publishes_the_kind_topic() -> None:
 
 
 def test_a_server_gets_no_broker_unless_one_is_named() -> None:
-    """No default. A quietly-constructed in-process broker would advertise
-    support and then deliver nothing as soon as a second worker existed."""
+    """No default."""
     assert _server().subscription_broker is None
