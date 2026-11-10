@@ -1,22 +1,3 @@
-"""A kernel tool's argument named after a value dispatch fills itself.
-
-Asked of kernel specs registered with ``register_tool``, where a seed and an
-argument of one name meet in three ways:
-
-- a parameter named after one of the kernel's ``RESERVED_POOL_SEEDS`` (``user``,
-  ``data``, ``instance`` and the rest) is refused by the kernel when the spec's
-  parameters are assembled, so no tool can carry it;
-- a top-level Validator field named like a seed the server registers stays the
-  caller's: it is advertised, validates into ``data``, and the service's
-  parameter of that name keeps the seed;
-- a ``reads`` entry nobody marked ``reflected``, named like a registered seed or
-  like the call's own ``request`` / ``view``, is refused by the kernel's
-  ``dispatch`` on every call, so ``register_tool`` refuses it, asking the
-  kernel's ``check_seeds`` with the server's ``pool_seeds``. A service spec's
-  read of either call name is refused earlier, when the spec is built; a
-  selector spec's is not, and is refused at registration.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -52,9 +33,6 @@ class _Tenant:
 
 def test_a_validator_field_named_after_a_reserved_seed_is_refused_at_registration() -> None:
     # The kernel refuses it when the spec's parameters are assembled, which is
-    # at construction or, where the Validator's annotations are strings, at the
-    # first ``parameters()``; ``register_tool`` asks for them to compile the
-    # schema, so either way no listing ever shows the field.
     spec = ServiceSpec(
         service=lambda *, data: None,
         atomic=False,
@@ -81,9 +59,6 @@ def test_a_read_named_after_a_reserved_seed_is_refused_when_the_spec_is_built(ki
 
 def test_a_validator_field_named_like_a_registered_seed_is_the_callers_and_reaches_data() -> None:
     # Refusing the field would be wrong: the seed would silently outrank it in
-    # the service's pool. The kernel keeps the caller's value in ``data`` and
-    # the seed in the parameter, so each reaches the service under its own name
-    # and nothing is lost.
     server = make_server(pool_seeds=_SEEDED)
     server.register_tool(
         ServiceSpec(
@@ -104,7 +79,6 @@ def test_a_validator_field_named_like_a_registered_seed_is_the_callers_and_reach
 
 def test_a_read_named_like_a_registered_seed_is_refused_at_registration() -> None:
     # Built outside the block: the spec is valid on its own, and only a server
-    # registering ``tenant`` makes the read one no caller's value reaches.
     spec = ServiceSpec(
         service=lambda *, tenant: tenant,
         atomic=False,
@@ -120,7 +94,6 @@ def test_a_read_named_like_a_registered_seed_is_refused_at_registration() -> Non
 @pytest.mark.parametrize("name", ["request", "view"])
 def test_a_read_named_after_the_calls_own_seat_is_refused_at_registration(name: str) -> None:
     # A selector spec's own read of either name is not refused when it is
-    # built, so the registration is what refuses it.
     spec = SelectorSpec(
         kind=SelectorKind.RETRIEVE,
         selector=lambda **_: None,

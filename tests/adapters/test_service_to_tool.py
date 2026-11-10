@@ -1,16 +1,3 @@
-"""What a kernel ``many`` service spec needs before it becomes a tool.
-
-A ``many=True`` spec validates a list of rows, and MCP ``arguments`` is always a
-JSON object, so the list travels under the one argument ``many_argument`` names.
-Asked of kernel specs registered with ``register_tool`` and ``register_tools``:
-such a spec registers, advertises the list under that name and delivers the
-validated rows to ``data``; a row that fails validation is named by its index in
-the detail; and the declarations that would stop the list reaching dispatch are
-refused by the kernel, a read taking the name ``many_argument`` declares (and
-not the default ``items`` when it declares another) and a target lookup beside
-the list.
-"""
-
 from __future__ import annotations
 
 import json
@@ -90,7 +77,6 @@ def test_a_payload_that_is_not_a_list_is_a_validation_error() -> None:
 
 def test_a_row_that_fails_validation_is_named_by_its_index_in_the_detail() -> None:
     # The kernel keys the detail by the failing row's index under the argument
-    # that carries the list, whatever validation library produced the errors.
     server = _registered(_many())
 
     out = server.call_tool(
@@ -104,7 +90,6 @@ def test_a_row_that_fails_validation_is_named_by_its_index_in_the_detail() -> No
 
 def test_a_many_spec_may_read_a_name_other_than_the_one_it_declares_for_the_list() -> None:
     # The collision is with ``many_argument``, not with the default: under
-    # ``rows`` a read of ``items`` is free, and a read of ``rows`` is not.
     spec = _many(many_argument="rows", reads=Parameters([Parameter("items", "string")]))
 
     listed: Any = _registered(spec).list_tools(user=None)
@@ -126,8 +111,6 @@ def test_a_many_spec_in_a_registry_registers() -> None:
 
 def test_a_read_named_as_the_list_argument_is_refused() -> None:
     # The kernel refuses two declarations of one name when the spec's
-    # parameters are assembled, which ``register_tool`` does to compile the
-    # schema, so the list can never be shadowed by a read of its name.
     with pytest.raises(ImproperlyConfigured, match="'items'"):
         _registered(_many(reads=Parameters([Parameter("items", "string")])))
 

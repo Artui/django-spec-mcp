@@ -1,5 +1,3 @@
-"""``register_ui_resource`` — declaring an interactive HTML view."""
-
 from __future__ import annotations
 
 from typing import Any
@@ -46,8 +44,7 @@ class TestDefaults:
         assert _register(_make()).encoding is ResourceEncoding.TEXT
 
     def test_is_unguarded_by_default(self) -> None:
-        """A view is a static asset on an already-authenticated session, and
-        hosts may prefetch it before any tool call."""
+        """A view is a static asset on an already-authenticated session."""
         assert _register(_make()).permissions == ()
 
     def test_can_still_be_guarded(self) -> None:
@@ -85,16 +82,14 @@ class TestContentSources:
         assert "<h1>A view</h1>" in binding.selector()
 
     def test_a_template_is_rendered_per_read_not_at_registration(self) -> None:
-        """So a template edit shows up without a restart, like every other
-        Django template. Registration therefore does not touch the loader."""
+        """So a template edit shows up without a restart, like every other Django template."""
         binding = _register(_make(), html=None, template_name="mcp_ui/does_not_exist.html")
 
         with pytest.raises(TemplateDoesNotExist):
             binding.selector()
 
     def test_a_body_template_is_wrapped_in_the_package_document(self) -> None:
-        """The recommended source. What the project writes is markup; the shell
-        and the ``ui/*`` bridge around it are the package's."""
+        """The recommended source."""
         binding = _register(_make(), html=None, body_template_name="mcp_ui/body.html")
         document = binding.selector()
 
@@ -109,14 +104,12 @@ class TestContentSources:
         assert "<title>Invoices</title>" in binding.selector()
 
     def test_a_body_template_falls_back_to_the_binding_name_for_the_title(self) -> None:
-        """A view with no ``title=`` still needs one: the bridge sends it as
-        ``appInfo.name``, and a host may show it as the frame's label."""
+        """A view with no ``title=`` still needs one: the bridge sends it as ``appInfo.name``."""
         binding = _register(_make(), html=None, body_template_name="mcp_ui/body.html")
         assert "<title>invoices_table</title>" in binding.selector()
 
     def test_a_body_template_is_also_rendered_per_read(self) -> None:
-        """Same reason a whole-document template is — an edit shows up without
-        a restart. Registration therefore does not touch the loader."""
+        """Same reason a whole-document template is — an edit shows up without a restart."""
         binding = _register(_make(), html=None, body_template_name="mcp_ui/nope.html")
 
         with pytest.raises(TemplateDoesNotExist):
@@ -135,9 +128,7 @@ class TestContentSources:
         )
 
     def test_the_two_template_sources_are_mutually_exclusive(self) -> None:
-        """They differ in what the template is expected to contain — a whole
-        document against a fragment — so accepting both would have to pick one
-        silently."""
+        """They differ in what the template is expected to contain."""
         with pytest.raises(ValueError, match="exactly one content source"):
             _register(
                 _make(),
@@ -202,8 +193,7 @@ class TestUIMetadata:
         assert set(binding.meta) == {UI_META_KEY, "example.com/other"}
 
     def test_declaring_the_ui_key_twice_raises(self) -> None:
-        """Both write the same ``_meta`` key, so one would silently win — and
-        the symptom is a view that never renders."""
+        """Both write the same ``_meta`` key, so one would silently win."""
         with pytest.raises(ValueError, match="both ui= and a 'ui' key"):
             _register(
                 _make(),
@@ -218,20 +208,7 @@ class TestUIMetadata:
 
 
 class TestAViewRenderCannotReadTheCaller:
-    """The premise the permissions exemption rests on, made true by construction.
-
-    ``register_ui_resource`` is the one registration on this server that skips
-    ``check_tool_permissions_declared``, and the reason given is that a view's
-    content cannot depend on who is asking. Two of the three content sources
-    make that true on their own. The third did not: ``render=`` was documented
-    and typed as zero-argument, nothing enforced it, and
-    ``handle_resources_read`` resolves every binding's callable by name against a
-    pool that deliberately carries ``request`` and ``user``.
-
-    So ``render=lambda user: ...`` was handed the authenticated caller, was
-    registered unguarded because of the exemption, and produced a document a host
-    may cache across callers. Each of those is defensible alone.
-    """
+    """The premise the permissions exemption rests on, made true by construction."""
 
     def test_a_render_naming_the_user_is_refused(self) -> None:
         with pytest.raises(ValueError, match="must take no arguments"):
@@ -251,8 +228,6 @@ class TestAViewRenderCannotReadTheCaller:
 
     def test_a_render_taking_anything_at_all_is_refused(self) -> None:
         # The pool is not a fixed set -- URI-template variables land in it too --
-        # so the refusal is about declaring a fillable parameter, not about the
-        # two names that happen to be the dangerous ones today.
         with pytest.raises(ValueError, match="must take no arguments"):
             _register(
                 _make(),
@@ -262,7 +237,6 @@ class TestAViewRenderCannotReadTheCaller:
 
     def test_a_render_with_a_default_is_still_refused(self) -> None:
         # A default does not stop resolve_callable_kwargs filling the parameter
-        # when the name is in the pool; it only hides the failure if it is not.
         with pytest.raises(ValueError, match="must take no arguments"):
             _register(
                 _make(),
@@ -272,7 +246,6 @@ class TestAViewRenderCannotReadTheCaller:
 
     def test_a_var_keyword_render_is_refused(self) -> None:
         # The worst case rather than an edge one: resolve_callable_kwargs hands
-        # the *entire* pool to a callable declaring **kwargs.
         def render(**kwargs: object) -> str:
             return "<h1>hi</h1>"
 
@@ -305,7 +278,6 @@ class TestAViewRenderCannotReadTheCaller:
 
     def test_a_variadic_positional_render_is_accepted(self) -> None:
         # resolve_callable_kwargs only ever builds keyword arguments, so this
-        # one is still called with nothing.
         def render(*args: object) -> str:
             return "<h1>hi</h1>"
 

@@ -1,16 +1,3 @@
-"""A kernel resource carries every field of its spec, because the read dispatches it.
-
-``register_resource(spec, ...)`` with a kernel ``RETRIEVE`` ``SelectorSpec``
-reads through the kernel's ``dispatch``, so what the spec declares runs on
-``resources/read`` as it runs on every other transport: a precondition gates the
-read, the presenter renders the row and queryset shaping is applied. Asked here:
-a spec declaring any of those registers, and a read runs its precondition and
-its presenter.
-
-Nothing the spec declares is dropped, so there is nothing to refuse at
-registration: dropping a precondition silently would look like success.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -96,8 +83,6 @@ def test_every_declared_spec_field_registers_and_is_kept(field: str, value: Any)
 @pytest.mark.django_db
 def test_a_read_runs_the_specs_precondition() -> None:
     # That the precondition ran, with the URI's variable in its pool, is this
-    # module's question. How a refusal from it is answered belongs to the read
-    # path, so the precondition here records and lets the read through.
     seen: list[Any] = []
 
     def _seen(*, pk: int) -> None:
@@ -114,7 +99,6 @@ def test_a_read_runs_the_specs_precondition() -> None:
 @pytest.mark.django_db
 def test_a_read_applies_the_specs_queryset_shaping() -> None:
     # ``extend_queryset`` narrowing the row away makes the read a miss, which
-    # only a read that shapes the selector's queryset can answer.
     invoice = Invoice.objects.create(number="INV-1")
     server = _server(_spec(extend_queryset=lambda queryset: queryset.none()))
 
