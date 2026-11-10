@@ -1,15 +1,15 @@
 """``completion/complete`` for prompts and for kernel resource templates.
 
-The prompt half is not about a spec, since a prompt is not one. The resource half registers kernel ``RETRIEVE`` specs through
+The prompt half is not about a spec. The resource half registers kernel ``RETRIEVE`` specs through
 ``register_resource(spec, uri_template=..., name=...)``, whose ``reads`` are the
 template's variables. A completion is a read of what it completes, so a kernel
 resource's spec permissions answer it as they answer ``resources/read``: the
 class-level checks, judged as the listing judges the spec, on no arguments,
 since a completion names a template rather than a URI, and before the rate
 limit, as the read asks them. A check reading ``arguments`` is handed ``None``
-there and refuses, whether it guards against ``None`` or raises on it, so a
-template whose check is scoped to a route completes for nobody; a ``ServiceError`` it raises refuses the completion as it hides the template,
-and a configuration error fails the completion as it fails the read.
+there and refuses, whether it guards or raises on ``None``, so a route-scoped
+template completes for nobody; a ``ServiceError`` it raises refuses the completion,
+as it hides the template, and a configuration error fails it as it fails the read.
 
 A prompt's kernel checks are handed the principal and the prompt's binding,
 as its ``prompts/get`` hands them.

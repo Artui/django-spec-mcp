@@ -57,7 +57,7 @@ def test_no_example_imports_drf_or_drf_services() -> None:
 
 @pytest.mark.parametrize(("project", "settings_module", "mcp_module"), _EXAMPLES)
 def test_no_example_installs_drf(project: str, settings_module: str, mcp_module: str) -> None:
-    """An installed app is reached by Django's app loading, not by an import the guard above can see."""
+    """An installed app is reached by Django's app loading, not an import the guard can see."""
     settings_file = _EXAMPLES_DIR / project / Path(*settings_module.split("."))
     assert "rest_framework" not in settings_file.with_suffix(".py").read_text()
 
@@ -255,8 +255,8 @@ def test_invoicing_demonstrates_lookup_empty_result_idempotency_and_seeds() -> N
     ``invoices.set_amount`` advertises its target lookup, requires it because
     the lookup has no default, refuses a call without it, lists
     ``idempotentHint``, and keeps a strict ``outputSchema`` because it has no
-    output re-read, its refusal worded by the server's ``conventions=``; ``invoices.find`` answers a miss with ``{}`` under a
-    schema that admits it; ``invoices.outstanding`` reads the mount's
+    output re-read, its refusal worded by ``conventions=``; ``invoices.find`` answers a miss with
+    ``{}`` under a schema that admits it; ``invoices.outstanding`` reads the mount's
     ``currency`` seed, does not advertise it, and refuses a client
     ``currency`` rather than read it; ``invoices.unsent`` binds ``sent`` with
     ``server_arguments=``, so it is not advertised and a client's ``sent`` is
@@ -596,10 +596,10 @@ def test_invoicing_authenticates_bearer_tokens_and_gates_its_prompt_on_a_scope()
     """The example's demo backend and the prompt's ``scopes=`` gate, as a client meets them.
 
     A request with no token, or a token the backend does not know, is a ``401``
-    whose challenge points at the metadata document, which is served where it
-    points and, the same, at RFC 9728's location at the origin, and names ``invalid_token`` only for the token sent; a token without ``invoices:email`` is the ``403`` naming that scope;
-    that token still calls a tool and reads the resource, which the scope does
-    not gate; the clerk's token renders the prompt.
+    whose challenge points at the metadata document, which is served where it points and,
+    the same, at RFC 9728's origin location, and names ``invalid_token`` only for the token sent;
+    a token without ``invoices:email`` is the ``403`` naming that scope; that token still calls
+    a tool and reads the resource, ungated by it; the clerk's token renders the prompt.
     """
     replies = json.loads(_run_in_example("invoicing", _INVOICING_AUTH))
     pointer = "http://localhost:8000/mcp/.well-known/oauth-protected-resource"
@@ -735,7 +735,7 @@ _JOB_STATUS = textwrap.dedent(
 
 
 def test_job_status_starts_a_job_and_serves_its_status(tmp_path: Path) -> None:
-    """``jobs.start`` answers at once, the resource follows the job, ``jobs.list`` filters and orders.
+    """``jobs.start`` answers at once, the resource follows the job, ``jobs.list`` filters, orders.
 
     The start returns the queued row with its id as a string, before the work
     runs; an out-of-range duration is a ``validation_error`` result; reading

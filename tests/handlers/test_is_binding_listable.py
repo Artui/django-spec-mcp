@@ -3,7 +3,7 @@
 The helper is asked of kernel bindings, registered with ``register_tool`` and
 ``register_resource``: every check admitting lists the binding, any refusal
 hides it, the first refusal decides, ``always_listed`` opts back in, and the
-selector-tool and resource bindings are judged the same way. Their ``permissions`` field holds only the scope gate
+selector-tool and resource bindings are judged alike. Their ``permissions`` hold only the scope gate
 (``scopes=``); the spec's own ``PermissionCheck``s are the kernel's, and the
 listing asks them through the kernel's ``authorize`` with what a call asks them
 with: the caller as principal, the server's pool seeds, and a call context whose

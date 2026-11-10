@@ -1,9 +1,9 @@
 """``FILTER_LISTINGS_BY_PERMISSIONS`` across the four list handlers, on kernel specs.
 
 It asks of tools and resources registered with ``register_tool`` and
-``register_resource`` and guarded by their specs' own ``PermissionCheck``s: every list handler (``tools/list``,
-``resources/list``, ``resources/templates/list``, ``prompts/list``) with the
-setting on and off, the ``always_listed`` opt-back-in, the filter running before
+``register_resource`` and gated by their own ``PermissionCheck``s: each list handler
+(``tools/list``, ``resources/list``, ``resources/templates/list``, ``prompts/list``) with
+the setting on and off, the ``always_listed`` opt-back-in, the filter running before
 pagination, and a check scoped by what a call names being judged on nothing.
 
 A kernel call's route is in its arguments, so a route-scoped check is one

@@ -51,7 +51,9 @@ def resume_task(
             store,
             record.task_id,
             status=TaskStatus.FAILED,
-            status_message=f"The task could not be queued again after its input was answered: {exc}",
+            status_message=(
+                f"The task could not be queued again after its input was answered: {exc}"
+            ),
             broker=broker,
         )
 

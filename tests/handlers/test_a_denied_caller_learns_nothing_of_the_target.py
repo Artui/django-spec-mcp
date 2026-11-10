@@ -8,7 +8,7 @@ kernel's ``dispatch`` fixes that order itself - class-level authorization,
 target resolution, object-level authorization, then validation - so these ask
 it of kernel ``ServiceSpec`` and ``SelectorSpec`` tools on every route.
 
-A denied caller is also not told which argument it left out. The kernel's ``dispatch`` runs its shape check before
+A denied caller is also not told which argument it left out: ``dispatch`` checks shape before
 authorization, so the transport asks the spec's class-level checks itself
 first (``admit_kernel_call``), on every route, and a caller they deny missing
 a required read is refused for its permission. A caller they admit is still

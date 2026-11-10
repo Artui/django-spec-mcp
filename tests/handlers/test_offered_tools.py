@@ -1,9 +1,9 @@
 """``tools/list`` leaves out a kernel tool that an operation-scope affordance refuses now.
 
-Asked of kernel ``ServiceSpec`` tools registered with ``register_tool``: a callable ``when`` unmet against the pool's seeds alone
+Asked of kernel ``ServiceSpec`` tools (``register_tool``): a ``when`` unmet by the seeds alone
 leaves the tool out, with or without ``FILTER_LISTINGS_BY_PERMISSIONS``; a
 condition on the row is never asked; ``always_listed`` keeps the tool; no pool
-is built when nothing is declared; and ``tools/call`` is unchanged. The permission filter is exercised through
+is built when nothing is declared; and ``tools/call`` is unchanged. The permission filter runs via
 ``scopes=``, the kernel binding's own gate, because whether the listing reads a kernel spec's
 ``permissions`` is ``is_binding_listable``'s question and not this file's.
 

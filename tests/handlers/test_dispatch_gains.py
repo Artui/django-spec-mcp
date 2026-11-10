@@ -3,7 +3,7 @@
 Asks of kernel specs registered with ``register_tool``: a collection selector
 narrowed by a FilterSet hands the service the whole collection to write, and a
 permission's ``has_object_permission`` judges the row an instance selector
-resolved, refusing the call before the service runs. The kernel's ``dispatch`` owns both, so these hold that the
+resolved, refusing the call before the service runs. ``dispatch`` owns both, so these hold that the
 transport hands it the arguments they read and maps its refusal to ``-32006``.
 """
 
