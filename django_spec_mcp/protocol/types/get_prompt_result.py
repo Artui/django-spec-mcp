@@ -8,11 +8,7 @@ from django_spec_mcp.protocol.types.prompt_message import PromptMessage
 
 @dataclass(frozen=True)
 class GetPromptResult:
-    """Result envelope returned by ``prompts/get``.
-
-    ``description`` surfaces the prompt's purpose to the client UI alongside
-    the rendered messages.
-    """
+    """Result envelope returned by ``prompts/get``."""
 
     messages: list[PromptMessage] = field(default_factory=list)
     description: str | None = None

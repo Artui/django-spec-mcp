@@ -1,5 +1,3 @@
-"""``ELICITATION_CREATE_METHOD`` - the one server-to-client request this package ever issues."""
-
 from __future__ import annotations
 
 ELICITATION_CREATE_METHOD: str = "elicitation/create"

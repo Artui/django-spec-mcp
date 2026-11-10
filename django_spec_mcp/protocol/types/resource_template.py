@@ -8,11 +8,7 @@ from django_spec_mcp.protocol.types.icon import Icon
 
 @dataclass(frozen=True)
 class ResourceTemplate:
-    """A parameterised resource address (RFC 6570 URI Template).
-
-    Returned by ``resources/templates/list``. Clients fill in the template
-    variables and call ``resources/read`` with the resulting URI.
-    """
+    """A parameterised resource address (RFC 6570 URI Template)."""
 
     uri_template: str
     name: str

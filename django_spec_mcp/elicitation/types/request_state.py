@@ -6,19 +6,7 @@ from typing import Any
 
 @dataclass(frozen=True)
 class RequestState:
-    """What the server needs back to carry on, and what it checks before it does.
-
-    The spec calls ``requestState`` *"an opaque blob"* the client "must not
-    interpret in any way", so its contents are ours to choose and the choice is
-    the security design. Three of these four fields exist only to be verified;
-    only ``answers`` carries anything forward.
-
-    **It travels through the client, so it is attacker-controlled input.** The
-    spec requires integrity protection whenever the state influences
-    authorization, resource access or business logic — which it does here, since
-    ``answers`` becomes tool arguments. Signing is in
-    ``django_spec_mcp.elicitation.sign_request_state``.
-    """
+    """What the server needs back to carry on, and what it checks before it does."""
 
     principal: str
     """Who the state was minted for. Rejecting a mismatch stops one caller
@@ -47,8 +35,7 @@ class RequestState:
     exchange."""
 
     def to_payload(self) -> dict[str, Any]:
-        """The JSON-serialisable form that gets signed. Keys are short because
-        the result is base64 and rides in every retry."""
+        """The JSON-serialisable form that gets signed."""
         return {
             "p": self.principal,
             "f": self.fingerprint,
@@ -58,14 +45,7 @@ class RequestState:
 
     @classmethod
     def from_payload(cls, payload: Any) -> RequestState | None:
-        """Rebuild from a verified payload, or ``None`` if it is not one.
-
-        Signature verification proves the payload came from this server, not
-        that it has this shape — a payload signed by an *older* release would
-        also verify. Hence the type checks: a stale shape is treated exactly
-        like a forged one, costing the client one extra round and us no
-        compatibility rules.
-        """
+        """Rebuild from a verified payload, or ``None`` if it is not one."""
         if not isinstance(payload, dict):
             return None
         principal: Any = payload.get("p")

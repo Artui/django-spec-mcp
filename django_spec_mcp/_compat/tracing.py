@@ -6,9 +6,7 @@ from contextlib import contextmanager
 from typing import Any
 
 
-# Resolved via ``importlib`` so the binding is plain ``Any`` (or ``None``) with
-# no narrowing for the type checker to fight: OpenTelemetry is an optional extra
-# and the package must remain usable without it.
+# Resolved via ``importlib``: OpenTelemetry is an optional extra the package must run without.
 def _resolve_otel_trace() -> Any:
     try:
         return importlib.import_module("opentelemetry.trace")
@@ -23,11 +21,7 @@ _TRACER_NAME: str = "django_spec_mcp"
 
 
 class _NoopSpan:
-    """Fallback span used when ``opentelemetry`` is not installed.
-
-    Mirrors the subset of the OTel ``Span`` API the handlers use, as no-ops, so
-    caller code stays branch-free.
-    """
+    """Fallback span used when ``opentelemetry`` is not installed."""
 
     def set_attribute(self, key: str, value: Any) -> None:
         return None
@@ -41,12 +35,7 @@ class _NoopSpan:
 
 @contextmanager
 def span(name: str, attributes: dict[str, Any] | None = None) -> Generator[Any]:
-    """Start an MCP span; no-op if OpenTelemetry isn't installed.
-
-    ``name`` follows the convention ``mcp.<method>`` (``mcp.tools.call``).
-    ``attributes`` are set at start time; the yielded span takes further fields
-    before exit.
-    """
+    """Start an MCP span; no-op if OpenTelemetry isn't installed."""
     if _otel_trace is None:
         yield _NoopSpan()
         return

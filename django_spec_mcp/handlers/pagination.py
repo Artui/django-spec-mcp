@@ -18,11 +18,7 @@ def _encode_cursor(offset: int) -> str:
 
 
 def _decode_cursor(cursor: str) -> int:
-    """Parse an opaque cursor back into a numeric offset.
-
-    Raises ``ValueError`` on any malformed input so callers can map to
-    JSON-RPC ``-32602``.
-    """
+    """Parse an opaque cursor back into a numeric offset."""
     padding: str = "=" * (-len(cursor) % 4)
     try:
         decoded: str = base64.urlsafe_b64decode(cursor + padding).decode()
@@ -42,20 +38,7 @@ def paginate(
     *,
     page_size: int,
 ) -> tuple[list[Any], str | None]:
-    """Slice ``items`` into a page of at most ``page_size``, starting at ``cursor``.
-
-    Returns ``(page, next_cursor)``; ``next_cursor`` is ``None`` at the end of
-    the sequence, the spec's signal that no more pages are available. A
-    malformed cursor raises ``ValueError`` for the caller to translate.
-
-    A ``page_size`` below 1 raises ``ImproperlyConfigured``, which is a
-    *different* failure from a bad cursor and deliberately not a ``ValueError``:
-    the cursor comes from the client and maps to ``-32602``, while this can only
-    come from the deployment's ``PAGE_SIZE``. Left to run it does not merely
-    serve an empty page — every page is empty, so ``next_cursor`` re-encodes the
-    offset it was handed for as long as the registry is non-empty and a
-    conformant client following ``nextCursor`` never terminates.
-    """
+    """Slice ``items`` into a page of at most ``page_size``, starting at ``cursor``."""
     if page_size < 1:
         raise ImproperlyConfigured(
             f"SPEC_MCP['PAGE_SIZE'] is {page_size}, so no listing can make "

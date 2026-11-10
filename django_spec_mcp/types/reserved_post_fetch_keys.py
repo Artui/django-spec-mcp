@@ -1,5 +1,3 @@
-"""``RESERVED_POST_FETCH_KEYS`` - keys the post-fetch pipeline of a LIST selector tool consumes."""
-
 from __future__ import annotations
 
 RESERVED_POST_FETCH_KEYS: frozenset[str] = frozenset({"page", "limit"})

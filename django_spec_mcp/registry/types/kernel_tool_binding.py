@@ -25,22 +25,7 @@ from django_spec_mcp.types.tool_content_kind import ToolContentKind
 
 @dataclass(frozen=True)
 class KernelToolBinding:
-    """All wiring for one MCP tool whose operation is a kernel spec.
-
-    ``spec`` is a ``django_service_specs`` ``ServiceSpec`` or ``SelectorSpec``, and
-    its class says which kind of tool this is: a service tool runs a mutation, a
-    selector tool reads. The call goes through the kernel's ``dispatch`` /
-    ``adispatch``, and the advertised schemas are the kernel's own
-    ``spec_caller_input_schema`` / ``spec_output_schema``, so the arguments a service
-    tool takes are the spec's parameters, spread at the top level of
-    ``arguments`` rather than nested under a ``data`` key.
-
-    Every other field is a fact of the MCP binding rather than of the operation:
-    the scope gate (``scopes``), ``rate_limits``, ``server_arguments``,
-    ``task_policy``, ``invalidates``, ``dispatch_timeout`` and
-    ``max_result_bytes`` are read by the ``tools/call`` shell around the
-    dispatch, never by the spec.
-    """
+    """All wiring for one MCP tool whose operation is a kernel spec."""
 
     name: str
     description: str | None
@@ -56,11 +41,7 @@ class KernelToolBinding:
 
     icons: tuple[Icon, ...] = ()
     annotations: dict[str, Any] = field(default_factory=dict)
-    # A free-form dict rather than a dataclass because ``_meta`` is MCP's open
-    # extension namespace: each extension owns a top-level key, so the valid
-    # key set is unbounded by design. Typed helpers belong *above* this field —
-    # a caller builds a typed object and merges its ``to_dict()`` in via
-    # ``merge_meta`` — not in place of it.
+    # A free-form dict, because ``_meta`` is MCP's open extension namespace.
     meta: dict[str, Any] = field(default_factory=dict)
     content_kind: ToolContentKind = ToolContentKind.TEXT
     content_mime_type: str | None = None
@@ -146,8 +127,7 @@ class KernelToolBinding:
     (``test_a_handbuilt_unguarded_kernel_tool_is_never_called``)."""
 
     def __post_init__(self) -> None:
-        # Each conjunct is held by a case of
-        # test_the_binding_takes_either_half_of_the_refused_pair_alone.
+        # Each conjunct is held by a test of its own.
         if self.include_output_schema is True and self.include_structured_content is False:
             raise ImproperlyConfigured(
                 f"Tool {self.name!r}: include_output_schema=True is incompatible "
@@ -162,9 +142,6 @@ class KernelToolBinding:
             include_structured_content=self.include_structured_content,
             include_output_schema=self.include_output_schema,
         )
-        # Here rather than in the registrar, so a binding built by hand reads a
-        # bare string as one scope and refuses ``scopes=()`` as well
-        # (``test_a_binding_built_by_hand_reads_a_bare_string_scope_as_one``).
         object.__setattr__(self, "scopes", scope_names(f"Tool {self.name!r}", self.scopes))
 
     @property
@@ -179,10 +156,7 @@ class KernelToolBinding:
 
     @cached_property
     def audience_projection(self) -> AudienceProjection:
-        """The spec's resolved audience markings, derived once per binding.
-
-        The kernel's own ``audience_projection_for_spec``, so the projected
-        payload and the advertised ``outputSchema`` read the same markings."""
+        """The spec's resolved audience markings, derived once per binding."""
         return audience_projection_for_spec(self.spec, name=f"Tool {self.name!r}")
 
 

@@ -24,18 +24,13 @@ async def handle_prompts_get_async(
     params: dict[str, Any] | None,
     context: MCPCallContext,
 ) -> dict[str, Any] | JsonRpcError:
-    """Async sibling of ``handle_prompts_get``.
-
-    The render callable is dispatched via ``acall``, so an async render
-    function awaits directly and a sync one runs in a thread.
-    """
+    """Async sibling of ``handle_prompts_get``."""
     target = resolve_prompt_get(params, context)
     if isinstance(target, JsonRpcError):
         return target
     binding, arguments_raw = target
 
     with span("mcp.prompts.get", attributes=span_attrs(binding.name, context)):
-        # See the sync sibling. Off the loop, since a permission may query.
         allowed, required_scopes = await acall(judge_binding, binding, context.token)
         if not allowed:
             return forbidden(required_scopes)
@@ -46,9 +41,6 @@ async def handle_prompts_get_async(
         if retry_after is not None:
             return rate_limited(retry_after)
 
-        # See the sync sibling: the transport's own ``HttpRequest``, carrying
-        # the token, and the seeds land *after* the client-supplied arguments,
-        # so an argument named ``user`` or ``request`` shadows nothing.
         request = carry_token(context.http_request, context.token)
         pool: dict[str, Any] = {
             **arguments_raw,

@@ -26,42 +26,7 @@ from django_spec_mcp.types.notification_kind import NotificationKind
 def grant_subscription(
     requested: SubscriptionFilter, context: MCPCallContext
 ) -> tuple[SubscriptionFilter, frozenset[str]]:
-    """Decide what a subscription may actually receive, and from which topics.
-
-    Returns ``(granted, topics)``: ``granted`` goes back to the client in the
-    acknowledgement, ``topics`` is what the stream attaches to. They are
-    produced together so they cannot disagree — a topic granted but not
-    announced would deliver notifications the client was told it would not get,
-    and the reverse would promise silence.
-
-    **This is the authorization boundary for the whole feature.** A topic name
-    is not a secret and the broker checks nothing, so everything deciding who
-    may hear what is here:
-
-    - **A resource URI is granted only if it resolves to a registered resource
-      and this caller may read it**, which for a kernel resource includes the
-      spec's own permissions as well as the binding's scope gate. Otherwise a subscription is a side channel
-      around ``resources/read``: a caller denied the body could still learn
-      every time it changed, and activity is often the more sensitive signal.
-    - **A task id is granted only to the principal that created it**, and only
-      on a server that runs tasks — the comparison ``tasks/get`` makes.
-    - **A list-changed kind is granted only if the server has such a registry**,
-      since advertising an event this server cannot produce leaves a client
-      waiting forever.
-
-    **A refused entry is dropped, not an error.** The spec uses the
-    acknowledgement as the channel for "you will not get this", omitting
-    unsupported types from the agreed set. Erroring on one bad URI would also
-    make the endpoint an oracle: a client could tell "no such resource" from
-    "not yours" by whether the subscription opened.
-
-    **One exception, and it is the spec's:** a client asking for ``taskIds``
-    without declaring the tasks extension **MUST** get a JSON-RPC error rather
-    than a quiet omission. That check runs at the transport before this — see
-    ``_maybe_subscribe`` — because it produces an error response rather than a
-    stream, and it is no oracle: it turns on what the *client* declared, not on
-    the tasks it named.
-    """
+    """Decide what a subscription may actually receive, and from which topics."""
     kinds: frozenset[NotificationKind] = frozenset(
         kind for kind in requested.kinds if _has_registry(kind, context)
     )
@@ -81,14 +46,7 @@ def grant_subscription(
 
 
 def _has_registry(kind: NotificationKind, context: MCPCallContext) -> bool:
-    """Whether the registry behind ``kind`` holds anything.
-
-    The spec's own example of a type to omit from the acknowledgement is
-    "``promptsListChanged`` when the server has no prompts".
-
-    Mapped explicitly, with no fallthrough: a new kind raises here rather than
-    silently landing on some other registry.
-    """
+    """Whether the registry behind ``kind`` holds anything."""
     registries: dict[NotificationKind, int] = {
         NotificationKind.TOOLS_LIST_CHANGED: len(context.tools),
         NotificationKind.PROMPTS_LIST_CHANGED: len(context.prompts),
@@ -98,32 +56,17 @@ def _has_registry(kind: NotificationKind, context: MCPCallContext) -> bool:
 
 
 def _may_watch_resource(uri: str, context: MCPCallContext) -> bool:
-    """Whether this caller may be told that ``uri`` changed.
-
-    Resolved through the same registry lookup ``resources/read`` uses, so a
-    template-backed URI is matched the way the reader matches it rather than by
-    a second rule that could drift.
-    """
+    """Whether this caller may be told that ``uri`` changed."""
     try:
         resolved: Any = context.resources.resolve(uri)
     except ValueError:
-        # A URI its template splits more than one way: the read refuses it,
-        # so the watch is dropped like any other unreadable URI
-        # (``test_a_subscription_drops_an_ambiguous_uri_and_keeps_its_unambiguous_sibling``).
         return False
     if resolved is None:
         return False
     binding, vars_ = resolved
-    # The binding's own judgement first, as the read asks it: a view's scope
-    # gate and checks, a kernel resource's scope gate alone
-    # (``test_a_ui_resource_check_gates_its_listing_read_and_subscription``).
     allowed, _ = judge_binding(binding, context.token)
     if not allowed:
         return False
-    # A kernel binding holds only its scope gate: the spec's own permissions
-    # answer the read inside ``dispatch``, so they answer the watch here too,
-    # or a caller the read refuses would still hear every change
-    # (``test_a_resource_the_caller_cannot_read_is_not_watchable``).
     if runs_on_kernel(binding):
         return _kernel_read_admits(binding, vars_, context)
     return True
@@ -132,34 +75,8 @@ def _may_watch_resource(uri: str, context: MCPCallContext) -> bool:
 def _kernel_read_admits(
     binding: KernelResourceBinding, variables: dict[str, str], context: MCPCallContext
 ) -> bool:
-    """Whether the kernel would let this caller start the read of ``binding``.
-
-    ``check_call`` is ``dispatch``'s prelude run alone, built from what
-    ``read_kernel_resource`` hands ``dispatch``: the same principal, the grant
-    only a registered unguarded binding carries, the URI variables read as the
-    spec's parameters, and the same call context. Each is held by a test that
-    fails without it: the server's seeds by
-    ``test_a_subscription_resolves_the_servers_pool_seeds``, the call context by
-    ``test_a_subscription_hands_the_check_the_call_context_the_read_does`` and
-    the URI variables read as the spec's types by
-    ``test_a_uri_variable_is_coerced_to_the_type_the_spec_declares``.
-
-    So a deactivated principal
-    (``test_a_deactivated_principal_cannot_watch_what_it_cannot_read``) and a
-    spec permission refusing the caller are refused here as the read refuses
-    them. Nothing is looked up, so a check on the row itself is not asked: the
-    watch is judged on the request, not on a row it would have to fetch.
-
-    Only ``DispatchError`` is a refusal. ``ImproperlyConfigured`` is how the
-    kernel answers a hand-built binding over an unguarded spec, whose read
-    answers -32603 and never runs: a misconfiguration, not a caller turned
-    away, so it propagates and fails the watch the same way
-    (``test_a_handbuilt_unguarded_kernel_resource_fails_the_watch_as_the_read_fails``)
-    rather than being dropped.
-    """
+    """Whether the kernel would let this caller start the read of ``binding``."""
     principal: Any = principal_of(context.token.user)
-    # One dict for the declaration and the checks, as dispatch asks both with
-    # the call's (test_a_watch_reads_its_variables_under_the_call_context_its_checks_get).
     asked = call_context(carry_token(context.http_request, context.token), binding.name)
     try:
         check_call(
@@ -176,15 +93,7 @@ def _kernel_read_admits(
 
 
 def _may_watch_task(task_id: str, context: MCPCallContext) -> bool:
-    """Whether this caller may be told how ``task_id`` is progressing.
-
-    The same ownership comparison ``tasks/get`` makes. A task's status is as
-    revealing as its result — knowing someone else's export finished is knowing
-    they ran one.
-    """
-    # Imported here rather than at module scope: ``handlers.tasks_utils`` reaches
-    # the handler layer, which reaches back to this module through the trigger
-    # path. The cycle is genuine, which is the documented exception.
+    """Whether this caller may be told how ``task_id`` is progressing."""
     from django_spec_mcp.handlers.tasks_utils import owned_by_caller
 
     store = context.tasks

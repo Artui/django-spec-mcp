@@ -6,12 +6,8 @@ from django_spec_mcp.handlers.types.context import MCPCallContext
 
 
 def handle_ping(params: dict[str, Any] | None, context: MCPCallContext) -> dict[str, Any]:
-    """Respond to the MCP ``ping`` keepalive.
-
-    The spec's response is an empty object: clients inspect no fields, only the
-    round-trip success.
-    """
-    del params, context  # unused
+    """Respond to the MCP ``ping`` keepalive."""
+    del params, context
     return {}
 
 

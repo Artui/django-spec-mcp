@@ -13,19 +13,7 @@ from django_spec_mcp.registry.types.utils import binding_checks, scope_names
 
 @dataclass(frozen=True)
 class PromptBinding:
-    """All wiring for a single MCP prompt.
-
-    A prompt is a server-defined message template the client invokes by name. The
-    ``render`` callable receives the client-supplied arguments as kwargs and returns a
-    list of
-    [`PromptMessage`][django_spec_mcp.protocol.types.prompt_message.PromptMessage]
-    instances, a list of strings (each becoming a user text message), a single string,
-    or a coroutine yielding any of those. The handler normalises whichever shape arrives
-    into the spec's ``messages`` list at dispatch time.
-
-    ``annotations`` and ``meta`` are emitted verbatim on this prompt's
-    ``prompts/list`` entry, under ``annotations`` and ``_meta`` respectively.
-    """
+    """All wiring for a single MCP prompt."""
 
     name: str
     description: str | None

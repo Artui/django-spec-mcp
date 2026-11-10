@@ -15,27 +15,7 @@ _DEFAULT_KEY_PREFIX: str = "spec-mcp:rl-sw"
 
 
 class SlidingWindowRateLimit:
-    """Sliding-window rate limiter using a list of timestamps in cache.
-
-    Avoids the fixed-window edge case where a client issues ``2 * max_calls``
-    requests across two adjacent windows: the timestamps of recent calls are
-    stored in a cache entry, and each call prunes the expired ones and compares
-    the live count against ``max_calls``.
-
-    Trade-offs against
-    [`FixedWindowRateLimit`][django_spec_mcp.auth.rate_limits.fixed_window_rate_limit.FixedWindowRateLimit]:
-
-    - **Smoother**: limits the actual rate over the trailing ``per_seconds``,
-      not bucketed counts.
-    - **Memory cost**: up to ``max_calls`` timestamps per key.
-    - **Read-modify-write**: no atomic guarantee, unlike the fixed window's
-      ``cache.add`` + ``cache.incr``. Concurrent calls can read stale state and
-      admit a few extra requests under contention; for strict atomicity in a
-      multi-worker deployment, back the limiter with a Redis-Lua script.
-
-    The cache **must** be a shared backend in multi-process deployments;
-    Django's ``locmem`` works for tests but shares no state across workers.
-    """
+    """Sliding-window rate limiter using a list of timestamps in cache."""
 
     def __init__(
         self,
@@ -59,12 +39,9 @@ class SlidingWindowRateLimit:
         timestamps: list[float] = cache.get(cache_key) or []
         live: list[float] = [ts for ts in timestamps if ts > cutoff]
         if len(live) >= self._max:
-            # The oldest live timestamp is when the window regains capacity;
-            # clamped to >= 1 so ``Retry-After`` is always usable.
+            # The oldest live timestamp is when the window regains capacity.
             retry_at: float = live[0] + self._window
             retry_after: int = max(int(retry_at - now), 1)
-            # Persist the pruned list so denied calls stop re-walking expired
-            # entries.
             cache.set(cache_key, live, timeout=self._window)
             return retry_after
         live.append(now)

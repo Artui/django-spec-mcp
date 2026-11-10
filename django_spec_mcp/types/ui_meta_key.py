@@ -1,5 +1,3 @@
-"""``UI_META_KEY`` - the _meta key MCP Apps owns on a resource or tool descriptor."""
-
 from __future__ import annotations
 
 UI_META_KEY: str = "ui"

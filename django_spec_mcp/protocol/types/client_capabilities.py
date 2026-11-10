@@ -6,11 +6,7 @@ from typing import Any
 
 @dataclass(frozen=True)
 class ClientCapabilities:
-    """Capability bundle the client advertises in ``initialize``.
-
-    All fields are open-ended dicts because the MCP spec leaves room for
-    future capability sub-keys. We round-trip them verbatim.
-    """
+    """Capability bundle the client advertises in ``initialize``."""
 
     roots: dict[str, Any] | None = None
     sampling: dict[str, Any] | None = None

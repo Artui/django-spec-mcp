@@ -1,5 +1,3 @@
-"""The package's enums and shared constants, one per module."""
-
 from django_spec_mcp.types.cache_scope import CacheScope
 from django_spec_mcp.types.client_capabilities_meta_key import CLIENT_CAPABILITIES_META_KEY
 from django_spec_mcp.types.client_info_meta_key import CLIENT_INFO_META_KEY

@@ -8,18 +8,7 @@ from django_spec_mcp.protocol.types.icon import Icon
 
 @dataclass(frozen=True)
 class Tool:
-    """An MCP tool descriptor as returned by ``tools/list``.
-
-    ``input_schema`` and ``output_schema`` are JSON Schema documents.
-    ``annotations`` carries the MCP ToolAnnotations hint bundle
-    (``readOnlyHint``, ``destructiveHint``), a closed spec-defined set.
-
-    ``meta`` is the base-protocol ``_meta`` bundle, emitted under ``"_meta"``.
-    It stays a free-form dict at this wire boundary rather than a closed
-    dataclass because ``_meta`` is MCP's open extension namespace — any
-    extension may add its own key. The same holds for every ``meta`` field on
-    the other wire types here.
-    """
+    """An MCP tool descriptor as returned by ``tools/list``."""
 
     name: str
     description: str | None = None

@@ -60,11 +60,7 @@ def dispatch(
     params: dict[str, Any] | None,
     context: MCPCallContext,
 ) -> Any | JsonRpcError:
-    """Route a JSON-RPC method to its handler.
-
-    Returns the handler's raw return value, except that
-    [`InitializeResult`][django_spec_mcp.protocol.types.initialize_result.InitializeResult]
-    is converted to its dict form so the transport can serialise uniformly."""
+    """Route a JSON-RPC method to its handler."""
     handler: _HandlerFn | None = _HANDLERS.get(method)
     if handler is None:
         return JsonRpcError(JsonRpcErrorCode.METHOD_NOT_FOUND, f"Unknown method: {method!r}")

@@ -30,13 +30,7 @@ async def read_kernel_resource_async(
     admission: KernelAdmission,
     context: MCPCallContext,
 ) -> dict[str, Any] | JsonRpcError:
-    """Async sibling of ``read_kernel_resource``, through ``adispatch``, reached
-    from ``handle_resources_read_async``.
-
-    The URI-template variables are the arguments, read from the strings a URI
-    carries into the types the spec's parameters declare (``coerce_flat``), so
-    ``invoices://7`` reaches an ``integer`` ``pk`` as ``7``.
-    """
+    """Async sibling of ``read_kernel_resource``, through ``adispatch``."""
     try:
         result = await adispatch(
             binding.spec,

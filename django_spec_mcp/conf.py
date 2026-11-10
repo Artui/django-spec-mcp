@@ -65,10 +65,7 @@ DEFAULTS: dict[str, Any] = {
 
 
 def get_setting(name: str) -> Any:
-    """Return a single setting from ``SPEC_MCP``, falling back to ``DEFAULTS``.
-
-    Raises ``KeyError`` for unknown setting names so typos surface immediately.
-    """
+    """Return a single setting from ``SPEC_MCP``, falling back to ``DEFAULTS``."""
     if name not in DEFAULTS:
         raise KeyError(f"Unknown SPEC_MCP setting: {name!r}")
     user_settings: dict[str, Any] = getattr(django_settings, "SPEC_MCP", {}) or {}

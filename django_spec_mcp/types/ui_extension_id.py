@@ -1,5 +1,3 @@
-"""``UI_EXTENSION_ID`` - identifier a client uses to advertise MCP Apps support."""
-
 from __future__ import annotations
 
 UI_EXTENSION_ID: str = "io.modelcontextprotocol/ui"

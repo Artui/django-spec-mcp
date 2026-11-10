@@ -10,15 +10,7 @@ from django_spec_mcp.schema.types.agent_conventions import AgentConventions
 
 @dataclass(frozen=True)
 class KernelRefusalScene:
-    """What an answer in the kernel refusal map needs to know about the call.
-
-    ``arguments`` are the ones the tool ran with, echoed in a validation
-    result when ``INCLUDE_VALIDATION_VALUE`` is on. ``input_round`` is the
-    round an ``AdditionalInputRequired`` can ask in, which only a service tool
-    called over the wire has: ``None`` from the in-process ``call_tool`` and for
-    a selector tool, where the request is answered as a service error. ``span`` is
-    the call's tracing span, or ``None``, for ``RECORD_SERVICE_EXCEPTIONS``.
-    """
+    """What an answer in the kernel refusal map needs to know about the call."""
 
     arguments: Any
     config: MCPConfig

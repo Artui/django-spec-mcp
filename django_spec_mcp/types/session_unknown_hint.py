@@ -1,5 +1,3 @@
-"""``SESSION_UNKNOWN_HINT`` - a session id arrived that this server will not honour — expired, evicted, terminated, or minted for a different principal."""
-
 from __future__ import annotations
 
 SESSION_UNKNOWN_HINT: str = "session-unknown"

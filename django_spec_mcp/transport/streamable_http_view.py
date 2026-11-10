@@ -82,16 +82,7 @@ logger = get_logger(__name__)
 
 
 def _reject_awaitable_token(result: Any, *, backend: Any) -> Any:
-    """Return the token, or refuse an ``authenticate`` that must be awaited.
-
-    **A security gate, not a type check.** The sync transport cannot await, so
-    an ``async def authenticate`` mounted under ``server.urls`` hands back an
-    un-awaited coroutine — which is *truthy*, so every ``token is None`` check
-    downstream passes and every caller is authenticated under the shared
-    ``"anonymous"`` principal, with nothing in the response saying so. The
-    backend is fine; its *mounting* is wrong, so the message names both ways
-    out.
-    """
+    """Return the token, or refuse an ``authenticate`` that must be awaited."""
     return reject_awaitable(
         result,
         call=f"{type(backend).__name__}.authenticate()",
@@ -107,16 +98,7 @@ def _reject_awaitable_token(result: Any, *, backend: Any) -> Any:
 
 
 def _reject_awaitable_session(result: Any, *, store: Any, method: str) -> Any:
-    """Return a session-store answer, or refuse one that must be awaited.
-
-    An ``async def owner`` is a correct implementation under the async
-    transport, which ``acall``s these methods, and the same store mounted under
-    ``server.urls`` silently stops working. This one fails *closed* — a
-    coroutine matches no principal — but incomprehensibly: every request
-    answers "re-initialize", and a session id minted from ``create`` is the
-    ``repr`` of a coroutine. Naming the mounting is the whole value here; the
-    store is not the bug.
-    """
+    """Return a session-store answer, or refuse one that must be awaited."""
     return reject_awaitable(
         result,
         call=f"{type(store).__name__}.{method}()",
@@ -133,32 +115,9 @@ def _reject_awaitable_session(result: Any, *, store: Any, method: str) -> Any:
 
 
 class StreamableHttpView(View):
-    """The single ``/mcp`` endpoint per MCP 2025-11-25 (Streamable HTTP).
+    """The single ``/mcp`` endpoint per MCP 2025-11-25 (Streamable HTTP)."""
 
-    A plain Django view answering three HTTP methods on one URL, each by the
-    method of that name (``StreamableHttpView.as_view(...)``):
-
-    - **POST** → exactly one JSON-RPC message, returns ``application/json``
-      (or HTTP 202 for notifications).
-    - **GET** → not implemented in v1; returns 405 (allowed by spec).
-    - **DELETE** → terminates the session referenced by ``MCP-Session-Id``.
-
-    ``HEAD`` takes the ``GET`` handler and ``OPTIONS`` is Django's, naming the
-    methods in ``Allow``. Nothing of a project's own middleware decides who
-    calls: [`MCPAuthBackend`][django_spec_mcp.auth.types.auth_backend.MCPAuthBackend]
-    is the auth layer, the view is CSRF-exempt and never redirected to a login
-    page, and per-binding permissions live on the registered tool, resource and
-    prompt. Rate limits are the package's own, ``rate_limits=`` on each binding;
-    no DRF throttle, authentication class, renderer or exception handler
-    reaches this view.
-
-    Collaborators (registries, auth backend, session store) are instance-scoped and
-    passed in by [`MCPServer`][django_spec_mcp.server.mcp_server.MCPServer] through
-    ``as_view``, never looked up at module level, so independent servers in one process
-    cannot interfere."""
-
-    # Django's ``as_view`` requires kwargs to be existing class attributes, so
-    # these are declared with defaults for the server to populate.
+    # Django's ``as_view`` requires kwargs to be existing class attributes.
     tools: ToolRegistry | None = None
     resources: ResourceRegistry | None = None
     prompts: PromptRegistry | None = None
@@ -167,31 +126,12 @@ class StreamableHttpView(View):
     # ``None`` on both means this server runs no tasks.
     task_store: TaskStore | None = None
     task_executor: TaskExecutor | None = None
-    # **Publishing only.** Serving ``subscriptions/listen`` needs a stream that
-    # stays open, which a sync WSGI view cannot hold, so that action is the
-    # async view's alone. Announcing an ``invalidates=`` change is the other
-    # direction and costs nothing but a publish, so a tool mutating over WSGI
-    # while subscribers hold their streams on an ASGI process still reaches
-    # them - the exact split a cross-process broker exists for.
     subscription_broker: SubscriptionBroker | None = None
-    # Identity the owning server resolved at construction. Unlike the
-    # collaborators above these stay optional at dispatch: a hand-wired view
-    # with no server still answers ``initialize``, falling back to
-    # ``SERVER_INFO``.
     server_info: Implementation | None = None
     instructions: str | None = None
     config: MCPConfig | None = None
-    # The owning server's ``pool_seeds=``, read into every context this view
-    # builds. The kernel's default for a hand-wired view, which is exactly
-    # the seeds dispatch would use with none passed.
     pool_seeds: PoolSeeds = DEFAULT_POOL_SEEDS
-    # The owning server's ``conventions=``, read into every context this view
-    # builds, so the wording it serves is that server's. The defaults for a
-    # hand-wired view, which is what a server given none would say.
     conventions: AgentConventions = AgentConventions()
-    # The owning server's ``exception_map=``, read into every context this view
-    # builds. A read-only empty one for a hand-wired view, since this is the class
-    # body and nothing here may be shared and written to.
     exception_map: Mapping[type[Exception], ExceptionHandler] = MappingProxyType({})
 
     @classonlymethod
@@ -206,8 +146,6 @@ class StreamableHttpView(View):
                 return refused
         return super().dispatch(request, *args, **kwargs)
 
-    # ----- the methods the endpoint serves -----
-
     def post(self, http_request: HttpRequest) -> HttpResponse:
         """POST action: parse a single JSON-RPC message and dispatch."""
         config: MCPConfig = self._require_config()
@@ -220,17 +158,10 @@ class StreamableHttpView(View):
             return message
 
         is_initialize: bool = isinstance(message, JsonRpcRequest) and message.method == "initialize"
-        # ``server/discover`` joins ``initialize`` in being answerable without a
-        # session, but does *not* mint one — hence a second flag rather than a
-        # widening of the first.
         is_sessionless: bool = (
             isinstance(message, JsonRpcRequest) and message.method in SESSIONLESS_METHODS
         )
 
-        # **The era fork.** Per-request ``_meta`` carrying a protocol version
-        # means modern (stateless, header-validated); its absence means legacy
-        # (``initialize`` handshake, sessions). One branch, here at the edge —
-        # everything below the transport is era-agnostic by construction.
         metadata: RequestMetadata | None = RequestMetadata.from_params(
             params_dict(getattr(message, "params", None))
         )
@@ -243,18 +174,11 @@ class StreamableHttpView(View):
         if negotiated is None:
             return unsupported_version_response(getattr(message, "id", None))
 
-        # Authentication runs *before* the session lookup: an unauthenticated
-        # caller always sees 401 regardless of session validity, so session ids
-        # cannot be probed through a 404-vs-401 oracle. The checks above are
-        # not principal-revealing.
         token = self._authenticate(http_request)
         if token is None:
             logger.warning("Authentication failed for %s", http_request.path)
             return unauthenticated_response(self._require_auth_backend(), http_request)
 
-        # A session is bound to the principal it was minted for at
-        # ``initialize``; a wrong-principal presentation renders the same
-        # 404 as an unknown id (no fresh ownership oracle).
         store = self._require_session_store()
         session_id: str | None = http_request.headers.get(_SESSION_HEADER)
         principal: str = principal_for_token(token)
@@ -291,16 +215,12 @@ class StreamableHttpView(View):
         except Exception as exc:  # noqa: BLE001 — the backstop; see ``internal_error_response``
             if not is_raised_denial(exc):
                 return internal_error_response(message, logger)
-            # A denial raised rather than returned; see ``raised_denial_error``.
             result = raised_denial_error()
 
         http_response: JsonResponse = legacy_result_response(
             message.id, result, self._require_auth_backend()
         )
         if is_initialize and self._sessions_enabled() and not isinstance(result, JsonRpcError):
-            # The spec makes assignment the server's choice ("MAY assign a
-            # session ID") and the client's duty to echo one conditional on it
-            # arriving, so not minting is the whole of sessionless mode here.
             new_session: str = _reject_awaitable_session(
                 store.create(principal_id=principal), store=store, method="create"
             )
@@ -310,19 +230,7 @@ class StreamableHttpView(View):
     def _handle_modern(
         self, http_request: Any, message: Any, metadata: RequestMetadata
     ) -> HttpResponse:
-        """Serve one request under the stateless (``2026-07-28``) rules.
-
-        Everything the legacy path does with a session is absent: no lookup, no
-        minting, no echo. An ``Mcp-Session-Id`` a legacy-minded client sends
-        anyway is ignored rather than rejected, as the spec asks of a modern
-        server receiving older traffic.
-
-        Header validation runs **before** authentication, unlike the legacy
-        session check: a header/body mismatch reveals nothing about who is
-        asking, and it is the signal a client uses to tell a modern server from
-        a legacy one, so gating it on credentials would break era detection for
-        anonymous probes.
-        """
+        """Serve one request under the stateless (``2026-07-28``) rules."""
         refused: JsonResponse | None = modern_header_refusal(
             http_request, message, metadata, self._require_config()
         )
@@ -344,50 +252,27 @@ class StreamableHttpView(View):
         if isinstance(message, JsonRpcNotification):
             return HttpResponse(status=202)
 
-        # Necessarily a request by now. The era test reads ``params``, which a
-        # JSON-RPC *response* does not carry, so a response body is always
-        # routed to the legacy path — and rejected there.
         try:
             result: Any = dispatch(message.method, params_dict(message.params), context)
         except Exception as exc:  # noqa: BLE001 — the backstop; see ``internal_error_response``
             if not is_raised_denial(exc):
                 return internal_error_response(message, logger)
-            # A denial raised rather than returned; see ``raised_denial_error``.
             result = raised_denial_error()
         return modern_result_response(message.id, result, self._require_auth_backend())
 
     def get(self, http_request: HttpRequest) -> HttpResponse:
-        """GET action: SSE-from-server isn't implemented in v1; 405 per spec.
-
-        Unconditional, and so decided without authenticating. Challenging
-        first would not keep even the 405 confidential: ``delete`` answers 405
-        to an anonymous DELETE whenever sessions are off, and POST answers 401
-        with a challenge naming the publicly fetchable protected-resource
-        metadata. All a challenge buys here is an OAuth flow, browser window
-        and all, ending at the 405 the caller gets for free.
-
-        The async sibling authenticates on this path, because there it guards
-        a stream a credential can actually open. WSGI serves no stream on any
-        configuration.
-        """
+        """GET action: SSE-from-server isn't implemented in v1; 405 per spec."""
         refused: JsonResponse | None = origin_refusal(http_request, self._require_config())
         if refused is not None:
             return refused
         return self._method_not_allowed()
 
     def delete(self, http_request: HttpRequest) -> HttpResponse:
-        """DELETE action: end the session named by ``MCP-Session-Id``.
-
-        Requires authentication, and only the principal a session was
-        minted for can destroy it — a wrong-principal (or unknown) id
-        renders 404 without touching the session.
-        """
+        """DELETE action: end the session named by ``MCP-Session-Id``."""
         refused: JsonResponse | None = origin_refusal(http_request, self._require_config())
         if refused is not None:
             return refused
         if modern_era_requested(http_request) or not self._sessions_enabled():
-            # The spec's blessed answer for a server that does not let clients
-            # terminate sessions, which is exactly true when there are none.
             return self._method_not_allowed()
         token = self._authenticate(http_request)
         if token is None:
@@ -410,13 +295,7 @@ class StreamableHttpView(View):
         session_id: str | None,
         client_capabilities: dict[str, Any] | None = None,
     ) -> MCPCallContext:
-        """The context a dispatch reads, from this view's collaborators.
-
-        ``client_capabilities`` is the modern path's alone. A legacy client
-        declared its capabilities once, at ``initialize``, and the spec forbids
-        relying on a declaration that did not arrive *with the request*, so the
-        legacy context leaves it empty.
-        """
+        """The context a dispatch reads, from this view's collaborators."""
         return MCPCallContext(
             http_request=http_request,
             token=token,
@@ -437,20 +316,12 @@ class StreamableHttpView(View):
             exception_map=self.exception_map,
         )
 
-    # ----- collaborator accessors -----
-
     def _method_not_allowed(self) -> HttpResponse:
         """A ``405`` naming the methods this view routes, as RFC 9110 requires."""
         return HttpResponseNotAllowed(allowed_methods(self))
 
     def _authenticate(self, http_request: HttpRequest) -> Any:
-        """Resolve the caller's token; on success the request is the token's.
-
-        The backend is handed an anonymous request (``seat_anonymous``), and an
-        authenticated one carries the token's principal from here on
-        (``carry_principal``), so every context this view builds afterwards
-        reads the token's caller.
-        """
+        """Resolve the caller's token; on success the request is the token's."""
         backend: MCPAuthBackend = self._require_auth_backend()
         seat_anonymous(http_request)
         token: Any = _reject_awaitable_token(backend.authenticate(http_request), backend=backend)

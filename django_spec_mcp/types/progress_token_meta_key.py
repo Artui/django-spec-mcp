@@ -1,5 +1,3 @@
-"""``PROGRESS_TOKEN_META_KEY`` - per-request _meta key by which a client asks to be told about progress."""
-
 from __future__ import annotations
 
 PROGRESS_TOKEN_META_KEY: str = "progressToken"

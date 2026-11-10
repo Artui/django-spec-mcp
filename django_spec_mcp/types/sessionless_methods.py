@@ -1,5 +1,3 @@
-"""``SESSIONLESS_METHODS`` - methods answerable before a session exists."""
-
 from __future__ import annotations
 
 SESSIONLESS_METHODS: frozenset[str] = frozenset({"initialize", "server/discover"})

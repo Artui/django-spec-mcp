@@ -1,11 +1,3 @@
-"""Public API for ``django_spec_mcp``.
-
-The specs this server registers are the kernel's: import ``ServiceSpec``,
-``SelectorSpec`` and the rest from ``django_service_specs``, which declares
-them. Nothing here re-exports a kernel name, so this package's public surface
-never pins a module path that is the kernel's to move.
-"""
-
 from django_spec_mcp.auth.types.auth_backend import MCPAuthBackend
 from django_spec_mcp.auth.types.self_checking import SelfChecking
 from django_spec_mcp.auth.types.token_info import TokenInfo

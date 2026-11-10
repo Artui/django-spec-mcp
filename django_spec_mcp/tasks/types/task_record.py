@@ -10,49 +10,7 @@ from django_spec_mcp.types.task_status import TaskStatus
 
 @dataclass(frozen=True)
 class TaskRecord:
-    """What a store holds: the wire
-    [`Task`][django_spec_mcp.protocol.types.task.Task] plus what a worker needs.
-
-    A *superset* rather than a parallel type. The extra fields never reach the
-    client — no task message has a slot for them — but they are why a task can
-    outlive the request that created it: the worker that finishes it shares
-    nothing with that request except this record.
-
-    **The scopes are stored, and that is the point.** Without them the worker
-    rebuilds a token that proves nothing, and every binding with ``scopes=``
-    denies the call it had already been authorized for — silently, long after
-    the client was told the work had started.
-
-    ``TokenInfo.raw`` is **not** stored: it is backend-defined credential
-    material, and persisting it would put that in a cache with a week-long
-    fallback TTL. A rehydrated token has ``raw=None``, so a permission reaching
-    into it is one that cannot run as a task.
-
-    **The separation is a security boundary.** ``to_wire`` is the only route
-    from a record to a message, which is what stops a principal id or a scope
-    list leaking into a response because a field was added to the wrong
-    dataclass.
-
-    Attributes:
-        task: The wire task — the only part a client ever sees.
-        tool_name: The tool the worker replays, verbatim.
-        arguments: The arguments it replays, verbatim.
-        principal_id: The owner, in the form
-            ``principal_for_token``
-            already produces for sessions.
-        user_pk: Rehydrates the user on the worker.
-        scopes: Rebuild the worker's ``TokenInfo`` so its permission checks see
-            what the request path saw.
-        audience: Rebuilds that ``TokenInfo``'s audience: one URL, or the
-            several a token names, held as a tuple whatever sequence was given,
-            so a store whose codec turns a tuple into a list (JSON does) hands
-            back the same type
-            (``test_the_record_holds_a_tuple_so_no_store_changes_its_kind``).
-        enqueued: Whether the task reached the executor, so a worker cannot be
-            tricked into running it twice. A worker clears it as it claims the
-            task, so a task waiting for input is not claimable until
-            ``tasks/update`` queues it again.
-    """
+    """What a store holds: the wire task plus what a worker needs."""
 
     task: Task
     tool_name: str
@@ -116,9 +74,7 @@ class TaskRecord:
     reusing over the task's lifetime."""
 
     def __post_init__(self) -> None:
-        # A ``str`` is a sequence too, so it is excluded first, or one URL would
-        # become a tuple of its characters
-        # (``test_one_audience_or_none_is_kept_as_it_is``).
+        # A ``str`` is a sequence too, so it is excluded first.
         if self.audience is not None and not isinstance(self.audience, str):
             object.__setattr__(self, "audience", tuple(self.audience))
 
@@ -134,12 +90,7 @@ class TaskRecord:
         return self.task
 
     def with_task(self, **changes: Any) -> TaskRecord:
-        """Return a copy with fields changed on the embedded
-        [`Task`][django_spec_mcp.protocol.types.task.Task].
-
-        Saves every caller a nested ``replace(record, task=replace(record.task,
-        ...))``.
-        """
+        """Return a copy with fields changed on the embedded task."""
         return replace(self, task=replace(self.task, **changes))
 
 

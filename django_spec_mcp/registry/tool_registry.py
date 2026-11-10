@@ -7,32 +7,14 @@ from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 
 
 class ToolRegistry:
-    """Name to tool binding lookup.
-
-    Holds service and selector tools in one namespace, rejecting
-    duplicates loudly so a misconfigured project surfaces the conflict at
-    registration rather than silently shadowing a tool.
-
-    ``pool_seeds`` are the owning server's, which ``MCPServer`` passes: a
-    binding's ``server_arguments`` are checked against them, since dispatch
-    refuses a parameter a registered seed occupies.
-    """
+    """Name to tool binding lookup."""
 
     def __init__(self, *, pool_seeds: PoolSeeds = DEFAULT_POOL_SEEDS) -> None:
         self._bindings: dict[str, KernelToolBinding] = {}
         self._pool_seeds: PoolSeeds = pool_seeds
 
     def register(self, binding: KernelToolBinding) -> None:
-        """Add ``binding``, refusing a duplicate name or a binding of server values that cannot hold.
-
-        The ``server_arguments`` check is made here rather than in the
-        registrars alone, because a binding built by hand and handed straight to
-        ``server.tools.register`` would otherwise reach every ``tools/call``
-        unchecked, and fail each one with ``ImproperlyConfigured`` where it
-        should have failed the server's startup
-        (``test_a_binding_built_by_hand_is_checked_when_it_is_registered``).
-        The registrars reach it as their last step, after the spec has compiled.
-        """
+        """Add ``binding``, refusing a duplicate name."""
         if binding.name in self._bindings:
             raise ValueError(f"Duplicate MCP tool name: {binding.name!r}")
         _refuse_server_arguments_that_cannot_hold(binding, self._pool_seeds)
@@ -42,14 +24,7 @@ class ToolRegistry:
         return self._bindings.get(name)
 
     def all(self) -> list[KernelToolBinding]:
-        """Every binding, in **registration order**.
-
-        ``tools/list`` has to be deterministic so clients can cache the catalog
-        and cursor pagination stays stable, which dict insertion order already
-        gives. Deliberately not sorted by name: registration order is authored
-        order, which is a better first page for a model than an alphabetical
-        one.
-        """
+        """Every binding, in **registration order**."""
         return list(self._bindings.values())
 
     def __len__(self) -> int:
@@ -62,12 +37,7 @@ class ToolRegistry:
 def _refuse_server_arguments_that_cannot_hold(
     binding: KernelToolBinding, pool_seeds: PoolSeeds
 ) -> None:
-    """Raise ``ImproperlyConfigured`` naming the tool for a binding of server values that cannot hold.
-
-    The kernel's ``check_server_arguments`` decides, and names the spec's kind
-    and callable; this adds the tool's name, which is what a server binding
-    many tools needs to find the one at fault.
-    """
+    """Raise ``ImproperlyConfigured`` naming the tool."""
     try:
         check_server_arguments(binding.spec, binding.server_arguments, pool_seeds=pool_seeds)
     except ImproperlyConfigured as exc:

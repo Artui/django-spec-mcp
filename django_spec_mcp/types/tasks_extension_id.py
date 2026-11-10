@@ -1,5 +1,3 @@
-"""``TASKS_EXTENSION_ID`` - identifier for the tasks extension, in both directions."""
-
 from __future__ import annotations
 
 TASKS_EXTENSION_ID: str = "io.modelcontextprotocol/tasks"

@@ -1,5 +1,3 @@
-"""``MCP_TRANSPORT`` - the value a call over this package's transport reads as its transport."""
-
 from __future__ import annotations
 
 MCP_TRANSPORT: str = "mcp"

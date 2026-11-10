@@ -1,5 +1,3 @@
-"""``JsonRpcId`` - type alias for the JSON-RPC id field."""
-
 from __future__ import annotations
 
 JsonRpcId = str | int | None

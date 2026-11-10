@@ -14,21 +14,7 @@ def resource_presentation_refusal(
     variables: dict[str, str],
     config: MCPConfig,
 ) -> JsonRpcError:
-    """A presenter refusing a shape the URI carried, as the read refuses its arguments.
-
-    A template variable may name one of the spec's ``shapes``, and its value is
-    read while the row is presented, after ``dispatch`` has returned. A
-    ``ServiceValidationError`` from the presenter then blames the caller exactly
-    when a tool's would (``present_kernel_result``): it is the ``-32602`` the
-    shape check answers for the same value (``invalid_arguments_error``), keyed
-    by the shape, or ``non_field_errors`` when the URI carried several, since
-    nothing in the error says which one was refused. With no shape in the URI
-    nothing the caller sent shaped the render, and ``exc`` is raised unchanged
-    to the transport's internal error, as every other presenter failure is.
-
-    A URI's variables are always strings and there are no server arguments on a
-    resource, so a shape is sent exactly when its name is among ``variables``.
-    """
+    """A presenter refusing a shape the URI carried, as the read refuses its arguments."""
     supplied: list[str] = [shape.name for shape in binding.spec.shapes if shape.name in variables]
     if not supplied:
         raise exc

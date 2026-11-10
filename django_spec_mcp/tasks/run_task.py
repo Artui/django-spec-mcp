@@ -29,76 +29,20 @@ def run_task(
     *,
     context_factory: Callable[[TaskRecord], MCPCallContext],
 ) -> None:
-    """Execute a stored task and record its outcome. Called **from the worker**.
-
-    The whole of the off-request half. A queue consumer knows only an id;
-    everything else — the call, the principal, the scopes — comes back out of
-    the store, and the outcome goes back into it. Nothing is returned: the
-    client learns the result by polling.
-
-    **Claim before running.** Queues deliver at least once, and running a
-    mutation twice because the broker retried would be a data bug with no trace.
-    A task is claimed by clearing its ``enqueued`` flag, and one that is not
-    claimable — unknown, already claimed, already terminal — is a no-op. This is
-    best-effort, not a lock: no backend here does compare-and-swap, so two
-    workers entering in the same instant can both claim. It closes the ordinary
-    duplicate-delivery case; a consumer that cannot tolerate the residual race
-    wants an idempotent service.
-
-    **Permissions run again here, in full.** The stored scopes and user rebuild
-    the same ``TokenInfo`` the request carried, so the binding's permissions and
-    its object-permission hook run exactly as they did inline. That is why the
-    record stores the authorization context rather than a bare principal id: a
-    re-check with a token that proves nothing is not a re-check.
-
-    **Rate limits are the one guard that does not run again**, and deliberately:
-    they are consumed rather than tested, and the request that asked for the
-    task already paid (see ``maybe_create_task``). The worker's context carries
-    ``enforce_rate_limits=False`` so a replay cannot bill the same client call
-    twice.
-
-    A denial or any other JSON-RPC error becomes a ``failed`` task — those are
-    protocol faults with no protocol response left to carry them. A tool-level
-    failure is *not*: it arrives as an ordinary result carrying ``isError:
-    true`` and the task is ``completed``, as the spec requires.
-
-    **A service that asks parks the task.** When the creating request declared
-    form elicitation (``TaskRecord.can_elicit``), the replay runs under that
-    declaration, so ``AdditionalInputRequired`` comes back as the inline
-    ``input_required`` result rather than an ``isError`` one. The task then moves
-    to ``input_required`` with that result's question under a key of its own
-    (``input_request_key``), and waits, unclaimed, for ``tasks/update`` to merge
-    the answer into its arguments and queue it again. Each run after an answer
-    is the next round, carried in a ``requestState`` signed here for this replay
-    alone, so the inline round budget (``MAX_INPUT_ROUNDS``) bounds the exchange
-    and its last question becomes the inline ``isError`` result.
-    """
+    """Execute a stored task and record its outcome."""
     record: TaskRecord | None = store.get(task_id)
     if record is None or not record.enqueued or record.status.is_terminal:
         return
     store.save(replace(record, enqueued=False))
 
-    # The registries, config and identity live on the server and the token on
-    # the record; ``MCPServer`` closes over the first half and this supplies the
-    # second, which keeps this module free of any import from ``server/``.
     context: MCPCallContext = context_factory(record)
-    # ``progress`` is seeded here rather than by ``context_factory`` because only
-    # this function knows the task id that makes it addressable. Without it a
-    # service's ``progress(...)`` calls resolve to the no-op.
     context = replace(context, progress=report_task_progress(store, task_id))
-    # The broker travels on the context so the worker publishes to the same
-    # server's subscribers — there is no request here to carry it.
     broker = context.subscriptions
     if record.can_elicit:
-        # The creating request's declaration, which is all ``ask_for_input``
-        # reads: a worker serves no client, so its context declares nothing.
         context = replace(context, client_capabilities={"elicitation": {}})
     try:
         result: Any = handle_tools_call(_replay(record, context), context)
     except Exception as exc:  # noqa: BLE001 — the worker's last line of defence
-        # Without this the exception propagates into the queue consumer, the
-        # task stays ``working``, and the client polls a handle that resolves
-        # only at its TTL. A visible ``failed`` beats a silent hang.
         transition_task(
             store,
             task_id,
@@ -119,26 +63,13 @@ def run_task(
         )
         return
     if result.get("resultType") == ResultType.INPUT_REQUIRED.value:
-        # ``ask_for_input`` asked this run's question as the round after the one
-        # the replay carried, which is the claim's, so the key names the round the
-        # budget was counted on. Best-effort as the claim is: a round set while
-        # the run was in flight (a second claim's park, or a caller's own
-        # ``transition_task``) is overwritten here.
         _park(store, task_id, record.input_round + 1, result, broker)
         return
     transition_task(store, task_id, status=TaskStatus.COMPLETED, result=result, broker=broker)
 
 
 def _replay(record: TaskRecord, context: MCPCallContext) -> dict[str, Any]:
-    """The ``tools/call`` a run replays: the recorded call, and past a first
-    question the round it is on.
-
-    The round reaches the budget check the only way the inline call's does, in a
-    ``requestState``, signed here for this replay rather than stored: a stored one
-    would expire with ``INPUT_REQUEST_TTL_SECONDS`` while the task waited. It
-    carries no answers, since ``tasks/update`` merged them into the arguments, and
-    binds the arguments as recorded, which the replay presents again.
-    """
+    """The ``tools/call`` a run replays: the recorded call."""
     params: dict[str, Any] = {"name": record.tool_name, "arguments": record.arguments}
     if record.input_round:
         state = RequestState(
@@ -159,16 +90,7 @@ def _park(
     result: dict[str, Any],
     broker: SubscriptionBroker | None,
 ) -> None:
-    """Move a task whose service asked to ``input_required``, its question under
-    round ``asked``'s key and the round recorded with it.
-
-    One read and one save, both ``transition_task``'s
-    (``test_the_park_reads_the_task_once_and_saves_it_once``): the round, the
-    status and the question land in one record, built from the task as it stands
-    after the run, so progress the run reported is kept. A task cancelled while
-    the service ran stays cancelled, and one expired stays gone
-    (``test_a_task_gone_or_cancelled_while_its_service_asked_is_not_parked``).
-    """
+    """Move a task whose service asked to ``input_required``."""
     transition_task(
         store,
         task_id,

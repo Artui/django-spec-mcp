@@ -1,5 +1,3 @@
-"""``ELICITATION_KEY`` - the key this package files its one question under in inputRequests."""
-
 from __future__ import annotations
 
 ELICITATION_KEY: str = "additionalInput"

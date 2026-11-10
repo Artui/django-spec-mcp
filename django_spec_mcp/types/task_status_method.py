@@ -1,5 +1,3 @@
-"""``TASK_STATUS_METHOD`` - pushed when a task changes status, to whoever subscribed to that task."""
-
 from __future__ import annotations
 
 TASK_STATUS_METHOD: str = "notifications/tasks"

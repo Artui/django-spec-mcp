@@ -7,24 +7,7 @@ from django_spec_mcp.types.modern_protocol_versions import MODERN_PROTOCOL_VERSI
 
 @dataclass(frozen=True)
 class MCPConfig:
-    """A server's resolved scalar configuration.
-
-    Every field is **already resolved** — there is no "unset" state and no settings
-    lookup left to do. [`MCPServer`][django_spec_mcp.server.mcp_server.MCPServer]
-    builds one in ``__init__`` (via ``build_mcp_config``, which reads
-    ``SPEC_MCP``) and threads it to the transport and, on ``MCPCallContext``,
-    to every handler. Read at request time these values could only ever be global; read
-    once at construction, each server carries its own.
-
-    Do **not** construct this directly to override a field — there are no
-    defaults, and a partially-specified config would silently discard the
-    project's own ``SPEC_MCP`` values. Use ``build_mcp_config(
-    page_size=50)``, which layers overrides over the settings.
-
-    Each field's user-facing documentation is the matching
-    ``SPEC_MCP`` key in the settings reference; the notes here are
-    the invariants a caller of this dataclass has to hold.
-    """
+    """A server's resolved scalar configuration."""
 
     protocol_versions: tuple[str, ...]
     """Supported versions, most-preferred first, across both eras. One list
@@ -163,27 +146,12 @@ class MCPConfig:
 
     @property
     def legacy_protocol_versions(self) -> tuple[str, ...]:
-        """The configured versions that negotiate through ``initialize``.
-
-        Not interchangeable with ``protocol_versions``. ``initialize``
-        falls back to the first *supported* version when a client omits the
-        header, and once a modern revision sits at the head of that list the
-        fallback would answer a legacy handshake with a version in which the
-        handshake does not exist. Legacy negotiation reads this; modern
-        validation reads ``modern_protocol_versions``.
-        """
+        """The configured versions that negotiate through ``initialize``."""
         return tuple(v for v in self.protocol_versions if v not in MODERN_PROTOCOL_VERSIONS)
 
     @property
     def legacy_fallback_version(self) -> str | None:
-        """The version a legacy client is answered with when it names none.
-
-        ``None`` when this server serves **no** legacy revision at all — a
-        supported configuration (``PROTOCOL_VERSIONS = ["2026-07-28"]``) and the
-        natural end state once legacy is dropped. Callers must branch on
-        ``None`` rather than index ``legacy_protocol_versions[0]``, which is an
-        ``IndexError`` out of the view on a modern-only server.
-        """
+        """The version a legacy client is answered with when it names none."""
         legacy: tuple[str, ...] = self.legacy_protocol_versions
         return legacy[0] if legacy else None
 

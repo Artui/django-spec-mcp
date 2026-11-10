@@ -35,13 +35,7 @@ async def handle_resources_read_async(
     params: dict[str, Any] | None,
     context: MCPCallContext,
 ) -> dict[str, Any] | JsonRpcError:
-    """Async sibling of ``handle_resources_read``.
-
-    Same shape, but nothing that can touch the ORM runs on the event loop:
-    the permission check, the kernel admission and the rate limits go
-    through ``acall``, and each read path keeps its selector and its
-    rendering off the loop too.
-    """
+    """Async sibling of ``handle_resources_read``."""
     target = resolve_resource_read(params, context)
     if isinstance(target, JsonRpcError):
         return target
@@ -55,8 +49,6 @@ async def handle_resources_read_async(
         if not allowed:
             return forbidden(required_scopes)
 
-        # See the sync sibling: a kernel resource's spec's own checks, before
-        # the charge, off the loop because a check may query.
         admission: KernelAdmission | None = None
         if runs_on_kernel(binding):
             admitted = await acall(
@@ -72,20 +64,10 @@ async def handle_resources_read_async(
         if retry_after is not None:
             return rate_limited(retry_after)
 
-        # See the sync sibling: a kernel resource reads through the kernel from
-        # here, under the admission its spec's checks gave.
         if admission is not None:
             return await read_kernel_resource_async(
                 cast(KernelResourceBinding, binding), uri, vars_, admission, context
             )
-        # See the sync sibling: the kernel's pool, seeded under the call's
-        # context, with the transport's request as the default for ``request``:
-        # a registered seed outranks it and it outranks a URI-template variable;
-        # a seed whose resolver declares ``request``, ``view`` or ``call_context``
-        # is asked for it, the context read under the resource's name.
-        # The selector goes through ``arun_selector_sync_safe`` and the encoding
-        # through ``acall``, so neither a template it renders nor a lazy value
-        # ``JSON`` encoding iterates is read on the loop.
         request = carry_token(context.http_request, context.token)
         seeded = seeded_pool(
             user=context.token.user,

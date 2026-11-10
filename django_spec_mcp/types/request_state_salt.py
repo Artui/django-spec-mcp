@@ -1,5 +1,3 @@
-"""``REQUEST_STATE_SALT`` - namespace for the HMAC over requestState."""
-
 from __future__ import annotations
 
 REQUEST_STATE_SALT: str = "django_spec_mcp.elicitation.request_state"

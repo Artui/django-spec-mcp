@@ -1,5 +1,3 @@
-"""``SUBSCRIPTIONS_ACKNOWLEDGED_METHOD`` - the first notification on every subscription, naming the filter the server agreed to honour."""
-
 from __future__ import annotations
 
 SUBSCRIPTIONS_ACKNOWLEDGED_METHOD: str = "notifications/subscriptions/acknowledged"

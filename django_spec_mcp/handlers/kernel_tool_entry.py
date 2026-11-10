@@ -14,22 +14,7 @@ from django_spec_mcp.schema.kernel_tool_output_schema import kernel_tool_output_
 
 
 def kernel_tool_entry(binding: KernelToolBinding, context: MCPCallContext) -> dict[str, Any]:
-    """A kernel tool's ``tools/list`` entry.
-
-    The schemas are the kernel's (``kernel_tool_input_schema``,
-    ``kernel_tool_output_schema``); everything else is assembled from the
-    server's settings: the ``outputSchema``
-    behind ``include_output_schema``, the handle convention appended to the
-    description, and ``annotations`` / ``_meta`` as registered.
-
-    The ``inputSchema`` reads the spec under the stamp ``tools/call`` dispatches
-    under, so a field a Validator declares only to an MCP call is offered
-    (``test_a_required_field_declared_only_under_mcp_is_listed``). The stamp alone,
-    with the request this listing holds left out: a schema that varied by caller
-    would make the shared ``cacheScope`` of a listing false, and a stamp varies by
-    transport only (``test_the_listing_hands_a_validator_the_stamp_and_no_request``).
-    A description that raises is not caught, so it raises out of ``tools/list``.
-    """
+    """A kernel tool's ``tools/list`` entry."""
     emit_output_schema, _emit_structured_content = resolve_structured_output(
         include_output_schema_override=binding.include_output_schema,
         include_structured_content_override=binding.include_structured_content,

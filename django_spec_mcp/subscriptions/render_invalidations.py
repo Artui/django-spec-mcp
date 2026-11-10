@@ -13,29 +13,7 @@ def render_invalidations(
     payload: Any,
     arguments: Mapping[str, Any],
 ) -> tuple[str, ...]:
-    """Turn a binding's ``invalidates=`` templates into the URIs that changed.
-
-    Templates use the same ``{var}`` syntax as ``uri_template`` on a resource,
-    so a consumer writes ``invoices://{pk}`` in both places and the two cannot
-    drift into different dialects.
-
-    **Rendered against the result merged with the call's arguments, result
-    winning.** The result is authoritative after a write — a service that
-    reassigns an invoice's number leaves the argument stale — while the
-    arguments are the only source when the result does not carry the key, as a
-    delete returning nothing still has ``{pk}`` in its input.
-
-    **A template that cannot render is dropped, never raised.** The write has
-    committed by the time this runs, so failing the call over a formatting
-    mistake would report a failure for work that succeeded; a missed
-    notification is recovered by the client's next read. Dropping is silent, so
-    a template naming a key nothing produces is caught by the
-    registration-time check, not here.
-
-    Duplicates collapse while order is kept, so declaring both
-    ``invoices://{pk}`` and ``invoices://`` publishes two topics and declaring
-    the same template twice publishes one.
-    """
+    """Turn a binding's ``invalidates=`` templates into the URIs that changed."""
     values: dict[str, Any] = {**dict(arguments), **_result_keys(payload)}
     rendered: list[str] = []
     for template in templates:
@@ -49,8 +27,7 @@ def _render(template: str, values: Mapping[str, Any]) -> str | None:
     out: list[str] = []
     last: int = 0
     for match in _TEMPLATE_VAR.finditer(template):
-        # A present-but-null key is as unusable as a missing one: rendering it
-        # as "None" would publish a topic nobody could subscribe to.
+        # A present-but-null key is as unusable as a missing one.
         value: Any = values.get(match.group(1))
         if value is None:
             return None
@@ -62,17 +39,7 @@ def _render(template: str, values: Mapping[str, Any]) -> str | None:
 
 
 def _result_keys(payload: Any) -> dict[str, Any]:
-    """The rendered tool result's fields, if it has any addressable ones.
-
-    A template refers to the payload the service produced, so it is read from
-    the tool result's ``structuredContent`` rather than the MCP envelope
-    wrapped round it — ``invalidates=`` is written against what the author's
-    service returns.
-
-    A list result contributes only its ``items`` key, as it is served under
-    it: ``{pk}`` over many rows has no single answer, and guessing one would
-    publish a URI for an arbitrary member, so a row's fields are never read.
-    """
+    """The rendered tool result's fields, if it has any addressable ones."""
     if not isinstance(payload, dict):
         return {}
     structured: Any = payload.get("structuredContent")

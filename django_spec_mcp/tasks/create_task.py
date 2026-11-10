@@ -24,27 +24,7 @@ def create_task(
     poll_interval_ms: int | None,
     can_elicit: bool = False,
 ) -> Task:
-    """Persist a task, hand it to the executor, and return the client's handle.
-
-    **Order matters and is normative.** The spec forbids returning a
-    ``CreateTaskResult`` before a ``tasks/get`` for that id would resolve, so
-    the record is durable before ``enqueue`` is called — and ``enqueue`` returns
-    before the handle goes back, because a worker picking the task up on another
-    machine the instant it is queued must find it already written.
-
-    **A failed hand-off is reported as a failed task, not a failed request.** By
-    the time ``enqueue`` raises the task exists, so a JSON-RPC error would leave
-    the client with no handle and this server with a record stuck in ``working``
-    until its TTL. The task moves to ``failed`` — a seed state other than
-    ``working`` is explicitly allowed — and the handle is returned anyway, so
-    the first ``tasks/get`` reports what happened. The broker's exception text
-    rides in ``statusMessage`` rather than being flattened to a generic message,
-    since "the queue is down" reaches a developer by no other channel.
-
-    ``can_elicit`` is whether the creating request declared form elicitation,
-    recorded because the worker that may need to ask has no request to read it
-    from (see ``TaskRecord.can_elicit``).
-    """
+    """Persist a task, hand it to the executor, and return the client's handle."""
     created: str = now_iso()
     seed = Task(
         task_id=new_task_id(),
@@ -77,9 +57,6 @@ def create_task(
         store.save(failed)
         return failed.to_wire()
 
-    # Marked only after a successful hand-off, so a record that never reached
-    # the queue stays distinguishable from one that did — ``run_task`` clears
-    # the flag as it starts, which is how it refuses to run a task twice.
     store.save(replace(record, enqueued=True))
     return seed
 

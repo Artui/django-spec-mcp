@@ -11,19 +11,7 @@ from django_spec_mcp.types.tool_content_kind import ToolContentKind
 def kernel_tool_output_schema(
     binding: KernelToolBinding, *, handle_description: str | None
 ) -> dict[str, Any] | None:
-    """The ``outputSchema`` a kernel tool can advertise, before the binding's
-    ``include_output_schema`` decides whether it does.
-
-    The kernel's ``spec_output_schema``, enveloped when the tool paginates and
-    projected through the binding's audience markings, so it names the fields
-    the presented payload carries, and with the ``"null"`` the kernel admits for
-    a spec that can present nothing restated as what this transport serves in
-    its place (``_admitting_nothing``, ``_a_list``). A list the kernel describes
-    as the root ``"array"`` is held under ``items`` (``_items_of``), because MCP
-    declares every ``outputSchema`` an object. ``None`` for an image or audio
-    tool, whose result is a media block with no structured content to describe,
-    and for a spec the kernel has no schema for.
-    """
+    """The ``outputSchema`` a kernel tool can advertise."""
     if binding.content_kind in (ToolContentKind.IMAGE, ToolContentKind.AUDIO):
         return None
     schema: dict[str, Any] | None = spec_output_schema(
@@ -51,45 +39,17 @@ _ARRAY_OR_NULL: list[str] = ["array", "null"]
 
 
 def _a_list(schema: dict[str, Any]) -> dict[str, Any]:
-    """A list-shaped spec's schema when the list may present nothing.
-
-    No MCP result carries a ``null`` as its structured content, so the
-    ``"null"`` the kernel adds describes nothing a client is served. A list
-    that presents nothing is the empty list, which ``"array"`` already admits,
-    and each row stays as strict as declared
-    (``test_a_list_that_may_present_nothing_is_advertised_as_a_list``), and
-    ``present_tool_result`` serves that empty list rather than ``{}``, as
-    ``{"items": []}`` (``test_a_list_that_presents_nothing_conforms_to_its_schema``).
-    """
+    """A list-shaped spec's schema when the list may present nothing."""
     return {**schema, "type": "array"}
 
 
 def _items_of(array: dict[str, Any]) -> dict[str, Any]:
-    """An unpaged list's schema, held under ``items`` in an object.
-
-    MCP 2025-11-25 declares ``outputSchema.type`` as ``"object"`` and
-    ``structuredContent`` as an object, so ``build_tool_result`` serves a
-    presented list as ``{"items": [...]}`` and this describes it. ``items`` is
-    the key the paged envelope holds its rows under, so a client reads a list
-    tool's rows at one path whether it pages or not. No
-    ``additionalProperties``, as on the kernel's paged envelope
-    (``test_a_spec_without_affordances_advertises_exactly_what_it_did_before``);
-    the root ``"object"`` is held over the dump by
-    ``test_every_advertised_output_schema_is_an_object``.
-    """
+    """An unpaged list's schema, held under ``items`` in an object."""
     return {"type": "object", "properties": {"items": array}, "required": ["items"]}
 
 
 def _admitting_nothing(schema: dict[str, Any]) -> dict[str, Any]:
-    """A nothing-presenting spec's schema, as an ``outputSchema`` can state it.
-
-    MCP requires an ``outputSchema`` of type ``"object"``, and a ``None`` is
-    served as the empty ``structuredContent`` ``{}``, which the kernel's
-    ``["object", "null"]`` with every field required does not admit. So the
-    root is ``"object"``, and its ``required`` becomes either every field or
-    none at all (``test_a_result_that_presents_nothing_conforms_to_its_schema``).
-    A schema with nothing required admits ``{}`` already and keeps no ``anyOf``.
-    """
+    """A nothing-presenting spec's schema, as an ``outputSchema`` can state it."""
     admitting: dict[str, Any] = {k: v for k, v in schema.items() if k != "required"}
     admitting["type"] = "object"
     if schema.get("required"):

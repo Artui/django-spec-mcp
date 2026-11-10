@@ -1,5 +1,3 @@
-"""``SUBSCRIPTION_ID_META_KEY`` - _meta key correlating a notification with the subscription that wanted it."""
-
 from __future__ import annotations
 
 SUBSCRIPTION_ID_META_KEY: str = "io.modelcontextprotocol/subscriptionId"

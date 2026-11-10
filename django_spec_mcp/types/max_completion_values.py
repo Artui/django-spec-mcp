@@ -1,5 +1,3 @@
-"""``MAX_COMPLETION_VALUES`` - the spec's hard cap on values in one completion/complete result."""
-
 from __future__ import annotations
 
 MAX_COMPLETION_VALUES: int = 100
