@@ -1,12 +1,3 @@
-"""The handlers' guard paths, called directly against the kernel server's registries.
-
-Asks of ``build_kernel_server``: each handler names a malformed request as a
-``-32602`` (or an unknown URI as ``-32002``) before any spec is reached, and a
-kernel service raising ``ServiceError`` is a tool-level ``isError`` result rather
-than a JSON-RPC error. The concrete resource listed is a kernel ``RETRIEVE`` with
-no URI variable, since the kernel server has no list resource.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -113,8 +104,7 @@ def test_handle_resources_list_returns_a_concrete_kernel_resource() -> None:
 
 @pytest.mark.django_db(transaction=True)
 def test_a_kernel_service_error_is_a_tool_level_result(client: Client) -> None:
-    """Business failures are tool-level: the JSON-RPC envelope succeeds and the
-    result carries ``isError: true``."""
+    """Business failures are tool-level: the envelope succeeds and the result carries isError."""
     with override_settings(ROOT_URLCONF=urlconf_for(_server())):
         caller = KernelClient(client)
         caller.initialize()

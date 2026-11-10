@@ -1,26 +1,3 @@
-"""The ``UnknownArguments`` policy of a kernel tool, on the call and in ``tools/list``.
-
-A kernel tool's policy is handed to ``dispatch``, whose closed argument set
-refuses or drops a key ``spec.parameters()`` does not declare, so the policy
-reaches two layers from one place: the call, and the ``inputSchema``'s
-``additionalProperties``. These tests pin both from a real ``MCPServer``, on a
-service tool and a paginated ``LIST`` selector tool, whose ``page`` and
-``limit`` are arguments the transport declares beside the spec's.
-
-The kernel's rules:
-
-- ``PASSTHROUGH`` is refused at registration, because no argument the spec
-  does not declare ever reaches a kernel callable.
-- A seed's name the caller sends is refused under ``REJECT`` like any other
-  undeclared key, and dropped under ``IGNORE`` so the seed's value is the one
-  the callable reads.
-- An unknown key's refusal is keyed by its own name.
-
-Which keys a kernel spec admits is ``spec.parameters()``,
-and ``tests/conformance/test_unknown_arguments_matrix.py`` holds the schema's
-agreement with it.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -51,11 +28,7 @@ class _Known:
 
 
 def _server(policy: UnknownArguments, seen: dict[str, Any]) -> MCPServer:
-    """A service tool and a paginated list tool under ``policy``, recording what reaches each.
-
-    Both callables take a bare ``**kwargs``, so a key reaching either is seen
-    whatever its name, and a test asserting it absent asserts the policy.
-    """
+    """A service tool and a paginated list tool under ``policy``, recording what reaches each."""
 
     def _service(**kwargs: Any) -> dict[str, bool]:
         seen.update(kwargs)
@@ -141,7 +114,6 @@ async def test_reject_accepts_only_known_keys() -> None:
 
 async def test_reject_treats_the_page_arguments_as_known() -> None:
     # The transport's own arguments, read off before dispatch, so the
-    # kernel's closed set never sees them.
     out = await _server(UnknownArguments.REJECT, {}).acall_tool(
         "rows", {"page": 1, "limit": 1}, user=None
     )

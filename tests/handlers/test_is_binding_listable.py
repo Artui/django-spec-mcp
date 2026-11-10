@@ -1,21 +1,3 @@
-"""Whether a kernel binding is listed to a caller, under ``FILTER_LISTINGS_BY_PERMISSIONS``.
-
-The helper is asked of kernel bindings, registered with ``register_tool`` and
-``register_resource``: every check admitting lists the binding, any refusal
-hides it, the first refusal decides, ``always_listed`` opts back in, and the
-selector-tool and resource bindings are judged alike. Their ``permissions`` hold only the scope gate
-(``scopes=``); the spec's own ``PermissionCheck``s are the kernel's, and the
-listing asks them through the kernel's ``authorize`` with what a call asks them
-with: the caller as principal, the server's pool seeds, and a call context whose
-request carries the token. So a tool is hidden from exactly the callers its call
-would refuse before resolving anything.
-
-A kernel ``PermissionCheck`` has no list-time method, and a listing hands it no
-arguments (``None``, the kernel's word for "none to hand"), so a check that
-decides by the call's arguments decides on none; ``always_listed`` is the way
-back.
-"""
-
 from __future__ import annotations
 
 from dataclasses import replace
@@ -111,7 +93,6 @@ def _server(**kwargs: Any) -> MCPServer:
         name="listable",
         auth_backend=HeaderAuthBackend(),
         # The test settings turn the guard requirement off; a server here keeps
-        # the default, so only the registrar's mark grants an unguarded spec.
         config=replace(
             build_mcp_config(), filter_listings_by_permissions=True, require_tool_permissions=True
         ),
@@ -142,7 +123,6 @@ def test_a_tool_whose_checks_admit_the_caller_is_listed() -> None:
 
 def test_a_tool_is_hidden_from_the_caller_its_spec_s_checks_refuse() -> None:
     # Both directions on one tool: a test asserting only "hidden" would also
-    # pass were every tool hidden.
     server = _server()
     server.register_tool(_service(Unrestricted()), name="open")
     server.register_tool(_service(_IsStaff()), name="staff_only")
@@ -155,14 +135,10 @@ def test_a_tool_is_hidden_from_the_caller_its_spec_s_checks_refuse() -> None:
 @pytest.mark.parametrize(
     ("checks", "registration", "is_staff", "scopes", "listed"),
     [
-        # Every check must admit the caller.
         ((Unrestricted(), _Refuse(), Unrestricted()), {}, False, (), False),
-        # The scope gate passes and the spec's check refuses: the listing asks both.
         ((_IsStaff(),), {"scopes": ("invoices",)}, False, ("invoices",), False),
-        # The spec's check admits and the scope gate refuses: still hidden.
         ((_IsStaff(),), {"scopes": ("invoices",)}, True, (), False),
         ((_IsStaff(),), {"scopes": ("invoices",)}, True, ("invoices",), True),
-        # ``always_listed`` lists a tool the spec refuses.
         ((_Refuse(),), {"always_listed": True}, False, (), True),
     ],
     ids=[
@@ -190,7 +166,6 @@ def test_a_tool_lists_when_its_scope_gate_and_every_check_admit(
 
 def test_a_deactivated_caller_is_listed_nothing() -> None:
     # Dispatch refuses a deactivated principal whatever its checks say, so the
-    # listing does too.
     server = _server()
     server.register_tool(_service(Unrestricted()), name="open")
 
@@ -209,9 +184,7 @@ def test_the_checks_are_asked_with_what_a_call_asks_them_with() -> None:
     assert seen["principal"] == ann
     # A listing has no arguments to hand, and says so the kernel's way.
     assert seen["arguments"] is None
-    # The server's pool seeds are offered, as dispatch offers them.
     assert seen["tenant"] == "acme"
-    # The token rides on the request, where a check reading a claim finds it.
     assert seen["call_context"]["action"] == "t"
     assert seen["call_context"]["request"].mcp_token.scopes == ("invoices",)
 
@@ -259,8 +232,6 @@ def test_a_resource_is_judged_by_its_spec_s_checks() -> None:
 
 def test_a_handbuilt_binding_whose_spec_declares_no_checks_is_hidden() -> None:
     # Its call is refused for everyone, since only the registrar's mark earns an
-    # unguarded spec its grant, so it is listed to no one, and the listing still
-    # answers rather than raising the kernel's configuration error.
     binding = KernelToolBinding(name="t", description=None, spec=ServiceSpec(service=_write))
 
     assert is_binding_listable(binding, HttpRequest(), TokenInfo(user=None)) is False
@@ -268,9 +239,6 @@ def test_a_handbuilt_binding_whose_spec_declares_no_checks_is_hidden() -> None:
 
 def test_a_registered_unguarded_tool_is_listed_where_its_call_is_granted() -> None:
     # The registrar marks a spec declaring no checks when the setting is off,
-    # and a call to it is granted on a server with the setting off, so it lists
-    # there; a server with the setting on holding the same binding grants no
-    # call, and does not list it.
     config = replace(
         build_mcp_config(), filter_listings_by_permissions=True, require_tool_permissions=False
     )
@@ -279,8 +247,6 @@ def test_a_registered_unguarded_tool_is_listed_where_its_call_is_granted() -> No
         server.register_tool(ServiceSpec(service=_write), name="t")
 
     assert _listed(server, None) == {"t"}
-    # The grant does not let a deactivated caller through, as it does not at
-    # the call.
     assert _listed(server, _user("gone", is_active=False)) == set()
 
     strict = _server()
@@ -302,8 +268,6 @@ def test_each_spec_listing_hands_the_server_s_seeds_and_setting(
     handler: Any, key: str, uri: str | None
 ) -> None:
     # Each handler hands its context's pool seeds and config through, which no
-    # other test tells apart from the defaults: the seed reaches the check, and
-    # a marked unguarded spec is hidden by a context whose setting is on.
     check = _Recording()
     seeds = DEFAULT_POOL_SEEDS.extend(tenant=lambda: "acme")
     lenient = make_server(

@@ -1,17 +1,3 @@
-"""What a kernel tool's input declaration validates is what its callable reads.
-
-A selector's arguments are its declared ``reads``, each with its own type, and
-a service's are its Validator's fields. So the question is asked of those two:
-the value the callable reads is the coerced one, or the default where the call
-left the argument out, and the schema requires exactly the names nothing
-defaults. A read's declared ``default`` is reported in the schema, not applied,
-so the default a selector reads is its own signature's, declared beside it.
-A read declared optional over a selector with no default of its own is where
-the two would come apart, the schema offering it as optional and the call
-leaving it out refused as missing, so registration refuses that declaration,
-naming the tool, and no client is shown the schema.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -44,8 +30,6 @@ class _Charge:
 
 
 def _read(*, number: str, limit: int = 5) -> dict[str, Any]:
-    # Its own default differs from the 10 the read declares, so a test sees which
-    # of the two a call applies.
     return {"number": number, "limit": limit}
 
 
@@ -97,7 +81,6 @@ async def test_the_callable_reads_the_declared_value(
 
 async def test_a_reads_default_is_reported_and_not_applied() -> None:
     # The read declares 10 over a selector defaulting to 5: the schema tells a
-    # client 10, and a call leaving the argument out reads the selector's 5.
     server = _server()
     listed: Any = server.list_tools(user=None)
     schemas = {tool["name"]: tool["inputSchema"] for tool in listed["tools"]}

@@ -1,10 +1,3 @@
-"""``prompts/list`` and ``prompts/get``.
-
-A prompt is not a spec: ``register_prompt`` takes a ``render`` callable and
-``permissions`` of kernel ``PermissionCheck``s, each handed the principal and
-the prompt's binding, never the arguments; the last test here holds that.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -103,8 +96,6 @@ def test_prompts_list_advertises_arguments() -> None:
 
 def test_prompts_list_paginates(settings) -> None:
     # Replacing the dict drops the suite-wide opt-out in conftest_settings, and
-    # this test's throwaway prompts are unguarded; carried through so the
-    # subject stays pagination.
     settings.SPEC_MCP = {"PAGE_SIZE": 2, "REQUIRE_TOOL_PERMISSIONS": False}
     server = make_server(session_store=InMemorySessionStore())
     for i in range(3):
@@ -301,8 +292,6 @@ class _Recording(PermissionCheck):
 
 def test_a_prompt_permission_is_judged_on_the_principal_and_the_binding_alone(get: Get) -> None:
     # The whole of what a prompt's check sees: the token's principal, an
-    # ``AnonymousUser`` for none, and the prompt's binding as the spec, once
-    # per get, and nothing of the arguments, which reach ``render`` and no check.
     permission = _Recording()
     server = make_server(session_store=InMemorySessionStore())
     binding = server.register_prompt(name="p", render=lambda **_: "hello", permissions=[permission])
@@ -317,9 +306,6 @@ def test_a_prompt_permission_is_judged_on_the_principal_and_the_binding_alone(ge
 
 def test_a_render_declaring_request_receives_the_transports_http_request(get: Get) -> None:
     # The plain ``HttpRequest`` the kernel tool path hands a spec, with the
-    # resolved token on it as ``mcp_token``. Its
-    # ``user`` is the token's principal, as the ``user`` seed is, and never the
-    # one the endpoint's session resolved.
     seen: dict[str, Any] = {}
 
     def render(request: Any, user: Any) -> str:
@@ -350,8 +336,7 @@ def test_a_render_declaring_request_receives_the_transports_http_request(get: Ge
 
 
 def test_render_reads_the_endpoints_query_string_and_no_drf_attributes() -> None:
-    """``request.GET`` is the MCP endpoint's own query string, and the request
-    is a Django one: no ``data`` or ``query_params`` to read arguments from."""
+    """``request.GET`` is the MCP endpoint's own query string."""
     seen: dict[str, Any] = {}
     server = make_server(session_store=InMemorySessionStore())
 
@@ -372,9 +357,7 @@ def test_render_reads_the_endpoints_query_string_and_no_drf_attributes() -> None
 
 
 async def test_user_and_request_user_agree_for_a_token_naming_no_one() -> None:
-    """A token naming no one seeds ``user`` as the anonymous principal
-    ``request.user`` is, on both dispatchers, so declaring ``user`` and reading
-    ``request.user`` answer alike."""
+    """A token naming no one seeds ``user`` as the anonymous principal ``request.user`` is."""
     seen: list[tuple[Any, Any]] = []
     server = make_server(session_store=InMemorySessionStore())
 

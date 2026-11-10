@@ -1,15 +1,3 @@
-"""Kernel ``RETRIEVE`` selector tools: a missing row, and ``allow_none``.
-
-Asked of a kernel ``SelectorSpec`` registered with
-``register_tool``, whose ``DataclassPresenter`` renders an ``Invoice`` row: a
-missing row (``None``, an empty queryset, ``Http404`` or ``DoesNotExist``) is a
-tool-level ``not_found``; under
-``allow_none`` it is the empty result instead; a queryset is materialized to
-its row; and a ``LIST`` has no row to miss, so ``allow_none`` does not turn
-its ``Http404`` into an empty result and its ``DoesNotExist`` is the author's
-error. Each on the sync and the async handler.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -115,7 +103,6 @@ async def test_allow_none_returns_an_empty_result(
 
     assert "isError" not in out
     # Nothing to present is a value, and MCP requires structured content to be
-    # an object, so it is ``{}`` rather than absent or ``null``.
     assert out["structuredContent"] == {}
     assert out["content"][0]["text"] == "{}"
 
@@ -156,7 +143,6 @@ async def test_a_list_selectors_http404_is_not_found_even_with_allow_none(
 @routes
 async def test_a_list_selectors_does_not_exist_propagates(is_async: bool) -> None:
     # A LIST has no row whose absence it could report, so a lookup failing
-    # inside it is the author's error rather than an empty list.
     def strict_parent() -> QuerySet[Invoice]:
         return Invoice.objects.filter(pk=Invoice.objects.get(pk=99999).pk)
 

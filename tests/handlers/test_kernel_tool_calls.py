@@ -1,5 +1,3 @@
-"""The kernel path's calls, listing and reads beyond the end-to-end walk."""
-
 from __future__ import annotations
 
 import json
@@ -156,7 +154,6 @@ def test_the_spec_reads_the_token_off_its_request(mount: None, client: Client) -
         ({"page": True, "limit": "lots"}, 1, [{"n": 0}, {"n": 1}]),
         ({"page": None}, 1, [{"n": 0}, {"n": 1}]),
         # ``True`` is an ``int``: read as one, it would be a limit of 1 and
-        # five pages.
         ({"page": 2, "limit": True}, 2, [{"n": 2}, {"n": 3}]),
     ],
     ids=["ints", "numeric-strings", "unreadable", "absent", "bool-limit"],
@@ -188,8 +185,7 @@ def test_a_server_argument_reaches_the_service(mount: None, client: Client) -> N
 
 
 def test_a_callers_output_format_is_not_read(mount: None, client: Client) -> None:
-    """Over the wire as in the handler: the text block is JSON whatever is asked for,
-    and a format the server never knew is not refused."""
+    """Over the wire as in the handler: the text block is JSON whatever format is asked for."""
     caller = _caller(client)
     body = caller.post(
         "tools/call", {"name": "invoices.list", "arguments": {}, "outputFormat": "xml"}
@@ -350,9 +346,7 @@ def test_unknown_arguments_reaches_the_schema_and_the_call(
 
 
 def test_required_scopes_lists_every_declared_scope(client: Client) -> None:
-    """``requiredScopes`` is the gate's whole declaration, not what the token
-    lacks, as on a prompt's or a view's scope gate: a token carrying one of two
-    scopes is told both."""
+    """``requiredScopes`` is the gate's whole declaration, not what the token lacks."""
     server = MCPServer(name="t", auth_backend=HeaderAuthBackend())
     server.register_tool(
         ServiceSpec(service=lambda: None, permissions=OPEN),

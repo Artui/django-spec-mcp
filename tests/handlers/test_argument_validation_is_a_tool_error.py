@@ -1,21 +1,3 @@
-"""A kernel tool's argument refusal on ``tools/call`` is a tool execution error, not ``-32602``.
-
-The MCP spec's tools "Error Handling" section lists "Input validation errors
-(e.g., date in wrong format, value out of range)" under *tool execution
-errors*, reported in the result with ``isError: true`` so a model can read them
-and correct itself (2025-11-25, 2026-07-28). Protocol errors are kept for an
-unknown tool and a request that fails the ``CallToolRequest`` schema itself.
-
-On the kernel path every refusal of the arguments is the kernel's own
-``InvalidArguments``: an unexpected argument under ``UnknownArguments.REJECT``,
-a Validator rejecting a field, and a read whose value its declared type
-refuses. Each is served as the ``validation_error`` result with the refusal's
-per-field ``detail`` and the message ``"Invalid arguments"``, on both tool
-kinds, every entry point and both protocol eras. A kernel selector's filters are
-declared ``reads``, so a refused filter value is the refused read. The
-unexpected argument's answer is keyed by its own name, ``Unknown argument.``.
-"""
-
 from __future__ import annotations
 
 import json
@@ -177,7 +159,6 @@ async def test_an_unknown_tool_is_still_minus_32602(route: str) -> None:
     assert out.code == JsonRpcErrorCode.INVALID_PARAMS
 
 
-# Not ``acall_tool``, which reads a falsy ``arguments`` as none sent.
 @pytest.mark.parametrize("route", ["handler", "async_handler"])
 @pytest.mark.parametrize("arguments", [["number"], "number", 0, False])
 async def test_non_object_arguments_are_still_minus_32602(arguments: Any, route: str) -> None:

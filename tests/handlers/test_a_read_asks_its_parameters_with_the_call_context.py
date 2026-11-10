@@ -1,19 +1,3 @@
-"""A kernel resource read asks its spec's parameters with the call's own ``call_context``.
-
-The kernel's ``dispatch`` asks ``spec.parameters(call_context=...)`` with the
-dict it is handed as it validates, so a declaration may depend on the call.
-The read coerces the URI's variables against that declaration twice before
-then, once to judge the caller (``admit_kernel_read``) and once to hand
-dispatch its arguments (``read_kernel_resource``). Each ask hands the one
-dict the admission carries to dispatch, never ``None`` and never a second
-dict built alike, so the variables are read under the declaration dispatch
-validates them against.
-
-A ``RETRIEVE`` ``SelectorSpec`` takes the keyword and has no Validator to hand
-it to, so what is pinned is the wiring: every ask the read makes, the
-kernel's own included, hands the dict the spec's check is handed.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -81,7 +65,5 @@ async def test_a_read_reads_its_variables_under_the_call_context_dispatch_receiv
     # Asked once, by the admission, whose grant dispatch then runs under.
     (dispatched,) = check.contexts
     handed = [call.kwargs.get("call_context") for call in asked.call_args_list]
-    # The admission's coercion and its shape check, the read's coercion and
-    # dispatch's own bind: four asks, each with the one dict.
     assert len(handed) == 4, handed
     assert all(each is dispatched for each in handed), handed

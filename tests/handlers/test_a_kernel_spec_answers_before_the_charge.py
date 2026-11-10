@@ -1,18 +1,3 @@
-"""A kernel spec's own checks answer a call before the transport charges it or reads its shape.
-
-A kernel binding's ``permissions`` hold only its ``scopes=`` gate, and the
-kernel's ``dispatch`` checks a call's arguments before it asks the spec's
-checks. So the transport asks them itself first, through the kernel's own
-prelude (``admit_kernel_call``): a caller they refuse is told so before the
-rate limit is charged, before a task is created and before it learns which
-arguments the tool takes. ``dispatch`` is then handed the grant, so the
-checks are asked once.
-
-Asked here of every kernel route that charges or creates work: ``tools/call``
-on both handlers and in process, a task-shaped tool, ``resources/read`` on both
-handlers, and what a check reading ``arguments`` sees.
-"""
-
 from __future__ import annotations
 
 import json
@@ -216,7 +201,6 @@ async def test_a_caller_the_spec_refuses_is_not_charged(is_async: bool) -> None:
 @_ASYNC
 async def test_a_deactivated_principal_is_not_charged(is_async: bool) -> None:
     # ``PrincipalUnavailable`` is the prelude's other denial, refused ahead of
-    # every check, as dispatch refuses it.
     limit = RefusingRateLimit()
 
     out = await _call(
@@ -235,7 +219,6 @@ async def test_an_admitted_caller_missing_an_argument_is_charged_and_told_which(
     is_async: bool,
 ) -> None:
     # The other half: the spec admitting the caller, the shape check still
-    # answers, after the charge.
     limit = _CountingLimit()
 
     out = await _call(_server(_Counted(admits=True), limiter=limit), {}, is_async=is_async)
@@ -247,7 +230,6 @@ async def test_an_admitted_caller_missing_an_argument_is_charged_and_told_which(
 @pytest.mark.parametrize("route", ["sync", "async", "in-process"])
 async def test_a_check_is_asked_once_per_call(route: str) -> None:
     # The grant the transport's own ask produced is what dispatch runs under,
-    # so the spec's checks are not asked a second time inside it.
     check = _Counted(admits=True)
     server = _server(check)
 
@@ -267,9 +249,6 @@ def _rows() -> list[dict[str, int]]:
 @_ASYNC
 async def test_a_paged_call_is_asked_once(is_async: bool) -> None:
     # The page is split off before the checks are asked, as ``run_kernel_tool``
-    # splits it before dispatch: asked with it, the shape check would refuse
-    # ``page`` and ``limit`` as unknown, the call would be judged on no
-    # arguments, and dispatch would ask again.
     check = _Counted(admits=True)
     server = _bare_server()
     server.register_tool(
@@ -287,8 +266,6 @@ async def test_a_paged_call_is_asked_once(is_async: bool) -> None:
 @_ASYNC
 async def test_a_stray_argument_a_tool_ignores_is_asked_once(is_async: bool) -> None:
     # Asked under the tool's own policy: under ``REJECT`` the stray argument
-    # would fail the shape check, the call would be judged on no arguments, and
-    # dispatch, which drops it, would ask again.
     check = _Counted(admits=True)
     server = _bare_server()
     server.register_tool(_get(check), name="get", unknown_arguments=UnknownArguments.IGNORE)
@@ -305,9 +282,6 @@ async def test_a_stray_argument_a_tool_ignores_is_asked_once(is_async: bool) -> 
 @_ASYNC
 async def test_a_check_reads_the_arguments_as_the_shape_check_reads_them(is_async: bool) -> None:
     # Asked on the arguments the shape check produced, as dispatch asks it: the
-    # string ``"8"`` reaches the selector as the int ``8``, so a check shown the
-    # string as sent would compare ``"8" != 8``, admit, and the selector would
-    # run on the row the check refuses.
     out = await _call(_server(_NotRowEight()), {"pk": "8"}, is_async=is_async)
 
     assert _forbidden(out), out
@@ -318,9 +292,6 @@ async def test_a_check_refusing_on_no_arguments_answers_a_malformed_call_before_
     is_async: bool,
 ) -> None:
     # A call whose arguments fail the shape check has no checked arguments, so
-    # the check is asked on none, as the listing asks it. Whatever it admits is
-    # still refused by the shape check, so this only decides which refusal is
-    # told, and ``.get`` on no arguments raises, which refuses.
     out = await _call(_server(_OnlyRowOne()), {"pk": "abc"}, is_async=is_async)
 
     assert _forbidden(out), out
@@ -339,8 +310,6 @@ async def test_a_check_raising_a_refusal_that_is_no_denial_is_answered_as_before
     refusal: Exception, answered_as: str, is_async: bool
 ) -> None:
     # A ``ServiceError`` a check looking a tenant up raises, or a bare
-    # ``DispatchError``: no denial, so each is left to dispatch, which raises it
-    # again and answers it through its own arm, after the charge.
     limit = _CountingLimit()
 
     out = await _call(_server(_Raises(refusal), limiter=limit), {"pk": 1}, is_async=is_async)
@@ -372,7 +341,6 @@ class _Rewrites(PermissionCheck):
 
 def _listed(server: MCPServer) -> bool:
     # Whether ``tools/list`` shows the tool to the caller once listings are
-    # filtered by permission, the question ``is_binding_listable`` answers.
     context = _ctx(server)
     return is_binding_listable(
         server.tools.get("get"),
@@ -401,8 +369,6 @@ async def test_a_call_failing_its_shape_is_refused_first_exactly_when_the_listin
     shape: str, arguments: dict[str, Any], is_async: bool
 ) -> None:
     # A call with no checked arguments is judged as the listing judges, on no
-    # arguments at all, so a caller learns which argument it left out exactly
-    # when the tool is listed to it, and is otherwise refused uncharged.
     build, listed = _SHAPES[shape]
     limit = _CountingLimit()
     server = _server(build(), limiter=limit)
@@ -439,9 +405,6 @@ async def test_a_call_missing_an_argument_is_refused_by_a_check_the_listing_hide
     decide: Any, is_async: bool
 ) -> None:
     # ``"8"`` without the required ``name``: the check is never shown the
-    # string, which would read as a row it admits in one case and one it
-    # refuses in the other. ``.get`` on no arguments raises, so the listing
-    # hides the tool, and the call is refused uncharged in both.
     limit = _CountingLimit()
     server = _bare_server()
     server.register_tool(
@@ -465,7 +428,6 @@ async def test_a_call_missing_an_argument_is_refused_by_a_check_the_listing_hide
 @_ASYNC
 async def test_a_check_never_writes_the_arguments_a_call_sent(is_async: bool) -> None:
     # A check is handed no arguments for a call failing its shape, so nothing
-    # it writes reaches the call, which the shape check still refuses.
     out = await _call(_server(_Rewrites()), {"pk": "abc"}, is_async=is_async)
 
     assert tool_error(out)["type"] == "validation_error", out
@@ -494,10 +456,6 @@ async def test_a_many_call_with_a_refused_row_is_asked_by_its_prelude_and_by_dis
     streamed: bool, is_async: bool
 ) -> None:
     # ``check_call`` asks the checks before it raises the first row's refusal,
-    # which hands back no grant, and dispatch, which is what reports the
-    # second row's Validator refusal beside it, asks again. The answer is
-    # dispatch's, both rows named. A stream's pre-flight is that prelude: the
-    # handler runs under its admission and asks no more than a plain call.
     check = _Counted(admits=True)
     server = _bare_server()
     server.register_tool(
@@ -549,10 +507,6 @@ def test_a_streamed_call_with_no_arguments_object_is_judged_on_none_sent(
     arguments: Any,
 ) -> None:
     # The pre-flight runs before the handler validates ``arguments``, so it
-    # meets one that is ``null`` or not an object. It judges those as
-    # delivering nothing, as the handler reads an absent one, rather than
-    # handing the check what no check can index, and leaves the handler to
-    # name the fault.
     check = _Recording()
     server = _bare_server()
     server.register_tool(
@@ -580,9 +534,6 @@ _BAD_ROW = [{"number": "A-1", "amount_cents": "x"}]
 
 def test_check_call_raises_a_refused_row_only_after_admitting_the_top_level() -> None:
     # The kernel behaviour ``admit_kernel_call`` reads a refused row by: raised
-    # after the class-level check admitted the checked top level, and keyed by
-    # index under ``many_argument`` alone, where a failed top level is raised
-    # before that check, without the rows. If either changes, this fails.
     check = _Counted(admits=True)
     spec = _tenant_bulk(check)
 
@@ -606,9 +557,6 @@ async def test_a_many_call_with_a_refused_row_is_answered_on_its_checked_top_lev
     tenant: int, admitted: bool, streamed: bool, is_async: bool
 ) -> None:
     # The checks admitted or refused the checked top level before the row was
-    # refused, so that answer stands: an admitted caller is told the row after
-    # the charge, never judged again on no arguments, which this check, reading
-    # ``tenant`` unguarded, would refuse.
     check = _TenantOne()
     limit = _CountingLimit()
     server = _bare_server()
@@ -637,9 +585,6 @@ async def test_a_refused_row_under_a_named_many_argument_keeps_its_admission(
     is_async: bool,
 ) -> None:
     # The rows travel under the argument ``many_argument`` names, ``lines`` here,
-    # so the refused row is read there: a guard that looked under ``items`` alone
-    # would read this tree as a failed shape and judge the call on no arguments,
-    # which this check, indexing ``tenant`` unguarded, refuses.
     limit = _CountingLimit()
     server = _bare_server()
     server.register_tool(
@@ -668,12 +613,6 @@ async def test_a_check_raising_a_refusal_shaped_like_a_refused_row_keeps_no_admi
     is_async: bool,
 ) -> None:
     # A check raising ``InvalidArguments`` keyed by row index under the many
-    # argument is no refused row: the kernel marks the one ``check_call`` raises
-    # after admitting the top level (``after_authorize``), and this one is not
-    # marked. So it is answered as any refusal a check raises is, judged on no
-    # arguments, which this check cannot answer, and refused before the charge.
-    # Read off the tree alone, it kept an admission it was never given and was
-    # charged.
     limit = _CountingLimit()
     tree = InvalidArguments({"items": {0: {"amount_cents": ["Not this row."]}}})
     server = _bare_server()
@@ -689,8 +628,6 @@ async def test_a_check_raising_a_refusal_shaped_like_a_refused_row_keeps_no_admi
 @_ASYNC
 async def test_an_array_argument_failing_at_an_index_is_no_refused_row(is_async: bool) -> None:
     # A spec that is not ``many`` fails an array argument's item at its index,
-    # under the argument's name, ``items`` here: a failed shape all the same,
-    # judged on no arguments, which this check refuses.
     limit = _CountingLimit()
     server = _bare_server()
     server.register_tool(
@@ -713,8 +650,6 @@ async def test_an_array_argument_failing_at_an_index_is_no_refused_row(is_async:
 @_ASYNC
 async def test_a_many_list_that_is_no_list_is_a_failed_shape(is_async: bool) -> None:
     # Its refusal sits under ``many_argument`` too, as a message rather than
-    # rows by index, so it is judged on no arguments, which ``_TenantOne``
-    # cannot answer.
     limit = _CountingLimit()
     server = _bare_server()
     server.register_tool(_tenant_bulk(_TenantOne()), name="get", rate_limits=[limit])
@@ -737,8 +672,6 @@ class _ScopedToAcme(PermissionCheck):
 
 def test_a_creates_scope_is_judged_on_the_servers_own_seeds() -> None:
     # The scope question of a create, asked on no arguments, is offered the
-    # server's pool seeds, as the class-level one is: a check naming a seed
-    # only this server registers is handed it, and admits.
     server = _acme()
     server.register_tool(ServiceSpec(service=lambda: {}, permissions=[_ScopedToAcme()]), name="get")
 
@@ -765,7 +698,6 @@ def _acme(**kwargs: Any) -> MCPServer:
 
 def _strict() -> MCPServer:
     # The test settings turn ``REQUIRE_TOOL_PERMISSIONS`` off, so only a server
-    # turning it on tells its own setting apart from the settings' default.
     return _acme(config=replace(build_mcp_config(), require_tool_permissions=True))
 
 
@@ -787,8 +719,6 @@ async def test_a_call_failing_its_shape_is_judged_with_what_its_call_carries(
     case: str, is_async: bool
 ) -> None:
     # Judged on no arguments, but with the server's seeds and the call's
-    # context, as the call is: each admits here, so the caller is told the
-    # shape after the charge.
     limit = _CountingLimit()
     server = _acme()
     check = _NamesTheTenant() if case == "seeds" else _NamesTheAction()
@@ -805,7 +735,6 @@ async def test_a_call_failing_its_shape_is_judged_under_the_answering_servers_se
     is_async: bool,
 ) -> None:
     # A binding marked unguarded elsewhere is granted no call by a server with
-    # the setting on, so it refuses every caller, uncharged.
     limit = _CountingLimit()
     server = _strict()
     server.tools.register(
@@ -874,9 +803,6 @@ def test_a_completion_is_judged_with_the_callers_principal_and_context(
     client: Client, user: str | None, admitted: bool
 ) -> None:
     # The completion asks the spec as the read does: for the token's user (the
-    # principal is ``None`` without ``principal_of(context.token.user)``), with a
-    # call context (``call_context=None`` fails it) whose request carries the
-    # token (``carry_token`` dropped fails it) and the binding's name as action.
     get_user_model().objects.create_user("alice")
     server = make_server(auth_backend=HeaderAuthBackend(), session_store=InMemorySessionStore())
     server.register_resource(
@@ -911,7 +837,6 @@ def test_a_completion_is_judged_with_the_callers_principal_and_context(
 @_ASYNC
 async def test_an_always_listed_tool_still_refuses_a_call_failing_its_shape(is_async: bool) -> None:
     # ``always_listed`` decides the listing, not who may call: the check still
-    # cannot answer on no arguments, so the call is refused uncharged.
     limit = _CountingLimit()
     server = _bare_server()
     server.register_tool(
@@ -954,7 +879,6 @@ def _task_server(check: PermissionCheck, limiter: Any) -> tuple[MCPServer, _Reco
 @_ASYNC
 async def test_a_caller_the_spec_refuses_gets_no_task(is_async: bool) -> None:
     # As the streamed route answers it: no durable work is queued for a call
-    # its worker would refuse, and nothing is charged.
     limit = RefusingRateLimit()
     server, executor = _task_server(_Counted(admits=False), limit)
 
@@ -1035,7 +959,6 @@ async def test_a_deactivated_reader_is_not_charged(is_async: bool) -> None:
 @_ASYNC
 async def test_a_reader_refused_on_a_malformed_variable_is_told_so(is_async: bool) -> None:
     # ``abc`` reads as no integer, so the URI's variables have no checked form,
-    # and the call is judged on no arguments, where ``.get`` raises and refuses.
     limit = RefusingRateLimit()
 
     out = await _read(_resource_server(_OnlyRowOne(), limit), "rows://abc", is_async=is_async)
@@ -1049,8 +972,6 @@ async def test_an_admitted_reader_of_a_malformed_variable_is_charged_and_told_wh
     is_async: bool,
 ) -> None:
     # The judgment admits, so the read is charged and then refused on the
-    # variable, as an admitted tool call is told which argument is wrong after
-    # its charge: ``-32602`` with the kernel's detail in ``data``.
     limit = _CountingLimit()
 
     out = await _read(
@@ -1108,7 +1029,6 @@ def test_a_reader_told_its_arguments_are_invalid_gets_the_detail_as_json_would_w
     include_value: bool,
 ) -> None:
     # A many call's node mixes integer row indices with ``non_field_errors``, which
-    # a sorted-key encoder refuses; the data is the tree with its keys as strings.
     scene = KernelRefusalScene(
         arguments={"pk": "abc"},
         config=replace(build_mcp_config(), include_validation_value=include_value),
@@ -1122,7 +1042,6 @@ def test_a_reader_told_its_arguments_are_invalid_gets_the_detail_as_json_would_w
     assert out.data["detail"] == {
         "rows": {"1": {"pk": ["Bad."]}, "non_field_errors": ["Too many."]}
     }
-    # The kernel's reading order is kept: the rows by index, then the list's message.
     assert list(out.data["detail"]["rows"]) == ["1", "non_field_errors"]
     assert out.data.get("value") == ({"pk": "abc"} if include_value else None)
     json.dumps(out.to_dict())
@@ -1130,7 +1049,6 @@ def test_a_reader_told_its_arguments_are_invalid_gets_the_detail_as_json_would_w
 
 def test_a_refusal_that_is_no_invalid_argument_is_still_raised_on_by_a_read() -> None:
     # The arm is ``InvalidArguments`` alone: a bare ``DispatchError`` stays the
-    # transport's internal error.
     scene = KernelRefusalScene(
         arguments={}, config=build_mcp_config(), conventions=AgentConventions()
     )
@@ -1165,10 +1083,6 @@ def _archived(*, archived: bool) -> dict[str, bool]:
 @_ASYNC
 async def test_a_reader_is_judged_on_the_variables_the_read_dispatches(is_async: bool) -> None:
     # A URI carries ``true`` as text, which the shape check reads as no boolean
-    # and the read's ``coerce_flat`` reads as ``True``. Asked on the text, this
-    # check would admit the caller, the limit would be charged and the read's
-    # own dispatch would then refuse ``True``: the check is asked on the
-    # variables the read dispatches, so it refuses before the charge.
     limit = RefusingRateLimit()
     server = _bare_server()
     server.register_resource(

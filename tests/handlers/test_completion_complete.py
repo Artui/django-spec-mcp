@@ -1,20 +1,3 @@
-"""``completion/complete`` for prompts and for kernel resource templates.
-
-The prompt half is not about a spec. The resource half registers kernel ``RETRIEVE`` specs through
-``register_resource(spec, uri_template=..., name=...)``, whose ``reads`` are the
-template's variables. A completion is a read of what it completes, so a kernel
-resource's spec permissions answer it as they answer ``resources/read``: the
-class-level checks, judged as the listing judges the spec, on no arguments,
-since a completion names a template rather than a URI, and before the rate
-limit, as the read asks them. A check reading ``arguments`` is handed ``None``
-there and refuses, whether it guards or raises on ``None``, so a route-scoped
-template completes for nobody; a ``ServiceError`` it raises refuses the completion,
-as it hides the template, and a configuration error fails it as it fails the read.
-
-A prompt's kernel checks are handed the principal and the prompt's binding,
-as its ``prompts/get`` hands them.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Iterator
@@ -139,7 +122,6 @@ def _seed_named_siblings(*, value: str, result: Any = None, queryset: Any = None
 @pytest.mark.parametrize(
     ("completer", "declared", "argument", "siblings", "values"),
     [
-        # A sibling argument reaches the completer under its own name.
         (
             lambda language: [f"{language}-web"],
             ["language", "framework"],
@@ -147,7 +129,6 @@ def _seed_named_siblings(*, value: str, result: Any = None, queryset: Any = None
             {"language": "python"},
             ["python-web"],
         ),
-        # A completer may declare the whole mapping of siblings.
         (
             lambda arguments, value: [f"{sorted(arguments)}:{value}"],
             ["a"],
@@ -155,7 +136,6 @@ def _seed_named_siblings(*, value: str, result: Any = None, queryset: Any = None
             {"z": 1},
             ["['z']:v"],
         ),
-        # A client-supplied ``value`` sibling must not shadow the real one.
         (
             lambda value: [value],
             ["a"],
@@ -163,8 +143,6 @@ def _seed_named_siblings(*, value: str, result: Any = None, queryset: Any = None
             {"value": "spoofed"},
             ["real"],
         ),
-        # The strip tracks the kernel's reserved seeds, which gained ``result``
-        # and ``queryset``; ``arguments`` still carries them verbatim, as caller input.
         (
             _seed_named_siblings,
             ["a"],
@@ -172,7 +150,6 @@ def _seed_named_siblings(*, value: str, result: Any = None, queryset: Any = None
             {"result": "r", "queryset": "q"},
             ["None-None"],
         ),
-        # A lone string is one suggestion, not its characters.
         (lambda: "python", ["a"], {"name": "a"}, None, ["python"]),
     ],
     ids=[
@@ -330,7 +307,6 @@ _INVOICE_PK = {
 
 def test_a_kernel_resources_completion_asks_its_spec_permissions() -> None:
     # The scope gate alone answered a kernel resource's completion, so a spec
-    # refusing the caller still listed which ``pk`` values exist.
     check = _Refuses()
     server = _invoice_server(check)
 
@@ -343,8 +319,6 @@ def test_a_kernel_resources_completion_asks_its_spec_permissions() -> None:
 
 def test_a_kernel_resources_completion_is_judged_on_no_arguments() -> None:
     # Fails closed: a completion names a template, not a URI, so a check
-    # scoping by a variable is handed ``None`` and refuses, whatever siblings
-    # the request carries, as it would admit a read of ``invoices://7``.
     check = _GrantsProjectSeven()
     server = _invoice_server(check)
 
@@ -357,7 +331,6 @@ def test_a_kernel_resources_completion_is_judged_on_no_arguments() -> None:
 
 def test_a_kernel_resources_scope_gate_answers_before_its_spec() -> None:
     # The scope gate is the shell's and answers first, with the scopes the
-    # token lacks; the spec's check is never asked for a caller it refuses.
     check = _Refuses()
     server = _invoice_server(check, scopes=("invoices:read",))
 
@@ -378,11 +351,6 @@ class _RaisesNotFound(PermissionCheck):
 
 def test_a_check_raising_a_service_error_refuses_the_completion_as_the_listing() -> None:
     # A completion names a template rather than a URI, so it has no arguments
-    # and is judged as the listing judges the spec, where a check that raises
-    # rather than answering refuses: hidden from the listing, a read of a URI
-    # whose variable has no checked form is ``-32006``, and so is the
-    # completion. A read with a checked form dispatches, and raises the
-    # check's ``ServiceError`` on to the transport's internal error.
     server = _invoice_server(_RaisesNotFound())
     context = _ctx(server)
     binding = server.resources.by_uri_template("invoices://{pk}")
@@ -425,8 +393,6 @@ def test_a_check_raising_on_no_arguments_refuses_the_completion_as_the_read_refu
     keyed_caller: KernelClient,
 ) -> None:
     # A check that indexes ``arguments`` raises ``TypeError`` on the ``None`` a
-    # completion hands it. That is the refusal (-32006, the same HTTP status) a
-    # read the check refuses answers, not an internal error (HTTP 500, -32603).
     completed = keyed_caller.post("completion/complete", _INVOICE_PK)
     read = keyed_caller.post("resources/read", {"uri": "invoices://2"})
 
@@ -447,7 +413,6 @@ class _AnswersWithACoroutine(PermissionCheck):
 
 def test_a_misconfigured_check_fails_the_completion_as_the_read() -> None:
     # A configuration error is raised, as the read raises it, rather than read
-    # as a refusal that would hide the mistake behind a -32006.
     server = _invoice_server(_AnswersWithACoroutine())
 
     with pytest.raises(ImproperlyConfigured, match="awaitable"):
@@ -485,7 +450,6 @@ def test_completion_runs_the_bindings_rate_limits() -> None:
 
 def test_a_kernel_resources_spec_is_asked_before_its_rate_limit() -> None:
     # Asked before the charge, as the read asks it, so a caller the spec
-    # refuses is told that and is charged nothing on either.
     check = _Refuses()
     limit = RefusingRateLimit()
     server = _invoice_server(check, rate_limits=[limit])
@@ -638,11 +602,7 @@ def test_capabilities_describe_what_the_server_can_answer() -> None:
 
 
 def test_a_completer_declaring_request_receives_the_transports_http_request() -> None:
-    """The plain ``HttpRequest`` the kernel tool path hands a spec, the token on it.
-
-    Its ``user`` is the token's principal, as the ``user`` seed is, and never the
-    one the endpoint's session resolved.
-    """
+    """The plain ``HttpRequest`` the kernel tool path hands a spec, the token on it."""
     seen: dict[str, Any] = {}
 
     def completer(*, value: str, request: Any, user: Any) -> list[str]:

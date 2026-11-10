@@ -1,10 +1,3 @@
-"""A kernel spec declaring no permissions, under each ``REQUIRE_TOOL_PERMISSIONS``.
-
-Refused at registration with the setting on. With it off, registered with one
-``UnguardedToolWarning`` and called without a permission check, under a grant
-minted per call for that spec and principal; a guarded spec is never granted.
-"""
-
 from __future__ import annotations
 
 import json

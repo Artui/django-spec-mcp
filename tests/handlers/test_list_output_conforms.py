@@ -1,31 +1,3 @@
-"""A kernel tool whose result presents as a list advertises, and serves, a list.
-
-A service tool whose ``output_selector_spec`` re-fetches a ``LIST`` must not
-advertise the bare item schema while serving rows. A list is served under
-``items``, as MCP's structured content is an object, and advertised so. Every case registers a
-kernel spec with
-``include_output_schema=True``, calls it, and runs the served payload through
-``assert_tool_result_conforms``, which is what a client holding the schema
-would check, with each ``RETRIEVE`` sibling riding along so a fix answering every
-tool with an array fails too.
-
-The cases:
-
-- a selector tool, and a service tool re-fetching through an output selector,
-  of either kind;
-- a service declaring ``returns_many``, the kernel's form of a ``LIST`` output
-  declaration with no selector: it presents the service's own return as the
-  set;
-- a ``many`` service, whose rows are its result. Its output selector re-reads
-  what the bulk write produced, so the selector's kind decides what is served.
-
-A ``LIST`` declaration with no selector is not asked to refuse, by name, a
-return that is no set: the kernel's ``returns_many`` iterates whatever the
-service returns, so a mapping is presented as its keys and fails in the
-presenter, and an ``int`` as not iterable. Refusing it by name is the kernel's
-question, not this transport's.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -92,7 +64,6 @@ _KINDS = pytest.mark.parametrize(
 
 def _rows_schema(tool: Any, kind: SelectorKind) -> None:
     # Named outright as well: a schema loose enough to accept both shapes would
-    # conform either way, and the shape is the contract.
     schema = tool["outputSchema"]
     assert schema["type"] == "object"
     if kind is SelectorKind.LIST:
@@ -177,8 +148,6 @@ async def test_a_many_services_output_selector_re_reads_and_its_kind_decides(
     kind: SelectorKind, served: Any
 ) -> None:
     # The output selector re-reads what the bulk write produced, and its kind
-    # decides what is presented, so the schema follows the kind and the served
-    # payload conforms to it either way.
     spec = ServiceSpec(
         service=_placed,
         atomic=False,

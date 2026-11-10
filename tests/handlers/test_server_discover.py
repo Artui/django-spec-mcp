@@ -1,12 +1,3 @@
-"""``server/discover`` plus the cacheability fields every result now carries, on kernel specs.
-
-It asks of a server whose tool is registered with ``register_tool`` and whose
-data resource is registered with ``register_resource``, both on kernel specs:
-discovery reports capabilities rather than bindings, a filtered catalog is
-private, and a read is private and uncached unless a static view opts into a
-TTL.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -137,11 +128,7 @@ def test_catalogs_are_public_when_listings_are_not_filtered() -> None:
 
 
 def test_catalogs_are_private_when_listings_are_filtered() -> None:
-    """A filtered listing is a function of the caller, so it must not be shared.
-
-    Labelling it ``public`` would licence a caching proxy to serve one tenant's
-    visible tools to another.
-    """
+    """A filtered listing is a function of the caller, so it must not be shared."""
     server = _with_a_tool(_server(filter_listings_by_permissions=True))
     for method in ("tools/list", "resources/list", "resources/templates/list", "prompts/list"):
         assert dispatch(method, None, _ctx(server))["cacheScope"] == "private", method
@@ -180,7 +167,6 @@ def test_a_static_resource_can_opt_into_a_ttl() -> None:
     )
     result = dispatch("resources/read", {"uri": "ui://table.html"}, _ctx(server))
     assert result["ttlMs"] == 3_600_000
-    # Still private: caching is about this caller's copy, not about sharing.
     assert result["cacheScope"] == "private"
 
 
@@ -199,7 +185,5 @@ def test_discover_falls_back_to_the_settings_identity() -> None:
         config=ctx.config,
     )
     info = dispatch("server/discover", None, ctx)["_meta"]["io.modelcontextprotocol/serverInfo"]
-    # The test settings configure SERVER_INFO, which is exactly the source
-    # this path is meant to reach for.
     assert info["name"].startswith("django-spec-mcp")
     assert info["name"] != "t"

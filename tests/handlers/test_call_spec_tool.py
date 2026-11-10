@@ -1,14 +1,3 @@
-"""``MCPServer.call_tool`` on kernel specs: the in-process, spec-core invocation surface.
-
-Asks of tools registered with ``register_tool``: a call through the
-kernel's ``dispatch`` off the HTTP path returns a :class:`ToolResult`, a
-business failure or a missing instance comes back as an ``isError`` result, and
-a permission fault or an unknown name propagates for the caller to map.
-
-A denied call raises the kernel's ``NotPermitted``. A kernel retrieve declares
-the read it takes, ``pk`` here.
-"""
-
 from __future__ import annotations
 
 import json
@@ -134,7 +123,6 @@ def test_include_structured_content_false_omits_the_structured_field() -> None:
         name="things.quiet",
         include_structured_content=False,
         # The MCP spec forbids advertising outputSchema while omitting
-        # structuredContent, so drop the schema too.
         include_output_schema=False,
     )
     result = server.call_tool("things.quiet", user=None)
@@ -185,8 +173,7 @@ def test_a_list_selectors_http404_is_not_found_in_process(allow_none: bool) -> N
 
 
 def test_a_write_whose_instance_selector_raises_http404_is_not_found_unrun() -> None:
-    """A service tool's ``not_found`` keeps the instance wording: its binding's
-    ``kind`` is no ``LIST``, so ``not_found_result`` words a missed instance."""
+    """A service tool's ``not_found`` keeps the instance wording."""
     ran: list[Any] = []
 
     def missing(*, pk: int) -> Any:
@@ -214,9 +201,7 @@ def test_a_write_whose_instance_selector_raises_http404_is_not_found_unrun() -> 
 
 
 def test_an_undeclared_argument_is_a_validation_error_not_a_fault() -> None:
-    """A kernel spec declares its reads, so an argument it does not declare
-    (``{"x": 1}`` here) is refused under ``REJECT`` as the wire refuses it, in
-    the result rather than raised."""
+    """A kernel spec declares its reads, so an argument it does not declare."""
     server = make_server()
     server.register_tool(
         ServiceSpec(service=lambda: None, permissions=OPEN, atomic=False), name="t.create"
@@ -251,7 +236,6 @@ def test_a_service_error_becomes_a_tool_error(raised: Exception, error_type: str
 
 def test_a_spec_permission_denial_propagates() -> None:
     # A kernel check refuses with the kernel's ``NotPermitted``, which the wire
-    # maps to its own code. It is a fault the caller maps, not a tool result.
     server = make_server()
     server.register_tool(
         ServiceSpec(service=lambda: {}, permissions=[_DenyAll()], atomic=False), name="t.create"
@@ -281,8 +265,7 @@ def test_a_selector_spec_permission_denial_propagates_before_the_selector_runs()
 
 @pytest.mark.django_db
 def test_a_selector_object_permission_denial_propagates() -> None:
-    """The object-level half: the kernel asks ``has_object_permission`` of the
-    row the retrieve resolved, so a denial on it propagates too."""
+    """The object-level half: a denial from has_object_permission propagates too."""
     invoice = Invoice.objects.create(number="A", amount_cents=1)
     server = make_server()
     server.register_tool(

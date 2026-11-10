@@ -1,19 +1,3 @@
-"""A kernel refusal's ``code`` reaches the caller, on every route a kernel tool is called by.
-
-Asks of tools registered with ``register_tool``:
-``ActionUnavailable(reason, code=...)`` serves its ``code`` beside the reason,
-because the reason is a sentence that gets reworded and the code is the name a
-client switches on, while a plain ``ServiceConflict`` serves no ``code`` key at
-all, not a null one.
-
-A kernel tool has three arms: ``run_kernel_tool`` on the sync
-wire, ``run_kernel_tool_async`` on the async one and ``call_kernel_tool`` in
-process, and a service and a selector take the same arm, so each arm's test is
-parametrised over the two. A kernel selector's ``affordances`` name the operations
-on its row rather than refusing the read, so a precondition raising the refusal is
-how one reaches a selector tool.
-"""
-
 from __future__ import annotations
 
 from typing import Any

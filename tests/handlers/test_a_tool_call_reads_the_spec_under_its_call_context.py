@@ -1,18 +1,3 @@
-"""Every reading of a tool's spec during a call is handed that call's ``call_context``.
-
-A Validator may declare ``parameters(self, *, call_context=None)``, and the
-kernel's ``apply_server_arguments`` and ``server_owned_keys`` read the spec as it
-declares itself to the dict they are handed, ``None`` reading the declaration
-made to no call. Each ``tools/call`` route hands them the call's dict: the bound
-value is checked against what the spec declares to the call, and the names an
-answer may come back under are the call's.
-
-``TypedByTheCall`` records what each reader is handed, which is what tells the
-sites apart: a later reader handed the call's dict does not undo an earlier one
-handed ``None``, so each route is held by the record, and the bound value's
-refusal holds the rule's effect.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
@@ -81,10 +66,7 @@ async def _call(params: dict[str, Any], ctx: MCPCallContext, is_async: bool) -> 
 async def test_a_bound_value_the_call_s_declaration_refuses_is_the_server_s_mistake(
     is_async: bool,
 ) -> None:
-    """``"x"`` passes the declaration made to no call, which registration reads,
-    and the call's own refuses it. Handed the call's dict the kernel's rule
-    raises ``ImproperlyConfigured``; handed ``None`` the value reaches dispatch,
-    which tells the caller an argument it never sent is invalid."""
+    """'x' passes the declaration made to no call, and the call's own declaration refuses it."""
     server, _validator, ran = _server("x")
     with pytest.raises(ImproperlyConfigured, match="binds a value its parameter refuses"):
         await _call({"name": TOOL, "arguments": {}}, call_context(server), is_async)
@@ -101,11 +83,7 @@ def test_call_tool_checks_a_bound_value_against_the_call_s_declaration() -> None
 
 @pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
 async def test_every_reader_in_a_call_is_handed_the_call_s_dict(is_async: bool) -> None:
-    """Two dicts, both the call's: the one ``resolve_tool_call`` lays the bound
-    value under before the task decision, and the one the re-apply after a
-    retry's answers, the admission and dispatch share. Handed ``None`` at the
-    re-apply or by ``admitted_arguments``, the record holds a ``None``; handed a
-    dict of its own at the re-apply, the record holds three."""
+    """Two dicts, both the call's: ``resolve_tool_call`` lays the bound value under each."""
     server, validator, ran = _server(7)
     out = await _call({"name": TOOL, "arguments": {}}, call_context(server), is_async)
     assert out["structuredContent"] == {"project": 7}, out
@@ -116,8 +94,7 @@ async def test_every_reader_in_a_call_is_handed_the_call_s_dict(is_async: bool) 
 
 
 def test_call_tool_hands_every_reader_the_dict_it_dispatches_with() -> None:
-    """One dict: the bound value is laid under the one dispatch is handed, built
-    from the copy of the request the call runs on."""
+    """One dict: the bound value is laid under the one dispatch is handed."""
     server, validator, ran = _server(7)
     result = server.call_tool(TOOL, {}, user=None)
     assert result.structured_content == {"project": 7}
@@ -127,8 +104,7 @@ def test_call_tool_hands_every_reader_the_dict_it_dispatches_with() -> None:
 
 @pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
 async def test_a_task_is_judged_under_the_call_s_dict(is_async: bool) -> None:
-    """Task creation lays the bound value again after a retry's answers and asks
-    the checks with the dict it laid it under."""
+    """Task creation lays the bound value again after a retry's answers, then asks the checks."""
     store = InMemoryTaskStore()
     server, validator, _ran = _server(7, task_store=store, task_executor=RecordingExecutor(store))
     out = await _call({"name": TOOL, "arguments": {}}, task_context(server), is_async)
@@ -164,10 +140,7 @@ def _asks_for_the_tenant(**_fields: Any) -> dict[str, Any]:
 
 @pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
 async def test_a_question_for_a_field_named_like_a_seed_is_asked(is_async: bool) -> None:
-    """``admitted_arguments`` subtracts ``server_owned_keys`` read under the
-    call's dict, where ``tenant`` is a field. Read under ``None`` it is the
-    seed's, so the question would be refused as asking for a name the server
-    fills, ``-32603``."""
+    """``admitted_arguments`` subtracts ``server_owned_keys`` read under the call's dict."""
     server = make_server(pool_seeds=PoolSeeds().extend(tenant=lambda: "acme"))
     server.register_tool(
         ServiceSpec(

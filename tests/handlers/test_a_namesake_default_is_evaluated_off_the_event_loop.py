@@ -1,12 +1,3 @@
-"""A value a kernel spec computes by a query for a read the call left out is computed off the loop.
-
-What fills a read the call leaves out, by a query, is the spec's ``kwargs``
-provider. A provider that queries on the event loop raises
-``SynchronousOnlyOperation`` where the sync path serves, so this asks that the
-provider is called off the loop on every route a kernel tool is called by: the
-sync handler, the async handler and ``acall_tool``.
-"""
-
 from __future__ import annotations
 
 from typing import Any

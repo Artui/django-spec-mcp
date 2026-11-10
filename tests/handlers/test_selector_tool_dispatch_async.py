@@ -1,12 +1,3 @@
-"""What only the async route asks of a kernel selector tool.
-
-The sync pipeline tests run on both handlers in
-``test_selector_tool_dispatch.py``, so this file asks what is particular to an
-async caller: an ``async def`` selector is awaited by ``adispatch`` and still
-answers the sync handler, and a paginated call's presenter is handed the page
-and not the whole set.
-"""
-
 from __future__ import annotations
 
 from typing import Any

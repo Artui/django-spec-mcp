@@ -1,12 +1,3 @@
-"""A kernel selector tool takes no part in an input round trip.
-
-A retry's ``inputResponses`` and ``requestState`` reach every ``tools/call``, and
-the service path folds them into the arguments. A selector reads: it never
-elicits or merges an answer, so the same call with and without a round trip's
-fields is answered alike, and a selector asking for input is a service error
-rather than a question: the result served is written out here as a literal.
-"""
-
 from __future__ import annotations
 
 import json

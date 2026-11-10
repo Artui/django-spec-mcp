@@ -1,19 +1,3 @@
-"""A kernel ``LIST`` tool's queryset shaping, and the call's ``request`` its callables are handed.
-
-Asks of kernel specs registered with ``register_tool``, against the real SQLite
-model: empty shaping is a
-no-op, ``annotations`` attach to each row, ``prefetch_related`` and
-``select_related`` land on the queryset before ``extend_queryset``, which runs
-last and may narrow it, shaping a selector that returns no queryset fails
-loudly, and a paginated page is read once.
-
-The kernel hands every callable that declares it the call's ``request`` and
-``view`` (``CALL_SEEDS``): here the ``HttpRequest`` carrying the caller's token
-as ``mcp_token``, and ``None`` for the view, since this transport has none.
-That is asked here of ``extend_queryset`` and the selector. A kernel Presenter
-takes no per-call context.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -89,8 +73,7 @@ def test_annotations_attach_to_each_row() -> None:
 
 
 def test_extend_queryset_runs_last_and_is_handed_the_calls_request() -> None:
-    """It sees the shaped queryset and can narrow it, and it is handed the
-    call's ``request``, carrying the token, and no view."""
+    """It sees the shaped queryset and can narrow it, and it is handed the call's ``request``."""
     _seed(100, 200, 300)
     seen: dict[str, Any] = {}
 
@@ -132,7 +115,6 @@ def test_related_lookups_land_before_extend_queryset(field: str, lookup: str, re
     def _capture_and_strip(*, queryset: Any) -> Any:
         captured.extend(read(queryset))
         # A fresh queryset, so the lookup is never evaluated against a relation
-        # the testapp model does not have.
         return Invoice.objects.all()
 
     _call(_list(**{field: (lookup,)}, extend_queryset=_capture_and_strip))
@@ -152,8 +134,7 @@ def test_shaping_a_selector_that_returns_no_queryset_fails_loudly() -> None:
 
 
 def test_a_paginated_page_is_read_once(django_assert_num_queries: Any) -> None:
-    """The presenter iterates the page ``paginate_output`` fetched: a count and
-    one page read, and no second fetch of the same rows."""
+    """The presenter iterates the page ``paginate_output`` fetched: a count and one page read."""
     _seed(1, 2, 3, 4, 5)
     with django_assert_num_queries(2):
         out = _call(_list(), {"limit": 2}, paginate=True)

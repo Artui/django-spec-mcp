@@ -1,22 +1,3 @@
-"""End-to-end kernel selector-tool dispatch: filter, then paginate, then present.
-
-Asked of kernel ``SelectorSpec`` tools
-registered with ``register_tool`` and called through ``handle_tools_call``
-and ``handle_tools_call_async`` alike: a ``filter_set`` advertises its filters
-and narrows the rows, ``paginate=True`` lays one page out through the kernel's
-``paginate_output`` with the untyped ``page`` / ``limit`` read as ints, a
-declared read is shape-checked, a list return pages in memory, ``None`` under
-``allow_none`` is the empty list (else an internal error), the spec's permissions and rate limits,
-a ``ServiceValidationError`` and a ``ServiceError`` are each answered on the
-tool result or the JSON-RPC error. The async-only questions are in
-``test_selector_tool_dispatch_async.py``.
-
-A kernel selector takes the ``reads`` it declares, and their shape check is
-asked here. A kernel ``SelectorSpec`` cannot be built without a selector. The
-object-level check on the resolved row is asked of every route in
-``test_a_denied_caller_learns_nothing_of_the_target.py``.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -162,7 +143,6 @@ async def test_a_filter_narrows_the_rows(is_async: bool) -> None:
 @routes
 async def test_with_no_filter_set_an_argument_is_refused_not_ignored(is_async: bool) -> None:
     # A kernel spec's argument set is closed, so a filter-shaped argument it
-    # does not declare is refused rather than silently dropped.
     await _seed(2)
 
     out = await _call(_server(_invoices()), {"sent": True}, is_async=is_async)
@@ -224,7 +204,6 @@ async def test_page_and_limit_are_read_as_ints(
     arguments: dict[str, Any], page: int, rows: int, is_async: bool
 ) -> None:
     # A bool is not read as ``1`` and an unreadable value falls back, to the
-    # first page and the kernel's default size, rather than being refused.
     await _seed(3)
 
     out = await _call(_server(_invoices(), paginate=True), arguments, is_async=is_async)
@@ -295,8 +274,6 @@ async def test_a_declared_read_is_shape_checked(is_async: bool) -> None:
 @routes
 async def test_none_under_allow_none_is_the_empty_list(is_async: bool) -> None:
     # A kernel spec says ``None`` is an answer only with ``allow_none=True``; without it the
-    # kernel's ``present`` raises ``TypeError`` and the call is an internal error
-    # (test_none_without_allow_none_is_an_internal_error).
     out = await _call(_server(_invoices(lambda: None, allow_none=True)), {}, is_async=is_async)
 
     assert out["structuredContent"] == {"items": []}
@@ -310,8 +287,7 @@ async def test_none_without_allow_none_raises_in_process(is_async: bool) -> None
 
 @routes
 def test_none_without_allow_none_is_an_internal_error(is_async: bool, client: Client) -> None:
-    """What a ``LIST`` returning ``None`` with nothing declared answers on the wire,
-    on both mounts: the transport's internal error, never an empty result."""
+    """What a ``LIST`` returning ``None`` with nothing declared answers on the wire."""
     server = make_server(auth_backend=HeaderAuthBackend())
     server.register_tool(_invoices(lambda: None), name="invoices.list")
     with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=is_async)):

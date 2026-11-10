@@ -1,34 +1,3 @@
-"""A kernel tool call that leaves out a required argument is a ``validation_error`` result.
-
-The kernel refuses a missing argument itself: ``dispatch``'s shape check names
-every required parameter the call left out, a selector's ``reads``, the
-``reads`` of the selector a service resolves its target through, and a
-Validator's fields alike, as ``InvalidArguments`` keyed by the name. The
-transport answers that refusal as the validation ``isError`` on every route, so
-a selector's ``TypeError`` for a missing keyword, an HTTP 500 with ``-32603`` on
-the wire, has no way to arise.
-
-Every route and both eras answer a result; ``required`` is what dispatch refuses. Several
-missing names are answered together, a provider or a registered seed filling a read
-satisfies it, and a caller the tool is not for is refused for that before any
-argument is read.
-
-The kernel's own rules:
-
-- The message is the server's ``AgentConventions.missing_arguments``,
-  ``"Missing required argument(s): `pk`."`` by default, for every name the
-  kernel reads as left out (``InvalidArguments.missing``), with
-  ``{"pk": ["This field is required."]}`` under ``detail``. A Validator field is
-  one of them.
-- A Validator field and a target lookup's read left out together are both
-  named.
-- A seed's name the client sends anyway is refused as an unknown argument: a
-  ``reflected`` read leaves the argument set once a seed fills it.
-
-A kernel read is declared on the spec, with its default, and a provider's keys
-are the ones its return annotation names.
-"""
-
 from __future__ import annotations
 
 import json
@@ -174,7 +143,6 @@ def _server(*, permissions: Any = OPEN, **kwargs: Any) -> MCPServer:
 
 def _ctx(server: MCPServer, scopes: tuple[str, ...] = ()) -> MCPCallContext:
     # The server's seeds and wording, as the views hand them to the context
-    # they build, so a handler route answers as the wire would.
     return MCPCallContext(
         http_request=HttpRequest(),
         token=TokenInfo(user=None, scopes=scopes),
@@ -201,7 +169,6 @@ async def _via(server: MCPServer, route: str, name: str, arguments: dict[str, An
     params: dict[str, Any] = {"name": name, "arguments": arguments}
     if route == "async_handler":
         return await handle_tools_call_async(params, _ctx(server))
-    # Off the event loop, where the sync handler's ORM work is allowed.
     return await sync_to_async(handle_tools_call)(params, _ctx(server))
 
 
@@ -223,11 +190,8 @@ def _refused(out: Any, message: str = "Invalid arguments") -> dict[str, Any]:
     [
         # A selector tool's own read.
         ("get", {}, "pk"),
-        # A service tool's instance lookup, beside a valid Validator field.
         ("rename", {"number": "INV-2"}, "pk"),
-        # A service tool's collection lookup.
         ("rename_all", {"number": "INV-2"}, "ids"),
-        # A service tool's Validator field, beside its lookup.
         ("rename", {"pk": 1}, "number"),
     ],
 )
@@ -253,7 +217,6 @@ def test_the_missing_argument_is_one_the_schema_requires() -> None:
 @pytest.mark.parametrize("route", _ROUTES)
 async def test_several_missing_names_are_answered_together(route: str) -> None:
     # The lookup's read and the Validator's field, answered in one result
-    # rather than one check at a time.
     out = await _via(_server(), route, "rename", {})
 
     message = "Missing required argument(s): `number`, `pk`."
@@ -263,8 +226,6 @@ async def test_several_missing_names_are_answered_together(route: str) -> None:
 @pytest.mark.parametrize("route", _ROUTES)
 async def test_several_missing_names_are_sorted_and_joined(route: str) -> None:
     # Declared ``tenant`` before ``pk``, so the check finds them in that order;
-    # the sentence sorts them, as the Pydantic-AI toolset does, so one omission
-    # reads the same on every call and on both transports.
     server = _server()
     server.register_tool(
         SelectorSpec(
@@ -343,7 +304,6 @@ async def test_a_caller_the_scope_gate_refuses_is_refused_before_the_argument_is
     name: str, is_async: bool
 ) -> None:
     # The gate is the transport's, judged before dispatch is reached, so a
-    # caller without the scope is told only that.
     server = make_server(session_store=None)
     server.register_tool(_get(), name="get", scopes=("invoices:read",))
     server.register_tool(_rename_spec(), name="rename", scopes=("invoices:read",))
@@ -357,7 +317,6 @@ async def test_a_caller_the_scope_gate_refuses_is_refused_before_the_argument_is
 
     assert isinstance(out, JsonRpcError)
     assert out.code == JsonRpcErrorCode.FORBIDDEN
-    # The other half: with the scope, the same call is answered for its argument.
     missing = "`pk`" if name == "get" else "`number`, `pk`"
     assert "pk" in _refused(granted, f"Missing required argument(s): {missing}.")
 
@@ -415,7 +374,6 @@ async def test_a_read_the_provider_fills_is_not_asked_of_the_caller(route: str) 
 @pytest.mark.parametrize("route", _ROUTES)
 async def test_the_providers_value_outranks_the_callers(route: str) -> None:
     # Checked, then dropped: a ``tenant`` the caller sends never stands in for
-    # the one the provider is annotated to fill.
     out = await _via(_scoped_server(_acme), route, "get", {"pk": 1, "tenant": "beta"})
 
     assert out["structuredContent"] == {"pk": 1, "tenant": "acme"}
@@ -433,7 +391,6 @@ async def test_a_read_the_provider_declines_and_the_caller_leaves_out_is_refused
     route: str,
 ) -> None:
     # Only the provider's answer can say whether ``tenant`` arrived, so the
-    # call is refused once it has answered, in the shape check's words.
     out = await _via(_scoped_server(_declines), route, "get", {"pk": 1})
 
     assert _refused(out, "Missing required argument(s): `tenant`.") == {"tenant": _REQUIRED}
@@ -472,7 +429,6 @@ async def test_a_reflected_read_a_registered_seed_fills_is_not_asked_of_the_call
 @pytest.mark.parametrize("route", _ROUTES)
 async def test_a_seeds_name_the_client_sends_anyway_is_refused_as_unknown(route: str) -> None:
     # The seed fills the read, so the name is not an
-    # argument of the call at all, and ``REJECT`` refuses it.
     out = await _via(_seeded_server(), route, "get", {"pk": 1, "tenant": "beta"})
 
     assert _refused(out) == {"tenant": ["Unknown argument."]}
@@ -497,7 +453,6 @@ async def test_a_call_leaving_one_argument_out_and_another_wrong_names_the_missi
     route: str,
 ) -> None:
     # The message names what was left out; the detail carries every refusal,
-    # the unknown argument's beside it.
     out = await _via(_server(), route, "get", {"bogus": 1})
 
     detail = _refused(out, "Missing required argument(s): `pk`.")

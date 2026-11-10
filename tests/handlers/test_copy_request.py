@@ -1,12 +1,3 @@
-"""An in-process call shares the handed request's body and parse state; only its user is its own.
-
-``copy_request`` hands each call a request that reads and writes the body, the
-stream and whatever has been parsed from them on the handed request itself, so
-what a spec reads is read for the caller exactly as if the request had been
-handed over, whether Django built it from WSGI or ASGI and however many calls
-share it, while the user the call seats stays on the copy.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -48,7 +39,6 @@ def _wsgi() -> HttpRequest:
 
 def _asgi() -> HttpRequest:
     # As Django's ASGI handler builds one: the body spooled into a file the
-    # request closes once it has read it, with ``content-length`` as declared.
     body_file = tempfile.SpooledTemporaryFile()  # noqa: SIM115 - the request closes it
     body_file.write(_BODY)
     body_file.seek(0)
@@ -104,8 +94,7 @@ _HOW = pytest.mark.parametrize("how", ["call_tool", "acall_tool"])
 @_HOW
 @pytest.mark.parametrize("kind", ["wsgi", "asgi"])
 async def test_a_spec_reading_the_body_reads_it_for_the_caller(kind: str, how: str) -> None:
-    """The body a spec reads is cached on the handed request, and the stream
-    that read leaves behind is the caller's, as one read of its own would."""
+    """The body a spec reads is cached on the handed request."""
     handed = _UNREAD[kind]()
 
     read = await _call(how, lambda request: request.body.decode(), handed)
@@ -117,14 +106,12 @@ async def test_a_spec_reading_the_body_reads_it_for_the_caller(kind: str, how: s
 
 @_HOW
 async def test_a_spec_draining_the_stream_drains_it_for_the_caller(how: str) -> None:
-    """Reading the stream itself, not the cached ``body``, consumes it for the
-    caller too, who then gets what Django answers any request read that way."""
+    """Reading the stream itself, not the cached ``body``, consumes it for the caller too."""
     handed = _wsgi()
 
     read = await _call(how, lambda request: request.read().decode(), handed)
 
     assert read == _BODY.decode()
-    # The body first, since the caller's own read would mark the stream read.
     with pytest.raises(RawPostDataException):
         handed.body  # noqa: B018 - the read is the assertion
     assert handed.read() == b""
@@ -133,8 +120,7 @@ async def test_a_spec_draining_the_stream_drains_it_for_the_caller(how: str) -> 
 @_HOW
 @pytest.mark.parametrize("kind", ["wsgi", "asgi"])
 async def test_a_body_no_spec_reads_is_left_unread(kind: str, how: str) -> None:
-    """A call reading nothing reads nothing on the caller's behalf, so the
-    caller's own first read starts the stream as it would have."""
+    """A call reading nothing reads nothing on the caller's behalf."""
     handed = _UNREAD[kind]()
 
     await _call(how, lambda request: "", handed)
@@ -146,8 +132,7 @@ async def test_a_body_no_spec_reads_is_left_unread(kind: str, how: str) -> None:
 
 @_HOW
 async def test_a_closed_stream_does_not_fail_a_call_that_reads_nothing(how: str) -> None:
-    """An ASGI request outliving its response has a closed body file; a call
-    that never reads the body is not failed for it."""
+    """An ASGI request outliving its response has a closed body file."""
     handed = _asgi()
     handed._stream.close()  # type: ignore[attr-defined]
 
@@ -156,9 +141,7 @@ async def test_a_closed_stream_does_not_fail_a_call_that_reads_nothing(how: str)
 
 @_HOW
 async def test_a_form_a_spec_parsed_is_parsed_for_the_caller(how: str) -> None:
-    """``POST`` and ``FILES`` parsed off the stream by a spec are the caller's
-    own, where a second parse would find the stream consumed and answer
-    empty."""
+    """``POST`` and ``FILES`` parsed off the stream by a spec are the caller's own."""
     handed = _form()
 
     read = await _call(how, lambda request: [request.POST["name"], request.FILES["f"].name], handed)
@@ -170,9 +153,7 @@ async def test_a_form_a_spec_parsed_is_parsed_for_the_caller(how: str) -> None:
 
 @_HOW
 async def test_an_encoding_a_spec_sets_is_the_callers(how: str) -> None:
-    """Setting ``encoding`` discards the parsed ``POST`` and the decoded
-    ``GET`` so they are decoded again under the new one: the caller's, which
-    are then the spec's, under the encoding the spec set."""
+    """Setting ``encoding`` discards the parsed POST and decoded GET so both are read again."""
     handed = RequestFactory().post(
         "/view?q=1", data=b"name=n", content_type="application/x-www-form-urlencoded"
     )
@@ -195,10 +176,7 @@ async def test_an_encoding_a_spec_sets_is_the_callers(how: str) -> None:
 
 @_HOW
 async def test_upload_handlers_a_spec_reads_are_bound_to_the_handed_request(how: str) -> None:
-    """Django binds each upload handler to the request it initialises them
-    on; the handlers a spec's read initialises are the caller's to parse with
-    afterwards, so they are bound to the handed request, never to the copy
-    and its user."""
+    """Django binds each upload handler to the request it initialises them on."""
     handed = _form()
     handed.user = _User("owner")
 
@@ -246,8 +224,7 @@ async def test_a_multipart_parser_a_spec_sets_is_the_callers(how: str) -> None:
 
 
 async def test_concurrent_calls_on_one_asgi_request_keep_their_own_users() -> None:
-    """Two calls on one handed request each see their own user and the one
-    body, which the caller can still read afterwards."""
+    """Two calls on one handed request each see their own user and the one body."""
     owner = _User("owner")
     handed = _asgi()
     handed.user = owner
@@ -267,9 +244,7 @@ async def test_concurrent_calls_on_one_asgi_request_keep_their_own_users() -> No
 
 @_HOW
 async def test_a_spec_handing_its_request_on_shares_the_callers_body(how: str) -> None:
-    """A spec handing its own request to a further call hands a copy of a
-    copy, which shares the body with the request first handed and carries the
-    inner call's user only."""
+    """A spec handing its own request to a further call hands a copy of a copy."""
     inner = _server(lambda request: [request.user.username, request.body.decode()])
     handed = _wsgi()
     handed.user = _User("owner")
@@ -286,9 +261,7 @@ async def test_a_spec_handing_its_request_on_shares_the_callers_body(how: str) -
 
 
 async def test_a_copy_reads_as_the_request_it_copies() -> None:
-    """The copy is an instance of the handed request's class, under its name,
-    qualified name and module, and every call on one server makes its copy
-    from one class, made once."""
+    """The copy is an instance of the handed request's class, under its name."""
     made: list[type] = []
 
     class _Request(WSGIRequest):
@@ -326,9 +299,7 @@ async def test_a_copy_reads_as_the_request_it_copies() -> None:
 
 @_HOW
 async def test_a_request_written_to_while_it_is_copied_is_copied_whole(how: str) -> None:
-    """Another thread's call may write the handed request's shared names while
-    this one copies it; the copy is taken whole first, so the write cannot
-    land mid-way through it."""
+    """The copy is taken whole first, so another thread's write cannot land mid-copy."""
 
     class _WrittenMidCopy(dict):
         """A ``__dict__`` written to between two steps of iterating it, where
@@ -348,8 +319,7 @@ async def test_a_request_written_to_while_it_is_copied_is_copied_whole(how: str)
 
 
 async def test_deleting_an_attribute_on_the_copy_leaves_the_caller_its_own() -> None:
-    """Only the body and parse state are shared: an attribute of the caller's
-    own that a spec deletes is deleted from the copy alone."""
+    """Only the body and parse state are shared: a spec's delete touches the copy alone."""
     handed = _wsgi()
     handed.note = "kept"  # type: ignore[attr-defined]
 
@@ -372,8 +342,7 @@ async def test_an_attribute_the_caller_sets_after_the_copy_is_not_the_copys() ->
 
 
 async def test_a_copy_does_not_pickle() -> None:
-    """Pickling looks the copy's class up by its name, which finds the handed
-    request's class rather than the copy's."""
+    """Pickling looks the copy's class up by its name."""
 
     def spec(request: Any) -> str:
         with pytest.raises(pickle.PicklingError):
@@ -383,7 +352,6 @@ async def test_a_copy_does_not_pickle() -> None:
     handed = _wsgi()
 
     assert await _call("call_tool", spec, handed) == "refused"
-    # Where the request it copies pickles.
     assert pickle.loads(pickle.dumps(handed)).path == "/view"
 
 
@@ -391,12 +359,7 @@ _EMPTY = object()
 
 
 class _Wrapped:
-    """The shape of DRF's ``Request`` that ``copy_request`` reads, built without DRF.
-
-    The ``HttpRequest`` it wraps is ``_request``, its ``user`` setter writes
-    through to it, and ``parse`` opens a stream over the wrapped request and
-    caches what it parsed as DRF's ``data`` does, under DRF's names.
-    """
+    """The shape of DRF's ``Request`` that ``copy_request`` reads, built without DRF."""
 
     def __init__(self, request: HttpRequest) -> None:
         self._request = request
@@ -425,9 +388,7 @@ class _Wrapped:
 
 @_HOW
 async def test_a_wrapped_request_keeps_its_user(how: str) -> None:
-    """The wrapper's ``user`` setter writes through to the request it wraps,
-    so that one is copied too, and neither the handed wrapper nor what it
-    wraps names the call's user afterwards."""
+    """The wrapper's ``user`` setter writes through to the request it wraps."""
     owner = _User("owner")
     handed = _Wrapped(_wsgi())
     handed.user = owner
@@ -441,9 +402,7 @@ async def test_a_wrapped_request_keeps_its_user(how: str) -> None:
 
 @_HOW
 async def test_a_wrapped_requests_parse_is_the_callers(how: str) -> None:
-    """What a spec parses through the wrapper is cached on the caller's
-    wrapper, whose stream is its own wrapped request rather than the copy's,
-    so the caller reads the parse instead of parsing a consumed stream."""
+    """What a spec parses through the wrapper is cached on the caller's wrapper."""
     inner = _wsgi()
     handed = _Wrapped(inner)
 
