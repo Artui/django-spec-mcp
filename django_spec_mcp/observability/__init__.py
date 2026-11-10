@@ -1,31 +1,3 @@
-"""The package's logger namespace and its logging conventions.
-
-**Namespace.** ``django_spec_mcp.<module>``, via ``getLogger(__name__)`` at
-each site, so a project configures it through Django ``LOGGING`` like any other
-library:
-
-    LOGGING = {
-        "loggers": {"django_spec_mcp": {"level": "INFO", "handlers": ["console"]}},
-    }
-
-**What is logged where.** ``ERROR``, with the traceback, for an exception a
-dispatch raised instead of returning: the transport answers it with a generic
-``-32603`` and this record is the only place its text goes. ``WARNING`` for
-every rejection a caller sees but an operator cannot otherwise explain —
-session, auth, origin, protocol version, and each outbound bound. ``INFO`` for
-``initialize`` and the era a request selected. ``DEBUG`` for per-call timing and
-result size.
-
-**The no-oracle rule applies to the response, not the log.** The session gate
-deliberately merges "unknown id" with "id owned by another principal" so a
-caller cannot probe session ids — but a log line is not the wire, so server side
-we name the exact condition.
-
-**Never logged:** bearer tokens, full session ids (a session id is a
-credential — log a short prefix), or tool arguments and results, which are
-consumer domain data and may be anything at all.
-"""
-
 from __future__ import annotations
 
 from django_spec_mcp.observability.get_logger import get_logger
