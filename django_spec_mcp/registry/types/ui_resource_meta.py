@@ -10,25 +10,7 @@ from django_spec_mcp.types.ui_permission import UIPermission
 
 @dataclass(frozen=True)
 class UIResourceMeta:
-    """What a host needs to know to render an interactive view.
-
-    Serialises into the resource's ``_meta`` under the Apps extension's key.
-    Typed at the registration parameter rather than in the wire types, because
-    ``_meta`` is an open namespace shared by every extension: it stays a
-    free-form dict at the boundary while each extension keeps its own closed
-    shape on the way in.
-
-    Attributes:
-        csp: Origins the view needs; see
-            [`UICsp`][django_spec_mcp.registry.types.ui_csp.UICsp].
-        permissions: Browser capabilities the view would use. The host decides
-            whether to grant them.
-        domain: A stable identity for the view's origin, letting a host group
-            views from one publisher — for a single consent prompt, say —
-            rather than treating every URI as unrelated.
-        prefers_border: Rendering hint that the view looks better with the
-            host's chrome around it. A hint, not a requirement.
-    """
+    """What a host needs to know to render an interactive view."""
 
     csp: UICsp | None = None
     permissions: Sequence[UIPermission] = ()
@@ -37,7 +19,6 @@ class UIResourceMeta:
 
     def to_dict(self) -> dict[str, Any]:
         """Serialise to the extension's camelCase wire shape, omitting empties."""
-        # Serialisation boundary (rule 11) — see `UICsp.to_dict`.
         out: dict[str, Any] = {}
         if self.csp is not None:
             csp = self.csp.to_dict()
