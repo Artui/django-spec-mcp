@@ -35,13 +35,11 @@ async def test_notify_records_to_buffer_and_wraps_payload() -> None:
     queue = server.sse_broker.subscribe("s1")
     delivered = await server.notify("s1", {"hello": "world"})
     assert delivered is True
-    # The published payload is wrapped; the SSE response generator unwraps it.
     payload = await queue.get()
     assert payload == {
         "_mcp_event_id": "0000000000000001",
         "_mcp_payload": {"hello": "world"},
     }
-    # The buffer recorded the event so a future reconnect can replay it.
     out: list[tuple[str, object]] = []
     async for pair in buffer.replay("s1", "0000000000000000"):
         out.append(pair)

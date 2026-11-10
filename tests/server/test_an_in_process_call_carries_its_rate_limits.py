@@ -1,12 +1,3 @@
-"""What ``MCPServer`` puts in the context of an in-process call.
-
-``_context`` decides whether the call is charged its rate limits, which is not visible in a
-result, so it is read where the handlers read it: the ``-32005`` a spent limit answers.
-
-An in-process call has no session, so ``_call_context`` takes no ``session_id`` and its span
-carries no ``mcp.session.id``; the span and the signature are pinned below.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -67,8 +58,7 @@ def _call_span(exporter: InMemorySpanExporter) -> Any:
 
 
 def test_the_in_process_call_context_takes_no_session_id() -> None:
-    """Fails while ``_call_context`` still accepts ``session_id``: no in-process entry point
-    has one to give, so the parameter only invited a caller to invent a session."""
+    """Fails while ``_call_context`` still accepts ``session_id``."""
     server = _server()
     extra: dict[str, Any] = {"session_id": "sess-7"}
     with pytest.raises(TypeError, match="session_id"):
@@ -76,8 +66,7 @@ def test_the_in_process_call_context_takes_no_session_id() -> None:
 
 
 def test_the_server_context_takes_no_session_id() -> None:
-    """Fails while ``_context`` still accepts ``session_id``: the worker and the in-process
-    entry points never pass one, and the HTTP views build their context with their own method."""
+    """Fails while ``_context`` still accepts ``session_id``."""
     server = _server()
     extra: dict[str, Any] = {"session_id": "sess-7"}
     with pytest.raises(TypeError, match="session_id"):

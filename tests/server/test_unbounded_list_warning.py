@@ -1,19 +1,3 @@
-"""Registering an unpaginated kernel LIST selector warns (or refuses).
-
-The third member of the registration-time family, after the unguarded and the
-undescribed warnings, and the one with a production incident behind it: an
-unpaginated LIST tool serialises whatever its selector resolves to, which for a
-plain ``Model.objects.all()`` is the whole table.
-
-It warns rather than clamping because there is nowhere honest to put the truth:
-a paginated result carries ``hasNext`` / ``totalPages``, so a clamped page tells
-the model there is more, while a silently shortened unpaginated list looks
-complete to the model reading it.
-
-Asked here of kernel specs registered with ``register_tool`` and
-``register_tools``, which reach one binding builder.
-"""
-
 from __future__ import annotations
 
 import warnings
@@ -144,12 +128,7 @@ def test_require_list_pagination_allows_a_paginated_tool() -> None:
 
 
 def test_the_warning_points_at_the_registering_line_not_this_package() -> None:
-    """A warning blames the caller's file, through both registrars.
-
-    ``register_tool`` and ``register_tools`` reach the check at different
-    depths (the second through a generator), so a fixed ``stacklevel`` would
-    name a frame inside this package for one of them.
-    """
+    """A warning blames the caller's file, through both registrars."""
     registry = SpecRegistry([RegisteredSpec(name="y", spec=_list())])
     (direct,) = _unbounded(lambda: _server().register_tool(_list(), name="x", description="d"))
     (batch,) = _unbounded(

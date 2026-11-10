@@ -1,13 +1,3 @@
-"""Registering a kernel tool with no description warns (or refuses).
-
-The counterpart to the unguarded warning. Both properties are required for a
-tool to be usable by a model (something must gate the call, something must say
-what it does), and an undescribed tool otherwise ships to ``tools/list``
-indistinguishable from a documented one.
-
-Asked here of kernel specs through ``register_tool`` and ``register_tools``.
-"""
-
 from __future__ import annotations
 
 import warnings
@@ -119,12 +109,7 @@ def test_warning_can_be_filtered_by_category() -> None:
 
 
 def test_the_warning_points_at_the_registering_line_not_this_package() -> None:
-    """A warning blames the caller's file, through both registrars.
-
-    ``register_tool`` and ``register_tools`` reach the check at different
-    depths (the second through a generator), so a fixed ``stacklevel`` would
-    name a frame inside this package for one of them.
-    """
+    """A warning blames the caller's file, through both registrars."""
     registry = SpecRegistry([RegisteredSpec(name="y", spec=_service())])
     (direct,) = _undescribed(lambda: make_server().register_tool(_service(), name="x"))
     (batch,) = _undescribed(lambda: make_server().register_tools(registry))

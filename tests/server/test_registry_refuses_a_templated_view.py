@@ -1,12 +1,3 @@
-"""The registry refuses a templated view, so a ``ui=`` link meets no ambiguity through one.
-
-``register_ui_resource`` refuses a templated ``uri=`` first, but ``server.resources.register``
-takes a ``ResourceBinding`` built by hand. A binding with the view mime type and a ``{var}``
-in its URI is a view no host can ask for, so ``ResourceRegistry.register`` refuses it too.
-The ambiguity refusal on a ``ui=`` link is therefore reachable only through a *data*
-resource's template, which the last test pins.
-"""
-
 from __future__ import annotations
 
 import pytest
@@ -60,7 +51,6 @@ def test_a_hand_registered_templated_view_is_refused_at_register() -> None:
 
 def test_a_concrete_view_binding_still_registers() -> None:
     # Kills the mutant that drops the template conjunct: a view with no ``{var}``
-    # must pass, so refusing on the mime type alone fails here.
     registry = ResourceRegistry()
     binding = _binding("ui://invoices/table.html", UI_RESOURCE_MIME_TYPE)
 
@@ -71,7 +61,6 @@ def test_a_concrete_view_binding_still_registers() -> None:
 
 def test_a_templated_data_resource_still_registers() -> None:
     # Kills the mutant that drops the mime conjunct: a data resource's template
-    # (any other mime type) must pass, so refusing on the template alone fails here.
     registry = ResourceRegistry()
     binding = _binding("things://{a}-{b}", "text/plain")
 

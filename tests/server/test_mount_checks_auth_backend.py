@@ -1,12 +1,3 @@
-"""Mounting is where an auth backend becomes load-bearing, so it is checked there.
-
-A server built without ``auth_backend=`` is a supported mode -- an in-process
-server never authenticates anything -- so construction needs no backend. What is
-refused is mounting one: every request to a mounted endpoint reaches
-``authenticate``, and this package ships no backend that verifies tokens, so a
-mount with none would either answer every caller or fail on the first request.
-"""
-
 from __future__ import annotations
 
 import pytest

@@ -1,19 +1,3 @@
-"""``MCPServer.unavailable_tools`` over kernel specs, and ``list_tools(include_unavailable=True)``.
-
-The two halves of what an in-process consumer needs to keep a model's tools in
-step with ``tools/list`` without re-listing every step: every definition once,
-and then, per step, which of them a fresh listing would leave out and why.
-
-What these hold is agreement. A name is reported exactly when ``list_tools``
-omits it, with the condition that omitted it; a tool this caller may not see is
-never named; ``always_listed`` is never reported; and the async twin answers as
-the sync one does, taking no executor hop when no tool declares anything to ask.
-
-Asked of kernel specs, whose ``affordances`` are the kernel's own. The
-transport-level gate that hides a tool from the caller is ``scopes=``, the one
-listing gate a kernel binding carries.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -156,9 +140,7 @@ def test_each_left_out_tool_is_named_with_the_condition_that_left_it_out() -> No
 
 
 def test_a_name_is_reported_exactly_when_the_listing_omits_it() -> None:
-    """The two come from one pass, so they partition the tools the caller may see:
-    everything listed with ``include_unavailable`` is either in the plain listing
-    or reported here, never both and never neither."""
+    """The two come from one pass, so they partition the tools the caller may see."""
     server = _server()
     _every_kind(server)
 
@@ -171,8 +153,7 @@ def test_a_name_is_reported_exactly_when_the_listing_omits_it() -> None:
 
 
 def test_always_listed_is_never_reported() -> None:
-    """It is never left out, so there is nothing to explain; its condition is
-    still enforced at the call."""
+    """It is never left out, so there is nothing to explain."""
     server = _server()
     _register(
         server, name="reopen_books", spec=_service(_CLOSED), permissions=[], always_listed=True
@@ -205,9 +186,7 @@ def test_the_answer_is_asked_again_on_every_call() -> None:
 
 
 def test_a_tool_hidden_from_the_caller_is_never_named(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Under ``FILTER_LISTINGS_BY_PERMISSIONS`` a tool this caller may not see is not
-    named, nor is its condition asked: its reason is written for whoever may call
-    it, and naming it would tell another principal it exists."""
+    """Under ``FILTER_LISTINGS_BY_PERMISSIONS`` a tool this caller may not see is not named."""
     built = _pool_spy(monkeypatch)
     server = _server(filter_listings_by_permissions=True)
     _register(server, name="close_books", spec=_service(_CLOSED), permissions=[_DENIED])
@@ -217,8 +196,7 @@ def test_a_tool_hidden_from_the_caller_is_never_named(monkeypatch: pytest.Monkey
 
 
 def test_with_the_permission_filter_off_every_tool_is_answered() -> None:
-    """The flag is off by default, and then the listing shows the tool to anyone;
-    what it omits for an unmet condition is reported whatever its permissions."""
+    """The flag is off by default, and then the listing shows the tool to anyone."""
     server = _server()
     _register(server, name="close_books", spec=_service(_CLOSED), permissions=[_DENIED])
 
@@ -231,8 +209,7 @@ def test_with_the_permission_filter_off_every_tool_is_answered() -> None:
 def test_include_unavailable_lists_every_tool_and_asks_nothing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Nothing about this caller was asked, so the listing is as public as one
-    over tools declaring nothing."""
+    """Nothing about this caller was asked, so the listing is as public as an open one."""
     built = _pool_spy(monkeypatch)
     server = _server()
     _register(server, name="close_books", spec=_service(_CLOSED), permissions=[])
@@ -284,10 +261,7 @@ async def test_aunavailable_tools_answers_as_the_sync_method_does() -> None:
 async def test_a_server_declaring_nothing_to_ask_answers_without_a_hop(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A consumer asks on every model step, so a server with nothing to ask should
-    not cost a thread switch per step. Every tool here is one a pass skips: no
-    affordance, a row condition, a selector projecting another operation, and an
-    ``always_listed`` tool whose condition is never asked."""
+    """Consumers ask on every model step, so nothing to ask must cost no thread switch."""
     hops = _hop_spy(monkeypatch)
     server = _server()
     _register(server, name="post_entry", spec=_service(), permissions=[])
