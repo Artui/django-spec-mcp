@@ -1,27 +1,3 @@
-"""``MCPServer(pool_seeds=)`` reaches every kernel dispatch and every condition the server asks.
-
-A registered seed is what hangs off ``request`` over HTTP and has no channel off
-it: a tenant, a locale, a clock. A kernel spec reading one has to receive it
-wherever this server runs the spec, or it works when ``dispatch`` is called
-directly and fails here. So each reach is driven on its own, because each builds
-its call somewhere else:
-
-- the four transport contexts (legacy and modern era, on the sync and the async
-  view) and the in-process ``call_tool`` / ``acall_tool``;
-- a selector tool and a resource read, beside a service tool;
-- the availability check ``tools/list`` and ``unavailable_tools`` run;
-- registration, which counts a seed as the source of a reflected read and
-  refuses a URI variable a seed occupies.
-
-Asked of kernel specs registered with ``register_tool`` and ``register_resource``.
-The task-worker case is asked of a kernel tool beside the other worker
-questions, as
-``tests/tasks/test_task_lifecycle.py::test_a_task_worker_hands_the_seeds_to_the_tool_it_runs``.
-An argument is a ``Parameter`` in ``reads``, and the kernel refuses one a seed
-occupies; a kernel selector declares its reads, and a reflected one a seed fills
-is the server's. A client argument named after a seed is refused as unknown.
-"""
-
 from __future__ import annotations
 
 import json
@@ -199,11 +175,6 @@ def test_acall_tool_hands_the_seeds_to_a_service_and_a_selector() -> None:
 @pytest.mark.django_db(transaction=True)
 def test_a_client_argument_named_after_a_seed_is_refused(in_process: bool, spec: Any) -> None:
     # The kernel refuses the argument as unknown, so no client value ever
-    # competes with a seed.
-    # No validator stands in front of a selector, so this is the path where an
-    # unreserved name would be client-controlled. Whether the selector reads the
-    # seed undeclared or declares it ``reflected``, the caller's key is not one
-    # the tool takes, and ``call_tool`` and the handlers dispatch from two places.
     server = MCPServer(name="t", auth_backend=AllowAnyBackend(), pool_seeds=SEEDS)
     server.register_tool(spec, name="tenant.scope", description="d")
     arguments = {"tenant": "globex"}
@@ -269,8 +240,6 @@ def _anonymous_listing_server(resolver: Any) -> MCPServer:
 @pytest.mark.django_db(transaction=True)
 def test_the_listing_resolves_the_seeds_for_an_anonymous_caller(era: str, is_async: bool) -> None:
     # ``AllowAnyBackend`` admits an ``AnonymousUser``, and one declared
-    # condition is enough for ``tools/list`` to resolve the seeds for it: the
-    # gated tool is hidden because the resolver answered ``None``.
     server = _anonymous_listing_server(_tenant_of)
     with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=is_async)):
         result = post_in_era(era, is_async, "tools/list", {})
@@ -292,7 +261,6 @@ def test_a_resolver_that_raises_for_a_caller_fails_that_callers_listing() -> Non
 @pytest.mark.django_db
 def test_a_seed_is_the_source_of_a_reflected_read() -> None:
     # The read is required, and nothing but the seed supplies it: so the tool
-    # neither advertises it nor asks the caller for it.
     server = MCPServer(name="t", auth_backend=AllowAnyBackend(), pool_seeds=SEEDS)
     server.register_tool(_selector(reads=Parameters([_TENANT])), name="tenant.scope")
     listed: Any = server.list_tools(user=None)
@@ -316,8 +284,6 @@ def test_a_uri_template_variable_named_after_a_seed_is_refused() -> None:
 
 def test_prompts_and_completion_do_not_receive_the_seeds_yet() -> None:
     # Pins what the docs state: a prompt's render and a completer are bare
-    # callables, not specs, and are called with pools of their own. The day
-    # either receives the seeds this fails, and the docs sentence goes.
     seen: dict[str, str] = {}
 
     def complete_topic(*, value: str, tenant: str = "unset") -> list[str]:

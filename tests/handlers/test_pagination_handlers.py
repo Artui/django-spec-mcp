@@ -1,11 +1,3 @@
-"""Pagination wired through tools/list, resources/list, resources/templates/list, on kernel specs.
-
-Pages and cursor refusals, over tools and resources registered with
-``register_tool`` and ``register_resource``. A kernel resource reads one row, so
-the concrete resources here are ``RETRIEVE`` specs with no variables; the
-listing pages over bindings, not over what they read.
-"""
-
 from __future__ import annotations
 
 from typing import Any

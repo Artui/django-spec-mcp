@@ -1,11 +1,3 @@
-"""The ``subscriptions/listen`` stream itself.
-
-Driven through the generator rather than the Django response wrapper, for the
-reason the progress-stream tests do the same: ``StreamingHttpResponse`` does not
-forward ``aclose()`` to the underlying generator, so the disconnect path is
-unreachable through it.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -45,8 +37,7 @@ def _open(broker: Any, topics: set[str], granted: SubscriptionFilter, **kw: Any)
 
 
 async def test_the_acknowledgement_is_the_first_frame() -> None:
-    """Normative: no notification may precede it, so it is emitted before the
-    queue is read at all — there is no window for an event to overtake it."""
+    """Normative: no notification may precede it, so it is emitted before the queue is read."""
     broker = InMemorySubscriptionBroker()
     gen = _open(broker, {"resource:a"}, SubscriptionFilter(resource_uris=("a",)))
     first = _frame(await anext(gen))
@@ -63,8 +54,7 @@ async def test_the_acknowledgement_carries_the_subscription_id() -> None:
 
 
 async def test_the_acknowledgement_reports_the_granted_set_not_the_requested_one() -> None:
-    """A client that asked for something this server cannot produce learns on
-    the first frame, instead of waiting for an event that will never come."""
+    """A client that asked for something this server cannot produce learns on the first frame."""
     broker = InMemorySubscriptionBroker()
     gen = _open(broker, {"t"}, SubscriptionFilter())
     assert _frame(await anext(gen))["params"]["notifications"] == {}
@@ -99,8 +89,7 @@ async def test_a_published_notification_reaches_the_stream() -> None:
 async def test_every_notification_carries_the_subscription_id(
     params: dict[str, Any], expected: int
 ) -> None:
-    """Stamped by the stream, not the publisher — the same event goes to every
-    subscription watching that URI and each needs its own id."""
+    """Stamped by the stream, not the publisher, since each subscription needs its own id."""
     broker = InMemorySubscriptionBroker()
     gen = _open(broker, {"resource:a"}, SubscriptionFilter(resource_uris=("a",)), request_id=42)
     await anext(gen)
@@ -132,9 +121,7 @@ async def test_a_non_dict_payload_passes_through_untouched() -> None:
 
 
 async def test_a_quiet_subscription_is_kept_alive() -> None:
-    """A subscription can legitimately be silent for hours, and proxies drop
-    idle connections. The comment frame holds it open without inventing a
-    notification the client did not ask for."""
+    """A subscription can legitimately be silent for hours, and proxies drop idle connections."""
     broker = InMemorySubscriptionBroker()
     gen = _open(broker, {"t"}, SubscriptionFilter(), keepalive=0.01)
     await anext(gen)
@@ -143,9 +130,7 @@ async def test_a_quiet_subscription_is_kept_alive() -> None:
 
 
 async def test_a_stream_keeps_serving_notifications_after_a_quiet_spell() -> None:
-    """The loop has to come back round. A subscription that went idle and then
-    stopped delivering would be the worst failure this feature has — silent, and
-    indistinguishable from nothing having changed."""
+    """The loop has to come back round."""
     broker = InMemorySubscriptionBroker()
     gen = _open(broker, {"t"}, SubscriptionFilter(), keepalive=0.01)
     await anext(gen)
@@ -156,9 +141,7 @@ async def test_a_stream_keeps_serving_notifications_after_a_quiet_spell() -> Non
 
 
 async def test_the_broker_is_released_when_the_client_leaves() -> None:
-    """Otherwise the broker holds a queue nobody reads — and, for the Redis
-    broker, a listener task and its channel subscriptions — for the life of the
-    process."""
+    """Otherwise the broker holds a queue nobody reads — and, for the Redis broker."""
     broker = InMemorySubscriptionBroker()
     gen = _open(broker, {"t"}, SubscriptionFilter())
     await anext(gen)
@@ -175,9 +158,7 @@ async def test_the_stream_is_released_even_if_it_never_yielded() -> None:
 
 
 async def test_the_response_carries_the_headers_a_stream_needs() -> None:
-    """Without ``X-Accel-Buffering`` nginx buffers the whole response and
-    flushes on close — which, for a stream that never ends, means the client
-    receives nothing at all."""
+    """Without ``X-Accel-Buffering`` nginx buffers the whole response and flushes on close."""
     response = build_subscription_stream(
         broker=InMemorySubscriptionBroker(),
         topics=frozenset({"t"}),
@@ -192,16 +173,14 @@ async def test_the_response_carries_the_headers_a_stream_needs() -> None:
 
 
 async def test_the_closing_result_names_the_subscription() -> None:
-    """Sent only on a deliberate teardown — an abrupt disconnect leaves nobody
-    to read a response, which is the spec's own rule."""
+    """Sent only on a deliberate teardown; an abrupt disconnect leaves nobody to read it."""
     body = subscription_closed_response("sub-9")
     assert body["id"] == "sub-9"
     assert body["result"]["_meta"][SUBSCRIPTION_ID_META_KEY] == "sub-9"
 
 
 async def test_a_subscription_only_hears_the_topics_it_named() -> None:
-    """The MUST NOT at the heart of the feature: opt-in is enforced by what the
-    stream attaches to, not by filtering on the way out."""
+    """The MUST NOT at the heart of the feature: opt-in is enforced at attach time."""
     broker = InMemorySubscriptionBroker()
     gen = _open(broker, {"resource:a"}, SubscriptionFilter(resource_uris=("a",)), keepalive=0.01)
     await anext(gen)
@@ -225,8 +204,7 @@ async def test_kinds_render_deterministically_in_the_acknowledgement() -> None:
 
 
 async def test_concurrent_publishes_do_not_disturb_an_unwinding_subscriber() -> None:
-    """A subscriber's ``finally`` can run while another request is mid-publish;
-    iterating the live set would raise into whichever request that was."""
+    """A subscriber's ``finally`` can run while another request is mid-publish."""
     broker = InMemorySubscriptionBroker()
     queues = [await broker.subscribe(frozenset({"t"})) for _ in range(3)]
     broker.unsubscribe(queues[1])

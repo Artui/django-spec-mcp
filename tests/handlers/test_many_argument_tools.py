@@ -1,20 +1,3 @@
-"""A kernel ``many=True`` service tool: its list travels under ``spec.many_argument``.
-
-MCP ``arguments`` is always a JSON object, so the list a bulk service validates
-cannot be the arguments themselves. A kernel ``ServiceSpec`` declaring
-``many=True`` names the one argument carrying it, ``items`` unless
-``many_argument`` says otherwise, and ``dispatch`` reads the list out of it,
-refuses anything sent beside it under ``REJECT``, and keys every refusal under
-it with item refusals at their indexes. These tests hold each route to that,
-the listing to advertising what dispatch enforces, and the wire to carrying
-the index a client needs to find the item it sent.
-
-A kernel spec's arguments are its parameters, and its ``unknown_arguments``
-decides what sits beside the list: an argument beside it is refused under
-``REJECT`` and dropped under ``IGNORE``, and the top level of the schema is
-closed exactly when it is refused.
-"""
-
 from __future__ import annotations
 
 import json
@@ -108,10 +91,7 @@ def _call_over_http(server: MCPServer, arguments: dict[str, Any]) -> Any:
 
 
 def _resolve(detail: dict[str, Any], sent: dict[str, Any]) -> dict[str, Any]:
-    """Walk every item refusal back into the arguments it names, as a client would.
-
-    JSON object keys are strings, so an index arrives as ``"1"`` and a client turns
-    it back into the position in the array it sent."""
+    """Walk every item refusal back into the arguments it names, as a client would."""
     return {
         f"{argument}[{index}].{field}": sent[argument][int(index)][field]
         for argument, by_index in detail.items()
@@ -159,9 +139,7 @@ def test_a_declared_argument_name_carries_the_list() -> None:
 def test_an_argument_beside_the_list_follows_the_unknown_arguments_policy(
     policy: UnknownArguments, refused: bool
 ) -> None:
-    """Refused under ``REJECT`` and dropped under ``IGNORE``, where the service is
-    handed the list alone; the schema's top level is closed exactly when it is
-    refused."""
+    """Refused under ``REJECT`` and dropped under ``IGNORE``."""
     ran: list[Any] = []
 
     def _record(*, data: list[_Line]) -> list[_Line]:
@@ -194,9 +172,7 @@ def test_a_missing_list_is_refused_under_the_argument() -> None:
 
 
 def test_an_invalid_item_is_served_at_its_index() -> None:
-    """Read off the HTTP response rather than the handler's return value: the
-    detail carries ``int`` keys until the encoder turns them into strings, and the
-    echoed value is only useful if that path resolves into it."""
+    """Read off the HTTP response rather than the handler's return value."""
     arguments = {"items": [_ROW, {**_OTHER, "amount_cents": "lots"}]}
     server = _server(config=build_mcp_config(include_validation_value=True))
 
@@ -209,13 +185,11 @@ def test_an_invalid_item_is_served_at_its_index() -> None:
 
 def _refuse_second(*, data: list[_Line]) -> None:
     # A bulk service naming the row it refuses in the shape dispatch gives item
-    # refusals, which is the natural thing for one to raise.
     raise ServiceValidationError({"items": {1: {"number": ["Already issued."]}}})
 
 
 def test_a_service_refusing_an_item_by_index_is_served_as_a_tool_error() -> None:
-    """The ``isError`` text is encoded with sorted keys, which an ``int`` key must
-    survive, and the index must resolve into the echoed arguments there too."""
+    """The ``isError`` text is encoded with sorted keys, which an ``int`` key must survive."""
     arguments = {"items": [_ROW, _OTHER]}
     server = _server(
         _spec(service=_refuse_second, presenter=None),
@@ -246,9 +220,7 @@ def test_each_item_is_closed_exactly_when_dispatch_refuses_an_unknown_key(
 
 
 def test_arguments_that_dispatch_accepts_conform_to_the_advertised_schema() -> None:
-    """The schema checked against a real validator in both directions: a call that
-    succeeds conforms, and an argument beside the list, which dispatch refuses, does
-    not."""
+    """The schema checked against a real validator in both directions."""
     schema = _schema(_server())
 
     jsonschema.validate({"items": [_ROW]}, schema)
@@ -257,9 +229,7 @@ def test_arguments_that_dispatch_accepts_conform_to_the_advertised_schema() -> N
 
 
 def test_the_served_list_conforms_to_the_advertised_output_schema() -> None:
-    """Read off the wire: ``structuredContent`` is the rows under ``items``, as for
-    every list result this server serves, and the text block encodes the same
-    object."""
+    """Read off the wire: ``structuredContent`` is the rows under ``items``."""
     server = _server(include_output_schema=True)
 
     listed: Any = _post(server, "tools/list", {})["result"]

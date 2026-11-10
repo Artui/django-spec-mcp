@@ -1,10 +1,3 @@
-"""``subscriptions/listen`` over the real transport.
-
-Asked here of kernel resources, mounted by ``kernel_urls.py``: ``gated``'s own
-spec permission refuses the caller, so dropping it from the first frame is the
-kernel read's gate answering the watch.
-"""
-
 from __future__ import annotations
 
 import json
@@ -103,8 +96,6 @@ async def test_a_notification_published_elsewhere_arrives_on_the_stream() -> Non
     [
         # Strange, but exactly what was asked for: every type is opt-in.
         pytest.param({}, id="asking-for-nothing"),
-        # The acknowledgement is the channel for "you will not get this", so a
-        # junk filter opens an honest, empty subscription rather than erroring.
         pytest.param("nonsense", id="a-malformed-filter"),
     ],
 )
@@ -115,13 +106,7 @@ async def test_an_empty_or_malformed_filter_is_acknowledged_and_silent(notificat
 
 
 async def test_a_legacy_client_gets_unknown_method_rather_than_a_stream() -> None:
-    """``subscriptions/listen`` exists to *replace* the legacy GET stream, so a
-    legacy caller has no way to interpret one.
-
-    Answered ``-32601`` inside a ``200``, which is ordinary JSON-RPC — the
-    ``404``-for-unknown-method rule belongs to the modern era, where it is what
-    lets a client tell an MCP endpoint from a server that hosts none.
-    """
+    """``subscriptions/listen`` exists to *replace* the legacy GET stream."""
     response = await AsyncClient().post(
         "/mcp/",
         data=json.dumps(
@@ -169,8 +154,7 @@ async def test_a_server_with_no_broker_says_so_on_the_first_frame() -> None:
 
 
 async def test_an_ordinary_request_is_unaffected() -> None:
-    """The subscription branch must not swallow anything else on the modern
-    path."""
+    """The subscription branch must not swallow anything else on the modern path."""
     response = await AsyncClient().post(
         "/mcp/",
         data=json.dumps(
@@ -194,8 +178,7 @@ async def test_an_ordinary_request_is_unaffected() -> None:
 
 
 async def test_a_grant_of_nothing_closes_instead_of_holding_a_worker() -> None:
-    """Otherwise the stream keeps an ASGI worker parked forever, emitting
-    keepalives it can never follow with anything."""
+    """Otherwise the stream keeps an ASGI worker parked forever."""
     response = await _listen(
         AsyncClient(), {"notifications": {"resourceSubscriptions": ["gated://1"]}}
     )
@@ -203,7 +186,6 @@ async def test_a_grant_of_nothing_closes_instead_of_holding_a_worker() -> None:
     assert len(frames) == 2
     assert frames[0]["method"] == "notifications/subscriptions/acknowledged"
     assert frames[0]["params"]["notifications"] == {}
-    # The closing result, so the client knows it is over rather than idle.
     assert frames[1]["result"]["_meta"][SUBSCRIPTION_ID_META_KEY] == 1
 
 
@@ -220,11 +202,7 @@ async def test_the_brokerless_stream_ends_too() -> None:
 
 
 async def test_a_capped_server_refuses_a_further_subscription() -> None:
-    """Each open subscription parks a worker, so past the cap a clear error
-    beats a server that stops answering anything."""
-    # ``REQUIRE_TOOL_PERMISSIONS`` is carried through because replacing the dict
-    # drops the suite-wide opt-out, and the resource registered below is a
-    # throwaway; the subject here is the subscription cap.
+    """Each open subscription parks a worker, so past the cap a clear error beats a hang."""
     with override_settings(
         SPEC_MCP={"MAX_CONCURRENT_SUBSCRIPTIONS": 0, "REQUIRE_TOOL_PERMISSIONS": False}
     ):
@@ -252,8 +230,7 @@ async def test_a_capped_server_refuses_a_further_subscription() -> None:
 
 
 async def test_a_capped_stream_closes_itself_and_forces_resubscription() -> None:
-    """Permissions are checked once, at open. The cap is what stops a revoked
-    principal receiving change signals indefinitely."""
+    """Permissions are checked once, at open."""
     from django_spec_mcp.subscriptions.in_memory_subscription_broker import (
         InMemorySubscriptionBroker,
     )
@@ -275,8 +252,7 @@ async def test_a_capped_stream_closes_itself_and_forces_resubscription() -> None
 
 
 async def test_the_capability_advertises_what_the_broker_makes_real() -> None:
-    """Without this the feature was undiscoverable — a client had to try
-    ``subscriptions/listen`` and read the grant."""
+    """Without it, the feature is undiscoverable except by trying the method."""
     response = await AsyncClient().post(
         "/mcp/",
         data=json.dumps(

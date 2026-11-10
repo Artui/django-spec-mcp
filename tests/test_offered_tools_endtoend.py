@@ -1,13 +1,3 @@
-"""An unavailable kernel tool, on the wire: left out of ``tools/list``, refused by ``tools/call``.
-
-Through the real URL conf, in both eras and on both transports, because the two
-transports are parallel implementations and the async one reaches the list
-handler through an executor hop the sync one does not make.
-
-Asked of kernel service specs declaring an ``Affordance``, registered with
-``register_tool``. The refusal is the kernel's ``ServiceError``.
-"""
-
 from __future__ import annotations
 
 import json
@@ -86,7 +76,6 @@ class _Wire:
             headers=headers,
         )
         # The async client hands back a coroutine; awaiting it on a private loop
-        # keeps one test body for both transports.
         return async_to_sync(_awaited)(response) if self.is_async else response
 
     def open(self) -> None:

@@ -1,16 +1,3 @@
-"""``SESSIONS_ENABLED=False`` — the legacy era served without session state.
-
-A conformant mode, not a relaxation: both legacy revisions say a server **MAY**
-assign a session ID at initialization, and make the client's duty to echo one
-conditional on it having arrived. A server that never assigns is never sent one.
-
-Why it exists: a session is state, and state expires, gets evicted, and dies
-with a deploy. Every one of those reaches the client as a ``404`` whose remedy
-is to re-``initialize`` — which not every client does, turning a recoverable
-condition into an outage. This removes the failure class server-side, for every
-client, without waiting on one to implement the remedy.
-"""
-
 from __future__ import annotations
 
 import json
@@ -112,11 +99,7 @@ async def test_a_call_with_no_session_id_succeeds_when_disabled(is_async: bool) 
 
 
 def test_a_stale_session_id_is_ignored_rather_than_rejected() -> None:
-    """A client still echoing an id from before the switch keeps working.
-
-    Without this, turning sessions off would itself cause the outage it exists
-    to prevent — every client holding an id would 404 until it re-initialized.
-    """
+    """A client still echoing an id from before the switch keeps working."""
     response = _view(sessions=False)(_post_request("ping", session_id="from-a-past-life"))
     assert response.status_code == 200
 
@@ -132,8 +115,7 @@ async def test_sse_get_is_405_when_disabled() -> None:
 
 @pytest.mark.parametrize("is_async", [False, True])
 async def test_delete_is_405_when_disabled(is_async: bool) -> None:
-    """ "The server MAY respond … with 405 … does not allow clients to terminate
-    sessions" — true by construction when there are none."""
+    """The spec's 405 is true by construction when there are no sessions to end."""
     request = factory.delete("/mcp/", headers={"X-Principal": "alice"})
     view = _view(sessions=False, is_async=is_async)
     response = await view(request) if is_async else view(request)
@@ -165,8 +147,6 @@ async def test_modern_era_is_sessionless_regardless_of_the_setting() -> None:
             headers={
                 "X-Principal": "alice",
                 "Mcp-Protocol-Version": "2026-07-28",
-                # The modern era mirrors the method in a header for gateway
-                # routing; ``validate_modern_request`` requires it to agree.
                 "Mcp-Method": "ping",
             },
         )
@@ -178,12 +158,7 @@ async def test_modern_era_is_sessionless_regardless_of_the_setting() -> None:
 
 
 def test_a_missing_session_is_labelled_in_a_header() -> None:
-    """The body says why; the header says why to a client that only logs status.
-
-    HTTP/2 has no reason phrase, so ``${status} ${statusText}`` — what clients
-    commonly log — is empty, and without the header a dead session reads
-    exactly like a load balancer's 404.
-    """
+    """The body says why; the header says why to a client that only logs status."""
     response = _view(sessions=True)(_post_request("ping"))
     assert response.status_code == 400
     assert response["MCP-Error"] == "session-missing"
@@ -196,11 +171,7 @@ def test_an_unknown_session_is_labelled_distinctly() -> None:
 
 
 def test_the_header_does_not_distinguish_unknown_from_wrong_principal() -> None:
-    """The no-ownership-oracle property survives the added diagnosability.
-
-    A caller must not be able to learn that an id it guessed is real but owned
-    by someone else, so both render the same status *and* the same slug.
-    """
+    """The no-ownership-oracle property survives the added diagnosability."""
     view = _view(sessions=True)
     minted = view(_post_request("initialize"))[_SESSION_HEADER]
     payload = {"jsonrpc": "2.0", "id": 1, "method": "ping"}

@@ -1,15 +1,3 @@
-"""A kernel service tool's arguments are its parameters, at the top level.
-
-The kernel spreads a service's input: a Validator's fields are the tool's arguments, and
-the service receives each validated value as its own keyword. There is no
-``argument_binding`` to choose, so a service never bundles its input under ``data``: one
-spec has one schema on every transport. The schema lists every parameter, less what the
-server fills whatever the caller sends, and does not require one a provider may fill.
-
-Every test reads what a client is served, through ``MCPServer.list_tools`` and
-the call routes.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -75,8 +63,6 @@ def _register(server: MCPServer, **declared: Any) -> None:
 
 def test_a_service_lists_its_validators_fields_at_the_top_level() -> None:
     # Not bundled under ``data``. A field without a default is required,
-    # because nothing but the caller fills it, and the schema is closed, as the
-    # call's argument set is.
     server = make_server()
     _register(server)
 
@@ -89,11 +75,6 @@ def test_a_service_lists_its_validators_fields_at_the_top_level() -> None:
 
 def test_a_field_named_like_a_registered_seed_is_still_the_callers() -> None:
     # A registered seed's name is not subtracted from a spread service's parameters. A
-    # Validator field of that name is the caller's to send: dispatch validates it, and
-    # the seed fills only the service's keyword (``server_owned_keys``). Asked of the
-    # builder with the seeds handed in, since the listing does not pass the server's yet
-    # (``test_kernel_tool_input_schema.py``); the reflected read of the same name is the
-    # control that shows they reached it.
     seeds = DEFAULT_POOL_SEEDS.extend(tenant=lambda: 1)
     server = make_server()
     _register(
@@ -134,21 +115,18 @@ def _declining_input_data() -> _MaybeTenantScope:
     ("provider", "properties", "required"),
     [
         # Merged over the caller's arguments before the Validator runs, so a
-        # field it always fills holds the provider's value whatever is sent.
         pytest.param(
             _typed_input_data,
             {"ticket", "resolution", "note"},
             {"ticket", "resolution"},
             id="typed",
         ),
-        # One that may decline ``tenant`` leaves the caller to send it or not.
         pytest.param(
             _declining_input_data,
             {"ticket", "resolution", "tenant", "note"},
             {"ticket", "resolution"},
             id="declinable",
         ),
-        # An untyped one may fill any field and fills none for certain.
         pytest.param(
             lambda: {"tenant": 1},
             {"ticket", "resolution", "tenant", "note"},
@@ -175,7 +153,6 @@ def _close_by_tenant(*, tenant: int, ticket: int) -> None:
 
 def test_a_service_without_a_validator_relaxes_its_reads_alone() -> None:
     # A service may declare its arguments as ``reads`` and no Validator; a
-    # provider beside them relaxes them, and there is no Validator seat to read.
     server = make_server()
     server.register_tool(
         ServiceSpec(
@@ -277,6 +254,5 @@ async def test_a_provider_filled_field_is_not_offered_because_the_callers_value_
     out = await _served(server, route, {"reason": "caller"})
 
     # ``REJECT`` still admits the name, since the spec declares it; the
-    # provider's value is the one served.
     assert "reason" not in listed["tools"][0]["inputSchema"]["properties"]
     assert out == {"reason": "provider"}

@@ -1,10 +1,3 @@
-"""The cross-process broker, against ``fakeredis``.
-
-The one that actually works past a single worker — and therefore the one whose
-behaviour matters most, since the in-memory sibling silently delivers nothing in
-exactly the deployment people reach for subscriptions in.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -23,11 +16,7 @@ def _client() -> FakeAsyncRedis:
 
 
 async def _await_subscriber(client: Any, channel: str, *, timeout: float = 1.0) -> None:
-    """Wait until the listener task has actually subscribed.
-
-    ``subscribe`` returns immediately — the Redis subscription happens inside a
-    background task — so a test that published straight away would race it.
-    """
+    """Wait until the listener task has actually subscribed."""
     deadline: float = asyncio.get_running_loop().time() + timeout
     while True:
         for ch, count in await client.pubsub_numsub(channel):
@@ -44,9 +33,7 @@ async def _drain(queue: asyncio.Queue[Any], *, timeout: float = 1.0) -> Any:
 
 
 async def test_a_publish_from_another_worker_reaches_the_subscriber() -> None:
-    """The whole reason this class exists: the write lands on one process and
-    the stream is parked on another."""
-    # Two clients on one fake server — the stand-in for two ASGI workers.
+    """The write lands on one process and the stream is parked on another."""
     shared = FakeServer()
     listener, publisher_client = FakeAsyncRedis(server=shared), FakeAsyncRedis(server=shared)
     broker = RedisSubscriptionBroker(listener)
@@ -63,8 +50,7 @@ async def test_a_publish_from_another_worker_reaches_the_subscriber() -> None:
 
 
 async def test_one_subscription_listens_to_all_of_its_topics_at_once() -> None:
-    """One listener task per *subscription*, not per topic — the task count is
-    bounded by connections rather than by how many things each one watches."""
+    """One listener task per *subscription*, not per topic."""
     client = _client()
     broker = RedisSubscriptionBroker(client)
     queue = await broker.subscribe(frozenset({"a", "b"}))
@@ -88,8 +74,7 @@ async def test_publishing_to_a_topic_nobody_watches_reports_zero() -> None:
 
 
 async def test_unsubscribing_cancels_the_listener() -> None:
-    """Without this the task and its channel subscriptions outlive the
-    connection, for the life of the process."""
+    """Without this the task and its channel subscriptions outlive the connection."""
     client = _client()
     broker = RedisSubscriptionBroker(client)
     queue = await broker.subscribe(frozenset({"a"}))
@@ -110,8 +95,7 @@ async def test_unsubscribing_twice_is_a_no_op() -> None:
 
 
 async def test_a_subscription_naming_no_topics_starts_no_listener() -> None:
-    """An empty filter is legal if odd; the acknowledgement is where the client
-    learns it will hear nothing."""
+    """An empty filter is legal but odd; the acknowledgement tells the client it hears nothing."""
     client = _client()
     broker = RedisSubscriptionBroker(client)
     queue = await broker.subscribe(frozenset())
@@ -132,8 +116,7 @@ async def test_the_channel_prefix_is_configurable() -> None:
 
 
 async def test_subscribe_acknowledgement_frames_are_not_delivered_as_payloads() -> None:
-    """Redis emits a ``subscribe`` control frame on the same stream; forwarding
-    it would put a message on the wire the client never asked for."""
+    """Redis emits a ``subscribe`` control frame on the same stream."""
     client = _client()
     broker = RedisSubscriptionBroker(client)
     queue = await broker.subscribe(frozenset({"a"}))
@@ -145,8 +128,7 @@ async def test_subscribe_acknowledgement_frames_are_not_delivered_as_payloads() 
 
 
 async def test_constructing_without_the_extra_is_a_clear_error(monkeypatch: Any) -> None:
-    """``redis`` is optional, so importing the module must work without it and
-    only construction may fail."""
+    """redis is optional, so importing the module must work without it."""
     import django_spec_mcp.subscriptions.redis_subscription_broker as module
 
     monkeypatch.setattr(module, "AsyncRedis", None)
@@ -155,16 +137,12 @@ async def test_constructing_without_the_extra_is_a_clear_error(monkeypatch: Any)
 
 
 async def test_subscribe_returns_only_once_the_channels_are_live() -> None:
-    """The race this closes: registering in a background task would let the
-    caller emit "you are subscribed" while publishes were still going nowhere
-    — in exactly the multi-process deployment this class exists for, where the
-    publisher is another process and waits for nobody."""
+    """Registering in a background task would ack before publishes could reach the stream."""
     shared = FakeServer()
     listener, publisher = FakeAsyncRedis(server=shared), FakeAsyncRedis(server=shared)
     broker = RedisSubscriptionBroker(listener)
     queue = await broker.subscribe(frozenset({"a"}))
 
-    # No polling helper, no sleep: the await is the guarantee.
     assert await RedisSubscriptionBroker(publisher).publish("a", {"n": 1}) >= 1
     assert await _drain(queue) == {"n": 1}
 
@@ -174,9 +152,7 @@ async def test_subscribe_returns_only_once_the_channels_are_live() -> None:
 
 
 async def test_the_channels_are_given_back_when_a_subscription_unwinds() -> None:
-    """Observable now that the release is a real coroutine rather than a
-    suppressed block in a cancelled task's ``finally`` — a wrong method name
-    would have leaked the channel silently."""
+    """Observable now that release is a real coroutine, not a suppressed block in a finally."""
     client = _client()
     broker = RedisSubscriptionBroker(client)
     queue = await broker.subscribe(frozenset({"a"}))
@@ -192,9 +168,7 @@ async def test_the_channels_are_given_back_when_a_subscription_unwinds() -> None
 
 
 async def test_active_subscriptions_counts_this_workers_streams() -> None:
-    """What ``MAX_CONCURRENT_SUBSCRIPTIONS`` bounds. Per process by design — a
-    cluster-wide count would cost a round trip on every subscribe to bound
-    something that is already a per-worker resource."""
+    """What ``MAX_CONCURRENT_SUBSCRIPTIONS`` bounds."""
     client = _client()
     broker = RedisSubscriptionBroker(client)
     assert broker.active_subscriptions == 0
@@ -208,14 +182,7 @@ async def test_active_subscriptions_counts_this_workers_streams() -> None:
 
 
 async def test_two_servers_on_one_redis_do_not_share_a_topic_space() -> None:
-    """Topic names are built from caller-supplied values — a notification kind,
-    a resource URI — so two servers that register the same ``SelectorSpec``
-    under the same URI derive the *same* topic. On a shared default prefix a
-    subscriber authorized on the public server then receives the internal
-    server's change signals, learning the change cadence of a resource it was
-    never granted, past the ``resources/read`` check ``grant_subscription``
-    gates subscriptions on. The cache-backed stores fold the server name into
-    their key prefix for exactly this reason."""
+    """Topic names are built from caller-supplied values — a notification kind, a resource URI."""
     shared = FakeServer()
     public = RedisSubscriptionBroker(FakeAsyncRedis(server=shared), namespace="public")
     internal = RedisSubscriptionBroker(FakeAsyncRedis(server=shared), namespace="internal")
@@ -225,11 +192,9 @@ async def test_two_servers_on_one_redis_do_not_share_a_topic_space() -> None:
         public._client,  # noqa: SLF001
         public._channel("resource:invoices://1"),  # noqa: SLF001
     )
-    # The other server publishes the identical topic name.
     assert await internal.publish("resource:invoices://1", {"n": 1}) == 0
     assert queue.empty()
 
-    # ...and the same server still reaches its own subscriber.
     assert await public.publish("resource:invoices://1", {"n": 2}) == 1
     assert await _drain(queue) == {"n": 2}
 

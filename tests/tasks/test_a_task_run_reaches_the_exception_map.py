@@ -1,10 +1,3 @@
-"""A task's worker answers a mapped exception as an inline call does.
-
-The worker has no view: its context is rebuilt from the server, off the request path,
-so a map carried only by the view would leave a task's mapped exception to be recorded
-as the run's crash.
-"""
-
 from __future__ import annotations
 
 from dataclasses import replace
@@ -56,8 +49,7 @@ def _run(store: InMemoryTaskStore, executor: RecordingExecutor, handler: Any) ->
 def test_a_mapped_error_answer_is_a_completed_task_carrying_the_handler_s_result(
     store: InMemoryTaskStore, executor: RecordingExecutor
 ) -> None:
-    """Completed, as a service's ``ServiceError`` is: the run delivered a tool result
-    saying the call failed, and ``tasks/result`` hands that result over."""
+    """Completed, as a service's ``ServiceError`` is: the result says the call failed."""
 
     def gone(exc: Exception) -> ToolResult:
         return build_error_tool_result(str(exc), error_type="tenant_gone")
@@ -88,8 +80,7 @@ class _RaisingCheck(PermissionCheck):
 def test_a_check_raising_a_mapped_exception_is_answered_by_the_task_s_run(
     store: InMemoryTaskStore, executor: RecordingExecutor
 ) -> None:
-    """Admission leaves it to the call, as an inline call's does: creating the task does
-    not raise, and the run the task was created for is what answers."""
+    """Admission leaves it to the call, as an inline call's does."""
 
     def gone(exc: Exception) -> ToolResult:
         return build_error_tool_result(str(exc), error_type="tenant_gone")
@@ -107,7 +98,6 @@ def test_a_check_raising_a_mapped_exception_is_answered_by_the_task_s_run(
         description="d",
         task_policy=TaskPolicy.OPTIONAL,
     )
-    # The fixture's context leaves the server's map out; the worker's carries it.
     asked = replace(context(server), exception_map=server._exception_map)
     handle: Any = handle_tools_call({"name": "orders.place", "arguments": {}}, asked)
     assert handle["resultType"] == "task", handle

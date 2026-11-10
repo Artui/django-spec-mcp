@@ -1,21 +1,3 @@
-"""A kernel spec this server refuses on every listing or call is refused when registered.
-
-A presenter whose markings cannot be projected, two fields marked as the
-record's label say, is refused by the kernel as the projection is derived, and
-the listing derives it for every tool: such a tool registered, and then
-``tools/list`` raised for every tool on the server and each call failed.
-Registration derives the projection, so the refusal names the tool at startup.
-
-A kernel spec is checked as it is constructed, so most of what could go wrong with it
-(an output selector declaring ``preconditions``, a ``reads`` entry the dispatcher seeds,
-such as ``user``) never reaches a registrar. What depends on the server is checked at
-registration: a read named after a seed this server's calls carry, the call's own
-``request`` and ``view`` or a seed registered on ``pool_seeds=``, which the kernel's
-``dispatch`` refuses on every call. Registration asks the kernel's ``check_seeds`` with
-the server's seeds, so the refusal names the tool at startup, in the words dispatch
-would refuse it in.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass

@@ -1,13 +1,3 @@
-"""A server's ``conventions=`` reaches the wire through both views, in both eras.
-
-Over HTTP the handlers never see the server: each view builds the request's
-context from what ``MCPServer`` handed ``as_view``, once per view, and each
-protocol era reaches that build by its own path. A convention dropped on any of
-those four routes leaves it speaking the defaults while ``call_tool`` and
-``list_tools`` speak the server's, which is why each view is driven here in both
-eras rather than once.
-"""
-
 from __future__ import annotations
 
 import json

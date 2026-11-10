@@ -1,5 +1,3 @@
-"""An async read of a view touches the ORM off the event loop."""
-
 from __future__ import annotations
 
 from typing import Any
@@ -22,8 +20,7 @@ def _usernames(**_: Any) -> Any:
 
 @pytest.mark.django_db(transaction=True)
 async def test_an_async_view_read_of_a_lazy_queryset_encodes_off_the_loop() -> None:
-    """A view hands its selector's queryset on unevaluated, so the encoder is
-    what queries; on the loop that raised ``SynchronousOnlyOperation``."""
+    """A view hands its selector's queryset on unevaluated, so the encoder is what queries."""
     await get_user_model().objects.acreate(username="u1")
     server = MCPServer(
         name="t", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore()
@@ -41,5 +38,4 @@ async def test_an_async_view_read_of_a_lazy_queryset_encodes_off_the_loop() -> N
 
     out: Any = await handle_resources_read_async({"uri": "r://users"}, context)
 
-    # Encoded as its text, which evaluating the queryset is what produces.
     assert "'username': 'u1'" in out["contents"][0]["text"]

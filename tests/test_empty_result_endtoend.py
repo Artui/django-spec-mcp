@@ -1,25 +1,3 @@
-"""A kernel tool's result with nothing to present conforms to MCP and to the advertised schema.
-
-MCP requires ``structuredContent`` to be an object, and a server advertising an
-``outputSchema`` MUST return structured content that conforms to it. Three
-kernel declarations may present nothing: a selector tool's ``allow_none``
-RETRIEVE that finds no row, a service tool whose output re-read selector finds
-none, and a service declaring ``allow_none=True``. One rule covers them: the
-result is served as ``{}``, and the ``outputSchema`` of a tool that can present
-nothing admits ``{}`` beside a full row. Every other tool keeps a strict
-``required``, because loosening it turns every row field optional for a client
-generating types from the schema.
-
-Each entry point is driven, because each answers on its own path: the sync wire
-handler, the async one, and the in-process ``call_tool``. The HTTP views are
-driven as well, sync and async in both eras, because what a client validates is
-the schema and the result read off the wire. ``tests/schema/`` asks the schema of
-every declaration; this asks what each route serves against it.
-
-The tools are kernel specs presenting through ``InvoiceOutput``: a kernel
-service presents its own return through its ``presenter``.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -138,8 +116,6 @@ def _server(session_store: Any = None) -> MCPServer:
     server.register_tool(
         _archiving(_void, presenter=INVOICE), name="invoices.void", description="d"
     )
-    # The remedy for the limit below: a re-read handing the service's return
-    # straight back, which makes the schema admit ``{}``.
     passthrough = SelectorSpec(
         kind=SelectorKind.RETRIEVE, selector=lambda *, result: result, presenter=INVOICE
     )
@@ -148,15 +124,11 @@ def _server(session_store: Any = None) -> MCPServer:
         name="invoices.void_reread",
         description="d",
     )
-    # The declaration for the same case: ``allow_none=True`` says the service
-    # may present nothing, so its schema admits ``{}`` with no re-read to lean on.
     server.register_tool(
         ServiceSpec(service=_touch_tasks, allow_none=True, presenter=INVOICE, permissions=OPEN),
         name="tasks.touch",
         description="d",
     )
-    # django-ag-ui's typed bridge fixture, reproduced: its code-mode stub reads
-    # this schema as the tool's return type.
     server.register_tool(
         ServiceSpec(
             service=_add,
@@ -210,7 +182,6 @@ _ENTRY_POINTS = pytest.mark.parametrize(
 def _assert_empty_and_conforming(tool: dict[str, Any], result: dict[str, Any]) -> None:
     assert not result.get("isError")
     # MCP: structured content is an object, and the text block carries the
-    # same JSON.
     assert result["structuredContent"] == {}
     assert result["content"][0]["text"] == "{}"
     assert_tool_result_conforms(tool, result)
@@ -251,7 +222,6 @@ def test_a_service_returning_none_through_a_pass_through_reread_conforms(call: A
 
 def _assert_admits_nothing(tool: dict[str, Any], result: dict[str, Any]) -> None:
     # Named outright as well as validated: the schema keeps its root object and
-    # moves ``required`` into the ``anyOf`` beside the empty object.
     assert "required" not in tool["outputSchema"]
     assert tool["outputSchema"]["anyOf"][1] == {"maxProperties": 0}
     _assert_empty_and_conforming(tool, result)
@@ -263,8 +233,6 @@ def test_a_service_declaring_allow_none_serves_an_empty_object_its_schema_admits
     call: Any,
 ) -> None:
     # ``tasks.touch`` has no re-read, so nothing but the declaration says it
-    # may present nothing. ``invoices.void`` is a service returning ``None``
-    # undeclared, and keeps its schema strict (below).
     server = _server()
 
     result = call(server, "tasks.touch", {})
@@ -289,7 +257,6 @@ def test_a_found_row_still_conforms_and_a_partial_row_does_not() -> None:
 
 def test_a_retrieve_that_cannot_present_nothing_keeps_its_schema_strict() -> None:
     # A miss on a RETRIEVE without ``allow_none`` is an ``isError`` result, so
-    # its schema has no reason to admit ``{}``.
     tool = _tool(_server(), "invoices.get")
 
     with pytest.raises(AssertionError):
@@ -302,9 +269,6 @@ def test_a_retrieve_that_cannot_present_nothing_keeps_its_schema_strict() -> Non
 @pytest.mark.parametrize("name", ["invoices.send", "invoices.void", "sums.add"])
 def test_a_service_with_no_output_reread_keeps_its_schema_strict(name: str) -> None:
     # With no re-read selector the service's own return presents, so nothing
-    # filters a row away. ``invoices.void`` returns ``None`` regardless, and is
-    # served ``{}`` against this schema: the documented limit, not admitted
-    # here, because admitting it would loosen every typed service's schema.
     schema = _tool(_server(), name)["outputSchema"]
 
     assert "anyOf" not in schema
@@ -316,8 +280,6 @@ def test_a_service_with_no_output_reread_keeps_its_schema_strict(name: str) -> N
 @pytest.mark.django_db(transaction=True)
 def test_an_undeclared_none_is_still_served_empty_against_a_strict_schema(call: Any) -> None:
     # The limit the declaration answers: the kernel presents a ``None`` the
-    # spec does not declare rather than refusing it, so the call succeeds with
-    # ``{}``, and a client validating it against the strict schema rejects it.
     server = _server()
 
     result = call(server, "invoices.void", {"number": "x"})
@@ -357,13 +319,9 @@ def test_every_served_result_conforms_to_its_served_schema(era: str, is_async: b
     Invoice.objects.create(number="INV-2")
     calls: list[tuple[str, dict[str, Any], Any]] = [
         # An ``allow_none`` miss, and a re-read that filters out the row the
-        # service just archived: both nothing, both served ``{}``.
         ("invoices.find", {"number": "nope"}, {}),
         ("invoices.archive", {"number": "INV-1"}, {}),
-        # A service declaring ``allow_none=True`` that returns ``None``.
         ("tasks.touch", {}, {}),
-        # A service with no re-read returns the row it changed, against a
-        # schema that still requires the row's fields.
         ("invoices.send", {"number": "INV-2"}, "INV-2"),
     ]
     with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=is_async)):
@@ -381,5 +339,4 @@ def test_every_served_result_conforms_to_its_served_schema(era: str, is_async: b
             else:
                 assert served["number"] == expected
                 assert "required" in schemas[name]
-            # Draft 2020-12, the dialect MCP names for a schema with no ``$schema``.
             Draft202012Validator(schemas[name]).validate(served)

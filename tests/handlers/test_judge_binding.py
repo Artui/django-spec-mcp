@@ -1,12 +1,3 @@
-"""A prompt and a UI resource are gated by the kernel's ``PermissionCheck``s and ``scopes=``.
-
-Neither is a spec, so nothing dispatches them: ``judge_binding`` asks each
-check ``has_permission(principal, binding)`` itself, on every path that serves
-or names one - ``prompts/list``, ``prompts/get``, ``resources/list``,
-``resources/read``, ``completion/complete`` and a subscription's grant - so a
-check written for a spec, on the principal alone, gates a prompt unchanged.
-"""
-
 from __future__ import annotations
 
 import dataclasses
@@ -458,7 +449,6 @@ class _ReadsAMissingKey(PermissionCheck):
 
 def test_a_prompt_check_that_raises_hides_that_prompt_and_no_other() -> None:
     # A listing must not fail whole (-32603) for one check that raises: only the
-    # binding whose check raised is hidden, as the kernel arm hides it.
     server = _server()
     server.register_prompt(name="open", render=lambda: "hi", permissions=[Unrestricted()])
     server.register_prompt(name="broken", render=lambda: "hi", permissions=[_ReadsAMissingKey()])
@@ -481,7 +471,6 @@ def test_a_view_check_that_raises_hides_that_view_and_no_other() -> None:
 
 def test_a_check_misconfigured_at_call_time_still_fails_the_listing() -> None:
     # A configuration error the get raises as well, so the listing fails with
-    # it rather than hiding the prompt and leaving the error for later.
     server = _server()
     server.register_prompt(name="open", render=lambda: "hi", permissions=[Unrestricted()])
     server.register_prompt(name="p", render=lambda: "hi", permissions=[_HandsBackACoroutine()])

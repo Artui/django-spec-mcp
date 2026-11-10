@@ -1,12 +1,3 @@
-"""A mounted kernel server that can push notifications, for the end-to-end suite.
-
-``open`` and ``gated`` are kernel
-``RETRIEVE`` resources, and ``gated``'s spec refuses every principal with its
-own ``PermissionCheck``, which is the gate a kernel read answers to. Module-level
-so the broker outlives a single request, as it does in a deployment: a
-subscription carries an event a different request produced.
-"""
-
 from __future__ import annotations
 
 from typing import Any

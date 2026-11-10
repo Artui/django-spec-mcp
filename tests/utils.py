@@ -1,5 +1,3 @@
-"""Shared assertions and helpers for the test suite."""
-
 from __future__ import annotations
 
 import json
@@ -26,14 +24,7 @@ from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
 def make_server(
     *, name: str = "t", auth_backend: MCPAuthBackend | None = None, **overrides: Any
 ) -> MCPServer:
-    """An ``MCPServer`` named ``t`` that lets any caller in; the keywords replace the rest.
-
-    The head most test modules built by hand. ``name`` and ``auth_backend`` are
-    the two parts of it a module varies (``HeaderAuthBackend`` where the token's
-    principal matters); ``None`` for the backend keeps ``AllowAnyBackend``.
-    ``session_store`` is left to the server's default unless a test passes one,
-    so a module that wants an in-memory store says so at the call.
-    """
+    """An ``MCPServer`` named ``t`` that lets any caller in; the keywords replace the rest."""
     return MCPServer(
         name=name,
         auth_backend=AllowAnyBackend() if auth_backend is None else auth_backend,
@@ -42,14 +33,7 @@ def make_server(
 
 
 def tool_error(out: Any) -> dict[str, Any]:
-    """Assert ``out`` is an ``isError`` tool result; return its error object.
-
-    Tool-level failures (business rules, service-raised validation,
-    missing rows) come back as successful JSON-RPC responses whose result
-    carries ``isError: true`` and a JSON error payload in ``content[0]``.
-    ``structuredContent`` must be absent — it is tied to the success
-    ``outputSchema``.
-    """
+    """Assert ``out`` is an ``isError`` tool result; return its error object."""
     assert isinstance(out, dict), f"expected a tool-result dict, got {out!r}"
     assert out.get("isError") is True
     assert "structuredContent" not in out
@@ -57,12 +41,7 @@ def tool_error(out: Any) -> dict[str, Any]:
 
 
 def plain_context(server: MCPServer, **overrides: Any) -> MCPCallContext:
-    """An anonymous legacy-era context carrying only ``server``'s three registries.
-
-    For a test that calls one handler directly and needs nothing the server's
-    view would add (tasks, subscriptions, its config); ``overrides`` replace any
-    field. ``call_context`` is the fuller one.
-    """
+    """An anonymous legacy-era context carrying only ``server``'s three registries."""
     base: dict[str, Any] = {
         "http_request": HttpRequest(),
         "token": TokenInfo(user=None),
@@ -76,13 +55,7 @@ def plain_context(server: MCPServer, **overrides: Any) -> MCPCallContext:
 
 
 def call_context(server: MCPServer, **overrides: Any) -> MCPCallContext:
-    """A context for calling ``server``'s handlers in process, as an anonymous caller.
-
-    It declares the tasks extension and carries the server's own task store,
-    subscription broker and config, so a handler sees what the server's view
-    would hand it; ``overrides`` replace any field. ``tests.tasks.conftest``'s
-    ``context`` differs on purpose: it carries the task executor and no broker.
-    """
+    """A context for calling ``server``'s handlers in process, as an anonymous caller."""
     request = HttpRequest()
     request.method = "POST"
     request.user = None
@@ -104,15 +77,7 @@ def call_context(server: MCPServer, **overrides: Any) -> MCPCallContext:
 
 
 class TypedByTheCall(Validator):
-    """Declares ``project`` an integer to a call of ``action``, and any value to no call.
-
-    Keyed on the call's dict: a reader handed ``call_context`` for a call of
-    ``action`` reads the integer, one handed ``None`` reads the declaration made
-    to no call, which takes any value and so passes ``check_server_arguments``
-    at registration for a bound value the call refuses. Records every
-    ``call_context`` its ``parameters`` is handed, the dict itself, so a test
-    can ask which reader was handed what, and whether two were handed one dict.
-    """
+    """Declares ``project`` an integer to a call of ``action``, and any value to no call."""
 
     def __init__(self, action: str) -> None:
         self.action = action
@@ -138,11 +103,7 @@ class TypedByTheCall(Validator):
 
 
 class RefusingRateLimit:
-    """An ``MCPRateLimit`` refusing every call, counting the calls it was asked about.
-
-    Pins the refusal order on a path that judges permissions before it charges a
-    quota: a caller the permission denies is told so, and is never charged.
-    """
+    """An ``MCPRateLimit`` refusing every call, counting the calls it was asked about."""
 
     def __init__(self) -> None:
         self.consumed: int = 0
@@ -178,13 +139,7 @@ _FIRST_NESTING_DEPTH: int = 1_000
 
 
 def on_a_bounded_stack(call: Callable[[], Any]) -> Any:
-    """Run ``call`` on a new thread that asks for a 4 MiB stack; return its result.
-
-    The bound keeps the nested body small. It is a request rather than a size,
-    for the reason the comment above gives, so pair it with
-    ``nested_past_the_decoders_limit_here`` called on that thread. The previous
-    size is restored however ``call`` ends, so no later thread inherits it.
-    """
+    """Run ``call`` on a new thread that asks for a 4 MiB stack; return its result."""
     previous: int = threading.stack_size(_BOUNDED_STACK_BYTES)
     try:
         with ThreadPoolExecutor(max_workers=1) as pool:
@@ -194,18 +149,7 @@ def on_a_bounded_stack(call: Callable[[], Any]) -> Any:
 
 
 def nested_past_the_decoders_limit_here() -> bytes:
-    """Return nested arrays ``json.loads`` raises ``RecursionError`` on, on this thread.
-
-    The depth doubles until the decoder raises here, because the limit follows
-    the stack of the calling thread and that stack is not known in advance. Call
-    it on the thread that will decode the body: the view decodes deeper in the
-    call stack than this probe, with no more stack and no more levels left, so a
-    body that overflows here also overflows in the view.
-
-    The loop stops at ``MAX_REQUEST_BYTES``. A body over it would be answered by
-    the size cap before the parse, and a stack too large to reach the limit under
-    it would otherwise send one or never end, so that case fails the test instead.
-    """
+    """Return nested arrays ``json.loads`` raises ``RecursionError`` on, on this thread."""
     cap: int = get_setting("MAX_REQUEST_BYTES")
     depth: int = _FIRST_NESTING_DEPTH
     while 2 * depth <= cap:
@@ -244,11 +188,7 @@ def _send(
 
 
 def post_in_era(era: str, is_async: bool, method: str, params: dict[str, Any]) -> Any:
-    """One request to the mounted endpoint, in ``era``, on the chosen view; its ``result``.
-
-    A legacy request opens its own session first; a modern one carries the
-    per-request ``_meta`` and the routing headers the era reads.
-    """
+    """One request to the mounted endpoint, in ``era``, on the chosen view; its ``result``."""
     client: Any = AsyncClient() if is_async else Client()
     headers: dict[str, str] = {"Mcp-Protocol-Version": era}
     body: dict[str, Any] = dict(params)

@@ -1,11 +1,3 @@
-"""``WWW-Authenticate`` rides a ``403`` and no other JSON-RPC error answer.
-
-The challenge names the scopes a denied caller must ask for. A client that
-meets it on an unknown method or an in-band error would read "ask for more
-scope" where nothing about its token is wrong, so ``challenged_error_response``
-adds it for the permission denial's status alone.
-"""
-
 from __future__ import annotations
 
 from typing import Any

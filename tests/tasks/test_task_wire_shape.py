@@ -1,16 +1,3 @@
-"""The task wire type, the policy branches, and the two task config scalars.
-
-The remaining corners: the status-specific field ``Task.to_dict`` emits, the
-``OPTIONAL`` fallbacks that quietly run a tool inline, the ``REQUIRED`` denial,
-the async path's task branch, and settings whose ``None`` is meaningful.
-
-Asked of kernel tools registered with a ``task_policy``. The permission
-denial is the ``scopes=`` gate, which answers with the scopes it declares; a
-kernel spec's own refusal before a task exists is
-``tests/handlers/test_a_kernel_spec_answers_before_the_charge.py``'s. The
-``REQUIRED`` refusals are asked here at the decision.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -50,8 +37,7 @@ def _task(**kwargs: Any) -> Task:
 
 
 def test_ttl_is_always_present_even_when_null() -> None:
-    """``ttlMs: number | null`` in the schema — an omission and a ``null`` mean
-    different things to a client deciding when to stop polling."""
+    """``ttlMs: number | null`` in the schema: an omission and a null mean different things."""
     assert _task().to_dict()["ttlMs"] is None
 
 
@@ -66,8 +52,7 @@ def test_a_status_message_rides_along_when_set() -> None:
 
 
 def test_the_status_decides_which_extra_field_appears_not_what_is_stored() -> None:
-    """A record holding both a result and an error must not emit a shape no
-    variant in the spec describes. The status is the single source of truth."""
+    """A record holding both a result and an error must not emit a shape the spec lacks."""
     emitted = _task(
         status=TaskStatus.COMPLETED, result={"a": 1}, error={"b": 2}, input_requests={"c": 3}
     ).to_dict()
@@ -87,8 +72,7 @@ def test_the_status_decides_which_extra_field_appears_not_what_is_stored() -> No
 def test_a_mandatory_field_is_an_empty_object_rather_than_missing(
     status: TaskStatus, key: str
 ) -> None:
-    """The spec makes each mandatory for its status. A client that unwraps it
-    unconditionally breaks on a missing key and survives an empty object."""
+    """The spec makes each mandatory for its status."""
     assert _task(status=status).to_dict()[key] == {}
 
 
@@ -133,16 +117,14 @@ def _running(**kwargs: Any) -> MCPServer:
 def test_an_optional_tool_runs_inline_when_a_task_is_not_possible(
     make_server: Callable[[], MCPServer], declares: bool
 ) -> None:
-    """Falling back is the whole point of ``OPTIONAL``: a server without a
-    queue, or a client that cannot poll, still gets the tool."""
+    """Falling back is the whole point of ``OPTIONAL``: a server without a queue."""
     server = make_server()
     binding = server._tools.get("p.optional")
     assert maybe_create_task(binding, {}, context(server, declares=declares)) is None
 
 
 def test_an_optional_tool_answers_a_declaring_client_with_a_task() -> None:
-    """The control of the two above: the same tool on a server that runs tasks,
-    asked by a client that declared, is answered with a handle and queued."""
+    """The control of the two above: the same tool on a server that runs tasks."""
     server = _running()
     result = maybe_create_task(server._tools.get("p.optional"), {}, context(server))
     assert isinstance(result, dict) and result["resultType"] == "task"
@@ -150,8 +132,7 @@ def test_an_optional_tool_answers_a_declaring_client_with_a_task() -> None:
 
 
 def test_a_required_tool_refuses_a_client_that_did_not_declare() -> None:
-    """The case the extension names: a server unable to service the request
-    without returning a task handle the client cannot accept."""
+    """The case the extension names: unable to service the request without a task handle."""
     server = _running()
     result = maybe_create_task(server._tools.get("p.required"), {}, context(server, declares=False))
     assert isinstance(result, JsonRpcError)
@@ -160,10 +141,7 @@ def test_a_required_tool_refuses_a_client_that_did_not_declare() -> None:
 
 
 def test_a_required_tool_on_a_server_that_cannot_run_tasks_blames_the_server() -> None:
-    """``-32603``, not the capability error. The client's request is fine;
-    the tool was declared un-runnable inline with nothing configured to run it
-    elsewhere. Blaming the client would send a competent one round a loop it
-    cannot win."""
+    """``-32603``, not the capability error."""
     server = _server()
     result = handle_tools_call({"name": "p.required", "arguments": {}}, context(server))
     assert isinstance(result, JsonRpcError)
@@ -174,9 +152,7 @@ def test_a_required_tool_on_a_server_that_cannot_run_tasks_blames_the_server() -
 def test_a_required_tool_without_a_server_to_run_it_blames_the_server_whatever_was_declared() -> (
     None
 ):
-    """The store is asked of every client, not only a declaring one: a client
-    that did not declare is told ``-32603`` too, because ``-32021`` would send
-    it to declare an extension that could not help."""
+    """The store is asked of every client: a non-declarer gets -32603, not -32021."""
     server = _server()
     result = handle_tools_call(
         {"name": "p.required", "arguments": {}}, context(server, declares=False)
@@ -197,9 +173,7 @@ class _Refuse(PermissionCheck):
 
 
 def test_the_capability_is_asked_before_the_scope_gate_and_the_spec_s_checks() -> None:
-    """A client that did not declare is told ``-32021`` even by a tool whose
-    scope gate and spec would both refuse it, so it learns what it can fix
-    first, and the tool's guards are not asked for a call that cannot run."""
+    """A non-declarer is told -32021 first, so it learns what it can fix before any guard."""
     store = InMemoryTaskStore()
     executor = RecordingExecutor(store)
     server = MCPServer(
@@ -219,17 +193,13 @@ def test_the_capability_is_asked_before_the_scope_gate_and_the_spec_s_checks() -
     assert result.code != JsonRpcErrorCode.FORBIDDEN
     assert result.code == JsonRpcErrorCode.MISSING_REQUIRED_CLIENT_CAPABILITY
     assert executor.enqueued == []
-    # The control: declared, the same caller is refused by the guards.
     declared = maybe_create_task(binding, {}, context(server, scopes=("things:write",)))
     assert isinstance(declared, JsonRpcError)
     assert declared.code == JsonRpcErrorCode.FORBIDDEN
 
 
 def test_a_scope_denial_stops_the_task_before_it_is_created() -> None:
-    """A task is durable, queued work carrying the caller's authorization.
-    Creating one for a caller who may not run the tool would put a denied call
-    in the queue and let its own check fail in a worker, where the 403 has
-    nowhere to go."""
+    """A task is durable, queued work carrying the caller's authorization."""
     store = InMemoryTaskStore()
     executor = RecordingExecutor(store)
     server = MCPServer(
@@ -243,7 +213,6 @@ def test_a_scope_denial_stops_the_task_before_it_is_created() -> None:
     assert result.code == JsonRpcErrorCode.FORBIDDEN
     assert result.data == {"requiredScopes": ["things:write"]}
     assert executor.enqueued == []
-    # The control: the scope the gate names admits the same caller to a task.
     admitted = maybe_create_task(
         server._tools.get("p.gated"), {}, context(server, scopes=("things:write",))
     )
@@ -251,8 +220,7 @@ def test_a_scope_denial_stops_the_task_before_it_is_created() -> None:
 
 
 def test_a_binding_predating_tasks_entirely_is_untouched() -> None:
-    """``getattr`` default, so a hand-built binding without the field behaves
-    as ``FORBIDDEN`` rather than raising."""
+    """getattr default, so a hand-built binding without the field behaves as FORBIDDEN."""
 
     class _Bare:
         name = "p.bare"
@@ -266,8 +234,7 @@ def test_a_binding_predating_tasks_entirely_is_untouched() -> None:
 
 @pytest.mark.django_db(transaction=True)
 async def test_the_async_tool_path_hands_back_a_task_too() -> None:
-    """The two ``tools/call`` handlers are parallel implementations, so the
-    branch has to exist — and be exercised — in both."""
+    """The two ``tools/call`` handlers are parallel implementations, so the branch has to exist."""
     server = _running()
     result = await handle_tools_call_async({"name": "p.optional", "arguments": {}}, context(server))
     assert result["resultType"] == "task"
@@ -289,26 +256,16 @@ def test_an_explicit_value_wins_over_the_setting() -> None:
 
 @override_settings(SPEC_MCP={"TASK_TTL_MS": None, "TASK_POLL_INTERVAL_MS": None})
 def test_none_in_settings_means_none_rather_than_unset() -> None:
-    """Why these two cannot use the ``x if x is not None else setting`` shape
-    the other scalars use: ``None`` is a configured answer here — "never
-    expire", "send no poll hint" — not an absent one."""
+    """``None`` is a configured answer here (never expire), not an absent one."""
     config = build_mcp_config()
     assert config.task_ttl_ms is None
     assert config.task_poll_interval_ms is None
 
 
 def test_an_explicit_none_disables_expiry_rather_than_reading_the_setting() -> None:
-    """The other half of the same distinction, from the caller's side.
-
-    ``build_mcp_config(task_ttl_ms=None)`` is a consumer asking for tasks that
-    never expire. Reading ``None`` as "not supplied" answered it with the
-    setting's 24 hours instead, and the only sign was records vanishing a day
-    in. ``UNSET`` is what carries "omitted" for every other nullable bound
-    here, and now for these two.
-    """
+    """The other half of the same distinction, from the caller's side."""
     assert build_mcp_config(task_ttl_ms=None).task_ttl_ms is None
     assert build_mcp_config(task_poll_interval_ms=None).task_poll_interval_ms is None
-    # Omitted still means the setting, which is what makes the two distinct.
     assert build_mcp_config().task_ttl_ms == 86_400_000
     assert build_mcp_config().task_poll_interval_ms == 5_000
 
@@ -345,14 +302,7 @@ def _limited_server(limiter: Any, **kwargs: Any) -> MCPServer:
 
 
 def test_a_task_shaped_call_charges_its_rate_limit() -> None:
-    """The charge has nowhere else to happen.
-
-    ``maybe_create_task`` answers *before* dispatch, which is where the inline
-    charge lives, and the worker replays under ``enforce_rate_limits=False``.
-    Without a charge here a client that declares the tasks extension opts itself
-    out of every quota the tool configures — by declaring a capability — and the
-    enqueue loop is unbounded.
-    """
+    """The charge has nowhere else to happen."""
     limiter = _CountingLimiter()
     server = _limited_server(limiter)
     result = maybe_create_task(server._tools.get("p.limited"), {}, context(server))
@@ -361,8 +311,7 @@ def test_a_task_shaped_call_charges_its_rate_limit() -> None:
 
 
 def test_an_exhausted_quota_refuses_before_a_task_exists() -> None:
-    """Refused, and refused *early*: a caller told to retry must not also have
-    left a queued record and an executor job behind."""
+    """Refused early: a caller told to retry must leave no queued record behind."""
     limiter = _CountingLimiter(deny_after=0)
     store = InMemoryTaskStore()
     executor = RecordingExecutor(store)
@@ -375,9 +324,7 @@ def test_an_exhausted_quota_refuses_before_a_task_exists() -> None:
 
 
 def test_a_call_that_runs_inline_is_still_charged_exactly_once() -> None:
-    """The fallback path must not double-charge: a client that did not declare
-    the extension runs the tool inline, where the ordinary charge already
-    happens, and this function has to leave that alone."""
+    """The fallback must not double-charge: an inline run already charges the ordinary way."""
     limiter = _CountingLimiter()
     server = _limited_server(limiter)
     assert (

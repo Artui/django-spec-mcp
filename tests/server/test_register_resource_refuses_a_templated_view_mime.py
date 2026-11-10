@@ -1,10 +1,3 @@
-"""``register_resource`` with the view mime type and a templated URI is refused.
-
-It worked in 0.4.0, but a view is fetched by the exact URI a tool's ``ui=`` link
-names, so a templated one is a resource no host can ask for. The registry's guard
-catches it on this path too, not only on a hand-built ``ResourceBinding``.
-"""
-
 from __future__ import annotations
 
 import pytest

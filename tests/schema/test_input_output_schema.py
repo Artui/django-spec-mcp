@@ -1,11 +1,3 @@
-"""A kernel tool's two schemas, by what the spec declares.
-
-The input side is ``kernel_tool_input_schema`` over the kernel's ``spec_input_schema``,
-the output side ``kernel_tool_output_schema`` over its ``spec_output_schema``; both are
-read here as the listing serves them. What a spec that may present nothing advertises is
-``test_kernel_output_presents_nothing.py``'s.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -67,7 +59,6 @@ def _selector(kind: SelectorKind, **declared: Any) -> SelectorSpec:
 
 def test_a_spec_declaring_no_arguments_is_a_closed_empty_object() -> None:
     # The kernel's argument set is closed, so a spec declaring none takes no
-    # argument at all, rather than an open ``{"type": "object"}``.
     assert _tool(_service())["inputSchema"] == {
         "type": "object",
         "properties": {},
@@ -135,8 +126,6 @@ def test_a_paginated_list_is_the_envelope() -> None:
 @pytest.mark.parametrize("paginate", [False, True], ids=["array", "envelope"])
 def test_a_list_selector_under_allow_none_keeps_its_list_schema(paginate: bool) -> None:
     # A ``LIST`` selector returning ``None`` has returned the empty list, so
-    # ``allow_none`` adds nothing to its schema: a list, empty at worst, and the
-    # envelope's four keys still required.
     allowing = _tool(_selector(SelectorKind.LIST, allow_none=True), paginate=paginate)
     strict = _tool(_selector(SelectorKind.LIST), paginate=paginate)
 

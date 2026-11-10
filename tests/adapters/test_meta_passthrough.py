@@ -1,23 +1,3 @@
-"""The generic ``_meta`` bundle is threaded registration to binding to wire, for kernel specs.
-
-``_meta`` is the base protocol's open extension namespace. This package carries
-it verbatim: nothing here validates, reserves, or interprets a key. The
-registration parameter is spelled ``meta`` and lands on the binding as the single
-source of truth and on the listing payload. Asked here of the kernel route:
-``register_tool``, ``register_tools(overrides=)`` and the kernel form of
-``register_resource``, through ``resources/list``, ``resources/templates/list``
-and the ``contents`` block of a read, sync and async; and of prompts, which are no spec
-and register the same way on either route.
-
-:func:`merge_meta` is the one place contributions are combined, so a feature
-that needs to inject its own key adds an argument at the adapter call site
-rather than touching every binding.
-
-A kernel spec is declared once and registered, and ``register_tools(overrides=)``
-is the bulk form. ``@server.prompt`` builds no spec, so
-``test_prompt_decorator_accepts_meta`` asks it of the prompt registration below.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -112,7 +92,6 @@ def test_merge_meta_later_piece_wins_on_a_conflicting_key() -> None:
 
 def test_merge_meta_is_shallow_and_replaces_a_nested_bundle_outright() -> None:
     # Extension keys are opaque bundles owned by one extension: deep-merging two
-    # would synthesise a shape neither owner declared.
     assert merge_meta({"ext": {"a": 1, "b": 2}}, {"ext": {"a": 9}}) == {"ext": {"a": 9}}
 
 
@@ -175,7 +154,6 @@ def test_a_registry_override_carries_meta_to_one_entry() -> None:
 
 def test_resource_meta_reaches_resources_list() -> None:
     # A fixed URI lists in ``resources/list``; a templated one is a template and
-    # lists in ``resources/templates/list`` below.
     server = make_server()
     binding = server.register_resource(
         _fixed(), name="thing", uri_template="things://all", meta=UI_META

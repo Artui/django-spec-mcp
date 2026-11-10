@@ -1,14 +1,3 @@
-"""``notifications/tasks`` — a task telling its watchers how it is going.
-
-Closes the loop the tasks extension describes: a client subscribes to task ids
-on ``subscriptions/listen`` and stops polling.
-
-Asked of a kernel tool: transitions reaching a watcher, cancelling, answering
-an input request, a worker's outcome, the acknowledgement listing task ids, a
-brokerless server transitioning silently, and the capability rule at the
-transport.
-"""
-
 from __future__ import annotations
 
 import json
@@ -85,9 +74,7 @@ def test_a_transition_reaches_a_watcher() -> None:
 
 
 def test_the_notification_carries_the_whole_task_not_a_delta() -> None:
-    """The spec: "a complete DetailedTask ... identical to what tasks/get
-    would have returned at that moment". That is what lets a missed
-    notification cost nothing and keeps polling genuinely optional."""
+    """The spec: a complete DetailedTask identical to what tasks/get would have returned."""
     broker, store = InMemorySubscriptionBroker(), InMemoryTaskStore()
     task = _task(store)
     queue = _watch(broker, task.task_id)
@@ -101,8 +88,7 @@ def test_the_notification_carries_the_whole_task_not_a_delta() -> None:
 
 
 def test_a_refused_transition_announces_nothing() -> None:
-    """It changed nothing, and telling a subscriber otherwise would have it
-    re-read a status that had not moved."""
+    """It changed nothing, and telling a subscriber otherwise would make it re-read."""
     broker, store = InMemorySubscriptionBroker(), InMemoryTaskStore()
     task = _task(store)
     transition_task(store, task.task_id, status=TaskStatus.COMPLETED, result={}, broker=broker)
@@ -119,8 +105,7 @@ def test_an_unknown_task_announces_nothing() -> None:
 
 
 def test_nothing_is_announced_until_the_transaction_commits() -> None:
-    """A task moving to ``completed`` inside a transaction that rolls back
-    would otherwise announce work that did not happen."""
+    """A task completing inside a transaction that rolls back would announce work not done."""
     broker, store = InMemorySubscriptionBroker(), InMemoryTaskStore()
     task = _task(store)
     queue = _watch(broker, task.task_id)
@@ -140,8 +125,7 @@ def test_cancelling_announces() -> None:
 
 
 def test_answering_an_input_request_announces() -> None:
-    """Fulfilment moves the task back to ``working``, which a watcher should
-    hear exactly as it hears any other transition."""
+    """Fulfilment moves the task back to ``working``."""
     broker, store = InMemorySubscriptionBroker(), InMemoryTaskStore()
     server = _server(broker, store)
     task = _task(store)
@@ -152,8 +136,7 @@ def test_answering_an_input_request_announces() -> None:
 
 
 def test_a_worker_running_a_task_announces_its_outcome() -> None:
-    """The end-to-end point of the feature: the client stops polling because
-    the worker tells it."""
+    """The end-to-end point of the feature: the client stops polling because the worker tells it."""
     broker, store = InMemorySubscriptionBroker(), InMemoryTaskStore()
     server = _server(broker, store)
     task = _task(store)
@@ -208,8 +191,7 @@ def _listen(client: Any, task_ids: list[str], *, declares: bool) -> Any:
 
 @pytest.mark.urls("tests.subscriptions.kernel_urls")
 async def test_asking_for_task_notifications_without_the_capability_is_an_error() -> None:
-    """The spec's one exception to "refused entries are dropped": this MUST
-    be an error rather than a quiet omission from the acknowledgement."""
+    """The spec's one exception to 'refused entries are dropped': this MUST be an error."""
     from django.test import AsyncClient
 
     response = await _listen(AsyncClient(), ["anything"], declares=False)
@@ -224,8 +206,7 @@ async def test_asking_for_task_notifications_without_the_capability_is_an_error(
 
 @pytest.mark.urls("tests.subscriptions.kernel_urls")
 async def test_declaring_the_capability_gets_a_stream_even_with_no_such_task() -> None:
-    """The error turns on what the *client declared*, not on anything about the
-    tasks it named — so it is not an oracle for which ids exist."""
+    """The error turns on what the *client declared*, not on anything about the tasks it named."""
     from django.test import AsyncClient
 
     response = await _listen(AsyncClient(), ["nope"], declares=True)

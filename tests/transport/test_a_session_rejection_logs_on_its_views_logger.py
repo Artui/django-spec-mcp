@@ -1,10 +1,3 @@
-"""A rejected session is logged on the logger of the view that rejected it.
-
-The shared gate takes the view's logger rather than its own, so an operator
-filtering on ``django_spec_mcp.transport.async_streamable_http_view`` sees the
-async endpoint's rejections and only those.
-"""
-
 from __future__ import annotations
 
 import logging

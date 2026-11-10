@@ -50,27 +50,14 @@ def test_a_bad_cursor_raises(cursor: str, message: str) -> None:
 
 
 def test_offset_past_end_returns_empty_page() -> None:
-    """A hand-crafted offset past the end yields an empty page and no cursor.
-
-    The helper itself never produces such a cursor, but a misbehaving client
-    could echo back a stale one — the handler should still degrade gracefully.
-    """
+    """A hand-crafted offset past the end yields an empty page and no cursor."""
     page, nxt = paginate([1, 2], _cursor(b"offset:99"), page_size=2)
     assert page == []
     assert nxt is None
 
 
 def test_page_size_below_one_is_a_configuration_error() -> None:
-    """A non-positive ``PAGE_SIZE`` cannot page: it is refused, not served.
-
-    With a page size of 0 every page is empty, so ``next_offset`` equals the
-    offset it was handed and ``nextCursor`` re-encodes it for as long as the
-    registry is non-empty — a conformant client following ``nextCursor`` until
-    it disappears never terminates. ``ImproperlyConfigured`` rather than
-    ``ValueError`` because the value comes from the deployment, not from the
-    client's cursor, and the listing handlers translate a ``ValueError`` into
-    ``-32602`` — blaming the caller for the operator's setting.
-    """
+    """A non-positive ``PAGE_SIZE`` cannot page: it is refused, not served."""
     with pytest.raises(ImproperlyConfigured, match="PAGE_SIZE"):
         paginate([1, 2, 3], None, page_size=0)
 
@@ -84,7 +71,7 @@ def test_a_page_size_of_one_still_pages() -> None:
     """The smallest value that terminates is allowed, and does terminate."""
     seen: list[int] = []
     cursor: str | None = None
-    for _ in range(4):  # one more iteration than there are items
+    for _ in range(4):
         page, cursor = paginate([1, 2, 3], cursor, page_size=1)
         seen.extend(page)
         if cursor is None:

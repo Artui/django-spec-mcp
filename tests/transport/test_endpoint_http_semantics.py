@@ -1,20 +1,3 @@
-"""What a client sees of the three endpoints at the HTTP level, before any JSON-RPC.
-
-The MCP endpoint (on both mounts) and the protected-resource metadata view are
-answered for ``HEAD`` and ``OPTIONS``, opt out of CSRF and of
-``LoginRequiredMiddleware``, refuse an ``Accept`` header admitting nothing they
-can answer with, and put an ``Allow`` header on every ``405``. None of that is
-written in this package's handlers: each is a property of the views
-themselves, so it is held here at the HTTP level.
-
-Two things are deliberately not pinned, because the package promises neither:
-the body of an ``OPTIONS`` answer and the ``Allow`` header on answers that are
-not a ``405``.
-
-Requests go through the ``endpoint`` fixture, whose ``send`` says why headers
-travel as ``headers=``.
-"""
-
 from __future__ import annotations
 
 import json
@@ -257,11 +240,7 @@ def _initialize_then_delete(user: Any) -> tuple[Any, Any]:
 
 @pytest.mark.django_db(transaction=True)
 async def test_a_session_cookie_does_not_bring_csrf_to_the_endpoint(endpoint: Endpoint) -> None:
-    """A bearer-token transport has no CSRF token to send, cookie or not.
-
-    The cookie is what makes ``CsrfViewMiddleware`` enforce at all on a
-    request it would otherwise also refuse, so the test logs a user in first.
-    """
+    """A bearer-token transport has no CSRF token to send, cookie or not."""
     user = await get_user_model().objects.acreate(username="cookie-holder")
     with override_settings(MIDDLEWARE=_SESSION_MIDDLEWARE, **_SESSION_SETTINGS):
         if endpoint.is_async:
@@ -282,11 +261,7 @@ async def test_a_session_cookie_does_not_bring_csrf_to_the_endpoint(endpoint: En
 
 
 async def test_csrf_never_answers_for_the_protected_resource_metadata(endpoint: Endpoint) -> None:
-    """A POST there is the view's own ``405``, not ``CsrfViewMiddleware``'s ``403``.
-
-    The metadata only answers ``GET``, so the opt-out shows only as which
-    refusal a POST gets: without it the middleware refuses first.
-    """
+    """A POST there is the view's own ``405``, not ``CsrfViewMiddleware``'s ``403``."""
     with override_settings(MIDDLEWARE=_SESSION_MIDDLEWARE, **_SESSION_SETTINGS):
         if endpoint.is_async:
             response = await AsyncClient(enforce_csrf_checks=True).post(_PRM)
@@ -326,13 +301,7 @@ def _logged_in_initialize(user: Any) -> Any:
 
 @pytest.mark.django_db(transaction=True)
 async def test_a_session_user_is_not_the_caller_the_auth_backend_sees(endpoint: Endpoint) -> None:
-    """``AllowAnyBackend`` reads ``request.user``; a session cookie must not set it.
-
-    The endpoint is CSRF-exempt, so a backend that took the session's user for
-    the caller would let any page the user visits call tools as them. The
-    session the ``initialize`` mints is owned by the shared anonymous principal,
-    whoever the cookie names.
-    """
+    """``AllowAnyBackend`` reads ``request.user``; a session cookie must not set it."""
     store = InMemorySessionStore()
     server = build_server()
     server._session_store = store  # noqa: SLF001 — the mount reads it at ``urls``
@@ -353,13 +322,7 @@ async def test_a_session_user_is_not_the_caller_the_auth_backend_sees(endpoint: 
 
 
 def test_the_sync_endpoint_reads_a_q_of_zero_as_django_does() -> None:
-    """``application/json;q=0`` is refused exactly where Django reads it as refusing JSON.
-
-    Django 5.2 reads a ``q`` of ``0`` as declaring a type unacceptable and 4.2
-    ignores it, so the answer is pinned to ``request.accepts`` rather than to a
-    version: a ``406`` where JSON is not accepted, served where it is. The
-    lowest-versions job runs this on 4.2, the rest of the suite on 5.2.
-    """
+    """``application/json;q=0`` is refused exactly where Django reads it as refusing JSON."""
     accept = "application/json;q=0, text/event-stream"
     accepted = (
         RequestFactory().post(_ENDPOINT, headers={"Accept": accept}).accepts("application/json")

@@ -1,24 +1,3 @@
-"""A registered seed a spec's check names resolves once per call, on every route that dispatches.
-
-The admission asks the spec's checks through ``check_call``, which resolves the
-seeds a check names and hands their values back on ``.seeds``. Every dispatch
-site hands that carrier on as ``dispatch(seeds=)``, so the run takes those
-values as they are: the check and the service (or the selector, for a read)
-see one object, and the seed's resolver runs once. Without it, the prelude and
-dispatch each resolve the seed, and the service sees a second value.
-
-One test per dispatch site: the wire's ``tools/call`` on the sync and the async
-view (``run_kernel_tool``, ``run_kernel_tool_async``), ``resources/read`` on
-both (``read_kernel_resource``, ``read_kernel_resource_async``), and the
-in-process ``call_tool`` (``call_kernel_tool``). The resolver hands out a fresh
-object each time, so a second resolve shows as a second object, never as an
-equal one.
-
-Then the three answers ``admit_kernel_call`` falls back from carry no carrier,
-since dispatch takes ``seeds=`` only beside the grant its prelude returned:
-a failed shape, a ``many`` call's refused row, and a refusal that is no denial.
-"""
-
 from __future__ import annotations
 
 import json
@@ -301,7 +280,6 @@ def test_a_call_failing_its_shape_carries_no_seeds_and_is_answered_as_before() -
     out = handle_tools_call({"name": "get", "arguments": {}}, _context(server))
     assert tool_error(out)["detail"] == {"pk": ["This field is required."]}, out
     # Resolved once, for the judgment on no arguments; dispatch refuses the
-    # shape before it asks the checks, so it resolves nothing.
     assert len(witness.resolved) == 1, witness.resolved
 
 
@@ -319,7 +297,6 @@ def test_a_many_call_with_a_refused_row_carries_no_seeds_and_is_answered_as_befo
         "items": {"0": {"amount_cents": ["Expected an integer."]}}
     }, out
     # Resolved by the prelude and again by dispatch, which asks the checks
-    # again before it reports the row.
     assert len(witness.resolved) == 2, witness.resolved
 
 
@@ -342,7 +319,6 @@ def test_a_refusal_that_is_no_denial_carries_no_seeds_and_is_answered_as_before(
 @pytest.mark.django_db(transaction=True)
 async def test_an_in_process_acall_tool_resolves_a_checks_seed_once() -> None:
     # ``acall_tool`` admits off the loop and dispatches through
-    # ``run_kernel_tool_async``, so it holds that site as the async view does.
     witness = _Witness()
 
     out = await _server(witness).acall_tool("tenant.whoami", {}, user=None)

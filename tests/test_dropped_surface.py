@@ -1,23 +1,3 @@
-"""What this package does not carry over from ``djangorestframework-mcp-server``.
-
-Each name below was public there and is gone here on purpose: the bundled
-authorization-server pieces (a project runs its own authorization server and
-verifies its own tokens through ``MCPAuthBackend``, and it serves its own
-metadata, so no backend answers ``authorization_server_metadata``), the transport's own
-permission types (the kernel's ``PermissionCheck`` gates a prompt and a view),
-the guard against settings
-keys a fresh package never had, chain tools (a service spec that calls the
-others replaces one), and the extras that only re-exposed another package's.
-TOON output went too, and ``OutputFormat`` with it, since one format left
-nothing to choose; ``RESOURCE_EDGE_SEEDS`` gave way to the kernel's
-``CALL_SEEDS``; and a view's callable source is ``render=``, not ``selector=``,
-which every spec in the package means a ``SelectorSpec`` by.
-
-A dropped name left behind fails at import where it is loud, but a dropped name
-left in a re-export, a settings default or an extra fails nowhere: it is simply
-still there. So each one is asserted absent.
-"""
-
 from __future__ import annotations
 
 import importlib
@@ -89,11 +69,7 @@ def test_a_dropped_backend_name_is_exported_nowhere(name: str) -> None:
     "namespace", [django_spec_mcp, django_spec_mcp.auth, django_spec_mcp.auth.types]
 )
 def test_the_authorization_server_metadata_is_exported_nowhere(namespace: object) -> None:
-    """An authorization server's metadata is the authorization server's to serve.
-
-    This package is only the resource server beside it, so it publishes the
-    protected-resource document and nothing describing an authorization server.
-    """
+    """An authorization server's metadata is the authorization server's to serve."""
     assert "AuthorizationServerMetadata" not in getattr(namespace, "__all__", ())
     assert not hasattr(namespace, "AuthorizationServerMetadata")
 
@@ -108,8 +84,7 @@ def test_no_backend_answers_for_an_authorization_server(backend: type) -> None:
 )
 @pytest.mark.parametrize("name", ["OutputFormat", "encode_toon", "RESOURCE_EDGE_SEEDS"])
 def test_a_dropped_output_or_seed_name_is_exported_nowhere(namespace: object, name: str) -> None:
-    """TOON was the one format besides JSON, so its encoder and the enum choosing
-    between them went together; the edge seeds are the kernel's ``CALL_SEEDS``."""
+    """TOON was the one format besides JSON, so its encoder and enum go together."""
     assert name not in namespace.__all__
     assert not hasattr(namespace, name)
 
@@ -152,11 +127,7 @@ def test_the_server_registers_no_chain_tool() -> None:
 
 
 def test_the_transport_permission_types_are_gone() -> None:
-    """A prompt and a view take the kernel's ``PermissionCheck`` and ``scopes=``.
-
-    So the package's own permission protocol and its two implementations are
-    not carried: a check on the principal alone is the instance a spec takes.
-    """
+    """A prompt and a view take the kernel's ``PermissionCheck`` and ``scopes=``."""
     assert importlib.util.find_spec("django_spec_mcp.auth.permissions") is None
     for name in ("MCPPermission", "ScopeRequired", "DjangoPermRequired"):
         assert name not in django_spec_mcp.__all__
@@ -186,8 +157,7 @@ def test_a_settings_key_drf_mcp_once_removed_is_not_refused(settings) -> None:
 
 
 def test_a_leftover_default_output_format_is_not_read(settings) -> None:
-    """Nothing reads the key, so a project still setting it is neither refused nor
-    warned, and its tools answer in JSON whatever it names."""
+    """Nothing reads the key, so a project still setting it is neither refused nor warned."""
     settings.SPEC_MCP = {"DEFAULT_OUTPUT_FORMAT": "toon"}
     with warnings.catch_warnings():
         warnings.simplefilter("error")

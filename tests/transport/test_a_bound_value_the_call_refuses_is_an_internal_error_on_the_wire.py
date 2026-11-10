@@ -1,17 +1,3 @@
-"""What an HTTP client sees when a bound value fails the call's own declaration.
-
-``tests/handlers/test_a_tool_call_reads_the_spec_under_its_call_context.py``
-holds that the handler raises ``ImproperlyConfigured`` for it. The raise is the
-server's mistake, so on the wire it is the dispatch backstop's ``500`` with a
-JSON-RPC ``-32603``, never a ``200`` carrying an ``isError`` ``validation_error``
-tool result, which would tell the caller an argument it never sent is invalid.
-Each case posts through a real URL conf, on the sync and the async view, plain
-and with a ``progressToken``. The async view's streamed call fails in its
-pre-flight, before a stream opens, so it answers the same JSON rather than a
-stream; the sync view never streams, so its ``progressToken`` case pins that a
-token changes nothing there.
-"""
-
 from __future__ import annotations
 
 import json
@@ -45,8 +31,7 @@ def _touch(*, project: Any) -> dict[str, Any]:
 
 
 def _server() -> MCPServer:
-    """``"x"`` is bound for ``project``: it passes the declaration made to no call, which
-    registration reads, and the declaration made to a call of ``TOOL`` refuses it."""
+    """'x' is bound for project: it passes the declaration made to no call."""
     server = make_server(session_store=InMemorySessionStore())
     server.register_tool(
         ServiceSpec(
@@ -99,17 +84,11 @@ async def _post_async(server: MCPServer, *, progress: bool) -> Any:
 async def test_a_bound_value_the_call_refuses_is_a_json_rpc_internal_error(
     is_async: bool, progress: bool, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """``500`` and ``-32603`` saying nothing more, no tool result, the fault logged.
-
-    Before 0.8.1 the bound value was checked against the declaration made to no
-    call, reached dispatch, and came back as a ``200`` whose tool result was a
-    ``validation_error`` naming ``project``, an argument the caller never sent.
-    """
+    """``500`` and ``-32603`` saying nothing more, no tool result, the fault logged."""
     caplog.set_level(logging.ERROR, logger="django_spec_mcp")
     if is_async:
         response = await _post_async(_server(), progress=progress)
     else:
-        # Off the loop: the sync test client must not run inside an event loop.
         response = await sync_to_async(_post_sync)(_server(), progress=progress)
 
     assert not response.streaming
@@ -132,5 +111,4 @@ async def test_a_bound_value_the_call_refuses_is_a_json_rpc_internal_error(
     assert len(records) == 1, [r.name for r in caplog.records]
     assert records[0].exc_info is not None
     assert isinstance(records[0].exc_info[1], ImproperlyConfigured)
-    # The kernel's rule, not any ``ImproperlyConfigured`` raised on the way to it.
     assert "binds a value its parameter refuses" in str(records[0].exc_info[1])

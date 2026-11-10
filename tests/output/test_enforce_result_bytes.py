@@ -1,5 +1,3 @@
-"""Unit coverage for the outbound size measurement."""
-
 from __future__ import annotations
 
 from django_spec_mcp.output.enforce_result_bytes import enforce_result_bytes
@@ -17,8 +15,6 @@ def test_exactly_at_the_ceiling_passes() -> None:
     """The ceiling is inclusive — ``<=`` rather than ``<``."""
     payload = {"x": "abc"}
     size = len(b'{\n  "x": "abc"\n}')
-    # Encoded size is whatever the encoder produces; measure it the same way
-    # the function does rather than hard-coding a guess.
     message = enforce_result_bytes(payload, size, label="Tool 'edge'")
     over = enforce_result_bytes(payload, size - 1, label="Tool 'edge'")
     assert (message, over is None) == (None, False)
@@ -28,7 +24,6 @@ def test_over_the_ceiling_explains_the_remedy() -> None:
     message = enforce_result_bytes({"rows": ["x" * 100] * 100}, 500, label="Tool 'invoices.list'")
     assert message is not None
     # The audience is a model deciding what to do next, so the message has to
-    # name the ceiling, the actual size, and something actionable.
     assert "Tool 'invoices.list'" in message
     assert "500 byte ceiling" in message
     assert "'limit'" in message

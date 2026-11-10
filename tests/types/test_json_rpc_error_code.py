@@ -1,5 +1,3 @@
-"""``JsonRpcErrorCode``: the standard and MCP-reserved codes."""
-
 from __future__ import annotations
 
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode

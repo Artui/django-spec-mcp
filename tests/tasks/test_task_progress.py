@@ -1,15 +1,3 @@
-"""Progress from inside a task — the record is the channel, polling is the pull.
-
-``notifications/progress`` needs a live connection and a worker has none, so a
-service running as a task reports onto its own record and the client reads it
-through ``tasks/get``. The service body is identical either way; that is the
-requirement these tests hold.
-
-Asked of kernel tools: a kernel service declares ``progress`` as it declares
-``user``, and ``dispatch`` hands it the task's reporter in the worker and the
-kernel's ``null_progress`` inline.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -46,7 +34,6 @@ from tests.tasks.test_task_lifecycle import _create
         (3, None, "Indexing", "Indexing (3)"),
         (3, None, None, "3"),
         # ``:g`` rather than ``str``: the Protocol types these as floats, and
-        # "3/10" is what a human reads where "3.0/10.0" is what a repr prints.
         (3.0, 10.0, None, "3/10"),
         (2.5, None, None, "2.5"),
     ],
@@ -71,8 +58,6 @@ def test_a_report_lands_on_the_record_and_on_the_wire(
     record: TaskRecord = store.get(task.task_id)
     assert (record.progress, record.total) == (7, 20)
     assert record.task.status_message == "Indexing (7/20)"
-    # The wire ``Task`` has no numeric slot, so this string is the whole of
-    # what a polling client receives.
     assert "progress" not in record.to_wire().to_dict()
 
 
@@ -93,11 +78,7 @@ def test_a_report_moves_the_timestamp_but_not_the_status(
 def test_a_terminal_task_is_never_rewritten(
     server: MCPServer, store: InMemoryTaskStore, executor: RecordingExecutor
 ) -> None:
-    """A cancel must not be un-done by a worker still unwinding.
-
-    The same one-way rule ``transition_task`` holds, for the same reason: the
-    two writers race by construction, and the finished state wins.
-    """
+    """A cancel must not be un-done by a worker still unwinding."""
     task: Task = _create(store, executor)
     transition_task(store, task.task_id, status=TaskStatus.CANCELLED)
     report_task_progress(store, task.task_id)(99, total=100)
@@ -114,31 +95,20 @@ def test_reporting_on_an_unknown_task_is_a_no_op(store: InMemoryTaskStore) -> No
 
 
 def test_a_store_that_is_down_does_not_take_the_operation_with_it() -> None:
-    """The sink is network I/O on somebody else's box, called once per tick.
-
-    A service that reports progress must not fail because the cache blinked —
-    the report describes the work, it is not the work.
-    """
+    """The sink is network I/O on somebody else's box, called once per tick."""
 
     class _BrokenStore:
         def get(self, task_id: str) -> Any:
             raise RuntimeError("cache unreachable")
 
-    report_task_progress(_BrokenStore(), "t-1")(1)  # must not raise
+    report_task_progress(_BrokenStore(), "t-1")(1)
 
 
 @pytest.mark.django_db
 def test_reporting_often_does_not_keep_a_task_alive_forever(
     server: MCPServer, executor: RecordingExecutor
 ) -> None:
-    """The cache store's absolute-expiry design, now that writes actually happen.
-
-    ``DjangoCacheTaskStore`` stamps expiry once at ``create`` and renews to the
-    *remaining* lifetime, with the note that otherwise "a task that reports
-    progress often would never expire". That was written for a write pattern
-    that did not yet exist — this is it, so it gets an assertion rather than a
-    re-reading.
-    """
+    """The cache store's absolute-expiry design, now that writes actually happen."""
     cache.clear()
     store = DjangoCacheTaskStore(namespace="progress")
     task: Task = _create(store, executor, ttl_ms=60_000)
@@ -158,13 +128,7 @@ def test_reporting_often_does_not_keep_a_task_alive_forever(
 def test_a_service_reporting_progress_is_visible_to_a_polling_client(
     server: MCPServer, store: InMemoryTaskStore, executor: RecordingExecutor
 ) -> None:
-    """The whole point, in one test.
-
-    The service declares ``progress`` and calls it — the same body that would
-    stream ``notifications/progress`` inline. Run as a task, those calls have
-    to survive to the record, which means the worker hands ``dispatch`` the
-    task's reporter rather than the no-op.
-    """
+    """The whole point, in one test."""
     seen: list[str] = []
 
     def indexer(progress: Any) -> dict[str, str]:
@@ -183,20 +147,12 @@ def test_a_service_reporting_progress_is_visible_to_a_polling_client(
     record: TaskRecord = store.get(task_id)
     assert record.status is TaskStatus.COMPLETED
     assert record.task.result["structuredContent"] == {"rows": "3"}
-    # The last report survives the completing transition's own write, because
-    # the two touch different fields.
     assert (record.progress, record.total) == (3, 3)
 
 
 @pytest.mark.django_db
 def test_the_same_service_runs_unchanged_off_the_task_path(server: MCPServer) -> None:
-    """The no-op seed, which is what lets one spec serve both paths.
-
-    An ordinary sync ``tools/call`` supplies no reporter, the kernel substitutes
-    its own no-op, and the identical service body completes without knowing the
-    difference. If it did know — if ``progress`` were ``None`` here — every spec
-    would need a task-shaped and a request-shaped variant.
-    """
+    """The no-op seed, which is what lets one spec serve both paths."""
     reported: list[Any] = []
 
     def indexer(progress: Any) -> dict[str, str]:
@@ -210,5 +166,4 @@ def test_the_same_service_runs_unchanged_off_the_task_path(server: MCPServer) ->
     )
 
     assert result["structuredContent"] == {"ok": "yes"}
-    # Called, and callable — the seed is the kernel's no-op, never ``None``.
     assert reported == [null_progress]

@@ -1,14 +1,3 @@
-"""Supported configurations whose defects a coverage number cannot see.
-
-A modern-only server, a progress token on a path with no reporter, the
-reporter's counters under concurrency and a tuple of resource links each break
-at 100% coverage: they are unexercised *combinations*, not uncovered lines.
-
-The tools and resources here are kernel specs registered with ``register_tool``
-and ``register_resource``. A kernel resource has two gates, its ``scopes=`` and
-its spec's own checks, so the denied read is asked of each.
-"""
-
 from __future__ import annotations
 
 import json
@@ -45,21 +34,12 @@ def test_a_modern_only_server_has_no_legacy_fallback() -> None:
 
 
 def test_discovery_still_works_on_a_modern_only_server() -> None:
-    """Not an ``IndexError`` and an HTTP 500.
-
-    ``server/discover`` is the request a modern client leads with, sent without
-    a version header precisely because it is asking which versions exist.
-    Refusing it would leave the server undiscoverable by exactly the clients it
-    still serves — so the version falls back to the head of the list whatever
-    era that is.
-    """
+    """Not an ``IndexError`` and an HTTP 500."""
     assert negotiate_protocol_version(None, config=_modern_only(), is_sessionless=True) == MODERN
 
 
 def test_a_legacy_client_mid_session_is_rejected_not_answered_with_a_modern_version() -> None:
-    """The other half of the same branch, and it must not go the same way:
-    handing a modern version to a header-less legacy request would tell it to
-    speak a revision it cannot."""
+    """The other half of the same branch, and it must not go the same way."""
     config = build_mcp_config(
         protocol_versions=["2026-07-28"], require_protocol_version_header=False
     )
@@ -67,9 +47,7 @@ def test_a_legacy_client_mid_session_is_rejected_not_answered_with_a_modern_vers
 
 
 def test_initialize_on_a_modern_only_server_explains_itself(rf: Any) -> None:
-    """Also an ``IndexError`` → 500 before. A legacy client learns the
-    handshake era is gone and what replaced it — something it can report to a
-    human, which a 500 is not."""
+    """Also an ``IndexError`` → 500 before."""
     server = MCPServer(
         name="modern-only",
         auth_backend=AllowAnyBackend(),
@@ -85,8 +63,7 @@ def test_initialize_on_a_modern_only_server_explains_itself(rf: Any) -> None:
 
 
 def test_a_server_supporting_no_revision_at_all_is_refused_at_construction() -> None:
-    """The one genuinely unusable value — caught once, at startup, rather than
-    as an index error out of a view on the first request."""
+    """The one genuinely unusable value — caught once, at startup."""
     with pytest.raises(ImproperlyConfigured, match="supports no MCP revision"):
         build_mcp_config(protocol_versions=[])
 
@@ -168,11 +145,7 @@ def _post(client: Client, method: str, params: dict[str, Any]) -> Any:
 def test_a_denied_resource_read_keeps_its_403_even_with_a_progress_token(
     stream_urls: Any, uri: str
 ) -> None:
-    """**The security-relevant one.** ``resources/read`` runs a permission
-    stack but the pre-flight could only speak for ``tools/call``, so a denial
-    rode inside a ``200`` SSE body with no ``WWW-Authenticate``, and a client
-    acting on status parsed the denial as success. Asked of the scope gate and
-    of the spec's own check."""
+    """Security: a resources/read denial rode a 200 SSE body, so clients read it as success."""
     with override_settings(ROOT_URLCONF=stream_urls):
         response = Client().post(
             "/mcp/",
@@ -206,8 +179,7 @@ def test_a_denied_resource_read_keeps_its_403_even_with_a_progress_token(
 
 @pytest.mark.django_db(transaction=True)
 def test_a_selector_tool_still_streams(stream_urls: Any) -> None:
-    """The gate must not close on the paths that *can* report — that would
-    silently remove the feature it exists to protect."""
+    """The gate must not close on the paths that *can* report."""
     with override_settings(ROOT_URLCONF=stream_urls):
         response = _post(Client(), "tools/call", {"name": "s.list", "arguments": {}})
     assert response.headers["Content-Type"].startswith("text/event-stream")
@@ -215,8 +187,7 @@ def test_a_selector_tool_still_streams(stream_urls: Any) -> None:
 
 @pytest.mark.django_db(transaction=True)
 def test_an_unknown_tool_is_not_streamed(stream_urls: Any) -> None:
-    """No binding, so nothing can report and nothing can be pre-flighted; the
-    handler's ``-32602`` is the useful answer."""
+    """No binding, so nothing can report and nothing can be pre-flighted."""
     with override_settings(ROOT_URLCONF=stream_urls):
         response = _post(Client(), "tools/call", {"name": "nope", "arguments": {}})
     assert response.headers["Content-Type"].startswith("application/json")
@@ -234,9 +205,7 @@ def test_a_tools_call_with_a_non_string_name_is_not_streamed(stream_urls: Any) -
 
 
 def test_the_reporter_guards_its_counters_with_a_lock() -> None:
-    """The frame hand-off was thread-safe; the cap and the monotonicity check
-    were not. Safe today only because a collaborator happens to use one
-    thread — which is not a property of this class."""
+    """The frame hand-off was thread-safe; the cap and the monotonicity check were not."""
     import asyncio
 
     from django_spec_mcp.transport.response_stream import _StreamReporter
@@ -257,8 +226,7 @@ def test_the_reporter_guards_its_counters_with_a_lock() -> None:
 
 
 def test_a_tuple_of_resource_links_is_accepted() -> None:
-    """A selector returning a tuple is producing the right shape; rejecting it
-    with a message about the wrong shape read as nonsense."""
+    """A selector returning a tuple is producing the right shape."""
     from django_spec_mcp.output.build_content_blocks import build_content_blocks
     from django_spec_mcp.types.tool_content_kind import ToolContentKind
 

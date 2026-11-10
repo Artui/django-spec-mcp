@@ -1,14 +1,3 @@
-"""``request.user`` is the token's principal on every path that hands a ``request``.
-
-A kernel tool's spec, a prompt's ``render``, a completer and a pool seed resolved
-on a view's read are each handed the transport's ``HttpRequest``. Over the wire
-its ``user`` is whatever the project's middleware resolved, a session cookie
-included, and the MCP caller is the bearer token's principal, which can be
-someone else. A callable authorizing on ``request.user`` must be judging the
-caller, so ``request.user`` is held to the token here, behind Django's session middleware with
-a client logged in as someone the token does not name.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -62,7 +51,6 @@ def _server(seen: list[Any], view_read: list[Any] | None = None) -> MCPServer:
         auth_backend=HeaderAuthBackend(),
         session_store=InMemorySessionStore(),
         # The async read resolves seeds on the loop, so the request is kept
-        # and read once the call is over.
         pool_seeds=PoolSeeds().extend(who=lambda request: seen.append(request)),
     )
     server.register_tool(
@@ -89,8 +77,6 @@ def _server(seen: list[Any], view_read: list[Any] | None = None) -> MCPServer:
         name="kernel_read",
         uri_template="k://who",
     )
-    # A view whose selector takes ``request`` reads it from the pool, where the
-    # transport lays the request carrying the token.
     kept = view_read if view_read is not None else []
     server.resources.register(
         ResourceBinding(
@@ -175,14 +161,12 @@ def test_a_caller_the_token_names_no_one_is_anonymous_not_the_sessions_user(
 
 @pytest.mark.django_db(transaction=True)
 async def test_in_process_no_user_is_anonymous_not_none(users: None) -> None:
-    """``acall_tool`` with ``user=None`` builds a request whose ``user`` was
-    ``None``; the spec sees an anonymous user, as on the wire."""
+    """``acall_tool`` with ``user=None`` builds a request whose ``user`` was ``None``."""
     caller = await get_user_model().objects.aget(username="token-caller")
     server = _server([])
     server.register_tool(
         SelectorSpec(
             kind=SelectorKind.RETRIEVE,
-            # ``request.user`` alone, so ``None`` is answered rather than raised on.
             selector=lambda *, request: {
                 "user": "none" if request.user is None else _whoami(request)
             },
@@ -199,8 +183,7 @@ async def test_in_process_no_user_is_anonymous_not_none(users: None) -> None:
 
 
 def _who_tool(server: MCPServer) -> None:
-    """A kernel tool answering the request's user before and after a pause, and
-    the user it was called as."""
+    """A kernel tool answering the request's user before and after a pause."""
 
     async def who(*, request: Any, user: Any) -> dict[str, str]:
         before = _name(request.user)
@@ -222,8 +205,7 @@ def _handed(user: Any) -> HttpRequest:
 
 @pytest.mark.django_db(transaction=True)
 async def test_an_in_process_call_leaves_the_handed_request_as_it_was(users: None) -> None:
-    """A view handing its own request to ``acall_tool`` still serves as its
-    user after the call, whoever the call ran as."""
+    """A view handing its own request to ``acall_tool`` still serves as its user after the call."""
     owner = await get_user_model().objects.aget(username="cookie-owner")
     server = _server([])
     _who_tool(server)
@@ -256,8 +238,7 @@ async def test_concurrent_in_process_calls_on_one_request_keep_their_own_users(
 
 @pytest.mark.django_db
 def test_sync_call_tool_hands_a_copy_carrying_the_acting_user(users: None) -> None:
-    """Sync ``call_tool`` agrees with ``acall_tool``: the spec's ``request.user``
-    is the ``user=`` it was called as, and the handed request keeps its own."""
+    """Sync ``call_tool`` agrees with ``acall_tool``."""
     model = get_user_model()
     caller = model.objects.get(username="token-caller")
     owner = model.objects.get(username="cookie-owner")
@@ -267,7 +248,6 @@ def test_sync_call_tool_hands_a_copy_carrying_the_acting_user(users: None) -> No
             kind=SelectorKind.RETRIEVE,
             selector=lambda *, request, user: {
                 "request": _whoami(request),
-                # Answered rather than raised on, for a request with no reader.
                 "auser": _async_name(request) if hasattr(request, "auser") else "none",
                 "user": _name(user),
             },
@@ -289,8 +269,7 @@ def test_sync_call_tool_hands_a_copy_carrying_the_acting_user(users: None) -> No
 
 @pytest.mark.django_db
 def test_sync_call_tool_drops_the_handed_requests_token(users: None) -> None:
-    """A token on the handed request is the outer caller's, so the spec's copy
-    carries none, and the handed request keeps its own."""
+    """A token on the handed request is the outer caller's, so the spec's copy carries none."""
     model = get_user_model()
     caller = model.objects.get(username="token-caller")
     owner = model.objects.get(username="cookie-owner")
@@ -315,9 +294,7 @@ def test_sync_call_tool_drops_the_handed_requests_token(users: None) -> None:
 
 @pytest.mark.django_db
 def test_sync_call_tool_with_no_request_hands_one_carrying_the_acting_user(users: None) -> None:
-    """With no request handed, sync ``call_tool`` synthesises one bearing the
-    user, as ``acall_tool`` does, rather than handing
-    a spec that reads ``request`` a ``None``."""
+    """With no request handed, sync ``call_tool`` synthesises one bearing the user."""
     caller = get_user_model().objects.get(username="token-caller")
     server = _server([])
     server.register_tool(

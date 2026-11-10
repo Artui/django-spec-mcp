@@ -1,10 +1,3 @@
-"""``MCPServer``'s registrars, collaborators, session namespacing and URL mounting.
-
-The registrars are asked here with kernel specs: ``register_tool`` and the
-kernel form of ``register_resource``. A kernel spec is registered through the
-registrars, which are the one way in.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -99,8 +92,7 @@ def test_omitted_collaborators_get_constructed_defaults() -> None:
 
 
 def test_default_session_store_is_namespaced_to_the_server() -> None:
-    """The cache-backed store shares one Django cache across every server in
-    the process, so its key space has to be per-server or two mounts collide."""
+    """The cache-backed store shares one Django cache across every server in the process."""
     internal = MCPServer(name="i", url_namespace="internal-mcp")
     public = MCPServer(name="p", url_namespace="public-mcp")
 
@@ -111,16 +103,9 @@ def test_default_session_store_is_namespaced_to_the_server() -> None:
 
 
 def test_sessions_are_keyed_on_name_not_url_namespace() -> None:
-    """Two servers sharing a URL namespace but named differently stay isolated.
-
-    ``url_namespace`` is a routing detail: a server used only in-process (the
-    django-ag-ui bridge) is never mounted, so its namespace is a meaningless
-    default and would collide with a mounted server at the default namespace —
-    a collision Django's urls.W005 duplicate-namespace check cannot see,
-    because an unmounted server isn't in the URL conf.
-    """
-    in_process = MCPServer(name="bridge")  # never mounted; url_namespace is the default
-    mounted = MCPServer(name="public-api")  # also the default url_namespace
+    """Two servers sharing a URL namespace but named differently stay isolated."""
+    in_process = MCPServer(name="bridge")
+    mounted = MCPServer(name="public-api")
 
     session_id = in_process.session_store.create(principal_id="user:1")
 
@@ -129,8 +114,7 @@ def test_sessions_are_keyed_on_name_not_url_namespace() -> None:
 
 
 def test_renaming_a_url_prefix_does_not_drop_sessions() -> None:
-    """Identity, not routing, owns the key space — so a cosmetic URL refactor
-    is not a silent session purge."""
+    """Identity, not routing, owns the key space, so a URL refactor purges nothing."""
     before = MCPServer(name="stable", url_namespace="old-prefix")
     after = MCPServer(name="stable", url_namespace="new-prefix")
 
@@ -140,8 +124,7 @@ def test_renaming_a_url_prefix_does_not_drop_sessions() -> None:
 
 
 def test_free_form_names_produce_usable_cache_keys() -> None:
-    """``name`` is consumer-supplied prose, but cache keys must survive
-    backends (memcached) that reject spaces and control characters."""
+    """``name`` is consumer-supplied prose, but cache keys must survive backends."""
     server = MCPServer(name="My Invoicing Server ✨")
     session_id = server.session_store.create(principal_id="user:3")
 
@@ -149,8 +132,7 @@ def test_free_form_names_produce_usable_cache_keys() -> None:
 
 
 def test_a_hand_built_session_store_keeps_its_own_namespace() -> None:
-    """Passing a store opts out of the server's namespacing — the consumer owns
-    it, and two default-constructed stores collide exactly as before."""
+    """Passing a store opts out of the server's namespacing."""
     store = DjangoCacheSessionStore()
     server = MCPServer(name="s", url_namespace="ignored", session_store=store)
     session_id = server.session_store.create(principal_id="user:2")
@@ -162,7 +144,6 @@ def test_a_hand_built_session_store_keeps_its_own_namespace() -> None:
 def test_urls_is_the_namespaced_triple(attribute: str) -> None:
     patterns, app_name, namespace = getattr(_make(), attribute)
     # (patterns, app_name, namespace) — the shape path() mounts directly, like
-    # admin.site.urls (no include()).
     assert app_name == namespace == "mcp"
     assert [p.name for p in patterns] == ["endpoint", "protected-resource-metadata"]
 
@@ -179,7 +160,6 @@ def test_url_namespace_is_overridable() -> None:
 
 def test_urls_mount_via_path_and_reverse_namespaced() -> None:
     # tests.testapp.urls mounts path("mcp/", server.urls) (the conftest
-    # ROOT_URLCONF), so the namespaced names reverse without include().
     from django.urls import reverse
 
     assert reverse("mcp:endpoint") == "/mcp/"

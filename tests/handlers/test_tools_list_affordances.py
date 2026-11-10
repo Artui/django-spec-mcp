@@ -1,19 +1,3 @@
-"""``tools/list`` advertises the ``affordances`` object a tool's results carry.
-
-A tool renders declared ``affordances`` into every item as an
-``affordances`` key that no presenter declares, so a schema derived from the
-presenter alone would never name it. Nothing failed: the schema does not forbid extra
-keys, so every result still conformed, and a client reading the schema could not
-learn the key or the codes it switches on.
-
-Each test reads the listing through ``MCPServer.list_tools``, the public surface,
-so it runs unchanged against a tree without the fix.
-
-The questions are asked of kernel specs registered with ``register_tool``: a
-``DataclassPresenter`` renders the order, and the order spec and its ``cancel``
-affordance are the ones in ``tests/testapp/affordances.py``.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -70,7 +54,6 @@ def _assert_advertises_cancel(item: Any) -> None:
     cancel = item["properties"]["affordances"]["properties"]["cancel"]
     assert cancel["required"] == ["available"]
     # Enumerated from the declaration, not from any one answer, so a client can
-    # switch on the code exhaustively.
     assert cancel["properties"]["code"]["enum"] == DECLARED_CODES
 
 
@@ -132,8 +115,7 @@ def test_a_service_tool_advertises_its_output_selector_spec_s_affordances() -> N
 
 
 def test_a_service_s_own_affordances_are_not_advertised() -> None:
-    """A service's own ``affordances`` are what a call is refused against, and are
-    never rendered, so they must not reach the schema of what it returns."""
+    """A service's own ``affordances`` are what a call is refused against."""
     server = fresh_server()
     server.register_tool(
         name="cancel_order",
@@ -146,8 +128,6 @@ def test_a_service_s_own_affordances_are_not_advertised() -> None:
                 permissions=None,
             ),
         ),
-        # Its ``books_closed`` condition is unmet, which on its own would leave
-        # it out of the listing this test reads.
         always_listed=True,
     )
 

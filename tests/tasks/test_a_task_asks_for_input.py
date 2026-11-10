@@ -1,19 +1,3 @@
-"""A task whose service asks for input parks in ``input_required`` and resumes.
-
-The worker runs the service; ``AdditionalInputRequired`` there, for a client
-whose creating request declared form elicitation, moves the task to
-``input_required`` with its ``inputRequests`` instead of completing it with an
-``isError`` result. ``tasks/update`` answers it: the answer merges into the
-recorded arguments as a retry's answers merge at task creation, the spec's
-checks are asked on the merged arguments, the round is charged, and the task
-is queued again. The worker re-runs with the merged arguments, under the round
-budget the inline call has.
-
-Every assertion reads the wire (``tasks/get``) or what the executor and the
-limiter saw, so the file asks the same questions of a release without the
-parking.
-"""
-
 from __future__ import annotations
 
 import time
@@ -114,8 +98,7 @@ class _World:
         )
 
     def ctx(self, *, elicitation: Any = None) -> MCPCallContext:
-        """A request declaring the tasks extension and ``elicitation``: forms when
-        ``None``, nothing when ``False``."""
+        """A request declaring the tasks extension and ``elicitation``: forms when ``None``."""
         capabilities: dict[str, Any] = {"extensions": {TASKS_EXTENSION_ID: {}}}
         if elicitation is not False:
             capabilities["elicitation"] = {} if elicitation is None else elicitation
@@ -178,8 +161,7 @@ def test_a_task_asks_waits_and_completes_with_the_answer() -> None:
 
 
 def test_a_second_question_is_asked_under_a_new_key_and_keeps_the_first_answer() -> None:
-    """The spec forbids reusing a key over a task's lifetime, and the first
-    answer must survive the second question, as it does inline."""
+    """The spec forbids reusing a key over a task's lifetime."""
     world = _World()
     task_id = world.start(1500)
     (first,) = world.get(task_id)["inputRequests"]
@@ -206,8 +188,7 @@ def test_a_second_question_is_asked_under_a_new_key_and_keeps_the_first_answer()
 
 @pytest.mark.parametrize("elicitation", [False, {"url": {}}])
 def test_a_client_that_cannot_be_asked_gets_the_result_it_gets_today(elicitation: Any) -> None:
-    """No form elicitation declared on the creating request: the task is never
-    parked, and completes with the ``isError`` result naming what is missing."""
+    """No form elicitation declared on the creating request: the task is never parked."""
     world = _World()
     task_id = world.start(500, elicitation=elicitation)
 
@@ -220,9 +201,7 @@ def test_a_client_that_cannot_be_asked_gets_the_result_it_gets_today(elicitation
 
 @pytest.mark.parametrize("bound", [None, ServerArguments(values={"reason": "audit"})])
 def test_the_round_budget_ends_the_exchange_as_inline(bound: ServerArguments | None) -> None:
-    """Two rounds allowed: the service is asked twice and the third question
-    becomes the ``isError`` result, never a third park. With a bound value too,
-    since the replay's round binds the arguments as recorded, which hold it."""
+    """Two rounds are allowed: a third question becomes the ``isError`` result."""
     world = _World(service=nag_kernel, max_input_rounds=2, server_arguments=bound)
     task_id = world.start(500)
     for _ in range(2):
@@ -238,9 +217,7 @@ def test_the_round_budget_ends_the_exchange_as_inline(bound: ServerArguments | N
 def test_an_answer_long_after_the_question_still_completes_the_task(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A task waits as long as its TTL, so the answer is not held to the
-    inline ``requestState`` lifetime: past it, a stored signature would no longer
-    verify and the earlier answer and the round would silently drop."""
+    """A task waits as long as its TTL, so answers outlive the inline requestState lifetime."""
     world = _World(input_request_ttl_seconds=5)
     task_id = world.start(1500)
     world.answer(task_id, _accept(confirmed=True))
@@ -273,8 +250,7 @@ def test_a_declined_answer_ends_the_task_as_the_inline_refusal_and_is_charged(
 
 
 def test_each_answering_round_is_charged_once() -> None:
-    """The worker charges nothing, so the round the client answers pays, as an
-    inline retry does: without it a parked task re-ran its service for free."""
+    """The worker charges nothing, so the round the client answers pays, as an inline retry does."""
     world = _World()
     task_id = world.start(500)
     assert world.limiter.charges == 1
@@ -296,8 +272,7 @@ def test_a_refused_charge_leaves_the_task_waiting() -> None:
 
 
 def test_the_checks_are_asked_on_the_merged_arguments_before_the_charge() -> None:
-    """The check refuses ``reason``, which only the second answer supplies:
-    the answer is refused, uncharged, and the task keeps waiting for one it admits."""
+    """The check refuses ``reason``, which only the second answer supplies."""
     world = _World(check=_RefusesAReason())
     task_id = world.start(1500)
     world.answer(task_id, _accept(confirmed=True))
@@ -348,8 +323,7 @@ def test_a_server_with_no_executor_left_fails_the_answered_task() -> None:
 
 @pytest.mark.parametrize("meanwhile", ["cancelled", "expired"])
 def test_a_task_gone_or_cancelled_while_its_service_asked_is_not_parked(meanwhile: str) -> None:
-    """A cancel, or the record's expiry, landing while the service ran wins: the
-    question it then asks parks nothing."""
+    """A cancel, or the record's expiry, landing while the service ran wins."""
     task: dict[str, str] = {}
 
     def asks_after_the_task_ends(*, count: int, confirmed: bool = False, reason: str = "") -> Any:  # noqa: ARG001
@@ -374,8 +348,7 @@ def test_a_task_gone_or_cancelled_while_its_service_asked_is_not_parked(meanwhil
 
 @pytest.mark.django_db
 def test_a_task_queued_by_0_6_0_runs_as_it_did() -> None:
-    """A record the cache kept across the upgrade carries no capability, so its
-    service's question is the ``isError`` result 0.6.0 gave, not a park."""
+    """A record the cache kept across the upgrade carries no capability."""
     store = DjangoCacheTaskStore(namespace="asks-upgrade")
     world = _World(store=store)
     task_id = world.create(500)
@@ -419,11 +392,7 @@ def _counting(runs: list[int]) -> Any:
 
 @pytest.mark.parametrize("meanwhile", ["cancelled", "expired"])
 def test_a_task_ended_while_its_answer_is_admitted_stays_ended(meanwhile: str) -> None:
-    """``tasks/update`` reads the task, then admits the answer (the checks and the
-    charge), then saves ``working``: the save is built from the record as it stands
-    then, so a cancel, or the record's expiry, landing in between is not undone and
-    the cancelled task's service does not run. Fails without the re-read in
-    ``resume_task``."""
+    """``tasks/update`` reads the task, then admits the answer (the checks and the charge)."""
     runs: list[int] = []
     task: dict[str, str] = {}
 
@@ -451,11 +420,7 @@ def test_a_task_ended_while_its_answer_is_admitted_stays_ended(meanwhile: str) -
 
 @pytest.mark.parametrize("worker_ran", [True, False])
 def test_a_duplicate_answer_runs_the_service_once(worker_ran: bool) -> None:
-    """A client retrying ``tasks/update`` can land the second while the first
-    admits. The second resumes the task (and, here, its worker runs); the first
-    then finds the task no longer waiting and queues nothing, rather than saving
-    its record over a task that moved on and running the service again. Fails
-    without the guard in ``resume_task``."""
+    """A client retrying ``tasks/update`` can land the second while the first admits."""
     runs: list[int] = []
     task: dict[str, str] = {}
 
@@ -476,12 +441,7 @@ def test_a_duplicate_answer_runs_the_service_once(worker_ran: bool) -> None:
 
 
 def test_a_late_answer_leaves_the_next_rounds_question_in_place() -> None:
-    """A duplicate ``tasks/update`` lands while the first admits: it resumes the
-    task, its worker runs, and the service asks round 2, parking the task again.
-    The first then finds the task waiting on a question it did not answer, and
-    queues nothing, rather than resuming it, wiping round 2's question and running
-    the service once more to ask it again. Fails without the round and request
-    guard in ``resume_task``."""
+    """A duplicate ``tasks/update`` lands while the first admits: it resumes the task."""
     runs: list[int] = []
     task: dict[str, str] = {}
 
@@ -507,12 +467,7 @@ def test_a_late_answer_leaves_the_next_rounds_question_in_place() -> None:
 
 @pytest.mark.parametrize("moved", ["round", "requests", "status"])
 def test_an_answer_resumes_only_the_question_it_read(moved: str) -> None:
-    """Each conjunct of the guard in ``resume_task`` alone. While the answer is
-    admitted, the task's round moves with its requests as they were, a further
-    request joins the one answered, or it is cancelled with its round and requests
-    kept: the answer resumes none of them, saves nothing and queues nothing. Every
-    transition clears the requests, so only the status conjunct keeps a cancelled
-    task that kept them from being reopened."""
+    """Each conjunct of the guard in ``resume_task`` alone."""
     task: dict[str, str] = {}
 
     def act() -> None:
@@ -556,9 +511,7 @@ class _CountingStore(InMemoryTaskStore):
 
 
 def test_the_park_reads_the_task_once_and_saves_it_once() -> None:
-    """From the service's question on, the park is one read and one save: the
-    round, the status and the question land in one record, built from the task as
-    the run left it, so the progress the service reported is kept."""
+    """From the service's question on, the park is one read and one save: the round."""
     store = _CountingStore()
 
     def asks(*, count: int, progress: Any, confirmed: bool = False, reason: str = "") -> Any:  # noqa: ARG001
@@ -581,9 +534,7 @@ def test_the_park_reads_the_task_once_and_saves_it_once() -> None:
 
 
 def test_a_round_set_while_the_worker_runs_is_overwritten_by_its_park() -> None:
-    """The park records the round after the one the worker claimed, so a round a
-    caller set through ``transition_task`` while the run was in flight does not
-    survive it."""
+    """The park records the round after the one the worker claimed."""
     task: dict[str, str] = {}
 
     def moves_the_round(*, count: int, confirmed: bool = False, reason: str = "") -> Any:  # noqa: ARG001
@@ -601,9 +552,7 @@ def test_a_round_set_while_the_worker_runs_is_overwritten_by_its_park() -> None:
 
 
 def test_a_transition_sets_the_round_only_when_asked_and_only_when_it_happens() -> None:
-    """``input_round`` lands with the transition it is given to; left out, the round
-    stays as it was, and ``0`` is a round like any other; a transition the terminal
-    guard refuses sets none."""
+    """``input_round`` lands with the transition it is given to; left out."""
     world = _World()
     task_id = world.create(5)
 
@@ -621,9 +570,7 @@ def test_a_transition_sets_the_round_only_when_asked_and_only_when_it_happens() 
 
 
 def test_the_answer_is_saved_before_the_task_is_queued() -> None:
-    """An executor may run the worker before ``enqueue`` returns: the task must
-    already read ``working`` and queued then, or the worker finds it waiting and
-    leaves it so for good."""
+    """An executor may run the worker before ``enqueue`` returns."""
     world = _World()
     task_id = world.start(500)
 
@@ -639,11 +586,7 @@ def test_the_answer_is_saved_before_the_task_is_queued() -> None:
 
 
 def _hand_parked(keys: dict[str, Any], *, count: int = 5) -> tuple[_World, str]:
-    """A registered tool's task parked as 0.6.0's public API did it: through
-    ``transition_task``, under the caller's own keys.
-
-    ``count`` of 5 is a call the service never asks about, so what happens next is
-    the package's doing and not the service's."""
+    """A registered tool's task parked as 0.6.0's public API did it: through ``transition_task``."""
     world = _World()
     task_id = world.create(count)
     record = world.store.get(task_id)
@@ -667,10 +610,7 @@ def _seen(world: _World, task_id: str) -> tuple[Any, ...]:
     ids=["in-one-update", "in-two-updates"],
 )
 def test_a_task_parked_by_hand_is_answered_as_in_0_6_0(answers: list[dict[str, Any]]) -> None:
-    """Answering every key sets it ``working`` and nothing else: no queueing, no
-    charge and no merge into the arguments, as when only ``transition_task`` parked
-    tasks. The tool is registered, which is what makes the package's own resuming
-    reachable."""
+    """Answering every key sets it ``working`` and nothing else: no queueing."""
     world, task_id = _hand_parked({"k1": {}, "k2": {}})
     before = _seen(world, task_id)
 
@@ -708,10 +648,7 @@ def test_a_task_parked_with_no_requests_is_not_queued_by_an_answer() -> None:
 
 @pytest.mark.parametrize("shape", ["round-zero", "more-than-the-key", "another-key"])
 def test_only_the_question_the_package_asked_resumes_a_task(shape: str) -> None:
-    """The package resumes a task whose one outstanding request is the key of its
-    recorded round, answered under that key. Each conjunct has its case: a round
-    of 0 (whose key is ``additionalInput-0``), a further request beside the key, and
-    an answer under another key."""
+    """The package resumes a task whose one outstanding request is the key of its recorded round."""
     if shape == "round-zero":
         world, task_id = _hand_parked({input_request_key(0): {}})
         answer: dict[str, Any] = {input_request_key(0): _accept(confirmed=True)}
@@ -735,8 +672,7 @@ def test_only_the_question_the_package_asked_resumes_a_task(shape: str) -> None:
 
 
 def test_a_task_whose_tool_is_no_longer_registered_is_queued_as_it_stands() -> None:
-    """Nothing is left to merge into or to charge, so the answer queues the task
-    and its worker answers the unknown tool as any run would."""
+    """Nothing is left to merge into or charge, so the worker answers the unknown tool."""
     world = _World()
     task = create_task(
         store=world.store,

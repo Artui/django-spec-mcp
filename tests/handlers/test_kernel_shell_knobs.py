@@ -1,11 +1,3 @@
-"""The ``tools/call`` shell's knobs, taking effect on a kernel binding.
-
-The shell around the dispatch (rate limits, the deadline, the result ceiling and
-the invalidation) is covered by its own tests. These hold that a kernel binding
-reaches each step, which the coverage gate
-cannot show: the lines run either way.
-"""
-
 from __future__ import annotations
 
 import time
@@ -98,8 +90,7 @@ def test_a_kernel_tools_dispatch_deadline_ends_the_wait() -> None:
 @pytest.mark.django_db
 @pytest.mark.parametrize("is_async", [False, True], ids=["call_tool", "acall_tool"])
 def test_an_anonymous_in_process_caller_reaches_a_kernel_tool(is_async: bool) -> None:
-    """``user=None`` dispatches for an ``AnonymousUser`` on both routes, where the
-    kernel's ``adispatch`` would refuse ``principal=None`` outright."""
+    """``user=None`` dispatches for an ``AnonymousUser`` on both routes."""
     seen: list[Any] = []
     server = make_server(name="knobs")
     server.register_tool(
@@ -117,8 +108,7 @@ def test_an_anonymous_in_process_caller_reaches_a_kernel_tool(is_async: bool) ->
 
 @pytest.mark.django_db
 def test_acall_tool_carries_its_token_on_the_request_it_synthesises() -> None:
-    """``acall_tool`` reaches the wire handler with the ``HttpRequest`` it builds,
-    so the kernel path's ``request.mcp_token`` always has a request to land on."""
+    """``acall_tool`` reaches the wire handler with the ``HttpRequest`` it builds."""
     seen: list[Any] = []
     server = make_server(name="knobs")
     server.register_tool(

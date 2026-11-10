@@ -64,12 +64,7 @@ def _initialize_request() -> HttpRequest:
 
 
 def test_async_auth_backend_on_sync_transport_is_refused() -> None:
-    """An ``async def authenticate`` under ``server.urls`` fails loudly, not open.
-
-    Served, it would authenticate every caller: the sync view cannot await,
-    so the coroutine would pass the ``token is None`` gate on its truthiness
-    alone.
-    """
+    """An ``async def authenticate`` under ``server.urls`` fails loudly, not open."""
     view = StreamableHttpView.as_view(
         tools=ToolRegistry(),
         resources=ResourceRegistry(),
@@ -104,7 +99,6 @@ def test_non_coroutine_awaitable_token_is_refused() -> None:
     class _Awaitable:
         def __await__(self) -> Generator[Any, None, None]:
             # Never driven: the transport refuses the object rather than
-            # awaiting it. The method exists only to satisfy ``isawaitable``.
             yield
 
     with pytest.raises(ImproperlyConfigured):
@@ -126,13 +120,7 @@ class _AllowAnyBackend(_DenyAllBackend):
 
 
 class _AsyncSessionStore(InMemorySessionStore):
-    """A store written async-native — correct *only* under ``server.async_urls``.
-
-    The likeliest instance of the awaitable-in-a-decision family, because
-    unlike an async permission this one is a supported implementation: the
-    async transport ``acall``s these methods. Mounting the same store on WSGI
-    is the mistake, and nothing about the store itself is wrong.
-    """
+    """A store written async-native — correct *only* under ``server.async_urls``."""
 
     async def create(self, *, principal_id: str) -> str:
         del principal_id
@@ -168,12 +156,7 @@ def test_async_session_store_create_on_sync_transport_is_refused() -> None:
 
 
 def test_async_session_store_owner_on_sync_transport_is_refused() -> None:
-    """The ownership gate refuses instead of answering "re-initialize" forever.
-
-    This one fails *closed* without the guard — a coroutine matches no
-    principal — but it fails closed with no legible cause, which is its own
-    kind of outage.
-    """
+    """The ownership gate refuses instead of answering 're-initialize' forever."""
     request = RequestFactory().post(
         "/mcp/",
         data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": "ping"}),
@@ -189,13 +172,7 @@ def test_async_session_store_owner_on_sync_transport_is_refused() -> None:
 
 
 def test_async_session_store_destroy_on_sync_transport_is_refused() -> None:
-    """DELETE is guarded too — ``destroy`` returns ``None``, so nothing else would notice.
-
-    The only site in the family whose return value is *never* inspected: an
-    un-awaited ``destroy`` coroutine would be discarded and the session would
-    quietly survive its own termination. Guarding the call is the only thing
-    that can see it.
-    """
+    """DELETE is guarded too — ``destroy`` returns ``None``, so nothing else would notice."""
 
     class _AsyncDestroyOnly(InMemorySessionStore):
         async def destroy(self, session_id: str) -> None:

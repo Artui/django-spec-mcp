@@ -1,22 +1,3 @@
-"""The kernel branches of ``handle_tools_call`` and its async sibling, called directly.
-
-Asks of tools and resources registered with ``register_tool`` /
-``register_resource``, of both handlers through the ``handle`` fixture: a validated dataclass
-input reaches the service, a service returning ``None`` still serves an object,
-a validation refusal keeps its detail, a scope gate or a spec permission denies
-with ``-32006``, an output selector reshapes the result, the structured-content
-and output-schema knobs answer per binding and server-wide, and the request-shape
-guard names a malformed ``arguments`` before the tool runs.
-
-Two of the questions are asked in a particular way:
-
-- A kernel spec always spreads its declared reads into the service's keywords,
-  so whether a caller can name a reserved pool seed is asked of ``user`` under
-  both ``unknown_arguments`` policies.
-- ``judge_binding`` is asked directly: it judges a prompt's or a view's
-  scope gate and kernel checks on every path, and names no spec.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -232,7 +213,6 @@ class _Judge(PermissionCheck):
         ((_Judge(False),), None, (False, [])),
         ((_Judge(True), _Judge(True)), None, (True, [])),
         ((), None, (True, [])),
-        # The scope gate refuses before a check is asked, naming every scope.
         ((_Judge(True),), ("a", "b"), (False, ["a", "b"])),
     ],
     ids=["denied-naming-no-scope", "all-allow", "none", "scope-gate"],
@@ -259,8 +239,6 @@ def _a_spec() -> ServiceSpec:
 
 
 # Disabling structuredContent also requires disabling outputSchema: advertising
-# the schema while suppressing the content is a spec violation that
-# ``resolve_structured_output`` rejects.
 @pytest.mark.parametrize(
     ("server_config", "registration", "emitted"),
     [
@@ -290,7 +268,6 @@ def test_structured_content_follows_the_binding_over_the_server(
     assert ("structuredContent" in out) is emitted
     if emitted:
         assert out["structuredContent"] == {"a": 1}
-    # The text rendering still carries the payload.
     assert '"a": 1' in out["content"][0]["text"]
 
 
@@ -335,9 +312,7 @@ def test_the_declared_reads_spread_into_the_services_keywords(handle: Handle) ->
     "policy", [UnknownArguments.REJECT, UnknownArguments.IGNORE], ids=["reject", "ignore"]
 )
 def test_a_caller_cannot_name_the_user_seed(handle: Handle, policy: UnknownArguments) -> None:
-    """``user`` is the dispatcher's own name, so a caller sending it is refused as
-    unknown under ``REJECT`` and dropped under ``IGNORE``; either way the service
-    runs as the transport's principal, never as the name the caller sent."""
+    """``user`` is the dispatcher's own name, so a caller sending it is refused or dropped."""
     received: list[Any] = []
 
     def svc(*, user: Any, ok: int) -> dict[str, Any]:
@@ -390,8 +365,7 @@ def test_a_missing_or_null_arguments_field_still_means_no_arguments(
 
 @pytest.mark.parametrize("requested", ["xml", "toon", "json", ""])
 def test_an_output_format_param_is_not_read(handle: Handle, requested: str) -> None:
-    """The text block is always JSON, so a client's ``outputFormat`` names nothing to
-    choose: whatever it says, known once or never, the tool runs and answers in JSON."""
+    """The text block is always JSON, so a client's ``outputFormat`` names nothing to choose."""
     out = _call(handle, _echo(), outputFormat=requested)
     assert out == {
         "content": [{"type": "text", "text": '{\n  "ok": true\n}'}],

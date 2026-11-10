@@ -1,21 +1,3 @@
-"""A retry's answer to a kernel service tool is judged on the arguments it produces.
-
-``tools/call`` merges a retry's ``inputResponses`` over the arguments as sent,
-even with no ``requestState``, so a first call can carry one. A kernel spec's
-permissions are its own ``PermissionCheck``s, and one declaring an
-``arguments`` keyword is handed the call's arguments by ``dispatch``, which the
-transport reaches once, with the merged arguments. So a check admitting only
-project ``"7"`` refuses ``"8"`` whether it was sent plainly or answered over an
-admitted ``"7"``, and admits ``"7"`` answered over a refused ``"8"``, on either
-handler, either view and over a stream.
-
-A kernel check reads the arguments rather than a request, so there is nothing
-to judge before the merge for an answer to slip past.
-
-A caller the spec refuses is not charged the rate limit, answered or not: the
-shell asks a kernel spec's checks before the charge (``admit_kernel_call``).
-"""
-
 from __future__ import annotations
 
 import json
@@ -139,7 +121,6 @@ async def test_an_answer_changing_a_value_the_permission_reads_is_refused(
 
     # Sent plainly, the answered value is refused.
     plain = await _post(server, _params({"project": "8"}, None), is_async=is_async)
-    # Answered over an admitted value, it is refused the same way.
     status, envelope = await _post(
         server, _params({"project": "7"}, {"project": "8"}), is_async=is_async
     )
@@ -154,7 +135,6 @@ async def test_an_answer_changing_a_value_the_permission_reads_is_refused(
 @_ASYNC
 async def test_an_answer_naming_the_admitted_value_runs_on_it(is_async: bool) -> None:
     # The other half: the check reads the merged arguments rather than
-    # refusing every answered call, so the test above holds what it was shown.
     ran: list[Any] = []
 
     out = await _handle(

@@ -1,11 +1,3 @@
-"""Every ``call_context`` this package builds says the call came over MCP.
-
-A project's own callable reads ``call_transport(call_context)`` to tell a call
-over MCP from one over any other transport. So the value has to hold for every
-reader of one call, on every route that builds a context, and for a call proxied
-in process, which ``acall_tool`` is: the entry spec-agents' bridge reaches.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -123,8 +115,7 @@ def _every_reader_read_mcp(readers: _Readers) -> None:
 
 
 def test_the_constant_is_the_plain_string_the_key_holds() -> None:
-    """A plain string, exported from the root, so a project compares against it
-    without importing a type (and a kernel lists no transports)."""
+    """A plain string, exported from the root, so a project needs no type import."""
     assert MCP_TRANSPORT == "mcp"
     assert type(MCP_TRANSPORT) is str
     assert "MCP_TRANSPORT" in django_spec_mcp.__all__
@@ -167,11 +158,7 @@ def test_every_reader_of_an_in_process_call_tool_reads_one_value() -> None:
 
 
 async def test_a_call_proxied_through_acall_tool_reads_mcp() -> None:
-    """The call spec-agents' MCP bridge makes (``integrations/mcp.py``): positional
-    name and arguments, the run's user, and the run's own request handed on. This
-    package cannot depend on spec-agents, so the line is held at the entry it
-    reaches. The transport a call came in on is the one that builds its dict, so
-    a proxied call reads ``mcp``, whoever proxies it."""
+    """The call spec-agents' MCP bridge makes (``integrations/mcp.py``)."""
     server, readers = _server()
     request = RequestFactory().post("/agent/")
     out = await server.acall_tool(TOOL, {}, user=None, request=request)

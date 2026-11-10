@@ -67,14 +67,7 @@ def test_resource_binding_is_template_property() -> None:
 
 
 def test_a_concrete_uri_wins_over_a_template_registered_first() -> None:
-    """Which binding serves a URI must not depend on registration order.
-
-    A template's ``{var}`` matches any single segment, so ``reports://{id}``
-    also matches ``reports://all-tenants-summary``. Resolving in registration
-    order made *which permission stack guards a URI* a function of the order the
-    two were registered in, and the wrong answer is the permissive one — the
-    template is the general case, guarded for the general caller.
-    """
+    """Which binding serves a URI must not depend on registration order."""
     reg = ResourceRegistry()
     template = _binding("reports://{report_id}", name="report")
     concrete = _binding("reports://all-tenants-summary", name="summary")

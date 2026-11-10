@@ -1,11 +1,3 @@
-"""Two servers mounted in one project must be distinguishable and isolated.
-
-The scenario the ``url_namespace`` knob was built for but which nothing
-exercised: a project running ``/internal/mcp`` alongside ``/public/mcp``. The
-per-server ``name`` was inert for exactly as long as no test asserted the wire
-identity of a *second* mount.
-"""
-
 from __future__ import annotations
 
 import json
@@ -47,11 +39,7 @@ def _initialize(client: Client, path: str) -> Any:
 
 
 def test_each_server_reports_its_own_identity(multi_urlconf) -> None:
-    """``name=`` reaches the wire.
-
-    Were both mounts to echo the global ``SERVER_INFO`` name, a client would have
-    no way to tell two servers apart.
-    """
+    """``name=`` reaches the wire."""
     internal = _initialize(Client(), INTERNAL).json()["result"]
     public = _initialize(Client(), PUBLIC).json()["result"]
 
@@ -64,9 +52,7 @@ def test_each_server_reports_its_own_identity(multi_urlconf) -> None:
 
 
 def test_title_is_the_human_label_and_name_stays_the_identifier(multi_urlconf) -> None:
-    """The spec's split: ``name`` is "intended for programmatic or logical use",
-    ``title`` is "intended for UI and end-user contexts". A server with a title
-    keeps its identifier — the title does not replace it."""
+    """The spec's split: name is for programmatic use, title is for UI and end-user contexts."""
     result = _initialize(Client(), INTERNAL).json()["result"]
 
     assert result["serverInfo"]["name"] == "internal-mcp"
@@ -80,11 +66,7 @@ def test_title_omitted_when_not_given(multi_urlconf) -> None:
 
 
 def test_server_name_is_not_shadowed_by_the_server_info_setting(multi_urlconf) -> None:
-    """An explicit ``name=`` outranks ``SERVER_INFO``.
-
-    ``conftest_settings`` configures ``SERVER_INFO['name']``, which would win
-    unconditionally if it outranked the argument.
-    """
+    """An explicit ``name=`` outranks ``SERVER_INFO``."""
     result = _initialize(Client(), INTERNAL).json()["result"]
     assert result["serverInfo"]["name"] == "internal-mcp"
 
@@ -95,19 +77,13 @@ def test_description_surfaces_as_initialize_instructions(multi_urlconf) -> None:
 
 
 def test_instructions_omitted_when_no_description_given(multi_urlconf) -> None:
-    """The spec field is optional — a server without a description omits it
-    rather than sending an empty string."""
+    """The spec field is optional, so a server without a description omits it."""
     result = _initialize(Client(), PUBLIC).json()["result"]
     assert "instructions" not in result
 
 
 def test_sessions_are_not_interchangeable_across_mounts(multi_urlconf) -> None:
-    """A session minted at one mount must not authorize the other.
-
-    Both servers here hold their own ``InMemorySessionStore``; this pins that
-    the transport actually consults its *own* store rather than any shared
-    namespace.
-    """
+    """A session minted at one mount must not authorize the other."""
     session_id = _initialize(Client(), PUBLIC)["Mcp-Session-Id"]
     assert session_id
 
@@ -122,8 +98,7 @@ def test_sessions_are_not_interchangeable_across_mounts(multi_urlconf) -> None:
 
 
 def test_two_servers_can_hold_different_scalars() -> None:
-    """The point of the config snapshot: read per request, these could only ever
-    be global, so no two servers in one project could differ on any of them."""
+    """The point of the config snapshot: read per request, these could only ever be global."""
     internal = MCPServer(
         name="internal",
         config=build_mcp_config(page_size=10, include_validation_value=True),
@@ -140,8 +115,7 @@ def test_two_servers_can_hold_different_scalars() -> None:
 
 
 def test_config_ignores_later_settings_mutation() -> None:
-    """Scalars freeze at construction — a settings change afterwards is not a
-    silent, retroactive reconfiguration of an already-mounted server."""
+    """Scalars freeze at construction — a settings change afterwards is not a silent."""
     with override_settings(SPEC_MCP={"PAGE_SIZE": 7}):
         server = MCPServer(name="s")
     assert server.config.page_size == 7

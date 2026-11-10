@@ -1,23 +1,3 @@
-"""A paginated kernel LIST tool refuses a read its pagination takes away.
-
-``page`` and ``limit`` belong to the read pipeline of a ``LIST`` selector tool
-registered with ``paginate=True``: the tool's ``inputSchema`` advertises them as
-the page and its size, and the call takes both from the arguments before the
-selector runs. A ``reads`` entry of either name registers, is advertised as the
-pipeline's integer rather than as declared, and then never receives what the
-caller sent, so registration refuses it, through ``register_tool`` and through
-``register_tools`` alike.
-
-The kernel takes the two names only from a tool that
-paginates: an unpaginated ``LIST`` tool's read of either name receives the
-caller's value as any read does, and so does a ``RETRIEVE`` tool's, which cannot
-paginate. Both register, and the first is called here to show it.
-
-A kernel spec declares its query values as ``reads`` and a kernel selector's
-arguments are its declared ``reads``, so a read is the only way a name can
-collide with the pagination pair.
-"""
-
 from __future__ import annotations
 
 import warnings

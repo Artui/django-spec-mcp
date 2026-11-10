@@ -1,5 +1,3 @@
-"""The sliding window's own questions; ``test_rate_limit_contract.py`` asks the shared ones."""
-
 from __future__ import annotations
 
 import time
@@ -17,8 +15,7 @@ def test_window_slides_with_real_time() -> None:
     token = TokenInfo(user=User(1))
     assert limiter.consume(http_request(), token) is None
     assert limiter.consume(http_request(), token) is None
-    assert limiter.consume(http_request(), token) is not None  # at the cap
-    # Wait for the window to slide past the first two timestamps.
+    assert limiter.consume(http_request(), token) is not None
     time.sleep(1.1)
     assert limiter.consume(http_request(), token) is None
 

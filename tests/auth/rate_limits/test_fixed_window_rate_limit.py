@@ -1,5 +1,3 @@
-"""The fixed window's own questions; ``test_rate_limit_contract.py`` asks the shared ones."""
-
 from __future__ import annotations
 
 import pytest

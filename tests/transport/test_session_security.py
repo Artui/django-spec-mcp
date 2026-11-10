@@ -1,18 +1,3 @@
-"""Wire-conformance tests for transport auth ordering + session binding.
-
-Each rule runs on both views through ``make_view``, except GET, which only
-the async view can serve a stream on:
-
-- POST authenticates *before* the session lookup (no 404-vs-401 oracle).
-- GET (SSE) and DELETE require authentication wherever a credential can
-  change the answer — which on GET means the async view with a broker
-  wired and sessions on. Where the answer is 405 whatever the caller
-  presents, that is settled first; see
-  ``test_unauthenticated_method_support.py``.
-- Sessions are bound to the principal that initialized them; another
-  principal presenting the id sees the same 404 as an unknown session.
-"""
-
 from __future__ import annotations
 
 import inspect
@@ -259,8 +244,7 @@ async def test_a_modern_notification_is_202(make_view: Any) -> None:
 
 
 async def test_an_unknown_modern_method_is_404(make_view: Any) -> None:
-    """The 404 is what lets a client tell this endpoint from a legacy HTTP+SSE
-    server; the JSON-RPC body is what stops it falling back anyway."""
+    """The 404 is what lets a client tell this endpoint from a legacy HTTP+SSE server."""
     response = await _modern_post(
         make_view(InMemorySessionStore()), principal="alice", method="nonsense/method"
     )

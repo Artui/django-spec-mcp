@@ -1,12 +1,3 @@
-"""``types/`` imports nothing else in the package.
-
-Every subpackage reads these values, and each subpackage's ``__init__``
-re-exports its whole surface, so a ``types/`` module importing one of them would
-make the first import of that subpackage a cycle. Walked from the source rather
-than from ``sys.modules``, so a name imported only under some condition is still
-seen.
-"""
-
 from __future__ import annotations
 
 import ast

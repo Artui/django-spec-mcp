@@ -1,13 +1,3 @@
-"""A retry that runs as a task carries its merged ``inputResponses`` into the record.
-
-The worker replays the recorded arguments and nothing else, so answers left out
-of the record are answers the task never sees: it ran without them and completed
-with an ``isError`` ``input_required`` result. Task creation therefore merges
-them as the inline call does, with or without a valid ``requestState``, and
-this file holds the merge on all three routes into it: the plain sync handler,
-the async one, and a streamed call, whose pre-flight admission is handed in.
-"""
-
 from __future__ import annotations
 
 from dataclasses import replace
@@ -177,12 +167,7 @@ async def test_a_retry_that_runs_as_a_task_stores_and_runs_its_answer(route: str
 
 @_ROUTES
 async def test_answers_carried_in_a_verified_state_reach_the_task(route: str) -> None:
-    """The state is the server's own, re-signed with an answer an earlier round took.
-
-    Round one's state carries none, so the retry below has no ``inputResponses``
-    and the only place ``confirmed`` can come from is the verified state:
-    resolving on the arguments alone, or with the state stripped, leaves it out.
-    """
+    """The state is the server's own, re-signed with an answer an earlier round took."""
     world = _World()
     first = RequestState.from_payload(
         signing.loads(await world.round_one_state(), salt=REQUEST_STATE_SALT)
@@ -239,7 +224,6 @@ async def test_a_junk_state_with_no_answers_stores_the_arguments_as_sent(route: 
     record = await world.run(handle)
     assert record.arguments == {"count": 500}
     # Nothing was merged, so the service asks, and the creating request declared
-    # forms: the task waits for the answer rather than failing.
     assert record.status is TaskStatus.INPUT_REQUIRED
     ((request),) = record.task.input_requests.values()
     assert request["params"]["requestedSchema"]["properties"] == {"confirmed": {"type": "boolean"}}
@@ -273,8 +257,7 @@ async def test_an_answer_cannot_replace_a_bound_value_in_a_task(route: str) -> N
 
 @_ROUTES
 async def test_a_caller_refused_on_the_merged_arguments_gets_no_task(route: str) -> None:
-    """The check refuses ``confirmed``, which only the answer supplies: asked on the
-    arguments as sent it would admit the call and queue what its worker refuses."""
+    """The check refuses ``confirmed``, which only the answer supplies."""
     world = _World(check=_RefusesAnAnswer())
 
     out = await world.call(route, _retry(None), world.ctx())
@@ -285,8 +268,7 @@ async def test_a_caller_refused_on_the_merged_arguments_gets_no_task(route: str)
 
 
 async def test_a_streamed_task_retry_is_admitted_afresh() -> None:
-    """The pre-flight asked on the arguments as sent; answers carried in make it a
-    different question, so creation asks the checks again, on the merged arguments."""
+    """The pre-flight asked on the arguments as sent."""
     check = _Asked()
     world = _World(check=check)
 
@@ -327,8 +309,7 @@ async def test_a_pre_flight_admission_stands_when_no_call_is_handed_in() -> None
 @pytest.mark.parametrize("route", ["sync", "async"])
 @pytest.mark.parametrize("action", ["accept", "decline"])
 async def test_a_selector_task_takes_no_part_in_the_round_trip(route: str, action: str) -> None:
-    """A selector merges and refuses nothing, so its answers neither reach the record
-    (accepted) nor answer the call before a task exists (declined)."""
+    """A selector merges and refuses nothing, so its answers neither reach the record."""
     store = InMemoryTaskStore()
     executor = RecordingExecutor(store)
     server = MCPServer(
@@ -371,14 +352,7 @@ async def test_a_selector_task_takes_no_part_in_the_round_trip(route: str, actio
 async def test_a_call_that_gets_no_task_never_has_its_answers_resolved_for_one(
     route: str, case: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The merge runs after every return that sends the call inline or refuses it.
-
-    Each case leaves ``maybe_create_task`` before its resolve: a client that did not
-    declare the extension, a server with no store, a tool that never runs as a task,
-    and a caller the scope gate denies. A spy on the function the task path calls
-    sees none of them; the inline route resolves through its own import, which the
-    spy does not touch.
-    """
+    """The merge runs after every return that sends the call inline or refuses it."""
     calls: list[tuple[Any, ...]] = []
     real = resolve_call_input
 

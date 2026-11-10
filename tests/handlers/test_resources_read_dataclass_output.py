@@ -1,17 +1,3 @@
-"""``resources/read`` renders a kernel resource through its spec's ``DataclassPresenter``.
-
-``register_resource(spec, uri_template=..., name=...)`` reads through the
-kernel's ``dispatch`` and the spec's presenter renders the row, so what is
-asked here is that both handlers serve what the presenter presents. Beside it:
-
-- a ``LIST`` of dataclasses: a kernel resource reads one row, so a ``LIST`` is
-  refused at registration and served as a selector tool instead;
-- an output no read could render: a presenter that is not a ``Presenter`` is
-  refused when the spec is built, since the spec declares its own presenter;
-- a declaration every read would fail on, refused at registration rather than
-  at the first read: a template variable no read declares.
-"""
-
 from __future__ import annotations
 
 import json
@@ -158,7 +144,6 @@ def test_a_selector_no_read_can_run_is_refused_at_registration(
     spec: SelectorSpec, seeds: PoolSeeds, offender: str
 ) -> None:
     # Neither name is a template variable, so the variable checks above pass
-    # it; the kernel's ``check_seeds``, asked with the server's seeds, does not.
     server = make_server(pool_seeds=seeds)
     with pytest.raises(ImproperlyConfigured, match=rf"Resource 'bad': .*\['{offender}'\]"):
         server.register_resource(spec, name="bad", uri_template="bad://{pk}")
@@ -168,8 +153,6 @@ def test_a_selector_no_read_can_run_is_refused_at_registration(
 @pytest.mark.django_db
 def test_an_optional_read_the_template_names_registers_and_is_read() -> None:
     # The matcher fills every template variable on every read, so ``pk`` is
-    # never left out whatever the read declares, as a bound server argument is
-    # not; a read the template names is checked as required.
     server = _bare_server()
     server.register_resource(
         SelectorSpec(
@@ -205,10 +188,7 @@ def test_an_optional_read_the_template_does_not_name_is_still_refused() -> None:
 
 
 def test_the_refusal_names_the_resource_and_each_variable_no_read_declares() -> None:
-    """``pk`` is declared and so is left out. The other six are listed sorted. The template
-    names them in reverse sorted order, so a list built in template order fails, and six
-    names make a set that happens to iterate sorted a one-in-720 chance per hash seed
-    (checked over ``PYTHONHASHSEED`` 0 to 7), so a list built from a set fails too."""
+    """``pk`` is declared and so is left out."""
     server = _bare_server()
     with pytest.raises(ImproperlyConfigured) as raised:
         server.register_resource(
@@ -246,8 +226,7 @@ def _provides_many() -> _ManyScope:
 
 
 def test_the_variables_a_provider_fills_are_listed_sorted() -> None:
-    """Five provider-filled names, in reverse sorted order in the template: the same two
-    ways to get the order wrong as the undeclared list, held for this one too."""
+    """Five provider-filled names, in reverse sorted order in the template."""
     server = _bare_server()
     names = ["zone", "yard", "mid", "lane", "bay"]
     with pytest.raises(ImproperlyConfigured) as raised:
@@ -279,12 +258,7 @@ def test_the_variables_a_provider_fills_are_listed_sorted() -> None:
     ids=["no-read-of-it", "a-reflected-read"],
 )
 def test_a_variable_named_view_is_refused_as_the_call_s_own(reads: Parameters) -> None:
-    """``view``, like ``request``, is one of the kernel's ``CALL_SEEDS``: dispatch fills it
-    from the call on every mount, so a URI segment of that name could never be the read's.
-    It is refused by the reserved check, whatever the spec declares. Before the kernel's
-    set was read, a spec with no read of it was told the variable was undeclared and one
-    with a reflected read that the server fills it, so the whole message is asserted: it
-    names which check answers."""
+    """``view``, like ``request``, is one of the kernel's ``CALL_SEEDS``."""
     server = _bare_server()
     with pytest.raises(ImproperlyConfigured) as raised:
         server.register_resource(
@@ -302,8 +276,7 @@ def test_a_variable_named_view_is_refused_as_the_call_s_own(reads: Parameters) -
 
 
 def test_a_variable_a_provider_always_fills_is_refused() -> None:
-    """A typed ``kwargs=`` provider that always returns ``pk`` replaces whatever the URI
-    carries, so the read would serve the provider's row for every URI."""
+    """A typed ``kwargs=`` provider that always returns ``pk`` replaces whatever the URI carries."""
     server = _bare_server()
     with pytest.raises(ImproperlyConfigured) as raised:
         server.register_resource(
@@ -347,9 +320,7 @@ def test_a_template_naming_both_kinds_of_bad_variable_says_both() -> None:
 
 @pytest.mark.django_db
 def test_a_template_variable_naming_a_shape_registers_and_is_read() -> None:
-    """A shape is a parameter of the spec too (``parameters()`` is its reads then its
-    shapes), which dispatch takes as an argument, so a variable naming one is not
-    refused: the check reads ``parameters()`` and not ``reads`` alone."""
+    """A shape is a parameter of the spec too (``parameters()`` is its reads then its shapes)."""
     server = _bare_server()
     server.register_resource(
         SelectorSpec(

@@ -1,8 +1,3 @@
-"""End-to-end prompts coverage through the live transport + capability advertisement.
-
-Asked of the default mount, the kernel test server.
-"""
-
 from __future__ import annotations
 
 import json
@@ -27,11 +22,7 @@ def test_initialize_does_not_advertise_prompts_when_none_registered(jsonrpc) -> 
 
 
 def test_initialize_advertises_prompts_when_registered(client: Client) -> None:
-    """A server with prompts → ``capabilities.prompts`` is present.
-
-    We register one through the running ``server`` instance from the testapp
-    URL conf, then drive ``initialize`` against it.
-    """
+    """A server with prompts → ``capabilities.prompts`` is present."""
     from tests.testapp.urls import server
 
     server.register_prompt(name="hello.world", render=lambda **_: "hi")
@@ -55,7 +46,6 @@ def test_initialize_advertises_prompts_when_registered(client: Client) -> None:
         body = response.json()
         assert body["result"]["capabilities"]["prompts"] == {}
     finally:
-        # Drop the prompt we registered so it doesn't leak into other tests.
         server.prompts._bindings.pop("hello.world", None)  # type: ignore[attr-defined]
 
 

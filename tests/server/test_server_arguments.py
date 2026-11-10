@@ -1,18 +1,3 @@
-"""``server_arguments=`` on a kernel tool: declared parameters the server answers for.
-
-A kernel tool registered with a ``ServerArguments`` takes the bound names from
-the server and the withheld ones from no one, and the caller is offered
-neither: ``tools/list`` leaves them out of the ``inputSchema`` and its
-``required``. A bound value wins over whatever the caller sends under its name,
-a bound value fills a read the spec requires, and a binding that cannot mean
-what it says is refused at registration naming the tool, however the binding
-reached the registry. A caller restating a bound value with a different one is
-logged once, by tool and argument name and never by value, and a retry's
-``inputResponses`` cannot replace a bound value, on the synchronous and the
-asynchronous handler alike. Whether a value reaches the callable through each
-registrar is asked in ``test_server_arguments_on_every_registrar.py``.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -129,11 +114,8 @@ def test_the_bound_value_wins_and_the_withheld_one_is_dropped(
     with caplog.at_level(logging.WARNING, logger="django_spec_mcp"):
         result = server.call_tool("card", {"project": 99, "draw": 3}, user=None)
     # Both are dropped rather than refused: the bound project wins over the
-    # caller's value and the withheld sibling is dropped.
     assert result.is_error is False
     assert result.structured_content == {"project": 7, "draw": 0}
-    # Held by the withheld conjunct of ``apply_tool_server_arguments``: a
-    # withheld name is logged whenever the caller sent it.
     (message,) = _dropped(caplog)
     assert "draw" in message
     assert "project" in message
@@ -151,8 +133,6 @@ def _optional_reads(selector: Any, *names: str) -> SelectorSpec:
 
 def test_an_optional_read_the_server_binds_registers_and_is_filled() -> None:
     # An optional read over a keyword with no default is refused at
-    # registration, since a call may leave it out; a bound one never is left
-    # out, because the server's value replaces the caller's on every call.
     server = make_server()
     bind = ServerArguments(values={"project": 7})
     server.register_tool(
@@ -167,8 +147,6 @@ def test_an_optional_read_the_server_binds_registers_and_is_filled() -> None:
 
 def test_a_bound_read_declaring_a_default_registers_and_takes_the_bound_value() -> None:
     # A read declaring a default is not demanded either, so the derived copy
-    # drops the default as well as requiring the read; requiring it alone
-    # leaves it refused as optional.
     server = make_server()
     server.register_tool(
         SelectorSpec(
@@ -208,7 +186,6 @@ def test_an_optional_read_the_server_does_not_bind_is_still_refused() -> None:
 @pytest.mark.parametrize("seat", ["instance_selector_spec", "collection_selector_spec"])
 def test_an_optional_lookup_read_the_server_binds_registers_and_is_filled(seat: str) -> None:
     # The binding reaches the target selector's reads too, which are the
-    # call's arguments as the spec's own are.
     lookup = SelectorSpec(
         kind=SelectorKind.RETRIEVE if seat == "instance_selector_spec" else SelectorKind.LIST,
         selector=lambda *, project: _Card(project=project, draw=0),
@@ -260,9 +237,7 @@ class _ProjectOnlyToACall(Validator):
 
 
 def test_a_name_a_validator_declares_only_to_a_call_is_refused_at_registration() -> None:
-    """Registration reads the declaration made to no call, so a binding a call's
-    declaration would take is refused: the name is declared to no call too, or
-    not bound."""
+    """Registration reads the declaration made to no call."""
     spec = ServiceSpec(
         service=lambda **_: {}, validator=_ProjectOnlyToACall(), permissions=[Unrestricted()]
     )
@@ -319,12 +294,7 @@ def _dropped(caplog: pytest.LogCaptureFixture) -> list[str]:
 def test_a_caller_restating_a_bound_value_with_another_is_logged_once(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Held by the ``repr(...) != repr(...)`` conjunct of ``apply_tool_server_arguments``.
-
-    The restated call below logs nothing only because the comparison sees the
-    caller's value equal the server's; without it both calls would log, which is
-    also what a task worker replaying already-applied arguments would do.
-    """
+    """Held by the ``repr(...) != repr(...)`` conjunct of ``apply_tool_server_arguments``."""
     server = make_server()
     bind = ServerArguments(values={"project": 7})
     server.register_tool(_selector(), name="rows", description="d", server_arguments=bind)
@@ -336,19 +306,13 @@ def test_a_caller_restating_a_bound_value_with_another_is_logged_once(
     (message,) = _dropped(caplog)
     assert "MCP tool 'rows'" in message
     assert "project" in message
-    # The values are the consumer's data: only the names are logged.
     assert "9" not in message
 
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
 def test_an_answer_cannot_replace_a_bound_value(is_async: bool) -> None:
-    """A retry's ``inputResponses`` merge over the arguments with no limit on their keys.
-
-    A first call can carry one too. Held by the second
-    ``apply_tool_server_arguments`` in ``handle_tools_call`` and its async
-    sibling, applied over what the answers produced.
-    """
+    """A retry's ``inputResponses`` merge over the arguments with no limit on their keys."""
     server = make_server()
     bind = ServerArguments(values={"project": 7})
     server.register_tool(_service(), name="note", description="d", server_arguments=bind)

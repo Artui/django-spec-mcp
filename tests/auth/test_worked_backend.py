@@ -1,10 +1,3 @@
-"""The backend the authentication page walks through, run as written.
-
-The page's class is read out of the page and executed here, so the worked
-example cannot drift from the seam it teaches: ``bearer_challenge``,
-``audience_matches`` and the RFC 9728 metadata document.
-"""
-
 from __future__ import annotations
 
 from pathlib import Path

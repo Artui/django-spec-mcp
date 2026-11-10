@@ -1,27 +1,3 @@
-"""What fills a kernel callable's required parameter, and what registration does when nothing does.
-
-A kernel service's callable receives, by name, what ``dispatch`` puts in its
-pool: the dispatcher's seeds (``user``, ``data``, ``call_context`` and the
-rest), the call's own ``request`` and ``view``, the spec's declared ``reads``
-and Validator fields, and what a ``kwargs=`` provider returns. A selector is
-handed the same except ``data``, which the kernel seeds for a service only.
-Each of those is asked here to fill a required parameter of a kernel spec
-registered with ``register_tool``, end to end through ``call_tool``. A
-var-positional parameter and a defaulted one need no source, and are asked
-here so a refusal of the unfilled cases cannot reach them.
-
-A required parameter none of them fills is refused at registration, because every
-call to such a tool raises ``TypeError`` out of dispatch: ``register_tool`` asks
-the kernel's ``check_seeds`` with the server's ``pool_seeds``, since the registered
-pool is not known when a spec is built (``lambda *, tenant: tenant`` is valid on
-a server whose pool registers ``tenant``). A Validator field the callable has
-no way to receive registers, is advertised, and is validated on the call,
-which runs without it. The kernel answers such a field with
-``unreceived_fields`` and does not refuse it, because such a spec runs and may
-mean to (a Validator checking that two fields agree passes one of them on), and
-this package does not refuse it either.
-"""
-
 from __future__ import annotations
 
 import json
@@ -72,7 +48,6 @@ def _server(spec: Any) -> MCPServer:
 
 def _served(spec: Any, arguments: dict[str, Any]) -> Any:
     # The text block carries every result; structured content mirrors it for an
-    # object and is left out for a scalar, which it cannot carry.
     out = _server(spec).call_tool("t", arguments, user=None).to_dict()
     assert out.get("isError") is not True, out
     served = json.loads(out["content"][0]["text"])
@@ -89,7 +64,6 @@ def test_a_required_seed_parameter_is_filled_by_dispatch() -> None:
 
 def test_a_required_data_parameter_without_a_validator_receives_an_empty_payload() -> None:
     # The kernel always seeds ``data`` for a service, so a spec with no
-    # Validator still has a payload to hand over, and it is empty.
     assert _served(_service(lambda *, data: dict(data)), {}) == {}
 
 
@@ -113,13 +87,11 @@ def test_a_defaulted_parameter_nothing_fills_runs_on_its_default() -> None:
 
 def test_a_var_positional_parameter_needs_no_source() -> None:
     # ``*tags`` has no default, so a check counting every parameter would call it
-    # required with no source; dispatch binds by keyword and leaves it empty.
     assert _served(_service(lambda *tags: {"tags": list(tags)}), {}) == {"tags": []}
 
 
 def test_a_defaulted_positional_only_parameter_registers_and_runs_on_its_default() -> None:
     # Positional-only cannot be bound by keyword, so a check reading the name
-    # alone would find no source for it; the default is what answers.
     assert _served(_retrieve(lambda pk=5, /: {"pk": pk}), {}) == {"pk": 5}
 
 
@@ -135,7 +107,6 @@ def test_a_validator_field_reaches_a_callable_that_can_receive_it(
     service: Callable[..., Any],
 ) -> None:
     # What the refusal below must leave alone: a field is not lost when the
-    # callable names it, takes ``data`` or takes ``**kwargs``.
     spec = _service(service, validator=DataclassValidator(_Titled))
 
     assert _served(spec, {"title": "a", "note": "kept"}) == "kept"
@@ -143,8 +114,6 @@ def test_a_validator_field_reaches_a_callable_that_can_receive_it(
 
 def test_a_selector_requiring_the_view_registers_and_is_handed_it() -> None:
     # The kernel's in-process route has no view, so ``view`` is ``None``; what
-    # is asked is that the parameter is filled rather than left to ``TypeError``.
-    # The selector returns a value, since a retrieve answering ``None`` is a miss.
     seen: list[Any] = []
 
     def _by_view(*, view: Any) -> dict[str, bool]:
@@ -163,8 +132,6 @@ _UNFILLED = "which nothing fills"
     ("build", "wording"),
     [
         # Factories, built inside the block, so a spec refused when it is built
-        # cannot fail collection; the match on the tool's name says the
-        # registration refused it, not the spec's construction.
         pytest.param(lambda: _service(lambda *, other: other), _UNFILLED, id="service"),
         pytest.param(lambda: _retrieve(lambda *, pk: pk), _UNFILLED, id="selector"),
         pytest.param(
@@ -177,8 +144,6 @@ _UNFILLED = "which nothing fills"
             "positional-only parameter",
             id="positional-only",
         ),
-        # The kernel seeds ``data`` for a service only, so a selector requiring it
-        # is as unfilled as ``other``.
         pytest.param(
             lambda: _retrieve(lambda *, data: data), _UNFILLED, id="selector-requiring-data"
         ),
@@ -193,7 +158,6 @@ def test_a_required_parameter_nothing_fills_is_refused_at_registration(
 
 def test_a_validator_field_the_callable_cannot_receive_registers_and_is_validated() -> None:
     # ``note`` reaches a callable naming it, taking ``data`` or taking ``**kwargs``;
-    # this one takes ``title`` alone, so ``note`` is validated and not passed on.
     spec = _service(lambda *, title: title, validator=DataclassValidator(_Titled))
     server = _server(spec)
     listed: Any = server.list_tools(user=None)
@@ -205,7 +169,6 @@ def test_a_validator_field_the_callable_cannot_receive_registers_and_is_validate
     assert "note" in listed["tools"][0]["inputSchema"]["properties"]
     assert out.get("isError") is not True, out
     assert json.loads(out["content"][0]["text"]) == "a"
-    # A refusal naming no missing argument keeps the generic message.
     assert refused.get("isError") is True, refused
     assert json.loads(refused["content"][0]["text"])["error"] == {
         "type": "validation_error",

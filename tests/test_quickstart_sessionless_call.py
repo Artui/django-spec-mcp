@@ -1,10 +1,3 @@
-"""The Quickstart's sessionless ``tools/call``, sent as the page writes it.
-
-The page's ``curl`` is read out of the page, its headers and body sent through
-the test client, so the one whole ``2026-07-28`` request a reader copies cannot
-drift from what the server accepts.
-"""
-
 from __future__ import annotations
 
 import json

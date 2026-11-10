@@ -1,20 +1,3 @@
-"""A kernel service tool advertises the arguments dispatch admits, and closes where it refuses.
-
-``register_tool`` hands a service tool's ``unknown_arguments`` to the kernel's
-``dispatch`` as registered. ``REJECT``, the default, refuses a name the spec
-does not declare whatever the spec declares it through: a Validator, ``reads``,
-a target selector's ``reads`` or nothing at all. The ``inputSchema`` lists
-``ServiceSpec.parameters()`` and stamps ``additionalProperties: false`` exactly
-where dispatch refuses an undeclared name; under ``IGNORE`` it carries no
-``additionalProperties`` at all, which JSON Schema reads as open.
-
-A kernel spec's arguments are what it declares. The refusal names the key in
-the detail (``{"rogue": ["Unknown argument."]}``); a service's bare ``**kwargs``
-does not open the set, since an argument the spec does not declare never
-reaches a kernel callable; and under ``IGNORE`` the schema omits
-``additionalProperties`` rather than stamping it ``true``.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -106,7 +89,6 @@ def _call(server: MCPServer, arguments: dict[str, Any]) -> dict[str, Any]:
 
 def test_a_target_lookup_service_refuses_an_undeclared_argument() -> None:
     # ``archive_task`` behind a ``pk`` lookup, under the default ``REJECT``. The lookup's ``pk``
-    # and the service's ``reason`` are listed, and nothing else is admitted.
     server = _server(_SPECS["target-lookup"](), policy=UnknownArguments.REJECT)
 
     schema = _input_schema(server)
@@ -127,9 +109,6 @@ def test_the_advertised_properties_are_the_keys_dispatch_admits(
     name: str, policy: UnknownArguments
 ) -> None:
     # The agreement asked of the kernel rather than restated: the properties
-    # are the spec's parameters, and the schema is closed exactly where
-    # dispatch refuses a name outside them. Closed, a call naming one
-    # undeclared key is refused for that key; open, the same call is served.
     spec = _SPECS[name]()
     server = _server(spec, policy=policy)
 
@@ -150,8 +129,6 @@ def test_the_advertised_properties_are_the_keys_dispatch_admits(
 
 def test_ignore_keeps_serving_an_undeclared_argument() -> None:
     # ``IGNORE`` is the opt-out: the schema lists the parameters and stays
-    # open, and a call naming an undeclared key is served, with the declared
-    # one delivered and the other dropped.
     server = _server(_SPECS["validator"](), policy=UnknownArguments.IGNORE)
 
     schema = _input_schema(server)
@@ -165,9 +142,6 @@ def test_ignore_keeps_serving_an_undeclared_argument() -> None:
 
 def test_a_bare_var_keyword_service_stays_closed_and_receives_no_undeclared_argument() -> None:
     # An argument the spec does not declare never reaches a kernel callable, so
-    # a service's ``**kwargs`` opens nothing: the undeclared key
-    # is refused, and a call without it reaches the service with the
-    # Validator's fields beside the pool's seeds, as any catch-all receives them.
     server = _server(_SPECS["var-keyword"](), policy=UnknownArguments.REJECT)
 
     schema = _input_schema(server)

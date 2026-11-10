@@ -1,14 +1,3 @@
-"""A URI its template splits more than one way is refused, never guessed at.
-
-Each ``{var}`` matches one or more characters other than ``/``, so the literal
-text between two variables decides where one ends. When that text also occurs
-inside a value, ``things://{a}-{b}`` read as ``things://1-2-3`` fits both
-``a='1-2', b='3'`` and ``a='1', b='2-3'``. Picking either would hand the
-selector arguments the client may not have meant, so the read is refused with
-``-32602`` and a subscription drops the URI; every URI the template splits one
-way only keeps resolving.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -69,9 +58,7 @@ def _read(uri: str, protocol_version: str = "2025-11-25") -> Any:
 
 @pytest.mark.parametrize("protocol_version", ["2025-11-25", "2026-07-28"])
 def test_a_read_its_template_splits_two_ways_is_refused(protocol_version: str) -> None:
-    """``-32602`` in both eras, where an unknown URI is ``-32002`` in the older
-    one, so the refusal is told apart from "no such resource" by its code there
-    and by its message in both."""
+    """-32602 in both eras, where an unknown URI is -32002 in the older one."""
     out = _read("things://1-2-3", protocol_version)
     assert isinstance(out, JsonRpcError)
     assert out.code == JsonRpcErrorCode.INVALID_PARAMS
@@ -105,8 +92,7 @@ def test_a_file_template_serves_report_pdf_and_refuses_a_tar_gz() -> None:
 
 
 def test_a_subscription_drops_an_ambiguous_uri_and_keeps_its_unambiguous_sibling() -> None:
-    """Refused the way every other unwatchable URI is: omitted from the grant,
-    not an error, so the rest of the subscription still opens."""
+    """Refused the way every other unwatchable URI is: omitted from the grant, not an error."""
     granted, topics = grant_subscription(
         SubscriptionFilter(resource_uris=("things://1-2-3", "things://1-2")),
         call_context(_server()),
@@ -137,8 +123,7 @@ def test_three_variables_split_one_way_resolve() -> None:
 
 
 def test_variables_separated_by_a_slash_split_one_way() -> None:
-    """A value never holds a ``/``, so a slash between two variables leaves a
-    single split however much other punctuation the values repeat."""
+    """A value never holds a slash, so a slash between two variables leaves one split."""
     reg = ResourceRegistry()
     reg.register(_binding("v://{a}/{b}"))
     found = reg.resolve("v://x-y.z/w.v-u")
@@ -147,12 +132,7 @@ def test_variables_separated_by_a_slash_split_one_way() -> None:
 
 
 def test_a_trailing_newline_is_no_false_ambiguity_and_no_value() -> None:
-    """``$`` matches before a final newline, so a greedy ``{pk}`` would take the
-    newline and a lazy one would not, and a template with one variable would be
-    called ambiguous. Matching the whole URI keeps the two in step, and a
-    control character is no part of a value, so the URI resolves to nothing:
-    neither the template nor the concrete ``reports://`` answers it
-    (``test_control_characters_in_uris.py``)."""
+    """``$`` matches before a final newline, so a greedy ``{pk}`` would take it."""
     reg = ResourceRegistry()
     template = _binding("invoices://{pk}")
     reg.register(template)
@@ -163,9 +143,7 @@ def test_a_trailing_newline_is_no_false_ambiguity_and_no_value() -> None:
 
 
 def test_an_ambiguous_uri_is_refused_rather_than_handed_to_a_later_template() -> None:
-    """Which binding answers a URI must not turn on whether its values repeat a
-    template's literals, so the refusal stops at the first template that
-    matches instead of falling through to the next."""
+    """Which binding answers must not turn on whether values repeat a template's literals."""
     reg = ResourceRegistry()
     reg.register(_binding("things://{a}-{b}"))
     reg.register(_binding("things://{x}"))

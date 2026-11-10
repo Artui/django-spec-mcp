@@ -1,23 +1,3 @@
-"""A ``401`` challenge is only honest where a token can change the answer.
-
-Both transports answer ``GET /mcp/`` with ``405`` on configurations that offer
-no server-pushed stream: the sync one always, the async one when no broker is
-wired or sessions are off, and decide it before authenticating. Authenticating
-first would answer an unauthenticated caller ``401`` with an RFC 9728
-``WWW-Authenticate`` challenge naming the protected-resource metadata document
-— the signal an MCP client uses to begin an OAuth flow, which in desktop
-clients opens a browser window, for a flow that could only end in ``405``.
-
-The modern path validates headers ahead of authentication for the same
-reason: era detection reveals nothing about who is asking, and gating it on
-credentials would break anonymous probes. Whether a resource supports a method
-is the same kind of fact, and ``DELETE`` on the same endpoint answers it
-without a credential.
-
-Grouped in one file because the rule spans both transports and three
-configurations, and a per-transport home would hide whether the two agree.
-"""
-
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -47,12 +27,7 @@ _MODERN_VERSION = "2026-07-28"
 
 
 class _HeaderPrincipalBackend:
-    """Authenticates on a header, so "no credential" is expressible.
-
-    ``AllowAnyBackend`` authenticates every request as anonymous and so can
-    never return ``401`` — which is why the default development configuration
-    cannot reach any of this.
-    """
+    """Authenticates on a header, so 'no credential' is expressible."""
 
     def authenticate(self, request: HttpRequest) -> TokenInfo | None:
         principal: str | None = request.headers.get("X-Principal")
@@ -98,12 +73,7 @@ def _get(*, version: str = _LEGACY_VERSION, principal: str | None = None) -> Any
 
 @pytest.mark.parametrize("sessions", [True, False])
 def test_sync_get_is_405_without_a_credential(sessions: bool) -> None:
-    """WSGI implements no GET stream at all, so the setting cannot matter.
-
-    The sessions check is absent here rather than merely late, which is what
-    made every sync deployment with a real auth backend reach this, not only
-    the sessionless ones.
-    """
+    """WSGI implements no GET stream at all, so the setting cannot matter."""
     response = _view(sessions=sessions)(_get())
     assert response.status_code == 405
     assert "WWW-Authenticate" not in response
@@ -132,12 +102,7 @@ async def test_async_get_is_405_without_a_credential_when_sessionless() -> None:
 
 
 async def test_async_get_is_405_without_a_credential_when_no_broker_is_wired() -> None:
-    """Holds the ``broker is None`` conjunct of the guard on its own.
-
-    ``MCPServer(sse_broker=None)`` with sessions *enabled* is a documented
-    configuration (``docs/async.md``), so the rule cannot be scoped to
-    ``SESSIONS_ENABLED``.
-    """
+    """Holds the ``broker is None`` conjunct of the guard on its own."""
     view = _view(sessions=True, is_async=True, broker=None)
     response = await view(_get())
     assert response.status_code == 405
@@ -145,12 +110,7 @@ async def test_async_get_is_405_without_a_credential_when_no_broker_is_wired() -
 
 
 async def test_async_get_is_405_without_a_credential_when_sessions_are_off() -> None:
-    """Holds the ``not sessions_enabled`` conjunct on its own.
-
-    Paired with the broker test above deliberately: the guard is one branch
-    arc, so deleting either conjunct leaves line and branch coverage at 100%.
-    These two are what fail instead.
-    """
+    """Holds the ``not sessions_enabled`` conjunct on its own."""
     view = _view(sessions=False, is_async=True, broker=InMemorySSEBroker())
     response = await view(_get())
     assert response.status_code == 405
@@ -167,12 +127,7 @@ async def test_async_get_answers_the_same_with_a_credential(sessions: bool, brok
 
 
 async def test_async_get_still_challenges_when_a_stream_is_actually_on_offer() -> None:
-    """The guard against over-correcting.
-
-    Sessions on and a broker wired is the one GET configuration that serves a
-    stream, so authentication genuinely decides the answer and the ``401`` —
-    challenge and all — must survive.
-    """
+    """The guard against over-correcting."""
     view = _view(sessions=True, is_async=True, broker=InMemorySSEBroker())
     response = await view(_get())
     assert response.status_code == 401
@@ -183,7 +138,7 @@ async def test_async_get_past_the_gate_reaches_the_session_checks() -> None:
     """An authenticated caller on that same configuration is not short-circuited."""
     view = _view(sessions=True, is_async=True, broker=InMemorySSEBroker())
     response = await view(_get(principal="alice"))
-    assert response.status_code == 404  # authenticated, but named no session
+    assert response.status_code == 404
 
 
 # ---------- DELETE answers the same question without a credential ----------
@@ -200,13 +155,7 @@ async def test_delete_answers_405_without_a_credential(is_async: bool) -> None:
 
 @pytest.mark.parametrize("is_async", [False, True])
 async def test_delete_discloses_the_setting_to_anyone_who_asks(is_async: bool) -> None:
-    """Why hiding GET's ``405`` was never worth a spurious OAuth flow.
-
-    ``DELETE`` distinguishes sessions-on from sessions-off without a
-    credential, and sessions-off is precisely what makes the legacy ``GET``
-    a ``405``. Challenging GET would protect nothing the neighbouring verb
-    does not already publish on the same endpoint.
-    """
+    """Why hiding GET's ``405`` was never worth a spurious OAuth flow."""
     off = _view(sessions=False, is_async=is_async)
     on = _view(sessions=True, is_async=is_async)
     off_request, on_request = factory.delete("/mcp/"), factory.delete("/mcp/")

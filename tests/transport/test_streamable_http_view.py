@@ -1,11 +1,3 @@
-"""What both streamable-HTTP views answer a POST or DELETE with, before and around dispatch.
-
-Each test runs once per view through the ``endpoint`` fixture, because the two
-views answer these requests identically. ``test_a_body_json_cannot_decode_is_a_parse_error``
-is the sync view's alone: it must decode on a bounded stack, and its async twin
-lives with the async view's tests.
-"""
-
 from __future__ import annotations
 
 import inspect
@@ -52,17 +44,12 @@ async def test_a_decode_error_keeps_the_decoders_detail(endpoint: Endpoint) -> N
 @pytest.mark.parametrize(
     ("body", "raises"),
     [
-        # Nested past the decoder's recursion limit. No fixed depth is past it
-        # on every run, so ``None`` stands for a body found on the thread that
-        # decodes it, under the 1 MiB default cap: see ``tests.utils``.
         pytest.param(None, RecursionError, id="nested-past-the-recursion-limit"),
-        # Over the 4300-digit cap on int conversion: a plain ``ValueError``.
         pytest.param(
             b'{"jsonrpc": "2.0", "id": 1, "method": "ping", "params": {"n": ' + b"9" * 5000 + b"}}",
             ValueError,
             id="integer-over-the-digit-limit",
         ),
-        # Not UTF-8: a ``UnicodeDecodeError`` from decoding the bytes.
         pytest.param(
             b'{"jsonrpc": "2.0", "id": 1, "method": "\xff"}',
             UnicodeDecodeError,
@@ -73,19 +60,11 @@ async def test_a_decode_error_keeps_the_decoders_detail(endpoint: Endpoint) -> N
 def test_a_body_json_cannot_decode_is_a_parse_error(
     client: Client, body: bytes | None, raises: type[Exception]
 ) -> None:
-    """None of these is a ``JSONDecodeError``, and each escaped as a 500.
-
-    The parse runs before authentication, so anyone could send one. The id is
-    ``null`` because a body that never decoded has no id to echo. The request
-    runs on a bounded stack, which keeps the nested body small, and that body is
-    found on the same thread because the bound is a floor rather than a size.
-    """
+    """None of these is a ``JSONDecodeError``, and each escaped as a 500."""
 
     def post() -> Any:
         sent: bytes = body if body is not None else nested_past_the_decoders_limit_here()
         # Checked on the thread that decodes it, because that thread's stack
-        # is what the nested body's limit depends on. A body that decoded here
-        # would be answered by a later check and pass without the fix.
         with pytest.raises(raises) as raised:
             json.loads(sent)
         assert raised.type is raises
@@ -98,8 +77,6 @@ def test_a_body_json_cannot_decode_is_a_parse_error(
 
     response = on_a_bounded_stack(post)
     payload: Any = response.json()
-    # Neither the size cap, which runs before the parse, nor the shape check
-    # a body that decoded would reach after it.
     assert payload["error"]["message"] != "Request body too large"
     assert payload["error"]["message"] != "JSON-RPC message must be a JSON object"
     assert response.status_code == 400
@@ -150,11 +127,7 @@ def test_two_servers_can_allow_different_origins(client: Client) -> None:
 
 
 async def test_post_response_jsonrpc_id_with_jsonrpc_request_only(endpoint: Endpoint) -> None:
-    """A bare JSON-RPC response object posted to the server is rejected.
-
-    Sent inside a session, so the refusal is the view's and not the session
-    gate's, which answers ``-32600`` too.
-    """
+    """A bare JSON-RPC response object posted to the server is rejected."""
     session_id: str = await endpoint.initialize()
     response = await endpoint.post(
         {"jsonrpc": "2.0", "id": 1, "result": {"ok": True}}, session_id=session_id
@@ -251,8 +224,6 @@ async def test_initialize_with_unsupported_protocol_header_is_rejected(endpoint:
             headers={"Mcp-Protocol-Version": "9999-99-99"},
         )
     # ``initialize`` may omit the header; it may not name a version this
-    # server does not speak. Falling back would answer a different protocol
-    # than the one asked for and say nothing about it.
     assert response.status_code == 400
 
 

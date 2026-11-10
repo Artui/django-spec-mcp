@@ -1,11 +1,3 @@
-"""Both mounts hand the endpoint view every collaborator the server holds.
-
-A collaborator left out of ``as_view`` fails with no error on either side: the
-view falls back to its class default, ``None``. A replay buffer dropped from
-``async_urls`` means every ``Last-Event-ID`` is silently ignored, and nothing
-else in the suite reaches the wiring, so it is asserted here, by identity.
-"""
-
 from __future__ import annotations
 
 from typing import Any

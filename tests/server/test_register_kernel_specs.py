@@ -1,9 +1,3 @@
-"""``register_tool``, ``register_tools`` and the kernel form of ``register_resource``.
-
-The spine's file, asked of kernel specs throughout, including that
-``register_tool`` refuses anything that is not a kernel spec.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
@@ -112,7 +106,6 @@ def test_a_list_tool_takes_the_page_knobs() -> None:
 @pytest.mark.parametrize("kind", ["service", "selector"])
 def test_a_task_policy_is_kept_on_the_binding(policy: TaskPolicy, kind: str) -> None:
     # The binding is what ``maybe_create_task`` reads, so the policy has to reach it
-    # from either kind of tool. What each policy does with a call is ``tests/tasks/``'.
     spec = _service() if kind == "service" else _selector(SelectorKind.RETRIEVE)
     binding = _server().register_tool(spec, name="t", task_policy=policy)
     assert binding.task_policy is policy
@@ -301,7 +294,6 @@ _NOT_JSON = pytest.mark.parametrize(
 @_NOT_JSON
 def test_a_non_json_encoding_beside_affordances_is_refused(encoding: ResourceEncoding) -> None:
     # The kernel projects each affordance into the presented object, so a
-    # presenter answering a document or bytes would fail every read.
     with pytest.raises(
         ImproperlyConfigured, match=f"encoding={encoding.name} cannot sit beside affordances"
     ):
@@ -316,7 +308,6 @@ def test_a_non_json_encoding_beside_affordances_is_refused(encoding: ResourceEnc
 @_NOT_JSON
 def test_a_non_json_encoding_beside_allow_none_is_refused(encoding: ResourceEncoding) -> None:
     # A missing row presents as ``None`` without running the presenter, so it
-    # could be neither a document nor bytes.
     with pytest.raises(
         ImproperlyConfigured, match=f"encoding={encoding.name} cannot sit beside allow_none"
     ):
@@ -327,7 +318,6 @@ def test_a_non_json_encoding_beside_allow_none_is_refused(encoding: ResourceEnco
 
 def test_the_spec_is_checked_for_a_resource_before_its_encoding() -> None:
     # A spec that is no resource at all is told so, not that its affordances
-    # cannot sit beside a non-JSON encoding.
     affordances = {"cancel": CANCEL_ORDER}
     with pytest.raises(TypeError, match="register_resource takes a django_service_specs"):
         _server().register_resource(
@@ -347,7 +337,6 @@ def test_the_spec_is_checked_for_a_resource_before_its_encoding() -> None:
 
 def test_a_json_resource_keeps_affordances_and_allow_none() -> None:
     # The control for both refusals: under JSON, a presented object with its
-    # affordances and a ``null`` for a missing row are both bodies.
     binding = _server().register_resource(
         _retrieve(
             presenter=DataclassPresenter(_Row),
@@ -412,8 +401,7 @@ def test_a_bare_string_scope_is_one_scope() -> None:
 
 
 def test_a_guarded_kernel_spec_registers_under_require_tool_permissions() -> None:
-    """The spec's own permissions are what the guard check reads: a guarded
-    tool and resource are accepted, unguarded ones refused."""
+    """The spec's own permissions are what the guard check reads."""
     server = _server(require_tool_permissions=True)
     assert server.register_tool(_service(), name="guarded").name == "guarded"
     assert (
@@ -463,7 +451,6 @@ class _Source:
             id="knob",
         ),
         # Refused by the tool registry's own check rather than the binding's, so
-        # only the trial registration of every entry keeps ``early`` out.
         pytest.param(
             _service(),
             {"late": {"server_arguments": ServerArguments(values={"tenant": 1})}},
@@ -472,7 +459,6 @@ class _Source:
             id="server-arguments",
         ),
         pytest.param(_service(), {}, ValueError, "Duplicate MCP tool name", id="name-taken"),
-        # A declaration no call can run, refused by the kernel's ``check_seeds``.
         pytest.param(
             ServiceSpec(service=lambda *, other: other, permissions=OPEN),
             {},

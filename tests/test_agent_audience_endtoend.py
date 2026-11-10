@@ -1,15 +1,3 @@
-"""Agent audience on a kernel tool, on the wire.
-
-Unit coverage proves each piece; this proves the wiring. A kernel tool presenting
-through a marked-up dataclass must actually *return* a projected payload and
-advertise a schema that matches it: a round trip through the handlers, not
-through the projection helpers directly.
-
-The markings are ``FieldMarking`` extras on ``AgentInvoiceOutput``. A hidden
-field is left out of the schema and the row alike, and a ``Literal`` presents
-its value (``PENDING_REVIEW``), not a label.
-"""
-
 from __future__ import annotations
 
 import json
@@ -94,7 +82,6 @@ def test_the_advertised_schema_matches_what_the_call_returns() -> None:
     advertised = set(tool["outputSchema"]["properties"]["items"]["items"]["properties"])
     assert advertised == set(returned["structuredContent"]["items"][0])
     # The handle is described rather than silently omitted, and the hidden
-    # field is described nowhere.
     assert "id" in advertised
     assert "sent" not in advertised
 

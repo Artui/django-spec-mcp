@@ -1,16 +1,3 @@
-"""The JSON-RPC error codes the MCP spec names, pinned on the wire of a kernel mount.
-
-Asks of the kernel conformance server the only error codes the spec dictates
-for a server of this shape, each with a client behaviour attached to it. A
-client may special-case ``-32002`` to mean "that resource is gone" and
-``-32602`` to mean "the request itself was wrong, don't retry it unchanged".
-They are asserted through the live transport, on
-both views, because the number a client sees is the contract.
-
-The denial is a kernel ``PermissionCheck`` refusing the anonymous caller; the
-kernel's ``NotPermitted`` is what ``KERNEL_REFUSALS`` maps to ``-32006``.
-"""
-
 from __future__ import annotations
 
 import json
@@ -32,8 +19,6 @@ pytestmark = pytest.mark.django_db(transaction=True)
 @pytest.fixture(params=[False, True], ids=["sync", "async"])
 def mount(request: pytest.FixtureRequest) -> Iterator[None]:
     server = build_kernel_server()
-    # A kernel ``PermissionCheck`` denial: its ``NotPermitted`` is what the wire
-    # maps to -32006, with an HTTP 403.
     server.register_tool(
         ServiceSpec(service=lambda: {"ok": "true"}, permissions=[IsAuthenticated()]),
         name="gated",
@@ -56,7 +41,6 @@ def test_an_unknown_resource_is_32002(caller: KernelClient) -> None:
     assert response.status_code == 200, response.content
     error = response.json()["error"]
     assert error["code"] == -32002
-    # The spec's worked example echoes the URI in ``data``.
     assert error["data"] == {"uri": "conformance://nothing-here"}
 
 
@@ -78,13 +62,7 @@ def test_an_unknown_name_or_method_has_the_code_the_spec_names(
 
 
 def test_a_kernel_permission_denial_does_not_squat_on_32002(caller: KernelClient) -> None:
-    """A denial must not look like a missing resource.
-
-    ``-32002`` is the spec's resource-not-found, so a denial sent under it would
-    be read by a spec-following client as "resource not found". The denial
-    carries an implementation-defined code, and the HTTP status is what a
-    client acts on.
-    """
+    """A denial must not look like a missing resource."""
     response = caller.post("tools/call", {"name": "gated", "arguments": {}})
     assert response.status_code == 403, response.content
     assert response.json()["error"] == {"code": -32006, "message": "Insufficient permission"}

@@ -1,12 +1,3 @@
-"""A 401's challenge carries ``error="invalid_token"`` only when a credential was sent.
-
-RFC 6750 3.1: when a request lacks any authentication information, the
-challenge SHOULD NOT include an error code. A client meeting
-``invalid_token`` on its first, credential-free request reads it as "the token
-you sent is bad" and may discard a token it never presented, where the bare
-challenge tells it to start the authorization flow.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -75,7 +66,6 @@ async def _refuse(endpoint: Endpoint, route: str, headers: dict[str, str]) -> An
         (False, "delete"),
         (True, "delete"),
         # The sync view's GET is a 405 before it authenticates; only the
-        # async view, with a broker and sessions, reaches a challenge there.
         (True, "get"),
     ],
 )

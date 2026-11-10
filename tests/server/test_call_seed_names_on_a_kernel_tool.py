@@ -1,16 +1,3 @@
-"""What each of a tool call's seed names is to a kernel tool.
-
-``request`` and ``view`` are the kernel's ``CALL_SEEDS``, read off the call's
-context, and ``serializer`` is an ordinary argument, since a kernel Validator
-binds nothing of that name. So ``serializer`` is advertised and received; a
-read named ``request`` or ``view`` is refused by the kernel when the spec is
-built, and one named after a seed the server registers is refused at
-registration, because no caller's value of that name reaches the service. A
-top-level Validator field of such a name is not a defect: the kernel documents
-it as the caller's, validated into ``data`` and never handed to the service
-under that name, so the last test here holds that answer.
-"""
-
 from __future__ import annotations
 
 from dataclasses import make_dataclass
@@ -34,7 +21,6 @@ from tests.utils import make_server
 
 def _echo(**pool: Any) -> dict[str, Any]:
     # The whole pool arrives (``user``, ``progress`` beside the arguments), so
-    # each test reads back only the name it sent.
     return pool
 
 
@@ -75,7 +61,6 @@ def test_a_kernel_read_named_serializer_is_advertised_and_received() -> None:
 
 def _reading(name: str) -> ServiceSpec:
     """A spec taking ``name`` as a read."""
-    # Named outright: a ``**`` catch-all is never handed a call seed's name.
     namespace: dict[str, Any] = {}
     exec(f"def service(*, {name}): return {{{name!r}: {name}}}", namespace)
     return ServiceSpec(
@@ -94,7 +79,6 @@ def test_a_read_named_after_a_call_seed_is_refused_when_the_spec_is_built(name: 
 
 def test_a_read_named_after_a_seed_the_server_registers_is_refused_at_registration() -> None:
     # The spec builds, since the kernel cannot know this server's seeds; the
-    # registrar asks ``check_seeds`` with them and refuses it naming the tool.
     spec = _reading("tenant")
     with pytest.raises(ImproperlyConfigured, match=r"MCP tool 'echo': .*\['tenant'\]"):
         _server(spec)
@@ -103,7 +87,6 @@ def test_a_read_named_after_a_seed_the_server_registers_is_refused_at_registrati
 @pytest.mark.parametrize("name", ["call_context", "user"])
 def test_a_kernel_read_named_after_a_reserved_seed_is_refused_by_the_kernel(name: str) -> None:
     # The kernel's own refusal, raised when the spec is built, before any
-    # registrar of this package sees it.
     with pytest.raises(ImproperlyConfigured, match=rf"\['{name}'\], which dispatch seeds itself"):
         ServiceSpec(
             service=_echo,
@@ -115,9 +98,6 @@ def test_a_kernel_read_named_after_a_reserved_seed_is_refused_by_the_kernel(name
 @pytest.mark.django_db
 def test_a_validator_field_named_after_a_seed_is_the_callers_and_the_keyword_is_the_seeds() -> None:
     # The kernel (0.18.0) seats a field named after a seed as the caller's,
-    # rather than refusing it. It validates into
-    # ``data`` and never reaches the service under that name, so the ``tenant``
-    # keyword reads the seed's value while the caller's own is in ``data``.
     def service(*, data: Any, tenant: str) -> dict[str, Any]:
         return {"data": dict(data) if isinstance(data, dict) else vars(data), "tenant": tenant}
 

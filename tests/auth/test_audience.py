@@ -29,12 +29,7 @@ def test_mismatch_rejected() -> None:
 
 
 def test_no_partial_match_for_safety() -> None:
-    """Token audiences are URLs, not patterns — substring matches must not pass.
-
-    It also holds the order of the checks: a ``str`` is itself a
-    ``Sequence[str]``, so a string read as a sequence would make the second
-    case a substring test, and it would pass.
-    """
+    """Token audiences are URLs, not patterns — substring matches must not pass."""
     assert audience_matches("https://example.com/mcp", "https://example.com/mcp/") is False
     assert audience_matches("https://example.com/mcp/x", "https://example.com/mcp/") is False
 
@@ -75,14 +70,12 @@ def test_unset_expected_disables_enforcement_for_a_sequence_too() -> None:
 
 
 def test_a_user_string_member_is_no_substring_match() -> None:
-    """``in`` on a ``UserString`` is a substring test, and only a member equal to
-    ``expected`` counts."""
+    """``in`` on a ``UserString`` is a substring test."""
     audience: Any = UserString(_HERE + "-admin")
     assert audience_matches(audience, _HERE) is False
 
 
 def test_a_bytes_audience_is_rejected_not_raised() -> None:
-    """``in`` on ``bytes`` raises ``TypeError`` for a ``str`` needle, a 500 where
-    the token should be a 401."""
+    """``in`` on ``bytes`` raises ``TypeError`` for a ``str`` needle."""
     audience: Any = _HERE.encode()
     assert audience_matches(audience, _HERE) is False

@@ -1,9 +1,3 @@
-"""``append_agent_conventions`` over a kernel spec's projection.
-
-The projection is the kernel's ``audience_projection_for_spec``, read off the
-``FieldMarking`` each presenter field declares in its ``Annotated`` extras.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -94,7 +88,6 @@ def _listed_description(conventions: AgentConventions | None) -> Any:
 
 def test_a_kernel_tools_listing_carries_the_servers_line() -> None:
     # The binding's projection is the spec's, so the listing reads the same
-    # markings these unit cases do, in the server's own words.
     described = _listed_description(AgentConventions(handle_line="Use the ids for calls."))
 
     assert described == "Fetch an invoice.\n\nIdentify records by `number`. Use the ids for calls."

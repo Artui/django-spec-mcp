@@ -1,13 +1,3 @@
-"""A task keeps the audience of a token that names several resources.
-
-A JWT ``aud`` array and django-oauth-toolkit's ``resource`` list reach
-``TokenInfo.audience`` as sequences, and a task stores it for the worker's
-rebuilt token. A store may change the sequence's kind on the way: a cache whose
-serialiser is JSON hands a tuple back as a list. So the record holds a tuple
-whatever it was given, and each store is asked whether the audience still
-matches after its round trip, the cache store through JSON as well.
-"""
-
 from __future__ import annotations
 
 import json

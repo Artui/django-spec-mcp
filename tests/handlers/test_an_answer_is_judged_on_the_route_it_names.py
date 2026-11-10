@@ -1,24 +1,3 @@
-"""A retry's answer naming another target is judged on the target it names.
-
-A kernel service tool acting on a row names the selector that finds it, and
-that selector's ``reads`` are arguments like any other, so a retry's
-``inputResponses`` can name another row by answering its lookup read. The
-transport merges the answers and reaches ``dispatch`` once, with the merged
-arguments, so every check is asked of the row the answer names: the
-class-level ``has_permission`` before anything is looked up, and
-``has_object_permission`` on the row resolved. A caller granted row A who
-sends A and answers B is refused, and a class-level refusal reads the same
-whether B exists or not.
-
-A kernel tool has no route apart from its arguments, and nothing is judged
-before the merge for an answer to slip past. ``invalidates=`` is rendered from
-the merged arguments, so the notice names the row the service ran on.
-
-A caller admitted is charged once, and a caller the spec refuses is not
-charged, since the shell asks a kernel spec's checks before the charge
-(``admit_kernel_call``).
-"""
-
 from __future__ import annotations
 
 import json
@@ -198,8 +177,6 @@ async def test_an_answer_is_judged_on_the_row_it_names(
     rows: tuple[Invoice, Invoice], sent: str | None, answered: str, admitted: bool, is_async: bool
 ) -> None:
     # The row the retry answers with is the one judged and run on, whichever the
-    # first call named, or whether it left the lookup out: refused on the
-    # ``beta`` row, run on the ``acme`` one.
     pks = {"acme": rows[0].pk, "beta": rows[1].pk}
     ran: list[int] = []
     arguments: dict[str, Any] = {"note": "x"}
@@ -258,7 +235,6 @@ async def test_an_answer_cannot_tell_an_existing_target_from_a_missing_one(
     rows: tuple[Invoice, Invoice], is_async: bool
 ) -> None:
     # The class-level check is asked before the row is looked up, so a caller
-    # it refuses learns nothing of which rows exist.
     acme, beta = rows
     ran: list[int] = []
     server = _server(_OnlyPk(acme.pk), ran)
@@ -277,8 +253,6 @@ async def test_an_answer_naming_no_row_is_not_found(
     rows: tuple[Invoice, Invoice], is_async: bool
 ) -> None:
     # Past the class-level check, a row-level one has no row to judge, so the
-    # answer is the missing row's; ``_OnlyPk`` above is what keeps a caller
-    # the spec refuses from learning it.
     acme, _ = rows
     ran: list[int] = []
 
@@ -295,8 +269,6 @@ async def test_the_invalidation_names_the_row_an_answer_moved_to(
     rows: tuple[Invoice, Invoice], is_async: bool
 ) -> None:
     # The result carries no ``pk``, so the template is rendered from the
-    # arguments, and it must be the merged ones: from the arguments as sent, a
-    # subscriber to the row the service ran on misses the change.
     acme, beta = rows
     broker = InMemorySubscriptionBroker()
     moved_to = await broker.subscribe(frozenset({topic_for_resource(f"invoices://{acme.pk}")}))
@@ -343,7 +315,6 @@ async def test_a_caller_declining_the_question_is_charged_once(
     rows: tuple[Invoice, Invoice], is_async: bool, action: str
 ) -> None:
     # A declined or cancelled answer is a call the client made: charged as one,
-    # and answered after the charge, with nothing run.
     acme, _beta = rows
     limit = _CountingRateLimit()
     ran: list[int] = []

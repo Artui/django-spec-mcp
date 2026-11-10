@@ -26,15 +26,7 @@ def list_invoices() -> list[Invoice]:
 
 
 def record_invoice(*, number: str = "", amount_cents: int = 0) -> Invoice:
-    """Create an invoice from the validated values the kernel passes by name.
-
-    A kernel service receives each validated value as its own keyword rather
-    than one ``data`` mapping.
-    ``number`` has a default because many specs register this service bare,
-    to ask a registration knob with no Validator or read declaring the
-    keyword, and registration refuses a keyword nothing fills
-    (``check_seeds``).
-    """
+    """Create an invoice from the validated values the kernel passes by name."""
     return Invoice.objects.create(number=number, amount_cents=amount_cents)
 
 

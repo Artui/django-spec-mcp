@@ -1,13 +1,3 @@
-"""A task's worker resolves a seed its spec's check names once, as an inline call does.
-
-Creating the task asks the spec's checks and keeps nothing of that admission:
-the record holds the tool name, the arguments and the token, never a grant or
-the seeds' values, which belong to one call in one process. The worker
-replays the call through ``handle_tools_call``, which admits it afresh and
-hands that admission's carrier to ``dispatch``. So the worker's run resolves
-the seed once, and the check and the service see one object.
-"""
-
 from __future__ import annotations
 
 from dataclasses import replace
@@ -69,8 +59,6 @@ def test_a_task_run_resolves_a_checks_seed_once(
     asked = replace(context(server), pool_seeds=server.pool_seeds)
     handle: Any = handle_tools_call({"name": "tenant.whoami", "arguments": {}}, asked)
     assert handle["resultType"] == "task", handle
-    # Creating the task asked the check once, on a value of its own; the
-    # worker's run is measured from here.
     assert len(resolved) == 1
     resolved.clear()
     checked.clear()

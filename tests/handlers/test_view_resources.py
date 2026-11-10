@@ -1,11 +1,3 @@
-"""A view resource: a ``ResourceBinding`` holding a bare selector, not a kernel spec.
-
-UI resources are views (``ui_view_to_resource``), and so is a binding built by
-hand. Their read, their listing and their watch run on the transport's own
-checks alone, since there is no spec for the kernel to ask; these cases hold
-each of those paths for a view.
-"""
-
 from __future__ import annotations
 
 import json
@@ -79,7 +71,6 @@ def _read(context: MCPCallContext, *, is_async: bool) -> Any:
 @_READS
 def test_a_view_read_over_the_result_ceiling_is_a_server_error(is_async: bool) -> None:
     # A resource read has no ``isError`` shape, so the ceiling is answered as a
-    # protocol error carrying the same remedy-naming message a tool's would.
     context = _context(_view(lambda: {"text": "x" * 100}), max_result_bytes=10)
     error = _read(context, is_async=is_async)
     assert isinstance(error, JsonRpcError)
@@ -89,7 +80,6 @@ def test_a_view_read_over_the_result_ceiling_is_a_server_error(is_async: bool) -
 
 def test_an_async_view_selector_is_awaited_on_the_async_read() -> None:
     # The exact body: an unawaited coroutine encodes as its ``repr``, which
-    # names this test and so would satisfy any substring of it.
     async def page() -> dict[str, str]:
         return {"title": "awaited"}
 
@@ -100,7 +90,6 @@ def test_an_async_view_selector_is_awaited_on_the_async_read() -> None:
 @pytest.mark.parametrize("listed", [True, False])
 def test_a_views_listing_asks_the_check_its_read_asks(listed: bool) -> None:
     # A kernel check has no list-time hook, so the listing and the read
-    # cannot disagree: ``has_permission`` answers both.
     binding = _view(lambda: {}, permissions=(_Answers(allowed=listed),))
     assert is_binding_listable(binding, HttpRequest(), TokenInfo(user=None)) is listed
 

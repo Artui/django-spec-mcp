@@ -1,16 +1,3 @@
-"""MCP server factory for the conformance suite, on kernel specs.
-
-The tools the conformance and transport suites call through the real Django
-URL conf, each named for the contract it demonstrates so a failing assertion
-points at the right one:
-
-- ``conformance.bulk_listed`` and ``conformance.bulk_gated`` are registered in
-  bulk through ``MCPServer.register_tools`` from a ``SpecRegistry``, the second
-  refused by its spec's own permission;
-- ``conformance.gated`` is registered alone and refuses an anonymous caller,
-  which the wire answers with HTTP 403 and ``-32006``.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass

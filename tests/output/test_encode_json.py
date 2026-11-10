@@ -34,7 +34,6 @@ def test_encode_json_sort_keys() -> None:
 
 def test_encode_json_orders_integer_keys_by_value_and_ahead_of_names() -> None:
     # A kernel ``many`` call's detail node: rows by index, then the list's own
-    # message. Not ``"10"`` before ``"2"``, and not a ``TypeError`` for the mix.
     node = {"non_field_errors": ["Too many."], 10: ["b"], 2: ["a"]}
 
     parsed = json.loads(encode_json({"items": node, "rows": ({"b": 1, "a": 2},)}))
@@ -70,7 +69,6 @@ def test_encode_json_writes_what_sort_keys_writes_wherever_sort_keys_can(
     payload: dict[object, object],
 ) -> None:
     # Only a node mixing integer and string keys is ordered by hand; every
-    # payload ``sort_keys`` can sort is written byte for byte as it writes it.
     expected = json.dumps(payload, indent=2, sort_keys=True, default=str, ensure_ascii=False)
 
     assert encode_json(payload) == expected
@@ -78,8 +76,6 @@ def test_encode_json_writes_what_sort_keys_writes_wherever_sort_keys_can(
 
 def test_a_mixed_payload_still_sorts_its_other_nodes_as_sort_keys_does() -> None:
     # The mixed ``items`` node sends the whole payload down the hand-ordered
-    # path; ``grades`` beside it is still sorted by value, as ``sort_keys``
-    # sorts it, not by the members' ``str()``.
     payload = {
         "items": {0: ["a"], "non_field_errors": ["b"]},
         "grades": {_Grade.FIRST: 1, _Grade.SECOND: 2},
@@ -92,7 +88,6 @@ def test_a_payload_sort_keys_can_sort_is_not_walked_first(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Walking it in Python first would cap its nesting at the interpreter's
-    # recursion limit rather than ``json.dumps``'s own.
     def _walked(payload: object) -> object:
         raise AssertionError("walked")
 

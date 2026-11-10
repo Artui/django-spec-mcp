@@ -1,8 +1,3 @@
-"""Linking a kernel tool to an interactive view: ``register_tool(ui=...)``.
-
-Asked of kernel specs registered with ``register_tool``.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -114,8 +109,7 @@ class TestTheLink:
         assert binding.meta[UI_META_KEY]["visibility"] == ["app"]
 
     def test_unsaid_visibility_is_omitted(self) -> None:
-        """Empty means "didn't say", which hosts read as the model-callable
-        default — not the same as declaring an empty list."""
+        """Empty means 'didn't say', which hosts read as the model-callable default."""
         assert "visibility" not in _link(_server()).meta[UI_META_KEY]
 
     def test_an_unlinked_tool_gains_no_meta(self) -> None:
@@ -141,14 +135,12 @@ class TestEveryToolKind:
 
 class TestRefusedLinks:
     def test_a_uri_no_view_answers_to(self) -> None:
-        """A typo would otherwise reach the host as a dangling reference: the
-        view renders nothing and nothing reports why."""
+        """A typo would otherwise reach the host as a dangling reference."""
         with pytest.raises(ValueError, match="not a view registered on this server"):
             _link(_server(), ui=UIToolMeta(resource_uri="ui://typo.html"))
 
     def test_a_uri_a_data_resources_template_splits_two_ways(self) -> None:
-        """``resolve`` walks every binding, so the ambiguous template can be a
-        data resource's: the message must not call it a view's."""
+        """``resolve`` walks every binding, so the ambiguous template can be a data resource's."""
         server = _server()
         server.register_resource(
             SelectorSpec(
@@ -177,8 +169,7 @@ class TestRefusedLinks:
         assert isinstance(raised.value.__cause__, ValueError)
 
     def test_a_templated_uri_names_no_view(self) -> None:
-        """``register_ui_resource`` refuses a ``{var}`` uri, so no view answers to
-        a templated link: it meets the dangling-reference refusal."""
+        """``register_ui_resource`` refuses a ``{var}`` uri."""
         with pytest.raises(ValueError, match="not a view registered on this server"):
             _link(_server(), ui=UIToolMeta(resource_uri="ui://invoices/{pk}.html"))
 
@@ -199,8 +190,7 @@ class TestRefusedLinks:
             _link(server, ui=UIToolMeta(resource_uri="invoices://data"))
 
     def test_a_tool_that_emits_no_structured_content(self) -> None:
-        """``structuredContent`` *is* the render payload — the view would come
-        up blank."""
+        """``structuredContent`` *is* the render payload — the view would come up blank."""
         with pytest.raises(ValueError, match="does not emit structuredContent"):
             _link(_server(), include_structured_content=False)
 

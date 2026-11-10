@@ -1,11 +1,3 @@
-"""What the three limiters promise alike, asked of each.
-
-The schemes differ in how they count (their own files ask that); a deployment
-swapping one for another may rely on the rest, so it is held for all three. Each
-factory takes the number of calls it admits before it refuses, with a refill slow
-enough that nothing comes back during a test.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -58,7 +50,7 @@ def test_buckets_are_per_user(make: Callable[..., Any]) -> None:
     assert limiter.consume(http_request(), a) is None
     assert limiter.consume(http_request(), b) is None
     assert limiter.consume(http_request(), a) is not None  # a is over its bucket
-    assert limiter.consume(http_request(), b) is not None  # b is over its bucket
+    assert limiter.consume(http_request(), b) is not None
 
 
 def test_anonymous_falls_back_to_remote_addr(make: Callable[..., Any]) -> None:
@@ -88,7 +80,7 @@ def test_custom_key_callable(make: Callable[..., Any]) -> None:
     assert limiter.consume(http_request(), TokenInfo(user=User(1))) is None
     # Another user, but the custom key collapses both into one bucket.
     assert limiter.consume(http_request(), TokenInfo(user=User(2))) is not None
-    assert seen  # the key callable was actually invoked
+    assert seen
 
 
 def test_namespace_isolates_counters(make: Callable[..., Any]) -> None:

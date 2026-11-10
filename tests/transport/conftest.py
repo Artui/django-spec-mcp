@@ -1,11 +1,3 @@
-"""The ``endpoint`` fixture: one test body run against both streamable-HTTP views.
-
-The sync and async views answer POST and DELETE identically, so a check of
-that wire is written once and run on each mount rather than copied per view.
-What only one view does (the async GET stream, the sync view's refusal of an
-awaitable collaborator) keeps its own test.
-"""
-
 from __future__ import annotations
 
 import json
@@ -52,12 +44,7 @@ class Endpoint:
         return override_settings(ROOT_URLCONF=urlconf_for(server, is_async=self.is_async))
 
     async def send(self, method: str, path: str = "/mcp/", **kwargs: Any) -> Any:
-        """Send one request on the mount's own client, the sync one off the event loop.
-
-        Request headers go through ``headers=`` only: the async client puts an
-        ``HTTP_*`` keyword in the ASGI scope rather than the request's headers,
-        so a test written that way would pass without sending what it names.
-        """
+        """Send one request on the mount's own client, the sync one off the event loop."""
         if self.is_async:
             return await getattr(AsyncClient(), method)(path, **kwargs)
         return await sync_to_async(getattr(Client(), method))(path, **kwargs)

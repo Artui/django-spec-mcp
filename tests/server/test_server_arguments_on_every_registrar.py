@@ -1,11 +1,3 @@
-"""``server_arguments=`` means the same on every kernel registrar.
-
-Each route a kernel tool can be registered by takes it: ``register_tool`` and a
-``register_tools`` override. Each route is asked both halves, for a selector
-and a service: a bound value reaches the callable, and a binding that cannot
-hold is refused at registration naming the tool.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass

@@ -1,19 +1,3 @@
-"""``tools/list`` offers what a Validator declares to an MCP call, under the stamp alone.
-
-``tools/call`` dispatches under a dict stamped ``mcp``, so a field a Validator
-declares only there is one the call takes. The listing asks under the same stamp,
-so a client following the schema can send it. It hands the stamp and no request,
-even with a request in hand: a schema that varied by caller would make the shared
-``cacheScope`` of a listing false, and a stamp varies by transport only.
-
-Registration compiles the schema under the same stamp, for what it raises, so a
-field that fails assembly under ``mcp`` alone fails the server's startup and not
-its first listing.
-
-Each test goes through ``register_tool`` or a binding built by hand, and reads the
-listing the way a client does, so it runs unchanged against a tree without the fix.
-"""
-
 from __future__ import annotations
 
 import json
@@ -225,7 +209,6 @@ def test_the_listing_hands_a_validator_the_stamp_and_no_request() -> None:
 
 def test_registration_compiles_under_the_stamp_a_listing_hands() -> None:
     # The checks made to no call hand ``None``, so what the compile hands is what
-    # is left, and it is the same dict a listing reads under.
     validator = _to_mcp()
     _server(validator)
 
@@ -241,7 +224,6 @@ def test_registration_compiles_under_the_stamp_a_listing_hands() -> None:
 @pytest.mark.django_db
 def test_a_field_declared_per_caller_stays_unoffered() -> None:
     # Offered only to a dict carrying a request, which a listing never hands. The
-    # call has one, so the field is still taken there.
     server = _server(_ToACaller(Parameter("ref_caller", "string")))
 
     assert "ref_caller" not in _listed(server)["properties"]
@@ -255,8 +237,6 @@ def _reads_the_request() -> _GuardsNoneThenReadsTheRequest:
 
 def test_a_validator_reading_the_none_request_raises_out_of_the_listing() -> None:
     # A binding built by hand reaches the listing past the compile ``register_tool``
-    # makes. Its check of ``server_arguments`` reads the declaration made to no call,
-    # which the guard answers. A description that raises is not caught here.
     server = make_server()
     server.tools.register(
         KernelToolBinding(name=TOOL, description="d", spec=_spec(_reads_the_request()))

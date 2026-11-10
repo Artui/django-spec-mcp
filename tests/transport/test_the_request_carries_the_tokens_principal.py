@@ -1,15 +1,3 @@
-"""From the moment a request authenticates, its ``user`` is the token's principal.
-
-The project's ``AuthenticationMiddleware`` resolves ``request.user`` from the
-session cookie, and the cookie may name someone other than the bearer token's
-principal. A prompt's check is handed the token's principal, and a spec's
-check asking for the call context is handed the transport's request (a
-streamed tool's pre-flight runs it before the handler), so whatever the
-transport leaves on it is who that check judges. Each case here logs one user
-in through a real session and authenticates as another with a bearer token,
-and asks what the check saw.
-"""
-
 from __future__ import annotations
 
 import json
@@ -53,11 +41,7 @@ class _BearerBackend(AllowAnyBackend):
 
 
 class _Recording(PermissionCheck):
-    """A kernel check admitting every call, keeping the principal and request it judged.
-
-    The request is the call context's, which the kernel hands a spec's check
-    that asks for it; a prompt's check is asked without one, so it is ``None``.
-    """
+    """A kernel check admitting every call, keeping the principal and request it judged."""
 
     def __init__(self) -> None:
         self.seen: list[tuple[Any, HttpRequest | None]] = []
@@ -150,7 +134,6 @@ async def test_a_permission_sees_the_tokens_principal_not_the_sessions(route: st
     assert response.status_code == 200, getattr(response, "content", response)
     if route == "streamed tool pre-flight":
         # Streamed, so the spec's check was asked on the request the
-        # transport authenticated, not on one a handler rebuilt.
         assert response["Content-Type"].startswith("text/event-stream")
     assert recording.seen, "the check was never asked"
     principal, request = recording.seen[0]
@@ -229,10 +212,7 @@ async def _async_ping(session_user: Any) -> Any:
 async def test_a_request_no_handler_reads_still_carries_the_tokens_principal(
     is_async: bool,
 ) -> None:
-    """``ping`` reaches no handler that seats a user, so what the request
-    carries afterwards is what the endpoint wrote the moment it authenticated,
-    and a middleware or view reading it after the endpoint sees the token's
-    principal, never the session's."""
+    """``ping`` reaches no handler that seats a user."""
     users = get_user_model().objects
     session_user = await users.acreate(username="cookie-holder")
     token_user = await users.acreate(username="token-holder")

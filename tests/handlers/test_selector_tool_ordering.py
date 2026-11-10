@@ -1,22 +1,3 @@
-"""Ordering on a kernel selector tool, through its filter set or its own read.
-
-A ``filter_set``'s
-``OrderingFilter`` is read by the kernel's ``filter_set_parameters`` into the
-spec's reads, so the tool advertises ``ordering`` with nothing declared at
-registration, the value reaches the filter, and a value outside its choices
-is refused by it. A sort the selector declares for itself is a ``reads``
-``Parameter`` like any other. ``page`` and ``limit`` belong to the transport's
-pagination, so neither reaches the selector, while the filter's reads do.
-
-The kernel's reading of a filter set:
-
-- an ``OrderingFilter`` is a multiple choice, so it is advertised as an array
-  of its choices and a bare string is refused for its shape;
-- its choices are advertised as an ``enum`` of the constants, without the
-  labels (``Amount (descending)``). Whether the kernel should carry them is the
-  kernel's question.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -94,8 +75,6 @@ def three_invoices(db: None) -> None:
 
 def test_the_filters_ordering_is_advertised_with_nothing_declared() -> None:
     # The vocabulary is the filter's own, ``amount`` and ``-amount``, and the
-    # kernel advertises a labelled choice as ``anyOf`` of ``const`` + ``title``
-    # rather than an ``enum``, the labels being django-filter's.
     assert _properties(_filtered())["ordering"] == {
         "type": "array",
         "items": {
@@ -179,8 +158,6 @@ def _ordered_by(*, ordering: str = "-amount_cents") -> Any:
     ids=["sort", "named-ordering"],
 )
 def test_a_sort_the_selector_declares_is_advertised_and_applied(selector: Any, name: str) -> None:
-    # Without a filter set, a selector may own a read named ``ordering`` too:
-    # nothing in the transport takes the name.
     server = _server(selector, reads=Parameters([Parameter(name, "string")]))
 
     assert _properties(server)[name] == {"type": "string"}

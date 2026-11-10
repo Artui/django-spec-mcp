@@ -24,22 +24,7 @@ from tests.testapp.services import invoice_by_pk, list_invoices, record_invoice
 def build_server(
     *, config: MCPConfig | None = None, auth_backend: MCPAuthBackend | None = None
 ) -> MCPServer:
-    """Construct the test MCP server: three tools and a resource, as kernel specs.
-
-    A factory rather than a module-level instance keeps tests independent —
-    each test that needs its own configuration can build a fresh server.
-
-    ``config`` overrides the scalars. Since they are resolved once in
-    ``MCPServer.__init__``, a test that needs non-default scalars must build its
-    own server (and mount it via ``urlconf_for``) rather than mutating
-    ``settings.SPEC_MCP`` around an already-mounted one.
-
-    A kernel resource is a ``RETRIEVE``, so the list is the ``invoices.list``
-    selector tool, beside ``invoices.get`` and the ``invoice`` resource.
-
-    The caller is whoever ``AllowAnyBackend`` resolves, the request's own user,
-    unless ``auth_backend`` says otherwise.
-    """
+    """Construct the test MCP server: three tools and a resource, as kernel specs."""
     server = MCPServer(
         name="testapp",
         auth_backend=auth_backend or AllowAnyBackend(),
@@ -96,10 +81,5 @@ def build_server(
 def build_kernel_server(
     *, config: MCPConfig | None = None, auth_backend: MCPAuthBackend | None = None
 ) -> MCPServer:
-    """``build_server`` with ``HeaderAuthBackend`` unless a test hands its own.
-
-    So the caller is chosen per request by header (``X-Test-User``,
-    ``X-Test-Scopes``), which is what the kernel suites written against this
-    name send.
-    """
+    """``build_server`` with ``HeaderAuthBackend`` unless a test hands its own."""
     return build_server(config=config, auth_backend=auth_backend or HeaderAuthBackend())

@@ -1,23 +1,3 @@
-"""Client-supplied names never outrank the transport's own seeds, on a kernel resource too.
-
-Every method letting a caller route a value into a pool, a prompt argument, a URI-template variable,
-or a completion sibling, has to keep the dispatcher's own names out of the caller's
-reach, or an argument called ``user`` binds to the parameter the dispatcher owns
-and the callable runs under a principal the caller named.
-
-The prompt and completion cases name no spec. The resource cases are asked of a kernel
-``RETRIEVE`` spec. ``register_resource`` refuses a template variable named after
-a reserved seed, and the kernel refuses a spec declaring a read of that name, so
-the runtime lock is reached only by a binding built by hand: there the kernel's
-argument check refuses ``user`` as an argument the spec does not declare, and
-the selector never runs under the name the URI carried: the read is answered
-``-32602`` with the kernel's detail, as any admitted read of arguments the check
-refuses is. That is the only outcome on this path: a resource read dispatches
-under the kernel's default ``REJECT``, and ``register_resource`` takes no
-``unknown_arguments`` knob, so the ``IGNORE`` case the tool path asks (in
-``test_handler_branches.py``) is not asked of a resource.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -85,8 +65,7 @@ def _rendered(out: Any) -> str:
     ids=["sync", "async"],
 )
 def test_prompt_argument_named_user_cannot_replace_the_caller(get: Any) -> None:
-    """The documented ``def render(user, topic)`` shape: ``user`` is the
-    authenticated principal, never an argument the client chose."""
+    """The documented ``def render(user, topic)`` shape: ``user`` is the authenticated principal."""
     server = _server_with_scoped_prompt()
 
     out = get({"name": "scoped", "arguments": {"topic": "x", "user": "victim"}}, _ctx(server))
@@ -95,9 +74,7 @@ def test_prompt_argument_named_user_cannot_replace_the_caller(get: Any) -> None:
 
 
 def test_prompt_argument_named_request_cannot_replace_the_request() -> None:
-    """The same key works for ``request``: an argument of that name does not
-    replace the transport's request, whose ``user`` is the caller, so a
-    ``render`` reading ``request.user`` is not fooled by it."""
+    """An argument named request does not replace the transport's request."""
     seen: dict[str, Any] = {}
 
     server = make_server()
@@ -201,13 +178,7 @@ def _handbuilt_notes() -> ResourceRegistry:
     ids=["sync", "async"],
 )
 def test_a_uri_template_variable_named_user_cannot_replace_the_caller(read: Any) -> None:
-    """The kernel's argument check refuses ``user`` as undeclared, and the read is
-    answered ``-32602`` naming it, so the selector never runs under the name the
-    URI carried."""
-    # The kernel declares no such read, so the argument check refuses the
-    # hand-built binding outright. The outcome that matters, that the selector
-    # never runs under the URI's name, would hold if the value were dropped
-    # instead, and an error is the louder way to hold it.
+    """The kernel's argument check refuses ``user`` as undeclared."""
     ran.clear()
     refused = read({"uri": "notes://victim/1"}, _ctx(make_server(), resources=_handbuilt_notes()))
     assert isinstance(refused, JsonRpcError), refused
@@ -280,8 +251,7 @@ def test_a_sibling_named_data_does_not_reach_the_completer() -> None:
 
 @pytest.mark.parametrize("name", ["instance", "result", "queryset"])
 def test_a_sibling_named_as_a_kernel_seed_does_not_reach_the_completer(name: str) -> None:
-    """``instance``, ``result`` and ``queryset`` are reserved seeds this handler
-    never supplies, so stripping tracks the whole set rather than a hand-picked few."""
+    """``instance``, ``result`` and ``queryset`` are reserved seeds this handler never supplies."""
     seen: dict[str, Any] = {}
 
     def completer(*, value: str, **kwargs: Any) -> list[str]:
@@ -296,8 +266,7 @@ def test_a_sibling_named_as_a_kernel_seed_does_not_reach_the_completer(name: str
 
 
 def test_a_sibling_named_serializer_reaches_the_completer_as_on_a_tool() -> None:
-    """``serializer`` is no seed, and a kernel tool receives a caller's key of
-    that name, so a completer is handed it as any other sibling."""
+    """``serializer`` is no seed, and a kernel tool receives a caller's key of that name."""
     seen: dict[str, Any] = {}
 
     def completer(*, value: str, **kwargs: Any) -> list[str]:
@@ -312,8 +281,7 @@ def test_a_sibling_named_serializer_reaches_the_completer_as_on_a_tool() -> None
 
 
 def test_a_sibling_named_request_is_outranked_by_the_seed() -> None:
-    """``request`` is no kernel seed and is not stripped, so it is the seed
-    written over the spread that keeps a caller's value out."""
+    """``request`` is no kernel seed and is not stripped."""
     seen: dict[str, Any] = {}
 
     def completer(*, value: str, request: Any) -> list[str]:
@@ -339,8 +307,7 @@ def test_an_ordinary_sibling_still_reaches_the_completer_by_name() -> None:
 
 
 def test_the_arguments_seed_still_carries_the_clients_whole_mapping() -> None:
-    """``arguments`` is documented as the siblings the client resolved, and a
-    completer reading it knows it is reading caller input."""
+    """``arguments`` is documented as the siblings the client resolved."""
     seen: dict[str, Any] = {}
 
     def completer(*, value: str, arguments: dict[str, Any]) -> list[str]:

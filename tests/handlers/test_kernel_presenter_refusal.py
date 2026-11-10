@@ -1,18 +1,3 @@
-"""A presenter refusing a caller's shape is the caller's ``validation_error``.
-
-A kernel spec's ``shapes`` are the one caller input read while the result is
-presented rather than while the spec is dispatched, so a presenter refusing one
-fails after ``dispatch`` has returned, outside every arm that decides whether a
-failure is the caller's to fix. Left there it would be a ``-32603`` on the wire
-and a raised ``ServiceValidationError`` from ``call_tool``; instead it is an
-``isError`` ``validation_error`` on every path a kernel tool is presented on:
-the wire, sync and async, and the in-process ``call_tool``.
-
-Only when the caller shaped the render: with no shape supplied, nothing the
-model sends can change the outcome, so the refusal is a server bug and is raised
-unchanged, as is anything a presenter raises that is not a validation error.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -97,7 +82,6 @@ def _server(**register: Any) -> MCPServer:
 def _wire(server: MCPServer, arguments: dict[str, Any], *, is_async: bool) -> Any:
     params = {"name": "rows", "arguments": arguments}
     # The server's own context, so its conventions word the refusal as they
-    # would on the wire (``test_on_a_paged_tool_the_servers_conventions_word_the_sentence``).
     context = server._call_context(user=None)
     if is_async:
         return async_to_sync(handle_tools_call_async)(params, context)
@@ -135,8 +119,6 @@ def test_a_refused_shape_is_a_validation_error_keyed_by_it(path: str) -> None:
 )
 def test_a_structured_refusal_is_worded_as_sentences(path: str, detail: Any, readable: str) -> None:
     # The message is read by a model, so a mapping or a list of errors is
-    # spelled out rather than shown as its ``repr``; the ``detail`` keeps the
-    # structure as raised.
     server = _server(spec=_selector(error=ServiceValidationError(detail)))
     error = tool_error(_call(server, {"fields": ["total"]}, path))
     assert error == {
@@ -182,7 +164,6 @@ def test_several_shapes_supplied_are_named_together(path: str) -> None:
 @_PATHS
 def test_a_refusal_with_no_shape_supplied_is_raised(path: str) -> None:
     # Nothing the caller sent shaped the render, so it is the server's fault:
-    # raised into ``call_tool`` and into the transport's backstop on the wire.
     with pytest.raises(ServiceValidationError):
         _call(_server(), {}, path)
 
@@ -190,7 +171,6 @@ def test_a_refusal_with_no_shape_supplied_is_raised(path: str) -> None:
 @_PATHS
 def test_an_explicit_null_is_not_supplied(path: str) -> None:
     # A shape declared nullable is the only one a ``null`` reaches the
-    # presenter for; any other refuses it at the shape check.
     with pytest.raises(ServiceValidationError):
         _call(_server(spec=_selector(nullable=True)), {"fields": None}, path)
 
@@ -198,7 +178,6 @@ def test_an_explicit_null_is_not_supplied(path: str) -> None:
 @_PATHS
 def test_a_shape_the_server_binds_is_not_supplied(path: str) -> None:
     # The server's value is not the caller's, so a refusal of it is no more
-    # the caller's to fix than a refusal with nothing sent.
     server = _server(server_arguments=ServerArguments(values={"fields": ["total"]}))
     with pytest.raises(ServiceValidationError):
         _call(server, {}, path)
@@ -285,7 +264,6 @@ def test_a_resource_refusals_structured_detail_is_kept_as_raised(
     is_async: bool, detail: Any
 ) -> None:
     # A detail already structured is placed under the shape as it is; only a
-    # bare message is wrapped in a list, as the shape check words its own.
     server = _resource_server("rows://{fields}", error=ServiceValidationError(detail))
     error = _read(server, "rows://total", is_async=is_async)
     assert isinstance(error, JsonRpcError)

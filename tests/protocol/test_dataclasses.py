@@ -146,7 +146,6 @@ _SERVER_INFO = Implementation(name="s", version="1")
         ),
         pytest.param(
             JsonRpcResponse(id=1, result={"ok": True}),
-            # Every result carries the 2026-07-28 discriminator, stamped once here.
             {"jsonrpc": "2.0", "id": 1, "result": {"resultType": "complete", "ok": True}},
             id="json-rpc-response-result",
         ),
@@ -265,8 +264,6 @@ _SERVER_INFO = Implementation(name="s", version="1")
         ),
         pytest.param(ResourceContents(uri="u"), {"uri": "u"}, id="resource-contents-minimal"),
         pytest.param(
-            # ``total`` is optional on the wire; the handler leaves it unset, but
-            # a consumer building a ``Completion`` directly may know the count.
             Completion(values=("a",), total=42, has_more=True),
             {"values": ["a"], "total": 42, "hasMore": True},
             id="completion-emits-a-known-total",
@@ -278,9 +275,7 @@ def test_to_dict(value: Any, expected: dict[str, Any]) -> None:
 
 
 def test_client_extensions_are_parsed_from_initialize() -> None:
-    """How a client says it supports MCP Apps. Parsed for introspection —
-    nothing gates on it, since advertisement is client→server only and the
-    spec defines no server-side counterpart."""
+    """How a client says it supports MCP Apps."""
     params = InitializeParams.from_payload(
         {
             "protocolVersion": "2025-11-25",

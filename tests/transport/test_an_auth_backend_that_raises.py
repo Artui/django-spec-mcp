@@ -1,12 +1,3 @@
-"""An exception an auth backend raises is answered by Django, not mapped here.
-
-The endpoints call ``authenticate`` outside their dispatch backstop, so what a
-backend raises reaches Django's own handler: its ``PermissionDenied`` and
-``Http404`` are its HTML ``403`` and ``404`` pages, and anything else is a
-``500``. A backend answers a caller it does not admit by returning ``None``,
-which is the ``401`` with the challenge.
-"""
-
 from __future__ import annotations
 
 import json

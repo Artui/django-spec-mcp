@@ -1,23 +1,3 @@
-"""A caller a kernel spec's permission denies learns nothing about the target it named.
-
-A denied caller is answered ``-32006`` alike for a row that exists and one that
-does not, the class-level check is asked once and not again on the resolved
-row, the object-level check still refuses a row, a list target is not judged
-row by row, and a denied caller is refused before its input is validated. The
-kernel's ``dispatch`` fixes that order itself - class-level authorization,
-target resolution, object-level authorization, then validation - so these ask
-it of kernel ``ServiceSpec`` and ``SelectorSpec`` tools on every route.
-
-A denied caller is also not told which argument it left out: ``dispatch`` checks shape before
-authorization, so the transport asks the spec's class-level checks itself
-first (``admit_kernel_call``), on every route, and a caller they deny missing
-a required read is refused for its permission. A caller they admit is still
-refused for its shape, and neither reaches the lookup.
-
-A kernel spec declares ``permissions=None``, guarded by nothing, only under
-``REQUIRE_TOOL_PERMISSIONS=False``, which ``test_kernel_unguarded.py`` asks.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -175,7 +155,6 @@ async def test_a_denied_caller_missing_a_read_is_refused_before_its_shape_and_an
     route: str, kind: str
 ) -> None:
     # A shape answer describes a tool the caller may not call, which the
-    # listing hides from it.
     lookup = _Lookup()
     check = _Check(admits=False)
     server = _server(kind, check, lookup)
@@ -213,8 +192,6 @@ async def test_the_class_level_check_is_asked_once_whatever_the_lookup_finds(
     kind: str, pk: int
 ) -> None:
     # Once for a missing row as for a found one, so how often the check is
-    # asked says nothing about whether the row exists; only a found row is
-    # then judged at the object level.
     check = _Check()
     server = _server(kind, check, _Lookup())
 
@@ -264,12 +241,9 @@ async def test_a_list_target_is_judged_as_a_set_not_row_by_row() -> None:
 @pytest.mark.parametrize("route", _ROUTES)
 async def test_a_denied_caller_is_refused_before_its_input_is_validated(route: str) -> None:
     # The note passes the shape check and fails the validator: a validator
-    # answering first would tell a denied caller what the input is held to,
-    # and that the row resolved.
     server = _server("service", _Check(admits=False), _Lookup())
 
     out = await _via(server, route, {"pk": 1, "note": "rejected"})
-    # Sized so the validator is what refuses an admitted caller the same call.
     admitted = await _via(
         _server("service", _Check(), _Lookup()), route, {"pk": 1, "note": "rejected"}
     )

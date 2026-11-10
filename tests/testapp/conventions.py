@@ -1,15 +1,3 @@
-"""A server with somewhere for each ``AgentConventions`` line to land, on kernel specs.
-
-- ``invoices.list`` is a paged selector tool declaring a read-shaping ``fields``
-  shape, so its param carries the scope sentence.
-- ``invoices.rename`` is a service tool resolving its target through a lookup
-  reading a required ``pk``, so a call leaving ``pk`` out earns the
-  missing-argument message.
-- Both present ``_Row``, whose ``id`` is a handle with no wording of its own, so
-  each tool's ``outputSchema`` carries the handle description and its
-  ``description`` the handle line.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -64,11 +52,7 @@ def _rename(*, instance: Invoice, number: str) -> Invoice:
 def conventions_server(
     conventions: AgentConventions | None = None, **server_kwargs: Any
 ) -> MCPServer:
-    """A fresh server speaking ``conventions``, or the defaults when ``None``.
-
-    ``server_kwargs`` reach ``MCPServer`` as given: a task store and executor
-    for a test that runs a call as a task.
-    """
+    """A fresh server speaking ``conventions``, or the defaults when ``None``."""
     server = MCPServer(
         name="conventions",
         auth_backend=AllowAnyBackend(),

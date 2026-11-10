@@ -1,17 +1,3 @@
-"""Outbound bounds on kernel tools and resources: page-size clamp, row and byte ceilings, deadline.
-
-Asks of specs registered with ``register_tool`` / ``register_resource``.
-``max_page_size``, ``max_result_bytes`` and
-``dispatch_timeout`` are per-tool knobs on ``register_tool``, each deferring to
-the server's value when left ``UNSET`` and disabled by ``None``; the clamps and
-the page envelope are the kernel's ``paginate_output``, handed the bound the
-binding and the server resolve.
-
-The prompt cases, ``run_with_deadline``, ``resolve_bound`` and
-``build_mcp_config`` name no spec. Registration-time coverage for the unpaginated-list warning
-lives in ``tests/server/test_unbounded_list_warning.py``.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -110,8 +96,6 @@ def test_a_model_supplied_limit_is_clamped_to_the_server_ceiling() -> None:
     _register_list(server)
     payload = _call(server, {"limit": 1000}, build_mcp_config(max_page_size=2))["structuredContent"]
     assert len(payload["items"]) == 2
-    # The clamp stays honest because the envelope says there is more: 5 rows
-    # over a clamped limit of 2 is 3 pages, not 1.
     assert (payload["totalPages"], payload["hasNext"]) == (3, True)
 
 
@@ -181,21 +165,18 @@ def test_a_result_exactly_at_the_ceiling_is_served_whole() -> None:
 def test_the_ceiling_bounds_the_fetch_and_not_just_the_payload(
     django_assert_num_queries: Any,
 ) -> None:
-    """The rows are bounded in SQL, so the table is never in memory, which is
-    what ``MAX_RESULT_BYTES`` cannot do: it measures a payload already fetched."""
+    """The rows are bounded in SQL, so the table is never in memory."""
     _seed(5)
     server = make_server()
     _register(server)
     with django_assert_num_queries(1) as captured:
         _call(server, {}, build_mcp_config(max_page_size=2))
-    # Ceiling + 1, the one extra row being how "over" is told from "exactly at".
     assert "LIMIT 3" in captured.captured_queries[0]["sql"]
 
 
 @pytest.mark.django_db
 def test_a_queryset_under_the_ceiling_is_read_once(django_assert_num_queries: Any) -> None:
-    """Under the ceiling the window read to tell "over" from "at" is what gets
-    presented: handing the QuerySet back instead would read the table a second time."""
+    """Under the ceiling the window read to tell over from at is what gets presented."""
     _seed(2)
     server = make_server()
     _register(server)
@@ -205,8 +186,7 @@ def test_a_queryset_under_the_ceiling_is_read_once(django_assert_num_queries: An
 
 
 def test_a_generator_under_the_ceiling_is_served_whole() -> None:
-    """A generator is spent by the window read, so the rows served must be the
-    window itself: handing the generator back would present an empty result."""
+    """A generator is spent by the window read, so the rows served must be the window itself."""
     server = make_server()
     _register(
         server,
@@ -265,9 +245,7 @@ def test_a_disabled_ceiling_serves_an_unpaginated_list_whole(
     ids=["sequence", "manager", "generator", "mapping", "string"],
 )
 def test_any_list_result_is_bounded_by_the_same_ceiling(selector: Any) -> None:
-    """A plain sequence, a generator, a Manager, a mapping and a string are bounded
-    as a QuerySet is: the kernel presents a ``LIST`` by iterating whatever the
-    selector returned, so a mapping counts its keys and a string its characters."""
+    """A plain sequence, a generator, a Manager, a mapping and a string are bounded alike."""
     _seed(3)
     server = make_server()
     _register(server, SelectorSpec(kind=SelectorKind.LIST, selector=selector, permissions=OPEN))
@@ -303,8 +281,7 @@ def test_call_tool_enforces_the_same_row_ceiling() -> None:
 
 @pytest.mark.django_db
 def test_a_page_past_the_end_clamps_to_the_last_page() -> None:
-    """An unclamped ``page`` becomes an arbitrarily large SQL OFFSET, which a
-    backend may reject with a ``DatabaseError`` that escapes as a 500."""
+    """An unclamped ``page`` becomes an arbitrarily large SQL OFFSET."""
     _seed(5)
     server = make_server()
     _register_list(server)
@@ -357,7 +334,6 @@ def test_an_oversized_tool_result_becomes_an_actionable_error() -> None:
     message = tool_error(out)["message"]
     assert "over this server's 200 byte ceiling" in message
     assert "not truncated" in message
-    # No partial payload came back alongside the error.
     assert "items" not in str(out.get("structuredContent", ""))
 
 
@@ -518,7 +494,6 @@ async def test_an_overrunning_tool_call_returns_a_terminal_error() -> None:
     )
     message = tool_error(out)["message"]
     # Honest that the work may still be running: cancelling the task does not
-    # interrupt a thread parked in the DB driver.
     assert "dispatch deadline" in message
     assert "may still be running" in message
 
@@ -560,7 +535,6 @@ async def test_tools_call_is_not_double_wrapped_by_the_dispatcher() -> None:
         _ctx(_slow_server(dispatch_timeout=None), build_mcp_config(dispatch_timeout=0.01)),
     )
     # A second timer at the dispatcher would have fired here regardless of the
-    # binding's opt-out.
     assert out["structuredContent"]["items"] == []
 
 

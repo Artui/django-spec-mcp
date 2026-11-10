@@ -1,17 +1,3 @@
-"""Registration-time guards on kernel resources and on prompts.
-
-The URI-template channel is the one caller-controlled name channel in the
-package: each variable lands in the selector's pool, so ``notes://{user}`` would
-let a URI segment stand in for the authenticated principal. A kernel resource's
-template is held to the same reserved names as a tool's, and a
-duplicated variable, whose later capture shadows the earlier, is refused too.
-
-The unguarded-resource questions (a resource with no permissions warns,
-``REQUIRE_TOOL_PERMISSIONS`` refuses it, a guarded spec is silent) are asked of
-a kernel resource in ``tests/handlers/test_kernel_unguarded.py`` and not
-restated here. The prompt and view questions build no spec.
-"""
-
 from __future__ import annotations
 
 import json
@@ -104,8 +90,7 @@ def test_require_tool_permissions_refuses_an_unguarded_prompt(settings: Any) -> 
 def test_an_unguarded_view_is_deliberately_allowed(
     settings: Any, recwarn: pytest.WarningsRecorder
 ) -> None:
-    """A view's content sources cannot read the caller's data, so views stay
-    exempt on purpose rather than by oversight."""
+    """A view's content sources cannot read the caller's data."""
     settings.SPEC_MCP = {"REQUIRE_TOOL_PERMISSIONS": True}
     server = make_server()
     server.register_ui_resource(name="view", uri="ui://view", html="<p>hi</p>", ui=UIResourceMeta())
@@ -114,8 +99,7 @@ def test_an_unguarded_view_is_deliberately_allowed(
 
 
 def test_a_prompt_argument_list_is_unaffected() -> None:
-    """Prompt arguments are a different channel: the ``prompts/get`` seed order
-    is what protects them, so a declared name is never refused here."""
+    """Prompt arguments are a different channel: prompts/get seed order protects them."""
     binding = make_server().register_prompt(
         name="p",
         render=lambda **_: "x",
@@ -147,8 +131,7 @@ def test_a_duplicated_template_variable_is_refused() -> None:
 
 @pytest.mark.parametrize("variable", ["serializer", "page"])
 def test_a_name_a_tool_reserves_is_an_ordinary_segment_of_a_resource(variable: str) -> None:
-    """A read has no Validator to bind ``serializer`` and no post-fetch pipeline
-    to take ``page``, so either is a locator segment the selector receives."""
+    """A read has no Validator to bind serializer and no pipeline to take page."""
     server = make_server()
     server.register_resource(_retrieve(variable), name="r", uri_template=f"r://{{{variable}}}")
     assert _read(server, "r://csv") == {"key": "csv"}

@@ -1,14 +1,3 @@
-"""Kernel bindings built by hand and passed straight to a registry.
-
-``server.tools.register`` and ``server.resources.register`` take a binding as
-built, so nothing checks its spec's guard the way ``register_tool`` and
-``register_resource`` do. Such a binding is never called without a permission
-check, whatever ``REQUIRE_TOOL_PERMISSIONS`` says: only the registrar's warning
-earns an unguarded spec its grant, and without one the kernel's dispatch
-refuses the spec. A hand-built resource binding's ``scopes`` gate the read on
-their own, as a tool binding's do.
-"""
-
 from __future__ import annotations
 
 from dataclasses import replace
@@ -112,7 +101,6 @@ def test_a_handbuilt_unguarded_kernel_tool_is_never_called(
         with pytest.raises(ImproperlyConfigured, match=_REFUSED):
             _call_tool(client, server, via)
     else:
-        # On the wire it is a server misconfiguration, so an internal error.
         assert _call_tool(client, server, via)["error"]["code"] == -32603
     assert RAN == []
 
@@ -121,7 +109,6 @@ def test_a_handbuilt_unguarded_kernel_tool_is_never_called(
 @pytest.mark.parametrize("via", ["sync", "async", "in-process"])
 def test_a_handbuilt_guarded_kernel_tool_is_called(client: Client, require: bool, via: str) -> None:
     # The control for the refusal above: the same binding over an open spec runs,
-    # so what stops the unguarded one is its missing guard and nothing upstream.
     server = _server(require=require)
     server.tools.register(_tool([Unrestricted()]))
     body = _call_tool(client, server, via)

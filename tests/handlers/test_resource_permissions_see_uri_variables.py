@@ -1,22 +1,3 @@
-"""A kernel resource's permission reading ``arguments`` judges the URI a read names.
-
-A kernel ``PermissionCheck`` opts into the call's ``arguments`` by declaring the
-keyword, and the read hands the URI-template variables there, read into the
-types the spec's ``reads`` declare, so ``projects://7`` reaches a check as
-``{"project_pk": 7}``, in the class-level check and in the object guard. One
-that declares ``call_context`` reads the request and the resource's name off
-it, so both checks see one request.
-
-Where the spec's check answers: a denied caller is charged nothing. A kernel
-resource's checks are the kernel's, which ``dispatch`` asks after the shell has
-charged the rate limits, so the shell asks them itself first
-(``admit_kernel_read``) and dispatch runs under the grant they gave. The last
-test pins that order.
-
-The subscription half asks the same: ``grant_subscription`` grants a watch only
-on the URIs the read would admit, judged by the spec's own checks.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -139,7 +120,6 @@ async def test_the_specs_check_answers_before_the_rate_limit(
     is_async: bool, uri: str, code: JsonRpcErrorCode, consumed: int
 ) -> None:
     # A denied caller is refused and charged nothing, and an admitted one is
-    # the one the rate limit then refuses, the check asked once either way.
     limiter = RefusingRateLimit()
     check = _GrantsProjectSeven()
 

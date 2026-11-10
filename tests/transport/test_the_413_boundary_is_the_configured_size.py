@@ -1,9 +1,3 @@
-"""A body of exactly ``max_request_bytes`` is admitted; one byte more is a ``413``.
-
-The limit is a size the body may reach, so the comparison is strict. Run on
-both views, which each read their body through ``read_message``.
-"""
-
 from __future__ import annotations
 
 from django_spec_mcp.config.build_mcp_config import build_mcp_config

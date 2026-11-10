@@ -1,30 +1,3 @@
-"""The kernel path's refusal map: total, ordered, and each row answering with its own wire body.
-
-Every row has a test asserting its own answer and asserting that it is not the
-answer of the row the refusal falls to with that row deleted, so mutating a row
-out fails a named test even where the map stays total:
-
-- ``NotPermitted`` / ``PrincipalUnavailable`` (fall to ``DispatchError``):
-  ``test_a_denied_principal_is_insufficient_permission``,
-  ``test_a_deactivated_principal_is_insufficient_permission``;
-- ``InvalidArguments`` (falls to ``DispatchError``):
-  ``test_invalid_arguments_carry_their_per_field_detail``, and for a ``many`` call
-  refused by row and as a whole, whose detail mixes integer indices with
-  ``non_field_errors``:
-  ``test_a_many_call_refused_by_row_and_as_a_whole_is_a_validation_result``;
-- ``DispatchError`` (unanswered without it):
-  ``test_a_bare_dispatch_error_is_a_validation_result`` and the totality test;
-- ``AdditionalInputRequired`` (falls to ``ServiceError``):
-  ``test_additional_input_required_asks_for_input``;
-- ``ServiceValidationError`` (falls to ``ServiceError``) and ``ServiceError``
-  (unanswered without it, with the totality test):
-  ``test_a_service_refusal_is_answered_with_its_wire_body``.
-
-The wire body a client reads for a denial and for a service refusal is written
-out as a literal in ``test_a_denied_principal_is_insufficient_permission`` and
-``test_a_service_refusal_is_answered_with_its_wire_body``.
-"""
-
 from __future__ import annotations
 
 import json
@@ -205,8 +178,6 @@ def test_a_many_call_refused_by_row_and_as_a_whole_is_a_validation_result(
     kernel: KernelClient,
 ) -> None:
     # Row 1 fails the shape check and the Validator refuses the list it is handed,
-    # so the kernel's detail node mixes the integer index with ``non_field_errors``,
-    # which a sorted-key encoder cannot order: it answered a 500.
     lines = [{"number": "A", "amount_cents": 1}, {"number": "B", "amount_cents": "x"}]
 
     body = kernel.call("bulk", {"items": lines})
@@ -219,13 +190,11 @@ def test_a_many_call_refused_by_row_and_as_a_whole_is_a_validation_result(
             "non_field_errors": ["Too many lines."],
         }
     }
-    # The kernel's reading order: the rows by index, then the list's own message.
     assert list(error["detail"]["items"]) == ["1", "non_field_errors"]
 
 
 def test_a_many_calls_refused_rows_are_listed_in_index_order(kernel: KernelClient) -> None:
     # Rows 2 and 10 fail: the text a model reads lists them as the kernel does,
-    # by number, where a sort of the stringified keys would put "10" first.
     lines = [{"number": str(n), "amount_cents": 1} for n in range(12)]
     lines[2]["amount_cents"] = "x"
     lines[10]["amount_cents"] = "x"
@@ -245,7 +214,6 @@ def test_a_bare_dispatch_error_is_a_validation_result(kernel: KernelClient) -> N
 
 def test_additional_input_required_asks_for_input(kernel: KernelClient) -> None:
     # A client that cannot be asked gets MRTR's degraded answer, which names the
-    # input wanted, where the service-error fallback would not.
     assert _error(kernel.call("asks")) == {
         "type": "input_required",
         "message": "Which account?",

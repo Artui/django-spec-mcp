@@ -1,13 +1,3 @@
-"""Every name this package writes somewhere that outlives a process.
-
-A cache key, a Redis channel, a signing salt and a settings key are read back
-by a later deploy, so each is a contract with the data already stored. These
-are the package's own names, none carried from the package it continues: a
-store keyed on an old prefix would keep that name for as long as the data
-lives, and a salt shared with it would accept the other package's signed
-state. Each value is pinned here so a rename cannot happen by accident.
-"""
-
 from __future__ import annotations
 
 from django.test import override_settings

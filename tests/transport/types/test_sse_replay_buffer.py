@@ -1,9 +1,3 @@
-"""What every ``SSEReplayBuffer`` promises, run against each implementation.
-
-What one backend adds on top - the in-memory ring's numbering and session
-bound, the Redis stream's trimming and expiry - is in that backend's own file.
-"""
-
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
@@ -45,8 +39,6 @@ async def test_record_returns_monotonic_ids(buffer: SSEReplayBuffer) -> None:
     b = await buffer.record("s", {"n": 2})
     c = await buffer.record("s", {"n": 3})
     # Compared as strings, which is how a resuming client's ``Last-Event-ID``
-    # is compared: Redis's ``ms-seq`` ids and the ring's zero-padded counter
-    # both sort by recency.
     assert a < b < c
 
 

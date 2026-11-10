@@ -1,12 +1,3 @@
-"""A watch of a kernel resource reads its URI variables as the read would.
-
-``_kernel_read_admits`` runs dispatch's prelude alone, so it coerces the
-variables against the declaration the call's ``call_context`` gives and hands
-``check_call`` that same dict, as ``dispatch`` asks the declaration with the
-dict it is handed. A ``RETRIEVE`` ``SelectorSpec`` takes the keyword and has
-no Validator to hand it to, so what is pinned is the wiring.
-"""
-
 from __future__ import annotations
 
 from typing import Any

@@ -1,25 +1,3 @@
-"""Progress over an SSE response stream, for kernel tools: the streaming half of the transport.
-
-A client asks by putting a ``progressToken`` in the request's ``_meta``; the
-server answers with ``text/event-stream`` carrying ``notifications/progress``
-frames and then the response. Everything here drives the real async URL conf,
-because the subject is what comes back over HTTP: content type, frame order,
-which status was committed.
-
-The tools are kernel specs registered with ``register_tool``, and a kernel
-service asks for the reporter by declaring ``progress``, which ``adispatch``
-fills.
-
-What the kernel adds is a second permission stack. A kernel binding's own
-``permissions`` hold only its ``scopes=`` gate, and the spec's
-permission checks run inside ``adispatch``, after a stream has committed
-its ``200``. So the pre-flight runs the kernel's own prelude as well
-(``test_a_spec_check_denying_a_streamed_call_keeps_its_403_and_challenge`` and
-the cases after it). A kernel spec declares its reads as arguments, and
-``test_a_check_reading_arguments_is_judged_on_the_servers_value`` asks that the
-pre-flight judges them on the server's value.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -210,7 +188,6 @@ async def test_a_progress_token_turns_the_response_into_a_stream() -> None:
     assert response.status_code == 200
     assert response["Content-Type"] == "text/event-stream"
     # Without this nginx buffers the whole body and flushes on close, which
-    # defeats the point of streaming at all.
     assert response["X-Accel-Buffering"] == "no"
 
 
@@ -230,7 +207,6 @@ async def test_progress_frames_arrive_before_the_response() -> None:
         "message": "starting",
     }
     # The final frame is the ordinary JSON-RPC response, and it terminates the
-    # stream.
     assert frames[-1]["id"] == 1
     assert frames[-1]["result"]["structuredContent"] == {"rows": 3}
 
@@ -302,13 +278,7 @@ async def test_a_token_that_is_not_a_string_or_int_is_treated_as_absent(token: A
 
 @pytest.mark.django_db(transaction=True)
 async def test_a_denied_tool_still_gets_403_and_a_challenge() -> None:
-    """The reason permissions are pre-flighted, for the ``scopes=`` gate.
-
-    A streaming response commits its status before the handler runs, so a
-    denial found inside would ride as an in-stream error inside a ``200``,
-    losing the ``403`` the authorization spec makes normative and the
-    challenge telling the client what to ask for.
-    """
+    """The reason permissions are pre-flighted, for the ``scopes=`` gate."""
     response = await _post(_server(), name="p.gated")
     assert response.status_code == 403
     assert response["Content-Type"].startswith("application/json")
@@ -331,13 +301,7 @@ def _wire(response: Any, body: dict[str, Any]) -> tuple[Any, ...]:
 
 @pytest.mark.django_db(transaction=True)
 async def test_a_spec_check_denying_a_streamed_call_keeps_its_403_and_challenge() -> None:
-    """The spec's own ``PermissionCheck`` is pre-flighted, not only the scope gate.
-
-    Asked only inside ``adispatch``, it would turn a ``403`` with a challenge
-    into a ``200`` stream carrying ``-32006`` whenever the caller asked for
-    progress: the status a client is told to act on would depend on whether
-    it wanted a progress bar.
-    """
+    """The spec's own ``PermissionCheck`` is pre-flighted, not only the scope gate."""
     streamed, plain = await _both(_server(), name="p.denied")
     assert streamed.status_code == 403
     assert _wire(streamed, streamed.json()) == _wire(plain, plain.json())
@@ -346,8 +310,7 @@ async def test_a_spec_check_denying_a_streamed_call_keeps_its_403_and_challenge(
 
 @pytest.mark.django_db(transaction=True)
 async def test_a_deactivated_principal_is_refused_before_the_stream() -> None:
-    """The kernel refuses an inactive user ahead of any check, as ``-32006``,
-    so the pre-flight does too, even for a spec every caller may run."""
+    """The kernel refuses an inactive user ahead of any check, as ``-32006``."""
     await get_user_model().objects.acreate(username="gone", is_active=False)
     server = _server(auth_backend=HeaderAuthBackend())
     streamed, plain = await _both(server, headers={"X-Test-User": "gone"})
@@ -357,9 +320,7 @@ async def test_a_deactivated_principal_is_refused_before_the_stream() -> None:
 
 @pytest.mark.django_db(transaction=True)
 async def test_a_check_reading_arguments_is_judged_on_the_servers_value() -> None:
-    """The pre-flight runs before the handler lays the server's arguments over
-    the caller's, so it lays them itself: a check reading ``tenant`` judged the
-    caller's ``evil`` there, and the server's ``acme`` in dispatch."""
+    """The pre-flight runs before the handler lays the server's arguments over the caller's."""
     response = await _post(_server(), name="p.tenanted", arguments={"tenant": "evil"})
     assert response.status_code == 200
     assert response["Content-Type"] == "text/event-stream"
@@ -370,8 +331,7 @@ async def test_a_check_reading_arguments_is_judged_on_the_servers_value() -> Non
 async def test_the_server_arguments_are_laid_without_a_second_warning(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """The handler warns once that it dropped the caller's ``tenant``; the
-    pre-flight lays the same values without saying so again."""
+    """The handler warns once that it dropped the caller's ``tenant``."""
     caplog.set_level(logging.WARNING, logger="django_spec_mcp")
     await _frames(await _post(_server(), name="p.tenanted", arguments={"tenant": "evil"}))
     dropped = [r for r in caplog.records if "dropped the caller's value" in r.getMessage()]
@@ -381,10 +341,7 @@ async def test_the_server_arguments_are_laid_without_a_second_warning(
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("paging", [{"page": 2}, {"limit": 5}])
 async def test_a_paged_call_its_spec_denies_keeps_its_403(paging: dict[str, int]) -> None:
-    """``page`` and ``limit`` are the transport's, split off before the checks
-    are asked on either path, so a caller the spec denies is a ``403`` whether
-    the call streams or not. The split itself is held by
-    ``test_a_paged_call_is_asked_once``."""
+    """page and limit are the transport's, split off before the checks are asked."""
     streamed, plain = await _both(_server(), name="p.pages", arguments=paging)
     assert streamed.status_code == 403
     assert _wire(streamed, streamed.json()) == _wire(plain, plain.json())
@@ -395,8 +352,7 @@ async def test_a_paged_call_its_spec_denies_keeps_its_403(paging: dict[str, int]
 async def test_a_check_reading_the_token_sees_the_calls_request(
     scopes: str, streamed: bool
 ) -> None:
-    """A check depending on the token reads ``call_context["request"].mcp_token``,
-    as the plan's call context promises, in the pre-flight as in dispatch."""
+    """A token-reading check sees the same request in the pre-flight as in dispatch."""
     server = _server(auth_backend=HeaderAuthBackend())
     response = await _post(server, name="p.write", headers={"X-Test-Scopes": scopes})
     assert response.streaming is streamed
@@ -405,13 +361,7 @@ async def test_a_check_reading_the_token_sees_the_calls_request(
 
 @pytest.mark.django_db(transaction=True)
 async def test_a_refusal_that_is_not_a_denial_is_left_to_the_handler() -> None:
-    """An unknown argument from a caller the spec admits is an ``isError`` result
-    on both paths, never a ``403``.
-
-    The pre-flight answers only the refusals ``KERNEL_REFUSALS`` answers
-    ``-32006``, and leaves every other one to the handler, which answers it in
-    the stream as it would without one.
-    """
+    """An unknown argument from a caller the spec admits is an ``isError`` result on both paths."""
     streamed, plain = await _both(_server(), name="p.export", arguments={"stray": 1})
     assert streamed.status_code == 200
     assert streamed["Content-Type"] == "text/event-stream"
@@ -429,9 +379,7 @@ class _LooksUpATenant(PermissionCheck):
 
 @pytest.mark.django_db(transaction=True)
 async def test_a_service_error_a_check_raises_streams_the_plain_calls_answer() -> None:
-    """A ``ServiceError`` from a check is no denial, so the pre-flight leaves it
-    to the handler, which answers it as an ``isError`` result in the stream,
-    the answer the same call gets without a progress token."""
+    """A ``ServiceError`` from a check is no denial, so the pre-flight leaves it to the handler."""
     server = _bare()
     server.register_tool(
         ServiceSpec(service=lambda: {}, permissions=[_LooksUpATenant()]), name="p.tenant"
@@ -448,12 +396,7 @@ async def test_a_service_error_a_check_raises_streams_the_plain_calls_answer() -
 
 @pytest.mark.django_db(transaction=True)
 async def test_a_caller_the_spec_denies_is_refused_before_its_unknown_argument() -> None:
-    """A caller ``_Deny`` refuses is a ``403`` on both paths, its stray argument unread.
-
-    The transport asks the spec's checks before it reads the call's shape, on
-    both paths, so a caller the tool is not for learns nothing of the
-    arguments it takes.
-    """
+    """A caller ``_Deny`` refuses is a ``403`` on both paths, its stray argument unread."""
     streamed, plain = await _both(_server(), name="p.denied", arguments={"stray": 1})
     assert streamed.status_code == 403
     assert _wire(streamed, streamed.json()) == _wire(plain, plain.json())
@@ -473,8 +416,7 @@ class _Counted(PermissionCheck):
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("token", ["abc123", None], ids=["streamed", "plain"])
 async def test_a_streamed_call_asks_the_spec_as_often_as_a_plain_one(token: Any) -> None:
-    """Once, by the pre-flight, before a stream commits its status; the handler
-    and ``adispatch`` run under that admission and ask nothing again."""
+    """Once, by the pre-flight, before a stream commits its status."""
     check = _Counted()
     server = _bare()
     server.register_tool(ServiceSpec(service=lambda: {}, permissions=[check]), name="p.counted")
@@ -502,10 +444,7 @@ class _NamesTenant(PermissionCheck):
 
 @pytest.mark.django_db(transaction=True)
 async def test_a_streamed_call_resolves_a_checks_seed_once() -> None:
-    """The handler dispatches under the pre-flight's admission, so the seed the
-    check names resolves once, and the check and the service see one object,
-    as on a plain call
-    (``tests/handlers/test_a_seed_a_check_names_resolves_once.py``)."""
+    """The handler dispatches under the pre-flight's admission."""
     resolved: list[_Tenant] = []
     checked: list[Any] = []
     ran: list[Any] = []
@@ -541,11 +480,7 @@ async def test_a_streamed_call_resolves_a_checks_seed_once() -> None:
 
 @pytest.mark.django_db(transaction=True)
 async def test_a_streamed_call_lays_its_bound_value_under_the_dict_it_dispatches_with() -> None:
-    """The pre-flight lays the bound value under the dict its admission carries,
-    and the handler, reusing that admission, lays it again under the same dict:
-    two dicts in all, that one and the one ``resolve_tool_call`` builds. Handed
-    ``None`` in the pre-flight the record holds a ``None``; a dict of the
-    handler's own at the re-apply makes three."""
+    """The pre-flight lays the bound value under the dict its admission carries, and the handler."""
     validator = TypedByTheCall("p.bound")
     ran: list[Any] = []
 
@@ -573,12 +508,7 @@ async def test_a_streamed_call_lays_its_bound_value_under_the_dict_it_dispatches
 
 @pytest.mark.django_db(transaction=True)
 async def test_a_streamed_task_call_resolves_a_checks_seed_once_before_the_worker() -> None:
-    """A call that streams progress and also runs as a task: the pre-flight
-    admits it (1), and task creation takes that admission rather than asking
-    the spec's checks again, so the seed a check names resolves once before the
-    worker, as on a plain task call
-    (``tests/tasks/test_a_task_resolves_a_checks_seed_once.py``). The worker
-    resolves once more, on its own."""
+    """A call that streams progress and also runs as a task: the pre-flight admits it (1)."""
     resolved: list[_Tenant] = []
     enqueued: list[str] = []
 
@@ -640,9 +570,7 @@ class _RecordsTenant(PermissionCheck):
 
 @pytest.mark.django_db(transaction=True)
 async def test_a_streamed_retry_with_merged_answers_is_admitted_afresh() -> None:
-    """The pre-flight never sees a retry's answers, so its admission is not the
-    call's: the handler asks the checks again on the arguments with the answers
-    merged in, and the service runs on those."""
+    """The pre-flight never sees a retry's answers, so its admission is not the call's."""
     check = _RecordsTenant()
     server = _bare()
     server.register_tool(
@@ -679,13 +607,7 @@ class _RecordsArguments(PermissionCheck):
 
 @pytest.mark.django_db(transaction=True)
 async def test_a_streamed_retry_carrying_only_request_state_is_admitted_afresh() -> None:
-    """A retry whose answers ride in the signed ``requestState`` alone, with no
-    ``inputResponses``, still has them merged into its arguments, so the
-    handler asks the checks on the merged arguments rather than reusing the
-    pre-flight's admission, made on what the client sent. This pins the
-    ``not prior.carried`` guard: one reading ``inputResponses`` instead reuses
-    the pre-flight admission here and the check is never asked on
-    ``confirmed``."""
+    """A retry whose answers ride in the signed ``requestState`` alone."""
     check = _RecordsArguments()
     server = _bare()
     server.register_tool(
@@ -707,19 +629,16 @@ async def test_a_streamed_retry_carrying_only_request_state_is_admitted_afresh()
         assert response["Content-Type"] == "text/event-stream"
         return (await _answer(response))["result"]
 
-    # Asks to confirm. Nothing is carried yet, so the pre-flight's admission is the call's.
     asked = await round_trip()
     assert asked["resultType"] == "input_required"
     assert check.asked == [sent]
 
-    # The confirmation is answered; it asks for a reason, and signs what was carried.
     check.asked.clear()
     answer = {ELICITATION_KEY: {"action": "accept", "content": {"confirmed": True}}}
     reason = await round_trip(inputResponses=answer, requestState=asked["requestState"])
     assert reason["resultType"] == "input_required"
     assert check.asked == [sent, {**sent, "confirmed": True}]
 
-    # The retry carries the signed state and no answer of its own.
     check.asked.clear()
     again = await round_trip(requestState=reason["requestState"])
     assert again["resultType"] == "input_required"
@@ -728,13 +647,7 @@ async def test_a_streamed_retry_carrying_only_request_state_is_admitted_afresh()
 
 @pytest.mark.django_db(transaction=True)
 async def test_a_denied_call_the_spec_ignores_unknown_arguments_for_keeps_its_403() -> None:
-    """The pre-flight judges unknown arguments by the binding's own policy.
-
-    A tool registered with ``UnknownArguments.IGNORE`` drops the stray
-    argument and reaches its permission check, so a denied caller is a ``403``
-    on both paths. That the policy is the binding's is held by
-    ``test_a_stray_argument_a_tool_ignores_is_asked_once``.
-    """
+    """The pre-flight judges unknown arguments by the binding's own policy."""
     server = _bare()
     server.register_tool(
         ServiceSpec(service=lambda: {}, permissions=[_Deny()]),
@@ -748,10 +661,7 @@ async def test_a_denied_call_the_spec_ignores_unknown_arguments_for_keeps_its_40
 
 @pytest.mark.django_db(transaction=True)
 async def test_a_check_reading_a_servers_own_seed_is_judged_on_that_seed() -> None:
-    """The pre-flight resolves the seeds the check names from the server's own
-    ``pool_seeds=``. Handed the defaults it cannot resolve ``tenant``, the
-    kernel raises a configuration error the pre-flight does not answer, and the
-    call is a ``500`` where the plain one is a ``403``."""
+    """The pre-flight resolves the seeds the check names from the server's own ``pool_seeds=``."""
     server = MCPServer(
         name="p",
         auth_backend=AllowAnyBackend(),
@@ -768,9 +678,7 @@ async def test_a_check_reading_a_servers_own_seed_is_judged_on_that_seed() -> No
 
 @pytest.mark.django_db(transaction=True)
 async def test_an_unguarded_spec_streams_under_the_grant_its_call_carries() -> None:
-    """With ``REQUIRE_TOOL_PERMISSIONS`` off, the pre-flight hands the kernel
-    the same ``Grant`` the call does; without it the kernel refuses the
-    unguarded spec as a configuration error, and the call is a ``500``."""
+    """With ``REQUIRE_TOOL_PERMISSIONS`` off, the pre-flight hands the kernel the same grant."""
     server = _bare(require_tool_permissions=False)
     with pytest.warns(UserWarning):
         server.register_tool(ServiceSpec(service=lambda: {"ok": True}), name="p.open")
@@ -795,7 +703,6 @@ async def test_notifications_are_capped() -> None:
     server.register_tool(ServiceSpec(service=chatty, permissions=OPEN), name="p.export")
     frames = await _frames(await _post(server))
     assert sum(1 for f in frames if f.get("method") == "notifications/progress") == 2
-    # Capping the *reports* must not cap the work: the result still arrives.
     assert frames[-1]["result"]["structuredContent"] == {"ok": True}
 
 
@@ -806,8 +713,8 @@ async def test_a_non_increasing_report_is_dropped() -> None:
 
     def backwards(*, progress: Any) -> dict[str, Any]:
         progress(5, total=10)
-        progress(3, total=10)  # dropped
-        progress(5, total=10)  # dropped: equal is not an increase
+        progress(3, total=10)
+        progress(5, total=10)
         progress(9, total=10)
         return {"ok": True}
 
@@ -833,8 +740,6 @@ async def test_an_exception_becomes_an_in_stream_error_not_a_truncated_body() ->
     frames = await _frames(await _post(server))
     assert frames[0]["method"] == "notifications/progress"
     assert frames[-1]["error"]["code"] == -32603
-    # Generic, with the exception's own text in the log only: see
-    # ``test_dispatch_backstop.py`` for the log half.
     assert frames[-1]["error"]["message"] == "Internal error"
     assert "nope" not in json.dumps(frames)
 
@@ -877,12 +782,7 @@ async def test_a_report_with_no_total_omits_the_field() -> None:
 
 
 async def test_closing_the_stream_cancels_the_dispatch() -> None:
-    """Cancellation-by-disconnect: the client going away *is* the signal.
-
-    It cancels the await, not the work: a thread parked in a driver's socket
-    read is not interruptible by asyncio, the same caveat the dispatch
-    deadline carries.
-    """
+    """Cancellation-by-disconnect: the client going away *is* the signal."""
     seen: list[str] = []
 
     async def never(reporter: Any) -> dict[str, Any]:
@@ -894,15 +794,10 @@ async def test_closing_the_stream_cancels_the_dispatch() -> None:
             raise
         return {}  # pragma: no cover - the sleep never completes
 
-    # Driving the generator rather than the response: Django wraps the
-    # iterator, and closing the wrapper does not reach through to the
-    # generator's ``finally``, which is the whole subject here.
     iterator = _stream(
         dispatch=never, request_id=1, progress_token="t", max_notifications=10, keepalive=5
     )
     assert b"progress" in await iterator.__anext__()
-    # The client hangs up: Django closes the generator, whose ``finally``
-    # cancels the dispatch.
     await iterator.aclose()
     await asyncio.sleep(0.05)
     assert seen == ["cancelled"]
@@ -920,8 +815,7 @@ async def test_a_report_after_the_client_left_is_dropped_not_raised() -> None:
 
 
 def test_preflight_stands_aside_for_everything_it_cannot_speak_for() -> None:
-    """An unknown tool, or a bad name, is the handler's error to report, with
-    a better message than a pre-flight could give."""
+    """An unknown tool, or a bad name, is the handler's error to report."""
     server = _server()
     context = MCPCallContext(
         http_request=HttpRequest(),

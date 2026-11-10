@@ -1,25 +1,3 @@
-"""A permission writing into ``arguments`` reaches no next check, service or caller.
-
-A check that declares ``arguments`` is handed the call's shape-checked
-arguments as a read-only mapping, a copy of the top level behind a proxy, so a
-check cannot carry a value into the next check or into the caller's own
-mapping:
-
-- a write raises ``TypeError`` at the check, which is a fault of the check and
-  not a refusal: the next check and the service never run, and the handler
-  lets it through as it does any fault, so the client reads the transport's
-  internal error with none of the check's wording;
-- a check that swallows that ``TypeError`` still changed nothing: the next
-  check and the service are handed the arguments the caller sent, and the
-  caller's own dict is untouched;
-- the way to supply a value the service takes is a ``kwargs`` provider, whose
-  return reaches the service as keywords.
-
-A service tool and a selector tool are both asked, each kind parametrised over
-the fault and the swallowed write. The ``kwargs`` provider case is asked of the
-service alone.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
@@ -119,8 +97,6 @@ def _server(
         spec = SelectorSpec(
             kind=SelectorKind.RETRIEVE,
             selector=service,
-            # ``note`` is required: the selector has no default for it, and an
-            # optional read over such a keyword is refused at registration.
             reads=Parameters(
                 [Parameter("note", "string", required=True), Parameter("owner", "string")]
             ),
@@ -167,15 +143,12 @@ def test_a_write_into_arguments_is_a_fault_that_stops_the_call(
 @KINDS
 @CALLS
 def test_a_swallowed_write_changes_nothing_downstream(call: Callable[..., Any], kind: str) -> None:
-    """The proxy, not the raise, is what holds: with the fault swallowed the call
-    runs, and nothing past the writing check finds its stamp."""
+    """The proxy, not the raise, is what holds: with the fault swallowed the call runs."""
     server, checked, ran = _server(swallow=True, kind=kind)
     arguments = {"note": "x"}
     out = call({"name": "tool", "arguments": arguments}, _ctx(server))
     assert out.get("isError") is not True, out
     assert checked == [{"note": "x"}]
-    # ``owner`` is the declared default (the dataclass's, the selector's):
-    # nobody stamped it.
     assert ran == [{"note": "x", "owner": ""}]
     assert arguments == {"note": "x"}
 
@@ -188,7 +161,6 @@ def test_a_kwargs_provider_is_how_a_value_reaches_the_service(call: Callable[...
     assert out.get("isError") is not True, out
     assert ran == [{"note": "x", "owner": "stamped"}]
     # The provider supplies the service's keyword; it is not an argument the
-    # caller sent, so the checks are not handed it, and nor is the caller's dict.
     assert checked == [{"note": "x"}]
     assert arguments == {"note": "x"}
 

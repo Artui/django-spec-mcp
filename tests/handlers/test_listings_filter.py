@@ -1,24 +1,3 @@
-"""``FILTER_LISTINGS_BY_PERMISSIONS`` across the four list handlers, on kernel specs.
-
-It asks of tools and resources registered with ``register_tool`` and
-``register_resource`` and gated by their own ``PermissionCheck``s: each list handler
-(``tools/list``, ``resources/list``, ``resources/templates/list``, ``prompts/list``) with
-the setting on and off, the ``always_listed`` opt-back-in, the filter running before
-pagination, and a check scoped by what a call names being judged on nothing.
-
-A kernel call's route is in its arguments, so a route-scoped check is one
-reading ``arguments``, which a listing hands as ``None``. Prompts are not specs.
-The async mount runs the listing off the event loop, so a check reading the
-database answers there too.
-
-Two further questions are asked of a kernel binding. A check that reads
-``arguments`` without guarding for a listing's ``None`` raises, which hides its
-binding alone, on every list handler and both mounts, and ``always_listed`` keeps
-it visible. And a create-shaped service spec, one with no target selector, is
-asked its scope check of ``None`` as every call asks it, so a check refusing
-``None`` hides it; a service on a row or a set and a selector spec are not.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -233,8 +212,6 @@ def test_tools_list_always_listed_overrides_a_refusal() -> None:
 
 def test_tools_list_judges_an_argument_scoped_check_on_no_arguments() -> None:
     # A listing names no project, so a check admitting a call that names
-    # project 7 is handed no arguments and hides the tool from a caller it admits
-    # on that call; ``always_listed`` is the way back.
     check = _ForProject()
     server = _server()
     _tool(server, "a")
@@ -255,7 +232,6 @@ def test_tools_list_filter_runs_before_pagination() -> None:
     out = handle_tools_list(None, _ctx(server))
 
     assert _names(out, "tools") == ["visible-1", "visible-2"]
-    # Three visible at a page size of two: one more page.
     assert "nextCursor" in out
 
 
@@ -351,9 +327,6 @@ def test_a_check_reading_arguments_hides_its_tool_and_no_other(
     client: Client, is_async: bool, listing: _Listing
 ) -> None:
     # A listing hands a check no arguments, so one reading them raises. That
-    # hides its own binding, as the docs promise of a check that cannot decide at
-    # list time, rather than failing the whole listing (HTTP 500) and taking an
-    # unrestricted one with it.
     server = _server()
     listing.register(server, "open")
     listing.register(server, "needs-x", _NeedsArgument())
@@ -395,9 +368,6 @@ def test_a_call_naming_the_argument_succeeds_where_the_listing_hides_the_tool(
 
 def test_a_check_left_awaiting_its_answer_still_fails_the_listing() -> None:
     # ``ImproperlyConfigured`` is a configuration error the call path raises as
-    # well, so the listing does not hide the binding for it: without the
-    # re-raise the broad arm below it would, and this would list nothing and
-    # raise nothing.
     server = _server()
     _tool(server, "awaits", _AwaitsAnswer())
 
@@ -410,8 +380,6 @@ def test_a_check_left_awaiting_its_answer_fails_the_call_too(
     client: Client, is_async: bool
 ) -> None:
     # The claim the listing's re-raise rests on: the call path does not answer
-    # this configuration error either, so a listing that hid the binding for it
-    # would be the one place it went unreported.
     server = _server(filtered=False)
     _tool(server, "awaits", _AwaitsAnswer())
 
@@ -433,8 +401,6 @@ def _create_tool(server: MCPServer, name: str, *checks: PermissionCheck) -> None
 
 def test_a_create_whose_scope_check_refuses_nothing_is_hidden() -> None:
     # Dispatch asks a create's scope check of ``None`` on every call, reading
-    # no row and no arguments, so a caller it refuses is answered an error at
-    # every call and is listed nothing.
     server = _server()
     _tool(server, "open")
     _create_tool(server, "create", _ScopeRefusesNone())
@@ -449,7 +415,6 @@ def test_a_create_whose_scope_check_admits_nothing_is_listed() -> None:
 
     assert _names(handle_tools_list(None, _ctx(server)), "tools") == ["create"]
     # The scope question is handed what a call hands it: the tool's name as
-    # the action, and a request carrying the token.
     assert [seen["action"] for seen in check.seen] == ["create"]
     assert hasattr(check.seen[0]["request"], "mcp_token")
 
@@ -504,9 +469,6 @@ def test_a_service_with_a_target_is_not_asked_the_scope_of_nothing(
     selectors: dict[str, SelectorSpec],
 ) -> None:
     # Held by the target-selector conjunct of the create shape: a write on a
-    # row asks ``has_object_permission`` of the row it finds and a bulk write
-    # asks ``has_scope_permission`` of the set, so neither is asked of ``None``
-    # and this refusal of ``None`` is no reason to hide the tool.
     server = _server()
     server.register_tool(
         ServiceSpec(service=_write, permissions=[_ScopeRefusesNone()], **selectors),
@@ -518,8 +480,6 @@ def test_a_service_with_a_target_is_not_asked_the_scope_of_nothing(
 
 def test_a_selector_tool_is_not_asked_the_scope_of_nothing() -> None:
     # Held by the kind conjunct of the create shape: a selector spec has no
-    # target selector to be missing, and its scope question is of the set it
-    # reads.
     server = _server()
     server.register_tool(
         SelectorSpec(kind=SelectorKind.LIST, selector=_rows, permissions=[_ScopeRefusesNone()]),

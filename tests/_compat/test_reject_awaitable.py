@@ -1,17 +1,3 @@
-"""The awaitable-in-a-decision guard, and every hook it covers.
-
-Two halves. The first exercises :func:`reject_awaitable` directly. The second
-is the point of the file: **one parametrized case per consumer-supplied hook
-that a sync path consults**, so the family is asserted as a family. Adding a
-sixth hook and forgetting to guard it should look like a missing row here, not
-like nothing at all.
-
-Three of these fail *open* without the guard — an ``async def`` returns a
-truthy coroutine and the caller is authenticated, granted, or shown every
-binding. That is why refusing is not a downgrade: the behaviour it replaces is
-a silent, total bypass.
-"""
-
 from __future__ import annotations
 
 import inspect
@@ -47,7 +33,6 @@ def test_a_plain_value_passes_through_unchanged() -> None:
 
 def test_a_falsy_value_passes_through_too() -> None:
     # The guard must not conflate "awaitable" with "truthy": a permission that
-    # legitimately returns ``False`` still has to reach the caller as ``False``.
     assert reject_awaitable(False, call="c()", remedy="r", hazard="h") is False
 
 
@@ -59,7 +44,6 @@ def test_a_coroutine_is_refused_and_closed() -> None:
         reject_awaitable(coroutine, call="Thing.hook()", remedy="r", hazard="h")
 
     # Closed, so CPython does not tack a "never awaited" RuntimeWarning onto
-    # the traceback at collection time and bury the actionable error.
     assert inspect.getcoroutinestate(coroutine) == inspect.CORO_CLOSED
 
 
@@ -134,7 +118,6 @@ def test_an_async_rate_limit_is_refused_and_named() -> None:
 
     message = str(excinfo.value)
     # Naming the offending class is the whole value: "returned an awaitable"
-    # alone leaves an operator grepping a settings module.
     assert "_AsyncRateLimit.consume()" in message
     assert "async_to_sync" in message
 
@@ -157,12 +140,7 @@ def test_a_prompt_check_answering_a_coroutine_is_refused_by_the_kernel_s_rule(ca
 
 
 def test_the_rate_limiter_refusal_explains_that_it_fails_closed() -> None:
-    """The one that denies rather than allows still gets a legible cause.
-
-    Left unguarded this is a permanent outage whose only symptom is an
-    unserialisable ``retryAfter`` — worse to diagnose than the fail-open ones,
-    even though it is safer.
-    """
+    """The one that denies rather than allows still gets a legible cause."""
     with pytest.raises(ImproperlyConfigured) as excinfo:
         _call_consume_rate_limits()
 

@@ -1,18 +1,3 @@
-"""The async handlers' own branches, on kernel tools and resources.
-
-Asks of specs registered with ``register_tool`` / ``register_resource``,
-through ``handle_tools_call_async``, ``handle_resources_read_async`` and
-``adispatch``: the guards name a malformed
-call, a refusal keeps its shape, an ``async def`` service, output selector and
-resource selector are awaited on the loop rather than sent to a thread, and the
-sync handler table is sent off the loop while its answer still reaches the wire.
-The branches the async handler shares with the sync one are asked of both in
-``test_handler_branches.py``.
-
-A kernel Validator reads the call's context off its ``ValidationContext``,
-asked here, and a kernel Presenter takes no per-call context.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -186,8 +171,7 @@ async def test_an_async_output_selector_reshapes_the_result() -> None:
 
 
 async def test_a_validator_reads_the_calls_context() -> None:
-    """The Validator is handed the call's context, carrying the request and the
-    tool's name."""
+    """The Validator is handed the call's context, carrying the request and the tool's name."""
     validator = _ContextSeen()
     server = _one(
         ServiceSpec(
@@ -264,9 +248,7 @@ async def test_adispatch_routes_prompts_get_to_the_async_handler() -> None:
 
 
 async def test_the_sync_handler_table_does_not_run_on_the_event_loop() -> None:
-    """``tasks/get`` reads the task store, and the default store is the Django
-    cache, which as ``DatabaseCache`` reaches ``django.db`` and raises
-    ``SynchronousOnlyOperation`` on the loop."""
+    """``tasks/get`` reads the task store, and the default store is the Django cache."""
     store = _LoopSniffingTaskStore()
     context = replace(
         _ctx(make_server()),
@@ -274,7 +256,6 @@ async def test_the_sync_handler_table_does_not_run_on_the_event_loop() -> None:
         client_capabilities={"extensions": {TASKS_EXTENSION_ID: {}}},
     )
     result = await adispatch("tasks/get", {"taskId": "nope"}, context)
-    # The handler ran and answered; what matters is the thread it ran on.
     assert isinstance(result, JsonRpcError)
     assert store.on_loop is False
 

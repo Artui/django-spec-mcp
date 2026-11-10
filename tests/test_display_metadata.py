@@ -1,14 +1,3 @@
-"""``display_name`` / ``display_description`` on a kernel tool: consumer-only metadata.
-
-The two labels are carried from registration onto the binding for an in-process
-consumer to read (django-spec-agents' tool catalog reads both off each binding),
-and the server never emits them on the wire. They carry onto the kernel path:
-a kernel spec has no label field of its own, so they stay registration knobs.
-
-Both are asked of ``register_tool`` and of ``register_tools(registry,
-overrides=)``.
-"""
-
 from __future__ import annotations
 
 from typing import Any

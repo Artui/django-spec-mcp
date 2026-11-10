@@ -1,10 +1,3 @@
-"""``MCPServer(exception_map=...)``: how a tool answers a project's own exception.
-
-Each test names the route it drives, because the routes do not share a catch: the
-wire's two ``run_kernel_tool`` siblings, the in-process ``call_kernel_tool``, and the
-admission and the presenter that run around them.
-"""
-
 from __future__ import annotations
 
 import json
@@ -129,8 +122,7 @@ async def test_a_mapped_exception_answers_as_its_handler_says(route: str) -> Non
     ids=["subclass", "base"],
 )
 async def test_the_most_specific_type_wins(route: str, raised: type, answered_by: str) -> None:
-    """The base registered first, so a walk of the mapping's own order, or one by
-    ``isinstance``, hands the subclass to the base's handler."""
+    """The base registered first, so a walk of the mapping's own order, or one by ``isinstance``."""
     exception_map = {TenantGone: _handler("gone"), ArchivedTenant: _handler("archived")}
     assert next(iter(exception_map)) is TenantGone
     out = await _call(route, _server(raised("x"), exception_map=exception_map))
@@ -182,8 +174,7 @@ EVERY_BROAD_MAP = pytest.mark.parametrize(
 async def test_a_broad_entry_leaves_a_service_s_validation_refusal_alone(
     exception_map: Any,
 ) -> None:
-    """Each refusal below has a row of its own in ``KERNEL_REFUSALS``, which is met
-    before ``ServiceError`` or ``Exception`` on the way up its MRO."""
+    """Each refusal below has a row of its own in ``KERNEL_REFUSALS``."""
     server = _server(ServiceValidationError("bad"), exception_map=exception_map)
     assert tool_error(await _call("wire-sync", server))["type"] == "validation_error"
 
@@ -246,8 +237,7 @@ async def _outcome(route: str, server: Any) -> Any:
 async def test_no_entry_reaches_a_denial_or_a_configuration_error(
     route: str, raised: Exception, exception_map: Any
 ) -> None:
-    """A tool result would tell the client the tool ran, and hide the server's own
-    mistake: each answers on each route as it does with no map at all."""
+    """A tool result would tell the client the tool ran, and hide the server's own mistake."""
     answered = await _outcome(route, _server(raised, exception_map=exception_map))
     assert answered == await _outcome(route, _server(raised))
 
@@ -330,8 +320,7 @@ def test_an_entry_for_a_denial_is_refused(denial: type[Exception]) -> None:
 
 
 async def test_a_mapped_exception_from_a_resource_read_is_not_the_maps() -> None:
-    """A read's answer is contents or a JSON-RPC error, so a handler's tool result has
-    nowhere to go: the read raises as it does with no map."""
+    """A read's answer is contents or a JSON-RPC error."""
 
     def read(*, pk: int) -> None:
         raise TenantGone("x")
@@ -380,8 +369,7 @@ def _check_server(**overrides: Any) -> tuple[Any, _RaisingCheck]:
 
 @pytest.mark.parametrize("route", ROUTES)
 async def test_a_check_raising_a_mapped_exception_answers_as_its_handler_says(route: str) -> None:
-    """The checks are asked at admission, ahead of the catch on the wire: left to
-    dispatch, as a ``ServiceError`` a check raises is, it reaches the call's arm."""
+    """The checks are asked at admission, ahead of the catch on the wire: left to dispatch."""
     server, _check = _check_server(exception_map={TenantGone: GONE})
     assert tool_error(await _call(route, server))["message"] == "from the check"
 
@@ -412,8 +400,7 @@ async def test_a_check_raising_a_mapped_exception_is_charged_like_a_service_erro
 async def test_a_seed_a_check_names_raising_a_mapped_exception_answers_as_its_handler_says(
     route: str,
 ) -> None:
-    """A tenant seed is the likeliest place for it, and whether a check names the seed
-    must not decide whether the project's handler answers."""
+    """Whether a check names the seed must not decide whether the handler answers."""
 
     def tenant() -> None:
         raise TenantGone("from the seed")
@@ -737,8 +724,7 @@ def test_a_mapped_exception_with_no_span_is_answered_without_one() -> None:
 async def test_a_handler_s_answer_announces_as_its_result_reads(
     handler: Any, announced: int
 ) -> None:
-    """``invalidates`` reads ``isError``: a handler answering with a result that is no
-    error says the call completed, and its tool's resources are announced."""
+    """``invalidates`` reads ``isError``: a result that is no error says the call completed."""
     broker = InMemorySubscriptionBroker()
     server = make_server(exception_map={TenantGone: handler}, subscription_broker=broker)
 

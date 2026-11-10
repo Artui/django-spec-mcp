@@ -1,19 +1,3 @@
-"""A kernel service tool's target selector resolves the row its service acts on.
-
-A kernel ``ServiceSpec`` carries an ``instance_selector_spec`` and ``partial``:
-the first is a ``RETRIEVE`` ``SelectorSpec`` whose
-``reads`` name the lookup, and dispatch hands the resolved row to the
-``Validator``'s context and to the service as ``instance``. Asked here, on both
-handlers: the service receives the row, a
-missing one (``None``, an empty queryset, ``DoesNotExist``) is a tool-level
-``not_found``, a non-queryset return is used as it is, the lookup's own
-``annotations`` and ``kwargs`` provider shape it, a caller cannot stand in for
-a seed, and ``partial`` relaxes what the Validator requires.
-
-A kernel Validator hands the service its validated values. The lookup key
-declared again by the body is refused when the tool is registered.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -109,7 +93,6 @@ async def _call(server: MCPServer, arguments: dict[str, Any], *, is_async: bool)
 
 def test_a_lookup_key_the_validator_also_declares_is_refused_at_registration() -> None:
     # A body field cannot name the row the target lookup resolves. The spec
-    # itself builds; registering it asks its parameters, which refuse the pair.
     with pytest.raises(ImproperlyConfigured, match=r"\['pk'\] are declared by two sources"):
         _server(validator=DataclassValidator(_Rename))
 
@@ -174,8 +157,6 @@ def test_the_lookups_shaping_reaches_the_row() -> None:
 
 def test_the_lookups_kwargs_provider_scopes_the_row() -> None:
     # The provider fills ``only_sent``, which no read declares, so the lookup
-    # finds a sent row, refuses an unsent one, and a caller naming the value
-    # is refused for an argument the tool does not take.
     unsent = Invoice.objects.create(number="unsent", sent=False)
     sent = Invoice.objects.create(number="sent", sent=True)
 
@@ -222,8 +203,6 @@ def test_the_validator_sees_the_resolved_row() -> None:
 @routes
 async def test_a_caller_cannot_stand_in_for_a_seed(is_async: bool) -> None:
     # ``instance`` and ``data`` are the dispatcher's, so a caller naming them
-    # is refused for arguments the spec does not declare, and the row is
-    # never touched.
     invoice = await Invoice.objects.acreate(number="orig")
 
     out = await _call(
@@ -238,12 +217,7 @@ async def test_a_caller_cannot_stand_in_for_a_seed(is_async: bool) -> None:
 
 
 class _SentFields(Validator):
-    """Binds only what was sent on a partial call, requiring both fields otherwise.
-
-    ``DataclassValidator`` builds every field, so a spec declaring ``partial``
-    over it is refused when built; a partial call needs a Validator that can
-    bind a part.
-    """
+    """Binds only what was sent on a partial call, requiring both fields otherwise."""
 
     def parameters(self) -> Parameters:
         return Parameters(

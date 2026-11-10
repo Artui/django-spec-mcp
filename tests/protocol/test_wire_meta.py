@@ -1,13 +1,3 @@
-"""Every wire object emits the base protocol's generic ``_meta`` bundle.
-
-``_meta`` is MCP's open extension namespace, carried on most wire objects.
-The dataclass field is named ``meta`` (a field literally named ``_meta``
-would read as private by Python convention); ``to_dict`` is the only place
-the wire spelling appears. It is omitted entirely when unset *or* empty —
-an empty ``"_meta": {}`` is legal but pure noise, and the handlers already
-normalise an empty binding bundle to ``None``.
-"""
-
 from __future__ import annotations
 
 from django_spec_mcp.protocol.types.prompt import Prompt

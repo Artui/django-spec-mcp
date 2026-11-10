@@ -1,6 +1,3 @@
-"""``register_ui_resource`` takes a concrete URI: a host fetches a view once and
-expands nothing, so a ``{var}`` in ``uri=`` names a view no host can ask for."""
-
 from __future__ import annotations
 
 import pytest
@@ -43,8 +40,7 @@ class TestATemplatedViewUri:
         assert len(server._resources) == 0
 
     def test_is_refused_before_the_content_source_is_judged(self) -> None:
-        """A templated URI is the first thing wrong with a call that also has no
-        content source, so the author is told about the URI."""
+        """A templated URI is the first thing wrong with a call that also has no content source."""
         with pytest.raises(ValueError, match="ui://invoices/\\{pk\\}"):
             _server().register_ui_resource(name="detail", uri="ui://invoices/{pk}")
 

@@ -1,16 +1,3 @@
-"""The conformance helper, and the contrast that is the reason it exists.
-
-The headline is `test_a_type_break_that_the_key_set_check_calls_conforming`: one tool,
-one call, and two assertions over the same pair -- the key-set comparison a
-suite writes on its own passes it, and this helper fails it. Everything else
-here covers the edges of the message that failure carries.
-
-The two cases calling a tool register a kernel list selector presenting through
-``InvoiceOutput``. The type break is a presenter formatting the amount on the
-way out: the advertised schema comes from the declared dataclass and goes on
-saying ``integer``. The other cases build no spec.
-"""
-
 from __future__ import annotations
 
 import sys
@@ -31,13 +18,7 @@ from tests.utils import plain_context
 
 
 class _LedgerPresenter(DataclassPresenter):
-    """A presenter that formats one value for display on the way out.
-
-    A stand-in for a real consumer defect rather than a contrivance: someone
-    overrides ``present`` to render an amount the way a person reads it, and the
-    advertised schema, derived from the *declared* dataclass, goes on saying
-    ``integer``. No key changes name and none disappears.
-    """
+    """A presenter that formats one value for display on the way out."""
 
     def present(self, value: Any) -> Any:
         row = super().present(value)
@@ -88,11 +69,9 @@ def test_a_type_break_that_the_key_set_check_calls_conforming() -> None:
     advertised = tool["outputSchema"]["properties"]["items"]["items"]["properties"]
     row = result["structuredContent"]["items"][0]
 
-    # The schema says integer; an integer is not what arrived.
     assert advertised["amount_cents"] == {"type": "integer"}
     assert row["amount_cents"] == "1240.00"
 
-    # The check a suite writes for itself. It passes -- no key moved.
     assert set(advertised) == set(row)
 
     with pytest.raises(AssertionError) as caught:
@@ -141,8 +120,6 @@ def test_every_problem_is_reported_not_only_the_first() -> None:
 
     message = str(caught.value)
     assert "2 problems" in message
-    # Ordered by where in the payload they sit, and the keyword-specific
-    # wording gives way to jsonschema's for anything but a type or a format.
     assert message.splitlines()[-2:] == [
         "  - $[0].amount_cents: advertised type 'integer', got string '12'",
         "  - $[1]: 'number' is a required property",
@@ -215,11 +192,7 @@ def test_the_schema_chooses_its_own_draft_when_it_names_one() -> None:
     ],
 )
 def test_what_arrived_is_named_in_json_s_vocabulary(arrived: Any, named: str) -> None:
-    """``True`` is a boolean here, not an integer, however Python spells it.
-
-    A value JSON has no word for keeps its Python type name, which is usually
-    the whole diagnosis -- an unserialized ``Decimal`` reached the payload.
-    """
+    """``True`` is a boolean here, not an integer, however Python spells it."""
     tool = {"name": "t", "outputSchema": {"type": "string"}}
 
     with pytest.raises(AssertionError) as caught:

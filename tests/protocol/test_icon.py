@@ -1,5 +1,3 @@
-"""``Icon`` — the display-metadata record every wire type can carry."""
-
 from __future__ import annotations
 
 import pytest
@@ -42,11 +40,7 @@ def test_data_uri_is_accepted() -> None:
     ],
 )
 def test_non_https_non_data_schemes_are_refused(src: str) -> None:
-    """Clients are required to reject these, so registration refuses them first.
-
-    A rejected icon is not a degraded icon — it is one the user never sees,
-    with nothing in the logs to say why.
-    """
+    """Clients are required to reject these, so registration refuses them first."""
     with pytest.raises(ImproperlyConfigured, match="https: or data:"):
         Icon(src=src)
 

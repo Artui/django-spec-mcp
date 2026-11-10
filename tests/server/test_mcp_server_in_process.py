@@ -1,18 +1,3 @@
-"""``MCPServer.list_tools`` / ``acall_tool``, the public in-process transport, over kernel specs.
-
-The full-transport in-process surface (distinct from :meth:`MCPServer.call_tool`):
-tool listing with the merged ``inputSchema``, the per-caller listing filter and
-pagination, and tool execution with the transport's scope gate and the read
-pipeline's pagination. These tests prove the methods delegate to the wire
-handlers (the behaviour itself is covered under ``tests/handlers/``) and build
-the call context correctly off-HTTP.
-
-A kernel spec has no ``filter_set`` ordering, so the read extras asked here are
-pagination alone; the transport-level gate is ``scopes=``, and a denial by the
-spec is its own ``PermissionCheck``. A kernel binding's only transport gate
-at listing is its scopes, which read the token and never the database.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -88,7 +73,6 @@ def test_list_tools_returns_the_merged_input_schema() -> None:
     (tool,) = payload["tools"]
     assert tool["name"] == "invoices.list"
     # The wire's merged schema: the spec's own read plus ``page`` / ``limit``
-    # from the binding's pagination knob.
     assert set(tool["inputSchema"]["properties"]) == {"number_prefix", "page", "limit"}
 
 
@@ -141,8 +125,7 @@ async def test_acall_tool_runs_a_service_tool() -> None:
 
 @pytest.mark.django_db(transaction=True)
 async def test_acall_tool_applies_the_read_pipelines_pagination() -> None:
-    """Pagination, the read-shaped extra ``call_tool`` layers on too, applies
-    through ``acall_tool`` beside the spec's own read."""
+    """Pagination, the read-shaped extra ``call_tool`` layers on too."""
 
     @sync_to_async
     def _setup() -> None:
@@ -160,8 +143,7 @@ async def test_acall_tool_applies_the_read_pipelines_pagination() -> None:
 
 
 async def test_acall_tool_enforces_the_scope_gate() -> None:
-    """The transport's scope gate, which the spec's permissions know nothing of,
-    gates ``acall_tool``."""
+    """The transport's scope gate, unknown to the spec's permissions, gates ``acall_tool``."""
     server = _server()
     server.register_tool(_create(), name="locked", description="d", scopes=("x",))
     result = await server.acall_tool("locked", {"number": "A"}, user=None)
@@ -190,7 +172,6 @@ async def test_acall_tool_enforces_the_selector_specs_permissions() -> None:
 
 async def test_acall_tool_unknown_tool_is_a_jsonrpc_error() -> None:
     # ``arguments`` omitted (defaults to ``None`` then ``{}``) and ``request``
-    # omitted (a context is synthesised): the bare-minimum call shape.
     result = await _server().acall_tool("nope", user=None)
     assert isinstance(result, JsonRpcError)
     assert result.code == JsonRpcErrorCode.INVALID_PARAMS
@@ -220,8 +201,6 @@ def test_call_context_leaves_a_provided_request_untouched() -> None:
     ctx = server._call_context(user=None, request=request)
     # What every handler does with the request before handing it on.
     carry_token(ctx.http_request, ctx.token)
-    # The call works on a copy carrying what the real request does (its method
-    # not forced to POST); the caller's own request is left as it was.
     assert ctx.http_request is not request
     assert ctx.http_request.method == "GET"
     assert request.user is sentinel  # type: ignore[attr-defined]

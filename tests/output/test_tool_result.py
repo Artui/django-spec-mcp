@@ -13,8 +13,6 @@ from django_spec_mcp.output.tool_result import build_tool_result
     [
         ({"a": 1}, {"a": 1}, '{\n  "a": 1\n}'),
         # A uniform list of objects, the payload a denser format would be
-        # tempting for, served under ``items`` because MCP's structured content
-        # is an object.
         (
             [{"a": 1}, {"a": 2}],
             {"items": [{"a": 1}, {"a": 2}]},
@@ -32,7 +30,6 @@ def test_the_text_block_is_the_payload_as_json(payload: object, served: object, 
 
 def test_a_list_text_block_is_the_object_with_structured_content_off() -> None:
     # The text block carries the JSON the structured content would, so a tool
-    # emitting no structured content still serves its rows under ``items``.
     res = build_tool_result([{"a": 1}], include_structured_content=False)
     assert res.structured_content is UNSET
     assert json.loads(res.content[0].to_dict()["text"]) == {"items": [{"a": 1}]}
@@ -45,7 +42,6 @@ def test_a_list_text_block_is_the_object_with_structured_content_off() -> None:
 )
 def test_a_scalar_payload_is_the_text_block_alone(payload: object, text: str) -> None:
     # MCP declares structured content an object, and a scalar has no object
-    # form, so it is left out even with structured content on.
     res = build_tool_result(payload, include_structured_content=True)
     assert res.structured_content is UNSET
     assert "structuredContent" not in res.to_dict()
@@ -62,7 +58,6 @@ def test_build_tool_result_omits_structured_content_when_disabled() -> None:
     assert res.structured_content is UNSET
     # Text payload still carries the data.
     assert json.loads(res.content[0].text or "") == {"a": 1}
-    # ``to_dict`` drops the field entirely so the wire payload is leaner.
     assert "structuredContent" not in res.to_dict()
 
 
@@ -72,11 +67,7 @@ def test_build_tool_result_includes_structured_content_by_default() -> None:
 
 
 def test_tool_result_carries_per_call_meta() -> None:
-    """``_meta`` on the *result envelope* is per-call, so it is a parameter.
-
-    A tool's static ``_meta`` is already advertised on its ``tools/list``
-    entry; nothing sources this from the binding.
-    """
+    """``_meta`` on the *result envelope* is per-call, so it is a parameter."""
     result = build_tool_result({"ok": True}, meta={"example.com/trace": "abc"})
     assert result.to_dict()["_meta"] == {"example.com/trace": "abc"}
 
@@ -89,15 +80,7 @@ def test_tool_result_omits_meta_by_default() -> None:
 
 
 def test_a_null_payload_is_emitted_as_an_empty_object() -> None:
-    """``include_structured_content=True`` must be distinguishable from ``False``.
-
-    Omitting the key for a genuine ``None`` collapsed "this tool has nothing to
-    present" into "this tool has no structured channel", so a client branching
-    on the key's presence was told the wrong thing about the server's
-    capability. The value is ``{}`` rather than ``null``, because MCP requires
-    structured content to be an object, and the text block carries the same
-    JSON.
-    """
+    """``include_structured_content=True`` must be distinguishable from ``False``."""
     res = build_tool_result(None, include_structured_content=True)
     wire = res.to_dict()
     assert "structuredContent" in wire

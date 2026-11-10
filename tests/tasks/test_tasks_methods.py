@@ -1,12 +1,3 @@
-"""``tasks/get``, ``tasks/cancel`` and ``tasks/update``.
-
-Handler-level, so the subject is the decision each one makes rather than the
-HTTP shell around it — the wire is covered end-to-end separately.
-
-Asked of the conftest's kernel ``server``, which carries a task store and no
-tool: each task here is created by name, so no handler asks a spec anything.
-"""
-
 from __future__ import annotations
 
 from dataclasses import replace
@@ -51,8 +42,7 @@ def _task(server: MCPServer, store: InMemoryTaskStore, executor: RecordingExecut
 def test_a_client_that_did_not_declare_the_extension_is_refused(
     handler: Any, server: MCPServer
 ) -> None:
-    """Per *this* request. A server must not rely on a declaration that did not
-    arrive with the request, and there is nowhere to remember one anyway."""
+    """Per *this* request."""
     result = handler({"taskId": "x"}, context(server, declares=False))
     assert isinstance(result, JsonRpcError)
     assert result.code == JsonRpcErrorCode.MISSING_REQUIRED_CLIENT_CAPABILITY
@@ -65,12 +55,7 @@ def test_the_refusal_tells_the_client_what_to_declare(server: MCPServer) -> None
 
 
 def test_the_refusal_is_not_the_code_the_extension_document_prints(server: MCPServer) -> None:
-    """The extension says ``-32003`` while naming the constant the ratified
-    core schema allocates as ``-32021``. It is a stale number from when tasks
-    were core, and ``-32003`` now sits in the implementation-defined band the
-    core spec promises never to define codes in — and is one of the two codes
-    this package burned.
-    """
+    """The extension says -32003 while naming the constant the core schema allocates as -32021."""
     result = handle_tasks_get({"taskId": "x"}, context(server, declares=False))
     assert isinstance(result, JsonRpcError)
     assert result.code == -32021
@@ -98,10 +83,7 @@ def test_a_missing_malformed_or_unknown_task_id_is_invalid_params(
 def test_another_principals_task_is_indistinguishable_from_a_missing_one(
     handler: Any, server: MCPServer, store: InMemoryTaskStore, executor: RecordingExecutor
 ) -> None:
-    """The uniformity is the security property. With no listing and no
-    session to scope by, an error that said "not yours" would confirm which
-    ids are real — which is the one thing the id's unguessability protects.
-    """
+    """The uniformity is the security property."""
 
     class _User:
         pk = 42
@@ -116,8 +98,7 @@ def test_another_principals_task_is_indistinguishable_from_a_missing_one(
 
 @pytest.mark.parametrize("handler", HANDLERS)
 def test_a_server_with_no_task_store_answers_unknown_task(handler: Any, server: MCPServer) -> None:
-    """ "Unknown method" would be worse: the client holds an id and wants to
-    know whether it is still good, not whether this endpoint speaks tasks."""
+    """Unknown method would be worse: the client wants to know whether its id is still good."""
     ctx = replace(context(server), tasks=None)
     result = handler({"taskId": "x", "inputResponses": {}}, ctx)
     assert isinstance(result, JsonRpcError)
@@ -139,9 +120,7 @@ def test_get_returns_the_task(
 def test_get_is_a_complete_result_not_a_task_result(
     server: MCPServer, store: InMemoryTaskStore, executor: RecordingExecutor
 ) -> None:
-    """Easy to get backwards. ``resultType: task`` marks the result that
-    *hands out* a handle; stamping it here would tell the client it had just
-    been given a second task."""
+    """Easy to get backwards."""
     task: Task = _task(server, store, executor)
     assert "resultType" not in handle_tasks_get({"taskId": task.task_id}, context(server))
 
@@ -177,8 +156,7 @@ def test_cancel_acknowledges_with_an_empty_result(
 def test_cancelling_a_finished_task_is_acknowledged_not_refused(
     server: MCPServer, store: InMemoryTaskStore, executor: RecordingExecutor
 ) -> None:
-    """The caller lost a race it had no way to see. Its next poll shows the
-    status that actually holds."""
+    """The caller lost a race it had no way to see."""
     task: Task = _task(server, store, executor)
     transition_task(store, task.task_id, status=TaskStatus.COMPLETED, result={})
     assert handle_tasks_cancel({"taskId": task.task_id}, context(server)) == {}
@@ -212,8 +190,7 @@ def test_answering_every_outstanding_request_resumes_the_task(
 def test_a_partial_answer_leaves_the_rest_outstanding(
     server: MCPServer, store: InMemoryTaskStore, executor: RecordingExecutor
 ) -> None:
-    """The spec allows a strict subset, so answers accumulate rather than
-    replace — and the next poll shows exactly what is still wanted."""
+    """The spec allows a strict subset, so answers accumulate rather than replace."""
     task: Task = _task(server, store, executor)
     _awaiting_input(store, task.task_id, {"k1": {}, "k2": {}})
     handle_tasks_update({"taskId": task.task_id, "inputResponses": {"k1": 1}}, context(server))
@@ -228,8 +205,7 @@ def test_a_partial_answer_leaves_the_rest_outstanding(
 def test_an_unknown_key_is_ignored_rather_than_rejected(
     server: MCPServer, store: InMemoryTaskStore, executor: RecordingExecutor
 ) -> None:
-    """A client that polls twice can answer twice, and an invented key is not
-    worth failing the whole call over."""
+    """A client that polls twice can answer twice, and an invented key is not worth failing."""
     task: Task = _task(server, store, executor)
     _awaiting_input(store, task.task_id, {"k1": {}})
     handle_tasks_update(
@@ -241,9 +217,7 @@ def test_an_unknown_key_is_ignored_rather_than_rejected(
 def test_updating_a_task_that_is_not_awaiting_input_is_refused(
     server: MCPServer, store: InMemoryTaskStore, executor: RecordingExecutor
 ) -> None:
-    """Not pedantry. A ``working`` task has nothing outstanding, so every
-    answer would be an unknown key — silently ignored and acknowledged as
-    success, indistinguishable from a delivery that worked."""
+    """Not pedantry."""
     task: Task = _task(server, store, executor)
     result = handle_tasks_update(
         {"taskId": task.task_id, "inputResponses": {"k": 1}}, context(server)

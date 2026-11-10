@@ -1,22 +1,3 @@
-"""A kernel spec's ``kwargs`` provider, on kernel tools and resources over both handlers.
-
-Asks of specs registered with ``register_tool`` / ``register_resource``: the
-provider's return reaches the callable as keywords,
-on every call, beside a resource's URI-template variables; a provider declaring
-``request`` is handed the call's request by name; a provider may query on the
-async route; and a provider returning ``UNSET`` for a key declines it rather than
-overriding the value the call carried, while one returning a value wins.
-
-The kernel hands a provider what it declares from the pool, and the call's
-``request`` and ``view`` (``CALL_SEEDS``) by name: the ``HttpRequest`` carrying
-the caller's token as ``mcp_token``, and ``None`` for the view.
-
-``register_resource`` on a kernel spec takes no output declaration, since the
-presenter is the spec's. A kernel ``SelectorSpec`` refuses a missing selector
-when it is built, before any registrar sees it, and a kernel Presenter takes no
-per-call context.
-"""
-
 from __future__ import annotations
 
 import json
@@ -86,8 +67,7 @@ def _text(out: dict[str, Any]) -> Any:
 
 @TOOLS
 def test_a_service_provider_is_merged_into_the_pool(call: Callable[..., Any]) -> None:
-    """The provider's return reaches the service as keywords, and the provider
-    is handed the call's request, carrying the caller, and no view."""
+    """The provider's return reaches the service as keywords."""
     seen: dict[str, Any] = {}
 
     def provider(*, request: Any, view: Any) -> dict[str, Any]:
@@ -201,9 +181,7 @@ async def test_an_async_resource_presents_a_lazy_queryset_off_the_loop() -> None
 def test_a_provider_declines_with_unset_and_wins_with_a_value(
     read: Callable[..., Any], provided: Any, served: str
 ) -> None:
-    """``UNSET`` means "I am not setting this key", so the URI's own value
-    stands; handing the sentinel to the selector would turn a well-formed read
-    into an internal error. A resolved value is still authoritative."""
+    """UNSET means 'I am not setting this key', so the URI's own value stands."""
     server, _ = _resource(
         lambda *, project_pk: {"project_pk": project_pk},
         lambda: {"project_pk": provided},
