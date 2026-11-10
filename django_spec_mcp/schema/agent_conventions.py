@@ -1,17 +1,3 @@
-"""The default agent-facing wording, and the helper that appends the handle line.
-
-Every sentence here is a prompt, so it lives in the transport that knows a model
-is reading. The kernel supplies the markings and no wording at all: what a
-reader should *do* with an identifier depends on the reader.
-
-These are the defaults
-[`AgentConventions`][django_spec_mcp.schema.types.agent_conventions.AgentConventions]
-carries, and what a server says unless it was given other wording with
-``MCPServer(conventions=...)``. The functions that write each sentence take it
-as text, defaulting to the constant, so a caller outside a server gets exactly
-what a server with default conventions serves.
-"""
-
 from __future__ import annotations
 
 from django_service_specs import AudienceProjection, FieldAudience
@@ -79,24 +65,7 @@ def append_agent_conventions(
     *,
     handle_line: str | None = HANDLE_LINE,
 ) -> str | None:
-    """Add the handle convention to a tool's description, when it has handles.
-
-    Conditional on something being able to act on it. A tool whose output
-    carries no handle gains nothing from being told how to treat one, and a
-    description is read on every listing — advice a model cannot use is not free,
-    it is budget spent teaching it about a field it will never see.
-
-    The per-field wording lives in ``outputSchema``, where a model reads it
-    beside the field it describes; this is the one sentence that has nowhere
-    else to go.
-
-    ``handle_line`` is the server's ``AgentConventions.handle_line``, already
-    rendered, so it is written as given. ``None``
-    drops the line and the ``Identify records by`` prefix with it, which is
-    framing for that line and says nothing on its own. Whether the line appears
-    is still decided here, so a consumer changes the text and never the
-    condition.
-    """
+    """Add the handle convention to a tool's description, when it has handles."""
     if handle_line is None:
         return description
     handles = [
