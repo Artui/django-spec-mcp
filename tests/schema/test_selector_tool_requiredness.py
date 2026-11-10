@@ -1,23 +1,3 @@
-"""A kernel selector tool's ``inputSchema`` asks for what a call needs and nothing the server fills.
-
-A kernel spec declares its arguments as ``reads``, each ``Parameter`` saying
-whether it is required, so nothing is inferred from a signature: requiredness
-is the declaration. What this transport still decides is what to leave out of
-that declaration, because the kernel's ``spec_input_schema`` lists every read
-as declared, ``required`` meaning the call needs the value from *someone*. Two
-things answer for a read instead of the caller:
-
-- a key a ``kwargs=`` provider is annotated to fill always reaches the
-  selector as the provider's, so it is not advertised at all
-  (``server_owned_keys``);
-- a key a provider may decline with ``UNSET``, and every read beside a
-  provider whose keys cannot be read, is offered and not required, because
-  dispatch does not demand it of the caller.
-
-Built through ``MCPServer.list_tools``, so each test reads what a client is
-served.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -100,8 +80,6 @@ def test_a_read_declared_optional_stays_optional() -> None:
 
 def test_a_selector_parameter_no_read_declares_is_not_advertised() -> None:
     # A kernel spec takes the arguments it declares and no others, not every
-    # parameter of the selector's signature, so ``tenant``, which ``_rows``
-    # takes with a default, is never offered and the closed set refuses it.
     server = make_server()
     _register(server, _PK)
 
@@ -112,7 +90,6 @@ def test_a_selector_parameter_no_read_declares_is_not_advertised() -> None:
 
 def test_a_read_named_like_a_dispatcher_seed_is_refused_when_the_spec_is_built() -> None:
     # A kernel read named like a seed is a declaration dispatch could never
-    # honour, so the spec refuses it before any tool is registered.
     with pytest.raises(ImproperlyConfigured, match="user"):
         SelectorSpec(
             kind=SelectorKind.LIST,
@@ -206,7 +183,6 @@ class _MaybeTenantScope(TypedDict):
 
 def _unresolvable_parameter_provider(*, request: NoSuchRequest) -> _MaybeTenantScope:  # noqa: F821
     # The return annotation resolves at runtime; the parameter's does not, as
-    # one imported only for type checking would not.
     return {"tenant": "acme", "region": "eu"}
 
 
@@ -214,9 +190,6 @@ def _unresolvable_parameter_provider(*, request: NoSuchRequest) -> _MaybeTenantS
 @pytest.mark.parametrize("provider", [_typed_provider, _generic_provider])
 def test_a_name_a_typed_provider_returns_is_not_asked_for(provider: Any) -> None:
     # The kernel lists ``tenant`` as declared and required, since the call
-    # needs a value for it; the provider is who supplies it, and replaces
-    # whatever a caller sends, so asking for it would demand a value the call
-    # then discards. A parameterised TypedDict is read off its origin.
     server = make_server()
     _register(server, _PK, _TENANT, kwargs=provider)
 
@@ -245,8 +218,6 @@ def test_the_call_serves_the_providers_value_whatever_the_caller_sends() -> None
 )
 def test_a_key_the_provider_may_decline_is_offered_but_not_required(provider: Any) -> None:
     # A kernel read declared ``required=True`` is relaxed at dispatch when a
-    # provider may fill it, so a call without it is not refused for it, and
-    # the schema says what dispatch demands, as django-spec-agents' does.
     server = make_server()
     _register(server, _PK, _TENANT, kwargs=provider)
 
@@ -271,8 +242,6 @@ def test_a_union_that_does_not_admit_unset_is_still_filled() -> None:
 )
 def test_an_untyped_provider_leaves_every_read_offered_and_none_required(provider: Any) -> None:
     # A provider whose return says nothing about its keys may fill any read,
-    # so dispatch demands none of them of the caller and none is required.
-    # Every one is still offered, since the provider fills none for certain.
     server = make_server()
     _register(server, _PK, _TENANT, kwargs=provider)
 
@@ -285,7 +254,6 @@ def test_an_untyped_provider_leaves_every_read_offered_and_none_required(provide
 @pytest.mark.django_db
 def test_a_read_left_out_that_the_untyped_provider_does_not_fill_is_handed_back() -> None:
     # Not required is not unchecked: the kernel refuses the call where the
-    # provider's answer is merged, and the refusal names the read.
     server = make_server()
     _register(server, _PK, _TENANT, kwargs=lambda: {})
 
@@ -297,9 +265,6 @@ def test_a_read_left_out_that_the_untyped_provider_does_not_fill_is_handed_back(
 
 def test_a_key_holding_unset_inside_a_container_is_filled() -> None:
     # The provider cannot decline ``regions`` or ``labels``: each comes back as
-    # a list or a dict, and only a value that is ``UNSET`` itself is dropped
-    # from the pool. So both are filled and not advertised, and walking every
-    # argument of every generic would find ``UnsetType`` inside them and offer both.
     server = make_server()
     _register(
         server,
@@ -324,11 +289,6 @@ def test_an_unresolvable_annotation_beside_the_return_costs_only_what_it_names(
     provider: Any,
 ) -> None:
     # A ``TypedDict`` value type that cannot be read leaves only its own key
-    # undecided, offered and not required as a declinable key is; a parameter
-    # typed with a name absent at runtime costs nothing, since only the return
-    # annotation says which keys are filled. Either way ``region`` is filled,
-    # ``tenant`` is offered, and ``pk`` stays required, where reading the whole
-    # provider as untyped would offer ``region`` and require nothing.
     server = make_server()
     _register(server, _PK, _TENANT, _REGION, kwargs=provider)
 

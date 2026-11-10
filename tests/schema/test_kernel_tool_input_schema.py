@@ -1,12 +1,3 @@
-"""``kernel_tool_input_schema``'s inputs: the pool seeds, the paging sentence and the context.
-
-The first two are the owning server's: its ``pool_seeds=`` and its
-``AgentConventions.query_param_on_pages``. The builder takes both: these tests
-hand them in directly, and ask the listing that the server's own values reach it.
-The context is the caller's to build, and what the listing hands is
-``test_a_listing_reads_the_spec_under_its_stamp.py``'s to pin.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -86,7 +77,6 @@ def test_a_read_a_registered_seed_fills_is_not_advertised() -> None:
 
 def test_without_the_seed_the_read_is_the_callers() -> None:
     # The seed is what makes it the server's: on a mount registering none, a
-    # reflected read is listed as declared.
     schema = kernel_tool_input_schema(_binding(_server()), max_page_size=None)
 
     assert "tenant" in schema["properties"]
@@ -121,9 +111,6 @@ def test_the_listing_reads_the_servers_paging_sentence() -> None:
 
 def test_a_paged_tools_shape_the_server_answers_is_withheld_not_described() -> None:
     # Only a shape still listed is told it applies to each item: one the
-    # server answers for is withheld before the sentence is laid on. A shape
-    # named like a registered seed would be withheld too, but no call could run
-    # it, so registration refuses that one.
     server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
     server.register_tool(
         SelectorSpec(

@@ -1,5 +1,3 @@
-"""``end_sentence`` — appended wording never runs on from text it did not write."""
-
 from __future__ import annotations
 
 import pytest

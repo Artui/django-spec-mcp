@@ -1,5 +1,3 @@
-"""A kernel tool whose output can present nothing advertises a schema its ``{}`` meets."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -151,10 +149,6 @@ def _arguments(name: str) -> dict[str, Any]:
 @pytest.mark.parametrize("name", _LISTS)
 def test_a_list_that_may_present_nothing_is_advertised_as_a_list(name: str) -> None:
     # The kernel writes ``["array", "null"]``, since its dispatch presents the
-    # ``None`` the service returned, and no MCP result can carry a ``null``.
-    # The schema states the list a client should be served in its place, the
-    # empty one, which an array admits; each row stays as strict as declared.
-    # The call serves that empty list under ``items`` (the test below).
     schema = _schemas(_list_server())[name]
 
     assert schema["type"] == "object"
@@ -182,7 +176,6 @@ def test_a_list_that_presents_nothing_conforms_to_its_schema(name: str) -> None:
 @pytest.mark.parametrize("many", [False, True], ids=["returns_many", "many"])
 def test_a_list_that_presents_rows_is_served_them(many: bool) -> None:
     # The empty list stands in only for nothing: a list declared ``allow_none``
-    # that does present rows serves every one of them.
     rows = [_Row(1, "a"), _Row(2, "b")]
     spec = (
         ServiceSpec(

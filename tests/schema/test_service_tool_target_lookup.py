@@ -1,13 +1,3 @@
-"""A kernel service tool advertises the lookup its target selector reads.
-
-A kernel service spec acting on a row or a set of rows names the selector that
-finds them (``instance_selector_spec`` or ``collection_selector_spec``), and
-that selector's ``reads`` are arguments of the call like the Validator's
-fields: ``ServiceSpec.parameters()`` lists them first, and dispatch admits and
-checks them. So the ``inputSchema`` lists them too, or a client validating its
-arguments against it could never send the one call that works.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -124,7 +114,6 @@ def test_the_collection_selectors_lookup_is_advertised() -> None:
 
 def test_the_advertised_arguments_are_the_ones_the_call_admits() -> None:
     # The agreement asked of the kernel rather than restated: every parameter
-    # the spec declares is a property, and the schema is closed beside them.
     spec = _rename_spec()
 
     schema = _schema(spec)
@@ -145,8 +134,6 @@ def _invoice_by_pk_or_none(*, pk: int | None = None) -> Any:
 
 def test_a_lookup_declared_optional_adds_nothing_to_required() -> None:
     # The lookup's selector defaults ``pk``: an optional read over a keyword
-    # with no default is refused at registration, since a call leaving it out
-    # would be refused as missing.
     lookup = SelectorSpec(
         kind=SelectorKind.RETRIEVE,
         selector=_invoice_by_pk_or_none,
@@ -161,7 +148,6 @@ def test_a_validator_field_named_like_the_lookup_is_refused_at_registration() ->
     # An input field does not override the lookup of the same name. Two kernel
     # declarations of one name are refused when the spec's parameters are
     # assembled, which registration does to compile the schema, so no listing
-    # ever shows either.
     @dataclass
     class _Pk:
         pk: int
@@ -189,7 +175,6 @@ def test_a_lookup_read_its_selectors_provider_fills_is_not_advertised() -> None:
 
 def test_a_lookup_read_beside_an_untyped_provider_is_offered_and_not_required() -> None:
     # The lookup's provider reaches the lookup's reads and nothing else, so the
-    # Validator's ``number`` stays required.
     lookup = _by_pk(kwargs=lambda: {})
 
     schema = _schema(_rename_spec(instance_selector_spec=lookup))
@@ -200,7 +185,6 @@ def test_a_lookup_read_beside_an_untyped_provider_is_offered_and_not_required() 
 
 def test_a_lookup_read_a_registered_seed_fills_is_not_advertised() -> None:
     # A reflected read of the target's lookup is the server's once a seed of
-    # its name is registered on the mount, as a reflected read of the spec's own is.
     lookup = _by_pk(_PK, Parameter("tenant", "string", required=True, reflected=True))
     server = MCPServer(
         name="t",
@@ -228,8 +212,6 @@ def _maybe_tenant() -> _MaybeTenant:
 
 def test_a_key_one_seat_may_decline_is_still_required_by_another() -> None:
     # The lookup's provider may answer ``tenant``, but the lookup does not read
-    # it: the service's own read does, and no provider reaches that seat. So
-    # dispatch demands ``tenant`` of the caller, and the schema requires it.
     spec = _rename_spec(
         service=lambda *, instance, number, tenant: instance,
         reads=Parameters([Parameter("tenant", "string", required=True)]),
