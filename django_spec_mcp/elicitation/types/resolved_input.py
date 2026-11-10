@@ -8,12 +8,7 @@ from django_spec_mcp.types.elicit_action import ElicitAction
 
 @dataclass(frozen=True)
 class ResolvedInput:
-    """What a request looks like once any earlier round's answers are folded in.
-
-    Produced once per dispatch, before the service runs, and read again if the
-    service asks for more — so it carries both the merged arguments and the
-    bookkeeping the next question needs.
-    """
+    """What a request looks like once any earlier round's answers are folded in."""
 
     arguments: dict[str, Any]
     """The client's arguments with every accepted answer merged over them.

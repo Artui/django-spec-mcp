@@ -1,30 +1,3 @@
-"""Asking the user a question, the way a stateless protocol has to.
-
-From ``2026-07-28`` a server cannot send a request to a client: the direction
-was removed and replaced with **multi round-trip requests**. A call that needs
-something it was not given answers with an ``InputRequiredResult`` instead of a
-result, the client collects the input, and it **retries the original call**
-carrying the answers. Two independent requests, nothing held in between.
-
-What the pieces here do, in the order a call meets them:
-
-1. ``read_elicit_answer``
-   and ``verify_request_state``
-   recover what an earlier round established, if this is a retry.
-2. The service runs, and may raise ``AdditionalInputRequired``.
-3. ``can_ask_client`` decides
-   whether this client can be asked at all, and
-   ``build_requested_schema``
-   turns the service's declaration into the form.
-4. ``sign_request_state``
-   seals what the next round will need to trust.
-
-**The service's involvement is one ``raise``.** It never holds a callback and is
-never resumed — it re-runs from the top with the answer present as an ordinary
-argument, which is why the transport-neutral half of this lives in the kernel
-as a bare exception carrying a message and a schema.
-"""
-
 from django_spec_mcp.elicitation.build_requested_schema import build_requested_schema
 from django_spec_mcp.elicitation.can_ask_client import can_ask_client
 from django_spec_mcp.elicitation.fingerprint_request import fingerprint_request

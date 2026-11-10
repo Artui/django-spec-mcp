@@ -10,19 +10,7 @@ from django_spec_mcp.types.result_type import ResultType
 
 @dataclass(frozen=True)
 class InputRequiredResult:
-    """The answer to *"I cannot finish this without something you have"*.
-
-    Not an error and not a partial result: a second, equally successful shape a
-    ``tools/call`` may return, discriminated by ``resultType``. The client
-    collects what is asked for and **retries the original call** carrying the
-    answers — a new request with a new id, which is what lets the server hold
-    nothing between the two.
-
-    **At least one of the two fields must be present**, per the spec.
-    ``inputRequests`` alone is "ask the user this"; ``requestState`` alone is
-    "come back with this token and I will carry on" (the spec's load-shedding
-    case). This package always sends both.
-    """
+    """The answer to *"I cannot finish this without something you have"*."""
 
     input_requests: Mapping[str, ElicitRequest] = field(default_factory=dict)
     """Server-assigned key → the request the client must fulfil.
@@ -46,12 +34,7 @@ class InputRequiredResult:
             )
 
     def to_dict(self) -> dict[str, Any]:
-        """The wire object, ``resultType`` included.
-
-        Stamped here rather than left to
-        [`JsonRpcResponse`][django_spec_mcp.protocol.types.json_rpc_response.JsonRpcResponse],
-        which defaults every result to ``complete`` and steps aside only for one that
-        has already named itself."""
+        """The wire object, ``resultType`` included."""
         out: dict[str, Any] = {"resultType": ResultType.INPUT_REQUIRED.value}
         if self.input_requests:
             out["inputRequests"] = {

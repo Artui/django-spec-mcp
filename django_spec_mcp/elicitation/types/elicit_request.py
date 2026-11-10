@@ -8,16 +8,7 @@ from django_spec_mcp.types.elicitation_create_method import ELICITATION_CREATE_M
 
 @dataclass(frozen=True)
 class ElicitRequest:
-    """One question to put to the user, in the spec's ``elicitation/create`` shape.
-
-    Form mode only. The spec's other mode, ``url``, hands the user a link to
-    complete out of band; it exists for the sensitive values a form is
-    explicitly *not* for (*"elicit non-sensitive information from the user via a
-    form"*), and nothing on this side knows how to mint such a URL.
-
-    ``mode`` is emitted explicitly even though ``"form"`` is its default, so a
-    client supporting both modes can branch on it without knowing that rule.
-    """
+    """One question to put to the user, in the spec's ``elicitation/create`` shape."""
 
     message: str
     """What to show the user: the service's own message, verbatim."""
