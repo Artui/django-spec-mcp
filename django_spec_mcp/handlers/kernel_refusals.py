@@ -39,23 +39,12 @@ KernelRefusalAnswer = Callable[
 def _insufficient_permission(
     exc: NotPermitted | PrincipalUnavailable, scene: KernelRefusalScene
 ) -> JsonRpcError:
-    """``-32006`` with no ``data``: the scope gate's ``requiredScopes`` belong to
-    the transport's own check, which answers before dispatch is reached, so a
-    refusal from inside dispatch names no scope."""
+    """``-32006`` with no ``data``: a refusal from inside dispatch names no scope."""
     return forbidden([])
 
 
 def _invalid_arguments(exc: InvalidArguments, scene: KernelRefusalScene) -> ToolResult:
-    """The validation ``isError``, its ``detail`` the refusal's own per-field map.
-
-    The shape ``validation_error_result`` serves. A refusal naming arguments
-    the call left out is worded in the server's
-    ``AgentConventions.missing_arguments``, from the kernel's own reading of the
-    refusal (``InvalidArguments.missing``)
-    (``test_a_missing_argument_is_worded_by_the_server``); any other refusal is
-    ``Invalid arguments``. The detail is the same either way, every refused
-    argument in it, so a call that left one argument out and sent another wrong
-    names the missing one in the message and both in the detail."""
+    """The validation ``isError``, its ``detail`` the refusal's own per-field map."""
     missing = exc.missing
     if missing:
         message = missing_arguments_message(missing, scene.conventions)
@@ -64,17 +53,12 @@ def _invalid_arguments(exc: InvalidArguments, scene: KernelRefusalScene) -> Tool
 
 
 def _dispatch_refused(exc: DispatchError, scene: KernelRefusalScene) -> ToolResult:
-    """A bare ``DispatchError`` as the validation ``isError``.
-
-    It carries a sentence and no per-field map, so the sentence becomes the
-    non-field entry of ``detail``, which keeps the result's shape the one an
-    ``InvalidArguments`` is served in."""
+    """A bare ``DispatchError`` as the validation ``isError``."""
     return _validation_result({NON_FIELD_ERRORS: [str(exc)]}, scene)
 
 
 def _service_validation(exc: ServiceValidationError, scene: KernelRefusalScene) -> ToolResult:
-    """The validation ``isError`` a service's own refusal is served as, its
-    message the service's own."""
+    """The validation ``isError`` a service's own refusal is served as."""
     return validation_error_result(exc, scene.arguments, config=scene.config)
 
 
@@ -93,15 +77,7 @@ def _validation_result(
 def _input_required(
     exc: AdditionalInputRequired, scene: KernelRefusalScene
 ) -> ToolResult | dict[str, Any] | JsonRpcError:
-    """MRTR's ``input_required`` on the wire; a service error where there is no
-    further round to ask in, which is how the in-process ``call_tool`` answers
-    it.
-
-    One condition, the round being there or not: held both ways by
-    ``test_additional_input_required_asks_for_input`` (a wire service tool,
-    which asks) and by ``test_call_tool_answers_a_request_for_input_as_a_service_error``
-    and ``test_a_kernel_selector_asking_for_input_is_answered_as_a_service_error``
-    (no round, so a service error)."""
+    """MRTR's ``input_required`` on the wire; a service error with no round left to ask in."""
     if scene.input_round is None:
         return service_error_result(exc)
     return ask_for_input(
@@ -113,13 +89,7 @@ def _input_required(
 
 
 def _service_error(exc: ServiceError, scene: KernelRefusalScene) -> ToolResult:
-    """The service ``isError``, carrying an ``ActionUnavailable``'s ``code``.
-
-    Recorded on the call's span under ``RECORD_SERVICE_EXCEPTIONS``. Each
-    conjunct is held by a test: ``test_a_service_error_is_recorded_only_when_asked``
-    fails without the setting's, and
-    ``test_a_service_error_with_no_span_is_answered_without_one`` without the span's.
-    """
+    """The service ``isError``, carrying an ``ActionUnavailable``'s ``code``."""
     if scene.span is not None and scene.config.record_service_exceptions:
         scene.span.record_exception(exc)
     return service_error_result(exc)

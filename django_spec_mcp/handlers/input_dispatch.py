@@ -1,17 +1,3 @@
-"""The two moments a ``tools/call`` touches the elicitation exchange.
-
-Both sides of one round trip: ``resolve_prior_input`` before the service
-runs, ``ask_for_input`` if it raises. Everything protocol-shaped is in
-``django_spec_mcp.elicitation``; the composition lives here because
-``isError`` is the failure channel and only a tool result has one.
-
-**Service tools only.** Selector tools deliberately do not reach this module,
-and ``AdditionalInputRequired`` from one degrades through the existing
-``ServiceError`` arm to an ordinary ``isError`` result. A selector is a read,
-and a read that needs the user to decide something is a tool wearing the wrong
-registration.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Collection
@@ -48,14 +34,7 @@ def resolve_prior_input(
     arguments: dict[str, Any],
     context: MCPCallContext,
 ) -> ResolvedInput:
-    """Fold any earlier round's answers into the arguments this call runs with.
-
-    Cheap and unconditional: an ordinary first call carries neither
-    ``inputResponses`` nor ``requestState``, so it gets its arguments back with a
-    fingerprint attached. That fingerprint is computed from the arguments **as
-    sent**, before the merge, which is what lets the next round's state bind to a
-    call the client will present again unchanged.
-    """
+    """Fold any earlier round's answers into the arguments this call runs with."""
     fingerprint: str = fingerprint_request(
         TOOLS_CALL_METHOD, {"name": tool_name, "arguments": arguments}
     )
@@ -75,10 +54,6 @@ def resolve_prior_input(
             refused_with=answer.action,
         )
 
-    # This round's answers merge over the carried ones and those over the
-    # client's arguments, so the most recently confirmed value wins at every
-    # layer. ``carried`` is trusted only because it arrived inside a signature
-    # bound to this principal and this call.
     carried: dict[str, Any] = dict(state.answers) if state else {}
     if answer is not None:
         carried.update(answer.content)
@@ -97,32 +72,8 @@ def ask_for_input(
     *,
     admitted: Collection[str],
 ) -> dict[str, Any] | JsonRpcError:
-    """Turn a service's *"I need something else"* into whatever this client can use.
-
-    Three outcomes, and the ordering between them is deliberate:
-
-    1. **A malformed schema is a ``-32603``**, checked before anything else: it
-       is a bug for every caller, and finding out only when a capable client
-       happens to call is how it survives to production.
-    2. **An ``InputRequiredResult``** when this client declared elicitation, the
-       service said what it wants, and the round budget is not spent.
-    3. **An ordinary ``isError`` result** otherwise, carrying the service's
-       message and the shape of what is missing.
-
-    (3) is why a non-declaring client does *not* get ``-32021
-    MissingRequiredClientCapability``: that code is for a capability the server
-    **requires**, and this one merely prefers it. A legacy client, a URL-mode
-    elicitation client and a task worker with nobody to ask are all served
-    better by being told what is missing — a model reading the requested shape
-    can supply the argument itself on the next call.
-
-    ``admitted`` is the argument names a kernel tool takes (``admitted_arguments``):
-    a question for any other name is the malformed schema of (1), since its answer
-    would come back as an argument the call refuses or drops.
-    """
+    """Turn a service's *"I need something else"* into whatever this client can use."""
     if not exc.schema:
-        # A message with no schema says *something* is needed without saying
-        # what. There is no form to render, so the message is the whole answer.
         return _degraded(exc)
 
     try:
@@ -148,12 +99,7 @@ def ask_for_input(
 
 
 def refusal_result(action: ElicitAction) -> dict[str, Any]:
-    """The tool result for a user who was asked and did not answer.
-
-    Kept apart from the failure above because the two say different things to a
-    model: an unanswerable question is worth working around, a declined one is
-    not worth asking twice.
-    """
+    """The tool result for a user who was asked and did not answer."""
     declined: bool = action is ElicitAction.DECLINE
     message: str = (
         "The user declined to provide the input this tool asked for."

@@ -23,12 +23,7 @@ from django_spec_mcp.tasks.types.task_store import TaskStore
 
 @dataclass(frozen=True)
 class MCPCallContext:
-    """Bundle of state every JSON-RPC handler needs.
-
-    Constructed by the transport layer per HTTP request and threaded through
-    ``dispatch`` to the chosen handler. Frozen so handlers cannot mutate shared
-    state — per-request bookkeeping happens on locals.
-    """
+    """Bundle of state every JSON-RPC handler needs."""
 
     http_request: HttpRequest
     token: TokenInfo

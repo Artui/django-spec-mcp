@@ -14,11 +14,7 @@ def handle_prompts_list(
     params: dict[str, Any] | None,
     context: MCPCallContext,
 ) -> dict[str, Any] | JsonRpcError:
-    """Return the catalog of prompts the server exposes, paginated.
-
-    Mirrors ``tools/list`` / ``resources/list`` — opaque cursor in,
-    ``nextCursor`` out when the page doesn't reach the end.
-    """
+    """Return the catalog of prompts the server exposes, paginated."""
     cursor = catalog_cursor(params)
     if isinstance(cursor, JsonRpcError):
         return cursor

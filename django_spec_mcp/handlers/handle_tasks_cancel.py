@@ -18,23 +18,7 @@ def handle_tasks_cancel(
     params: dict[str, Any] | None,
     context: MCPCallContext,
 ) -> dict[str, Any] | JsonRpcError:
-    """Signal that a task should stop. Acknowledged with an empty result.
-
-    **Intent, not a guarantee** — the spec's wording is "signals cancellation
-    intent". Nothing here reaches into a running worker; it marks the task
-    ``cancelled`` so the client stops waiting and a cooperative worker can
-    notice. A worker that checks nothing runs to completion, and
-    ``transition_task`` then refuses to overwrite ``cancelled``, so the
-    record does not flip back.
-
-    Cancelling an already-terminal task is **not** an error: the transition is
-    refused, the acknowledgement still goes out, and the next ``tasks/get``
-    shows the status that holds. An error would report a fault where the caller
-    lost a race it had no way to see.
-
-    ``notifications/cancelled`` is **MUST NOT** for this — it belongs to
-    in-flight requests, and a task is work that outlived its request.
-    """
+    """Signal that a task should stop."""
     if not declares_tasks_extension(context):
         return missing_capability_error()
     task_id: str | JsonRpcError = resolve_task_id(params)

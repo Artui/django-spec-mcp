@@ -42,58 +42,18 @@ def call_kernel_tool(
     request_classes: dict[tuple[type, frozenset[str]], type],
     exception_map: Mapping[type[Exception], ExceptionHandler],
 ) -> ToolResult:
-    """The in-process ``call_tool`` of a kernel tool, through ``dispatch``.
-
-    ``arguments`` are the caller's: the binding's server arguments are laid
-    over them here, as on the wire, under the ``call_context`` the call is
-    admitted and dispatched with, built from the request it runs on
-    (``test_call_tool_hands_every_reader_the_dict_it_dispatches_with``). The scope gate
-    is not judged here: there is no token in process. The spec's own permissions are the kernel's, asked of ``user``
-    before ``dispatch`` checks the arguments, as on the wire
-    (``admit_kernel_call``), so a caller they refuse is told that rather than
-    which argument it left out
-    (``test_call_tool_refuses_a_caller_the_spec_denies_before_the_argument_is_checked``);
-    ``dispatch`` runs under the grant they gave, on the values of the seeds
-    they name (``test_an_in_process_call_tool_resolves_a_checks_seed_once``).
-
-    A refusal the wire answers ``-32006`` is raised as it is, the
-    ``NotPermitted`` or ``PrincipalUnavailable`` itself, for the caller to map
-    to its own wire; every other refusal comes back as the ``isError`` result
-    the wire serves. ``AdditionalInputRequired`` is a service error here, since
-    there is no further round to ask in. An exception the server's ``exception_map``
-    holds answers as its handler says, as on the wire; any other is raised as it was.
-
-    ``request_classes`` is the owning server's, the classes ``copy_request``
-    makes its copies of a handed request from.
-    """
-    # A handed request is the caller's own, so the spec is handed a copy whose
-    # ``user`` is the one the call runs as, as ``acall_tool``'s is
-    # (``test_sync_call_tool_hands_a_copy_carrying_the_acting_user``); with
-    # none handed, a minimal one bearing that user is synthesised, as
-    # ``acall_tool`` does
-    # (``test_sync_call_tool_with_no_request_hands_one_carrying_the_acting_user``).
+    """The in-process ``call_tool`` of a kernel tool, through ``dispatch``."""
     if request is not None:
         request = copy_request(request, request_classes)
-        # The copy starts with the handed request's attributes, and a token on
-        # it is the outer caller's, a spec handing its own request on included,
-        # so a check reading ``mcp_token`` would judge them rather than
-        # ``user``. ``call_tool`` has no token, so the copy carries none
-        # (``test_sync_call_tool_drops_the_handed_requests_token``); the
-        # handed request keeps its own, as ``mcp_token`` is not shared.
         vars(request).pop("mcp_token", None)
     else:
         request = HttpRequest()
         request.method = "POST"
     request = seat(request, principal_of(user))
-    # Built from the copy of the request the call runs on, so a Validator
-    # reading the request off the dict reads that one, without the outer
-    # caller's token.
     context = call_context(request, binding.name)
     arguments = apply_tool_server_arguments(binding, arguments, dispatch_context=context)
     dispatched, page = page_request(binding, arguments, config)
     try:
-        # Inside the ``try``, so the one thing it raises, a denial, meets the
-        # arm below, which raises it on as it raises dispatch's own.
         admission = admit_kernel_call(
             binding,
             dispatched,
@@ -114,7 +74,6 @@ def call_kernel_tool(
             call_context=admission.call_context,
         )
     except Exception as exc:
-        # One arm, for the reason ``run_kernel_tool`` gives.
         handler = exception_handler_for(exc, exception_map)
         if handler is not None:
             return answer_mapped_exception(handler, exc, config=config)

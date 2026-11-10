@@ -30,14 +30,7 @@ def read_kernel_resource(
     admission: KernelAdmission,
     context: MCPCallContext,
 ) -> dict[str, Any] | JsonRpcError:
-    """Read a kernel resource through ``dispatch``, once the scope gate, the spec's
-    checks (``admit_kernel_read``) and the rate limits have answered in
-    ``handle_resources_read``; dispatch runs under the ``admission`` they gave.
-
-    The URI-template variables are the arguments, read from the strings a URI
-    carries into the types the spec's parameters declare (``coerce_flat``), so
-    ``invoices://7`` reaches an ``integer`` ``pk`` as ``7``.
-    """
+    """Read a kernel resource through ``dispatch``, once the read's gates have answered."""
     try:
         result = dispatch(
             binding.spec,

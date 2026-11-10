@@ -8,12 +8,7 @@ from django_spec_mcp.handlers.types.context import MCPCallContext
 
 @dataclass(frozen=True)
 class KernelInputRound:
-    """The round an ``AdditionalInputRequired`` can ask its question in.
-
-    The call's resolved prior input and its context, held together because
-    ``ask_for_input`` needs both and neither means anything without the other:
-    a call either has a round to carry the answers into or it does not.
-    """
+    """The round an ``AdditionalInputRequired`` can ask its question in."""
 
     prior: ResolvedInput
     context: MCPCallContext

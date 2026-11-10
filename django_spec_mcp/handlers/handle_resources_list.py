@@ -14,10 +14,7 @@ def handle_resources_list(
     params: dict[str, Any] | None,
     context: MCPCallContext,
 ) -> dict[str, Any] | JsonRpcError:
-    """List concrete resources (those without template variables), paginated.
-
-    Resource templates are exposed via ``resources/templates/list`` instead.
-    """
+    """List concrete resources (those without template variables), paginated."""
     cursor = catalog_cursor(params)
     if isinstance(cursor, JsonRpcError):
         return cursor

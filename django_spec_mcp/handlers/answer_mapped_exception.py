@@ -10,19 +10,7 @@ from django_spec_mcp.protocol.types.tool_result import ToolResult
 def answer_mapped_exception(
     handler: ExceptionHandler, exc: Exception, *, config: MCPConfig, span: Any = None
 ) -> ToolResult:
-    """What ``handler`` answers ``exc`` with, recorded on the span as a service error is.
-
-    A mapped exception ends the call inside a well-formed result, so the tracer
-    never sees it leave: under ``RECORD_SERVICE_EXCEPTIONS`` it is recorded here,
-    as the ``ServiceError`` arm records its own. Each conjunct is held by a test:
-    ``test_a_mapped_exception_is_recorded_only_when_asked`` fails without the
-    setting's, and an in-process ``call_tool``, which has no span, without the span's.
-
-    Anything but a ``ToolResult`` is the handler's bug and is raised as one. A
-    ``JsonRpcError`` in particular would otherwise reach the wire as a protocol error,
-    and a mapped exception is never one
-    (``test_a_handler_returning_anything_else_is_a_type_error``).
-    """
+    """What ``handler`` answers ``exc`` with, recorded on the span as a service error is."""
     if span is not None and config.record_service_exceptions:
         span.record_exception(exc)
     answer = handler(exc)
