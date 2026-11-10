@@ -25,14 +25,7 @@ def _given(value: Any, setting: str) -> Any:
 
 
 def _bound(value: int | float | None | UnsetType, setting: str) -> Any:
-    """Resolve a nullable bound: ``UNSET`` → settings, ``None`` → disabled.
-
-    ``None`` is a *meaningful value* for the outbound bounds ("no ceiling"), so
-    it cannot double as the "not supplied" sentinel the other arguments use.
-    ``UNSET`` (the kernel's sentinel) carries that distinction:
-    ``build_mcp_config()`` takes the setting,
-    ``build_mcp_config(dispatch_timeout=None)`` disables the deadline.
-    """
+    """Resolve a nullable bound: ``UNSET`` → settings, ``None`` → disabled."""
     return get_setting(setting) if isinstance(value, UnsetType) else value
 
 
@@ -67,25 +60,9 @@ def build_mcp_config(
     input_request_ttl_seconds: int | None = None,
     max_input_rounds: int | None = None,
 ) -> MCPConfig:
-    """Resolve a ``MCPConfig`` from ``SPEC_MCP``, applying overrides.
-
-    The single place the scalar settings are read.
-    [`MCPServer`][django_spec_mcp.server.mcp_server.MCPServer] calls this once in
-    ``__init__``; nothing reads these settings per request, which is what lets two
-    servers in one project hold different values.
-
-    Every argument is ``None`` by default, meaning "take it from settings". Pass
-    one to override just that field for this server:
-
-        MCPServer(name="internal", config=build_mcp_config(page_size=500))
-
-    Use this rather than constructing ``MCPConfig`` directly — it layers
-    overrides *over* the project's settings instead of discarding them.
-    """
+    """Resolve a ``MCPConfig`` from ``SPEC_MCP``, applying overrides."""
     resolved_versions: tuple[str, ...] = tuple(_given(protocol_versions, "PROTOCOL_VERSIONS"))
     if not resolved_versions:
-        # Caught at construction rather than as an ``IndexError`` out of a view
-        # on the first request: every version lookup downstream indexes this.
         raise ImproperlyConfigured(
             "SPEC_MCP['PROTOCOL_VERSIONS'] is empty, so this server supports "
             "no MCP revision and cannot answer any request. List at least one."
@@ -124,11 +101,6 @@ def build_mcp_config(
         ),
         catalog_cache_ttl_ms=int(_given(catalog_cache_ttl_ms, "CATALOG_CACHE_TTL_MS")),
         resource_cache_ttl_ms=int(_given(resource_cache_ttl_ms, "RESOURCE_CACHE_TTL_MS")),
-        # ``None`` is meaningful for both — "no expiry" and "send no poll hint"
-        # — so neither can use ``_given`` as the scalars above do, which would
-        # read an explicit ``None`` as "not supplied" and silently pick up the
-        # setting instead. ``_bound`` carries
-        # that distinction on the sentinel, exactly as the outbound bounds do.
         task_ttl_ms=_nullable_int(_bound(task_ttl_ms, "TASK_TTL_MS")),
         task_poll_interval_ms=_nullable_int(_bound(task_poll_interval_ms, "TASK_POLL_INTERVAL_MS")),
         subscription_max_seconds=_nullable_float(
