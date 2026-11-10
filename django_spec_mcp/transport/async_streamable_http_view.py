@@ -102,12 +102,7 @@ logger = get_logger(__name__)
 
 
 def _capacity_refusal(cap: int, what: str, setting: str, *, request_id: Any = None) -> JsonResponse:
-    """The ``503`` for a stream past its per-worker cap, naming the setting to raise.
-
-    Refused rather than queued: each stream parks a worker for its lifetime,
-    so accepting past the cap trades a clear error for a server that stops
-    answering anything at all.
-    """
+    """The ``503`` for a stream past its per-worker cap, naming the setting to raise."""
     return error_response(
         code=JsonRpcErrorCode.INTERNAL_ERROR,
         message=(
@@ -120,61 +115,30 @@ def _capacity_refusal(cap: int, what: str, setting: str, *, request_id: Any = No
 
 
 class AsyncStreamableHttpView(View):
-    """Async sibling of ``StreamableHttpView`` for ASGI deployments.
-
-    A plain Django view whose methods are all ``async def``, so Django awaits it
-    with no thread hop. Wire behaviour matches the sync view for POST and DELETE — same headers, same
-    status codes, same JSON-RPC shapes — and the reasoning behind the shared checks
-    lives there. The async path additionally serves server-initiated SSE on GET when an
-    [`SSEBroker`][django_spec_mcp.transport.types.sse_broker.SSEBroker] is wired in;
-    without one, GET returns 405, which the spec allows when there is nothing to push.
-
-    Sync collaborators (auth backend, session store, permissions) are bridged
-    through ``asgiref.sync.sync_to_async``, so a fully sync stack still
-    works under ASGI.
-    """
+    """Async sibling of ``StreamableHttpView`` for ASGI deployments."""
 
     tools: ToolRegistry | None = None
     resources: ResourceRegistry | None = None
     prompts: PromptRegistry | None = None
     auth_backend: MCPAuthBackend | None = None
     session_store: SessionStore | None = None
-    # Serving a subscription is async-only: it is a stream that stays open,
-    # which a sync WSGI view cannot hold. The sync view is given one only to
-    # publish to it.
+    # Serving a subscription is async-only: the stream stays open.
     subscription_broker: SubscriptionBroker | None = None
     # ``None`` on both means this server runs no tasks.
     task_store: TaskStore | None = None
     task_executor: TaskExecutor | None = None
     sse_broker: SSEBroker | None = None
     sse_replay_buffer: SSEReplayBuffer | None = None
-    # Identity the owning server resolved at construction. Unlike the
-    # collaborators above these stay optional at dispatch: a hand-wired view
-    # with no server still answers ``initialize``, falling back to
-    # ``SERVER_INFO``.
     server_info: Implementation | None = None
     instructions: str | None = None
     config: MCPConfig | None = None
-    # The owning server's ``pool_seeds=``, read into every context this view
-    # builds. The kernel's default for a hand-wired view, which is exactly
-    # the seeds dispatch would use with none passed.
     pool_seeds: PoolSeeds = DEFAULT_POOL_SEEDS
-    # The owning server's ``conventions=``, read into every context this view
-    # builds, so the wording it serves is that server's. The defaults for a
-    # hand-wired view, which is what a server given none would say.
     conventions: AgentConventions = AgentConventions()
-    # The owning server's ``exception_map=``, read into every context this view
-    # builds. A read-only empty one for a hand-wired view, since this is the class
-    # body and nothing here may be shared and written to.
     exception_map: Mapping[type[Exception], ExceptionHandler] = MappingProxyType({})
 
     @classonlymethod
     def as_view(cls, **initkwargs: Any) -> Callable[..., Any]:
-        """Build the view function, opted out of CSRF and of the login redirect.
-
-        Django marks the function a coroutine function because every method the
-        class answers is ``async def``, so the handler awaits it.
-        """
+        """Build the view function, opted out of CSRF and of the login redirect."""
         return exempt_endpoint(super().as_view(**initkwargs))
 
     async def dispatch(  # ty: ignore[invalid-method-override]
@@ -183,13 +147,9 @@ class AsyncStreamableHttpView(View):
         refused: JsonResponse | None = not_acceptable(request, _ANSWERS_WITH)
         if refused is not None:
             return refused
-        # Every route is a coroutine here, Django's ``options`` and ``405``
-        # included, because ``view_is_async`` is set; the stub types the sync
-        # base's return, not the coroutine it hands back.
+        # Every route is a coroutine here, because ``view_is_async`` is set.
         routed: Any = super().dispatch(request, *args, **kwargs)
         return await routed
-
-    # ----- the methods the endpoint serves -----
 
     async def post(self, http_request: HttpRequest) -> HttpResponseBase:
         config: MCPConfig = self._require_config()
@@ -202,13 +162,11 @@ class AsyncStreamableHttpView(View):
             return message
 
         is_initialize: bool = isinstance(message, JsonRpcRequest) and message.method == "initialize"
-        # Answerable without a session, but does *not* mint one — hence a
-        # second flag rather than a widening of the first.
+        # Answerable without a session, but does *not* mint one.
         is_sessionless: bool = (
             isinstance(message, JsonRpcRequest) and message.method in SESSIONLESS_METHODS
         )
 
-        # **The era fork** — see the sync sibling for the reasoning.
         metadata: RequestMetadata | None = RequestMetadata.from_params(
             params_dict(getattr(message, "params", None))
         )
@@ -221,15 +179,11 @@ class AsyncStreamableHttpView(View):
         if negotiated is None:
             return unsupported_version_response(getattr(message, "id", None))
 
-        # Before the session lookup, so session ids cannot be probed through a
-        # 404-vs-401 oracle. See the sync sibling.
         token = await self._authenticate(http_request)
         if token is None:
             logger.warning("Authentication failed for %s", http_request.path)
             return unauthenticated_response(self._require_auth_backend(), http_request)
 
-        # A wrong-principal presentation renders the same 404 as an unknown id,
-        # so the gate is not an ownership oracle.
         store = self._require_session_store()
         session_id: str | None = http_request.headers.get(_SESSION_HEADER)
         principal: str = principal_for_token(token)
@@ -257,10 +211,6 @@ class AsyncStreamableHttpView(View):
                 code=JsonRpcErrorCode.INVALID_REQUEST, message="Expected a JSON-RPC request"
             )
 
-        # The stream decision sits inside the backstop with the dispatch: its
-        # permission pre-flight asks the binding's scope gate and the spec's
-        # PermissionChecks as the dispatch would, so a raise there is the same
-        # server fault, and it happens before any stream has committed a status.
         try:
             streamed: HttpResponseBase | None = await self._maybe_stream(message, context)
             if streamed is not None:
@@ -269,15 +219,12 @@ class AsyncStreamableHttpView(View):
         except Exception as exc:  # noqa: BLE001 — the backstop; see ``internal_error_response``
             if not is_raised_denial(exc):
                 return internal_error_response(message, logger)
-            # A denial raised rather than returned; see ``raised_denial_error``.
             result = raised_denial_error()
 
         http_response: JsonResponse = legacy_result_response(
             message.id, result, self._require_auth_backend()
         )
         if is_initialize and self._sessions_enabled() and not isinstance(result, JsonRpcError):
-            # Assignment is the server's choice; the client's duty to echo one
-            # is conditional on it arriving. Not minting is sessionless mode.
             new_session: str = await acall(store.create, principal_id=principal)
             http_response[_SESSION_HEADER] = new_session
         return http_response
@@ -285,12 +232,7 @@ class AsyncStreamableHttpView(View):
     async def _handle_modern(
         self, http_request: Any, message: Any, metadata: RequestMetadata
     ) -> HttpResponseBase:
-        """Async sibling of the sync view's modern path — same rules.
-
-        A full parallel implementation rather than a wrapper, as everywhere
-        else in this transport: threading a sync/async switch through would put
-        the era branch somewhere it does not belong.
-        """
+        """Async sibling of the sync view's modern path — same rules."""
         refused: JsonResponse | None = modern_header_refusal(
             http_request, message, metadata, self._require_config()
         )
@@ -312,17 +254,6 @@ class AsyncStreamableHttpView(View):
         if isinstance(message, JsonRpcNotification):
             return HttpResponse(status=202)
 
-        # Necessarily a request by now. The era test reads ``params``, which a
-        # JSON-RPC *response* does not carry, so a response body is always
-        # routed to the legacy path — and rejected there.
-        #
-        # Everything that runs consumer code for this request sits inside the
-        # backstop: the subscription grant and the stream's permission
-        # pre-flight ask the same scope gates and PermissionChecks a dispatch
-        # does.
-        # Neither has committed a status when it raises, so a JSON-RPC answer
-        # is still possible; once a stream is open, the stream's own error
-        # frame takes over.
         try:
             subscribed: HttpResponseBase | None = await self._maybe_subscribe(message, context)
             if subscribed is not None:
@@ -334,36 +265,11 @@ class AsyncStreamableHttpView(View):
         except Exception as exc:  # noqa: BLE001 — the backstop; see ``internal_error_response``
             if not is_raised_denial(exc):
                 return internal_error_response(message, logger)
-            # A denial raised rather than returned; see ``raised_denial_error``.
             result = raised_denial_error()
         return modern_result_response(message.id, result, self._require_auth_backend())
 
     async def get(self, http_request: HttpRequest) -> HttpResponseBase:
-        """GET action: open a server-pushed SSE stream for the current session.
-
-        - 405 if no broker is configured, or sessions are off (nothing to
-          push, and no channel to push it down). Decided **before**
-          authentication: no credential changes this answer, so challenging
-          for one would send the client after a token it cannot use.
-        - 401 if the caller cannot authenticate — the stream carries a
-          session's payloads, so it is gated exactly like POST.
-        - 400 if the protocol-version header is missing or unsupported. The
-          spec is silent on GET here; this is parity with POST.
-        - 404 if the session id is unknown **or owned by a different
-          principal** (indistinguishable on purpose).
-        - 503 if this worker is already serving
-          ``MAX_CONCURRENT_SSE_STREAMS`` streams.
-        - Otherwise ``text/event-stream``, with idle keep-alives and whatever
-          ``MCPServer.notify`` enqueues, for at most
-          ``SSE_STREAM_MAX_SECONDS``.
-
-        **Both bounds exist because this stream is the cheapest thing an
-        authenticated caller can hold.** Minting sessions is uncapped and each
-        one addresses its own stream, so a caller looping ``initialize`` and
-        then ``GET`` parks an ASGI task per session, each keep-aliving itself
-        past any proxy's idle timeout. ``subscriptions/listen`` is bounded on
-        exactly these two axes for exactly this reason.
-        """
+        """GET action: open a server-pushed SSE stream for the current session."""
         refused: JsonResponse | None = origin_refusal(http_request, self._require_config())
         if refused is not None:
             return refused
@@ -372,15 +278,6 @@ class AsyncStreamableHttpView(View):
 
         broker = self.sse_broker
         if broker is None or not self._sessions_enabled():
-            # The session id *is* the channel address, so sessionless leaves
-            # nothing to open a per-client stream against. 405 is the spec's
-            # status for "this endpoint offers no SSE stream".
-            #
-            # Ahead of authentication, because no credential moves this
-            # configuration off 405 and a 401 here carries a challenge that
-            # asks the client to go get one. Method support is a fact about
-            # the resource, not about the caller — the same reasoning
-            # ``_handle_modern`` applies to era detection.
             return self._method_not_allowed()
 
         token = await self._authenticate(http_request)
@@ -405,8 +302,6 @@ class AsyncStreamableHttpView(View):
         if cap is not None and broker.active_streams >= cap:
             return _capacity_refusal(cap, "SSE streams", "MAX_CONCURRENT_SSE_STREAMS")
 
-        # ``Last-Event-ID`` is honoured only with a replay buffer wired in;
-        # otherwise there is nothing buffered to replay and it is ignored.
         last_event_id: str | None = (
             http_request.headers.get("Last-Event-ID")
             if self.sse_replay_buffer is not None
@@ -421,18 +316,11 @@ class AsyncStreamableHttpView(View):
         )
 
     async def delete(self, http_request: HttpRequest) -> HttpResponse:
-        """DELETE action: end the session named by ``MCP-Session-Id``.
-
-        Requires authentication, and only the principal a session was
-        minted for can destroy it — a wrong-principal (or unknown) id
-        renders 404 without touching the session.
-        """
+        """DELETE action: end the session named by ``MCP-Session-Id``."""
         refused: JsonResponse | None = origin_refusal(http_request, self._require_config())
         if refused is not None:
             return refused
         if modern_era_requested(http_request) or not self._sessions_enabled():
-            # No sessions to terminate — the spec's blessed answer for a server
-            # that does not let clients terminate sessions.
             return self._method_not_allowed()
         token = await self._authenticate(http_request)
         if token is None:
@@ -442,8 +330,6 @@ class AsyncStreamableHttpView(View):
             store = self._require_session_store()
             if await acall(store.owner, session_id) != principal_for_token(token):
                 return unknown_session_response()
-            # The session is going away, so buffered events would never be
-            # delivered.
             if self.sse_replay_buffer is not None:
                 await self.sse_replay_buffer.forget(session_id)
             await acall(store.destroy, session_id)
@@ -452,22 +338,11 @@ class AsyncStreamableHttpView(View):
     async def _maybe_subscribe(
         self, message: Any, context: MCPCallContext
     ) -> HttpResponseBase | None:
-        """Answer ``subscriptions/listen`` with a stream that stays open.
-
-        ``None`` for every other method. Separate from ``_maybe_stream``: that
-        one wraps a dispatch and ends with its result, while this has no
-        dispatch and ends when the client leaves.
-
-        **Modern era only.** A legacy client reaching here gets dispatch's
-        unknown-method answer rather than a stream it cannot interpret.
-        """
+        """Answer ``subscriptions/listen`` with a stream that stays open."""
         if getattr(message, "method", None) != SUBSCRIPTIONS_LISTEN_METHOD:
             return None
         broker = context.subscriptions
         if broker is None:
-            # Checked before granting: evaluating permissions and reading the
-            # task store to build a grant we then discard is work for nothing.
-            # An empty grant closes after the acknowledgement.
             return build_subscription_stream(
                 broker=InMemorySubscriptionBroker(),
                 topics=frozenset(),
@@ -486,10 +361,6 @@ class AsyncStreamableHttpView(View):
         requested = SubscriptionFilter.from_params(
             params.get("notifications") if params is not None else None
         )
-        # The spec's one exception to "refused entries are dropped": a client
-        # asking for task notifications without declaring the tasks extension
-        # MUST get an error, not a quiet omission. Answered here rather than in
-        # the grant because it produces an error response instead of a stream.
         if requested.task_ids and not declares_tasks_extension(context):
             return modern_refusal(missing_capability_error(), message.id)
         granted, topics = await acall(grant_subscription, requested, context)
@@ -502,27 +373,15 @@ class AsyncStreamableHttpView(View):
         )
 
     async def _maybe_stream(self, message: Any, context: MCPCallContext) -> HttpResponseBase | None:
-        """Answer with an SSE stream when the client asked to hear about progress.
-
-        ``None`` means "not this request" — no ``progressToken``, so a single
-        JSON object it is. The spec lets the server choose per request, and a
-        stream whose only event is the final response costs a connection and
-        buys nothing.
-
-        Era-independent: the token sits at ``_meta.progressToken`` in both.
-        """
+        """Answer with an SSE stream when the client asked to hear about progress."""
         params: dict[str, Any] | None = params_dict(message.params)
         token: str | int | None = progress_token(params)
         if token is None:
             return None
 
-        # Asking is not enough — the dispatch has to be able to answer. See
-        # ``can_report_progress`` for which paths qualify and why.
         if not await acall(can_report_progress, message.method, params, context):
             return None
 
-        # Before the stream opens, while a status can still be chosen. See
-        # ``preflight_admission`` for why this one check moves out here.
         outcome: JsonRpcError | KernelAdmission | None = await acall(
             preflight_admission, message.method, params, context
         )
@@ -533,9 +392,7 @@ class AsyncStreamableHttpView(View):
         admission: KernelAdmission | None = outcome
 
         def dispatch_with(reporter: ProgressReporter) -> Any:
-            # ``can_report_progress`` let only ``tools/call`` through, which the
-            # router sends straight to this handler, so calling it here is the
-            # same dispatch with the pre-flight's admission handed along.
+            # Calling it here is the same dispatch, with the pre-flight's admission handed along.
             return handle_tools_call_async(
                 params, dataclasses.replace(context, progress=reporter), admission=admission
             )
@@ -553,12 +410,7 @@ class AsyncStreamableHttpView(View):
         session_id: str | None,
         client_capabilities: dict[str, Any] | None = None,
     ) -> MCPCallContext:
-        """The context a dispatch reads, from this view's collaborators.
-
-        ``client_capabilities`` is the modern path's alone: the spec forbids
-        relying on a declaration that did not arrive *with the request*, so
-        the legacy context leaves it empty.
-        """
+        """The context a dispatch reads, from this view's collaborators."""
         return MCPCallContext(
             http_request=http_request,
             token=token,
@@ -579,19 +431,12 @@ class AsyncStreamableHttpView(View):
             exception_map=self.exception_map,
         )
 
-    # ----- collaborator accessors -----
-
     def _method_not_allowed(self) -> HttpResponse:
         """A ``405`` naming the methods this view routes, as RFC 9110 requires."""
         return HttpResponseNotAllowed(allowed_methods(self))
 
     async def _authenticate(self, http_request: HttpRequest) -> Any:
-        """Resolve the caller's token; on success the request is the token's.
-
-        As the sync view's: the backend sees an anonymous request, and an
-        authenticated one carries the token's principal from here on, ahead of
-        every context, stream pre-flight and subscription grant built from it.
-        """
+        """Resolve the caller's token; on success the request is the token's."""
         backend = self._require_auth_backend()
         seat_anonymous(http_request)
         token: Any = await acall(backend.authenticate, http_request)

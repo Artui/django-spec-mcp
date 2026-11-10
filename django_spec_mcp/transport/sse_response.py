@@ -17,22 +17,12 @@ _KEEPALIVE_INTERVAL_SECONDS: float = 15.0
 
 
 def keepalive_interval_seconds() -> float:
-    """The idle keep-alive period shared by both SSE surfaces.
-
-    Shared so the POST response stream and the GET session stream cannot drift
-    apart on a value whose whole purpose is matching what the proxies in front
-    of them tolerate.
-    """
+    """The idle keep-alive period shared by both SSE surfaces."""
     return _KEEPALIVE_INTERVAL_SECONDS
 
 
 def format_event(payload: Any, *, event_id: str | None = None) -> bytes:
-    """Encode a single JSON-RPC payload as one SSE event.
-
-    SSE events are delimited by a blank line. ``event_id``, when set, becomes
-    an ``id:`` line preceding the ``data:`` payload; clients echo the latest
-    seen ID back via ``Last-Event-ID`` on reconnect.
-    """
+    """Encode a single JSON-RPC payload as one SSE event."""
     body: str = json.dumps(payload, separators=(",", ":"))
     if event_id is None:
         return f"data: {body}\n\n".encode()
@@ -48,27 +38,7 @@ async def stream_events(
     last_event_id: str | None = None,
     max_seconds: float | None = None,
 ) -> AsyncIterator[bytes]:
-    """Async generator that yields SSE bytes for one session's stream.
-
-    Subscribes to ``broker`` for ``session_id``, emits an opening comment so
-    intermediaries know the stream is alive, then drains the queue forever.
-    Idle periods produce ``: keepalive`` comment frames so proxies do not close
-    the connection, and a client disconnect unsubscribes the session cleanly
-    through the ``finally``.
-
-    With a ``replay_buffer``, every event recorded after ``last_event_id`` is replayed
-    on open as ``id: <id>\\ndata: <payload>\\n\\n`` frames before live mode begins, and
-    live frames arrive wrapped as ``{"_mcp_event_id", "_mcp_payload"}`` (see
-    [`MCPServer.notify`][django_spec_mcp.server.mcp_server.MCPServer.notify]),
-    unpacked here so the wire stays SSE-shaped. Without one, no ``id:`` lines are
-    emitted and ``last_event_id`` is ignored.
-
-    ``max_seconds`` closes the stream from this end once it elapses, with a
-    comment frame rather than an abrupt cut so an operator reading the wire can
-    tell a lifetime cap from a crash. Checked at the top of each wait, so the
-    close lands within one keep-alive period of the deadline. The client
-    reconnects on its own — that is what SSE clients do — and with a replay
-    buffer the reconnect is gapless."""
+    """Async generator that yields SSE bytes for one session's stream."""
     queue: asyncio.Queue[Any] = broker.subscribe(session_id)
     deadline: float | None = (
         None if max_seconds is None else asyncio.get_running_loop().time() + max_seconds
@@ -82,10 +52,6 @@ async def stream_events(
                 yield format_event(payload, event_id=event_id)
         while True:
             if deadline is not None and asyncio.get_running_loop().time() >= deadline:
-                # The authentication check happened once, when the stream
-                # opened. Ending it forces a reconnect, which re-runs that
-                # check, so a revoked principal stops receiving a session's
-                # pushes within one window rather than indefinitely.
                 yield b": stream closed\n\n"
                 return
             try:
@@ -115,11 +81,7 @@ def build_sse_response(
     last_event_id: str | None = None,
     max_seconds: float | None = None,
 ) -> StreamingHttpResponse:
-    """Build the spec-compliant ``StreamingHttpResponse`` for an SSE GET.
-
-    ``X-Accel-Buffering: no`` disables nginx response buffering; without it
-    nginx waits for the connection to close before flushing, defeating SSE.
-    """
+    """Build the spec-compliant ``StreamingHttpResponse`` for an SSE GET."""
     response = StreamingHttpResponse(
         stream_events(
             broker,

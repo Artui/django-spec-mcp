@@ -13,11 +13,7 @@ from django_spec_mcp.conf import get_setting
 
 @dataclass(frozen=True)
 class _Entry:
-    """What a session key holds: the owning principal, and when it was minted.
-
-    ``created_at`` is the anchor the absolute cap needs — without it a sliding
-    window cannot expire a continuously-used session.
-    """
+    """What a session key holds: the owning principal, and when it was minted."""
 
     principal_id: str
     created_at: float
@@ -31,40 +27,7 @@ _SESSION_ID_SHAPE = re.compile(r"\A[A-Za-z0-9_-]{1,128}\Z")
 
 
 class DjangoCacheSessionStore:
-    """Session store backed by ``django.core.cache``.
-
-    Works across processes — the production-suitable default.
-
-    **Two windows, both configurable** (``SESSION_TTL_SECONDS`` /
-    ``SESSION_MAX_AGE_SECONDS``, or the constructor arguments here). The TTL is
-    an **idle** window that restarts on every successful ``owner`` read, so
-    a session in continuous use never lapses; the max age is the **absolute**
-    ceiling that stops a sliding window outliving a revoked principal.
-
-    **Neither window can promise more than the cache underneath.** An eviction
-    policy like Redis's ``allkeys-lru`` drops session keys well before any
-    timeout, and the client cannot tell that apart from expiry. If sessions
-    vanish early, check the eviction policy before these settings.
-
-    A value this store cannot read fails the ownership comparison and the
-    client transparently re-initializes. A bare principal string — the shape
-    older versions wrote — is honoured and rewritten in the current shape, so
-    an upgrade does not log every current holder out.
-
-    **Namespacing.** An instance built by
-    [`MCPServer`][django_spec_mcp.server.mcp_server.MCPServer] keys its entries under
-    the server's ``name``, so two servers in one project cannot see each other's
-    sessions. Without it they share one flat key space over the same Django cache: a
-    session minted at one satisfies the other's ownership check, and a ``DELETE``
-    against either destroys the other's session. The namespace is **hashed** into the
-    key (``spec-mcp:session:<digest>:<token>``) because ``name`` is free-form while cache
-    keys must survive backends like memcached, which reject spaces and control
-    characters and cap length at 250.
-
-    Constructing the store yourself means you own the namespace:
-
-        MCPServer(session_store=DjangoCacheSessionStore(namespace="internal"))
-    """
+    """Session store backed by ``django.core.cache``."""
 
     def __init__(
         self,
@@ -73,8 +36,7 @@ class DjangoCacheSessionStore:
         ttl_seconds: int | None = None,
         max_age_seconds: int | None = None,
     ) -> None:
-        # Folded into the prefix once: the namespace is fixed for the store's
-        # lifetime, so there is nothing to recompute on the read path.
+        # Folded into the prefix once: the namespace is fixed for the store's lifetime.
         self._prefix: str = (
             _KEY_PREFIX if namespace is None else f"{_KEY_PREFIX}{namespace_digest(namespace)}:"
         )
@@ -91,15 +53,7 @@ class DjangoCacheSessionStore:
         return f"{self._prefix}{session_id}"
 
     def _readable(self, session_id: str) -> bool:
-        """Whether the id could be one this store minted.
-
-        The same reasoning as the digest above, from the other direction: an
-        ``Mcp-Session-Id`` arrives off the wire and goes straight into a cache
-        key, and the memcached backends raise on a key holding a space or a
-        control character, or one over 250 bytes. An id that cannot be one of
-        ours names no session either, so it is answered as the miss it is
-        rather than as an unhandled 500.
-        """
+        """Whether the id could be one this store minted."""
         return bool(_SESSION_ID_SHAPE.match(session_id))
 
     def create(self, *, principal_id: str) -> str:
@@ -112,31 +66,15 @@ class DjangoCacheSessionStore:
         return token
 
     def exists(self, session_id: str) -> bool:
-        """Whether a key is present — deliberately *not* ``owner() is not None``.
-
-        A value this store cannot read is present but ownerless, and the gate
-        keys on ``owner``. Reading through ``owner`` here would also
-        refresh the idle window, making a liveness probe extend what it probes.
-        """
+        """Whether a key is present — deliberately *not* ``owner() is not None``."""
         return self._readable(session_id) and cache.get(self._key(session_id)) is not None
 
     def owner(self, session_id: str) -> str | None:
-        """Resolve the owning principal, refreshing the idle window on the way.
-
-        **Idle, not fixed.** The window restarts on every successful read, so
-        only a genuinely idle session lapses.
-
-        **Bounded by an absolute maximum age.** The principal binding is
-        checked once, at ``initialize``, so an unbounded sliding window would
-        keep a *revoked* principal alive for as long as it kept talking.
-        """
+        """Resolve the owning principal, refreshing the idle window on the way."""
         if not self._readable(session_id):
             return None
         entry = cache.get(self._key(session_id))
         if isinstance(entry, str):
-            # Written by a version that stored the bare principal. Honoured and
-            # re-written in the current shape rather than logging the holder out
-            # mid-upgrade; its age is unknown, so the clock starts now.
             entry = _Entry(principal_id=entry, created_at=time.time())
         if not isinstance(entry, _Entry):
             return None

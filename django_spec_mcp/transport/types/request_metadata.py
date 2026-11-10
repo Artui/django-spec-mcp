@@ -11,18 +11,7 @@ from django_spec_mcp.types.protocol_version_meta_key import PROTOCOL_VERSION_MET
 
 @dataclass(frozen=True)
 class RequestMetadata:
-    """The per-request ``_meta`` a modern client sends on every request.
-
-    What replaced the ``initialize`` handshake: version, identity and
-    capabilities restated on each request rather than agreed once and
-    remembered, so nothing is negotiated and nothing has to be stored.
-
-    ``from_params`` doubles as the **era test**, returning ``None`` when
-    the request carries no modern protocol version — a legacy request being
-    exactly one that carries none. Deliberately not a test on the
-    ``MCP-Protocol-Version`` header (legacy clients have sent one since
-    ``2025-06-18``) nor on the method (most exist in both eras).
-    """
+    """The per-request ``_meta`` a modern client sends on every request."""
 
     protocol_version: str
     client_capabilities: dict[str, Any] = field(default_factory=dict)
@@ -30,15 +19,7 @@ class RequestMetadata:
 
     @classmethod
     def from_params(cls, params: Any) -> RequestMetadata | None:
-        """Read modern metadata off a request's ``params``, or ``None`` if legacy.
-
-        Tolerant on the way in: a malformed ``_meta`` reads as legacy rather
-        than erroring, because a *missing* modern marker and a *broken* one are
-        indistinguishable from here, and answering a legacy client with a
-        modern header-validation error is the more confusing failure. A modern
-        request missing a required field is rejected downstream, where the
-        error can name it.
-        """
+        """Read modern metadata off a request's ``params``, or ``None`` if legacy."""
         if not isinstance(params, dict):
             return None
         meta: Any = params.get("_meta")
@@ -58,11 +39,7 @@ class RequestMetadata:
 
 
 def _implementation(raw: Any) -> Implementation | None:
-    """Project a ``clientInfo`` mapping, ignoring anything unusable.
-
-    Self-reported and unverified, as the spec says of the server's own, so a
-    half-filled one is projected as far as it goes. Nothing branches on it.
-    """
+    """Project a ``clientInfo`` mapping, ignoring anything unusable."""
     if not isinstance(raw, dict) or not isinstance(raw.get("name"), str):
         return None
     version: Any = raw.get("version")

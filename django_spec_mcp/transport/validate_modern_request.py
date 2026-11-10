@@ -41,26 +41,7 @@ def validate_modern_request(
     headers: Any,
     supported_versions: tuple[str, ...],
 ) -> JsonRpcError | None:
-    """Check a modern request's headers against its body. ``None`` if it passes.
-
-    The transport mirrors selected body fields into headers so gateways and
-    observability tooling can route without parsing JSON. That is only safe if
-    the two agree: otherwise a gateway routes on the header while the server
-    executes the body, the confused-deputy shape this closes. The spec is
-    correspondingly strict — any mismatch, any missing required header, is
-    ``400`` with ``-32020``.
-
-    Three checks:
-
-    1. The requested protocol version must be one this server implements —
-       ``-32022``, carrying ``supported`` and ``requested`` so the client can
-       retry without guessing.
-    2. ``MCP-Protocol-Version`` must equal the ``_meta`` version.
-    3. ``Mcp-Method`` must equal the body's method, and ``Mcp-Name`` — for the
-       methods that have one — must equal ``params.name`` or ``params.uri``,
-       **after** decoding the Base64 sentinel a client uses for any value that
-       will not survive as a plain ASCII header.
-    """
+    """Check a modern request's headers against its body."""
     if metadata.protocol_version not in supported_versions:
         return JsonRpcError(
             JsonRpcErrorCode.UNSUPPORTED_PROTOCOL_VERSION,
@@ -90,9 +71,6 @@ def validate_modern_request(
         return None
     body_value: Any = params.get(source) if isinstance(params, dict) else None
     if not isinstance(body_value, str):
-        # A missing or non-string source field is a params fault, not a header
-        # one, and the handler owns that message — it knows which field and
-        # why — so header validation stands aside.
         return None
     name_header: Any = headers.get(NAME_HEADER)
     if name_header is None:
@@ -109,18 +87,7 @@ def validate_modern_request(
 
 
 def _decode_header_value(value: str) -> str | None:
-    """Resolve the Base64 sentinel a client uses for header-unsafe values.
-
-    HTTP field values are ASCII-only, so a tool named in another script or a
-    URI with a space cannot ride as itself. The spec's answer is
-    ``=?base64?<payload>?=``, and clients must use it for a *literal* value
-    that happens to look like the sentinel too — which is why an unwrapped
-    value is returned verbatim without further inspection.
-
-    Returns ``None`` when the wrapper is present but the payload will not
-    decode: a malformed header rather than a mismatched one, which the caller
-    reports as such.
-    """
+    """Resolve the Base64 sentinel a client uses for header-unsafe values."""
     if not (value.startswith(_SENTINEL_PREFIX) and value.endswith(_SENTINEL_SUFFIX)):
         return value
     payload: str = value[len(_SENTINEL_PREFIX) : -len(_SENTINEL_SUFFIX)]
