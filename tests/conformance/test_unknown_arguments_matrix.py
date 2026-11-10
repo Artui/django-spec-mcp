@@ -1,15 +1,3 @@
-"""End-to-end unknown-argument policy of a kernel tool, through the live transport.
-
-Verifies the wire shape of ``REJECT`` for a kernel spec registered with
-``register_tool``: an ``isError`` ``validation_error`` result whose detail names
-the unknown key, served as a ``tools/call`` result rather than a JSON-RPC
-error. ``PASSTHROUGH`` has no wire shape: ``register_tool`` refuses it, since
-the kernel never hands an undeclared argument to a callable, so a server
-carrying it never starts.
-
-The refusal names the unknown key in its detail.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -48,7 +36,6 @@ def _spec() -> SelectorSpec:
 
 def __getattr__(name: str) -> Any:
     # A server per URLconf read, so no session outlives its test: pytest-django
-    # clears the resolver cache around every test (see ``tests/conformance/urls.py``).
     if name != "urlpatterns":
         raise AttributeError(name)
     server = MCPServer(name="conformance", auth_backend=AllowAnyBackend())
@@ -89,7 +76,6 @@ def test_reject_unknown_accepts_known_only(jsonrpc: Any, initialized_session: st
 
 def test_passthrough_is_refused_where_the_conformance_server_would_have_carried_it() -> None:
     # The spec the ``REJECT`` tool serves, registered under ``PASSTHROUGH``:
-    # refused at registration, so no call can reach it.
     server = MCPServer(name="conformance", auth_backend=AllowAnyBackend())
 
     with pytest.raises(ImproperlyConfigured, match="PASSTHROUGH is not honoured by the kernel"):

@@ -1,12 +1,3 @@
-"""End-to-end ``register_tools`` parity through the live transport, on kernel specs.
-
-Tools registered in bulk from a ``SpecRegistry`` must show up in ``tools/list``
-and answer ``tools/call`` exactly as a ``register_tool`` call of the same spec
-would; ``tests/server/test_register_kernel_specs.py`` pins the bindings field for
-field, and this file proves the wire shape lands too. The spec's own
-permissions, not a binding's, are what gate a bulk-registered tool.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Iterator
@@ -108,6 +99,5 @@ def test_bulk_registered_service_is_gated_by_its_specs_permissions(
 ) -> None:
     response = caller.post("tools/call", {"name": "conformance.bulk_gated", "arguments": {}})
     # 403 per the MCP authorization spec's error table: "invalid scopes or
-    # insufficient permissions". The JSON-RPC error rides in the body too.
     assert response.status_code == 403, response.content
-    assert response.json()["error"]["code"] == -32006  # FORBIDDEN
+    assert response.json()["error"]["code"] == -32006
