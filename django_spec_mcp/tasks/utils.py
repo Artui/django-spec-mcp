@@ -1,5 +1,3 @@
-"""Internal helpers shared by the task lifecycle functions."""
-
 from __future__ import annotations
 
 import re
@@ -29,37 +27,17 @@ def new_task_id() -> str:
 
 
 def is_wellformed_task_id(task_id: str) -> bool:
-    """Whether ``task_id`` could be an id this package issued.
-
-    A ``taskId`` arrives off the wire and, in a cache-backed store, is
-    concatenated straight into a cache key. Django's memcached backends reject
-    keys containing spaces or control characters and keys over 250 bytes, so an
-    id like ``"a b"`` reaches the client library and raises out of a handler
-    that has no arm for it — an unhandled 500 where the client should have got
-    the ordinary "unknown task" answer. Nothing is leaked by checking: an id
-    that cannot be one we minted cannot name a task that exists, so the two
-    answers were always going to be the same.
-    """
+    """Whether ``task_id`` could be an id this package issued."""
     return bool(_TASK_ID_SHAPE.match(task_id))
 
 
 def input_request_key(round_: int) -> str:
-    """The ``inputRequests`` key of a task's ``round_``-th question (from 1).
-
-    The spec forbids a server reusing a key over a task's lifetime, and
-    ``tasks/update`` accumulates answers by key, so a task asking twice under the
-    inline exchange's one fixed key would read its first answer as the second's.
-    """
+    """The ``inputRequests`` key of a task's ``round_``-th question (from 1)."""
     return f"{ELICITATION_KEY}-{round_}"
 
 
 def now_iso() -> str:
-    """Current time as the ISO 8601 string the wire format wants.
-
-    ``timezone.now()`` rather than ``datetime.now()`` so the value honours the
-    project's ``USE_TZ``: a client in an unknown zone cannot tell a naive local
-    timestamp from a UTC one on the wire.
-    """
+    """Current time as the ISO 8601 string the wire format wants."""
     return timezone.now().isoformat()
 
 

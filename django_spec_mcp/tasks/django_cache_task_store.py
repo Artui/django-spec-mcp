@@ -19,36 +19,7 @@ _NO_TTL_FALLBACK_SECONDS: int = 60 * 60 * 24 * 7
 
 
 class DjangoCacheTaskStore:
-    """Task store backed by ``django.core.cache``. **The default.**
-
-    Cross-process, which for tasks is not a nice-to-have: the web worker that
-    creates a task and the worker that finishes it are different processes, so
-    a store they do not share cannot work at all (see
-    [`InMemoryTaskStore`][django_spec_mcp.tasks.in_memory_task_store.InMemoryTaskStore]).
-
-    **Namespacing** follows
-    [`DjangoCacheSessionStore`][django_spec_mcp.transport.django_cache_session_store.DjangoCacheSessionStore]
-    exactly — the server's ``name``, hashed into the key prefix, so two servers in one
-    project cannot read or overwrite each other's tasks. The digest is for key hygiene
-    (``name`` is free-form; memcached rejects spaces and caps length), not secrecy.
-
-    **Records are serialised to plain dicts rather than pickled.** The cache
-    holds them across a deploy, and a pickled dataclass is a version of this
-    package's class definition: rename a field and every in-flight task becomes
-    unreadable exactly when a worker tries to finish it. Plain dicts also keep
-    the store usable under a JSON-serialising backend.
-
-    **Expiry** is absolute, stamped once at ``create`` from ``ttlMs`` and
-    carried in the envelope, so ``save`` renews the cache timeout to the
-    *remaining* lifetime rather than restarting the clock — otherwise a task
-    reporting progress often would never expire.
-
-    **A malformed id is a miss, not an exception.** ``taskId`` comes off the
-    wire and lands in a cache key, and the memcached backends reject keys with
-    spaces or control characters and keys over 250 bytes — raising out of a
-    handler with no arm for it. An id that cannot be one this package minted
-    cannot name a record either, so it is answered as the absence it is.
-    """
+    """Task store backed by ``django.core.cache``."""
 
     def __init__(self, *, namespace: str | None = None) -> None:
         self._prefix: str = (
@@ -85,9 +56,7 @@ class DjangoCacheTaskStore:
         if expires_at is None:
             timeout: float = _NO_TTL_FALLBACK_SECONDS
         else:
-            # Floor at one second: a zero timeout means "expire immediately" on
-            # several backends, which would drop a task the caller is still
-            # writing to.
+            # Floor at one second: a zero timeout means "expire immediately" on several backends.
             timeout = max(1.0, expires_at - time.time())
         payload: dict[str, Any] = _serialize(record)
         payload["expiresAt"] = expires_at
@@ -123,13 +92,7 @@ def _serialize(record: TaskRecord) -> dict[str, Any]:
 
 
 def _deserialize(raw: dict[str, Any]) -> TaskRecord | None:
-    """Rebuild a record, or ``None`` if the entry cannot be trusted.
-
-    An entry written by a different version of this package, or by anything else
-    sharing the cache, is treated as a task that does not exist rather than
-    raised on: the caller answers ``-32602``, which is what a client holding an
-    id that no longer resolves would have got had the entry simply expired.
-    """
+    """Rebuild a record, or ``None`` if the entry cannot be trusted."""
     try:
         status: TaskStatus = TaskStatus(raw["status"])
         task = Task(
@@ -156,8 +119,6 @@ def _deserialize(raw: dict[str, Any]) -> TaskRecord | None:
             input_responses=raw.get("inputResponses") or {},
             progress=raw.get("progress"),
             total=raw.get("total"),
-            # Absent from a record written before input_required parking: such a
-            # task never parks, and has asked nothing.
             can_elicit=bool(raw.get("canElicit")),
             input_round=int(raw.get("inputRound") or 0),
         )
