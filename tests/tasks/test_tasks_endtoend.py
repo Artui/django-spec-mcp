@@ -1,12 +1,3 @@
-"""The tasks extension over the actual HTTP transport, for kernel tools.
-
-Asked of kernel tools, one per ``TaskPolicy``: the decision at ``tools/call``,
-the handle and polling it, the full round trip, the non-declaring fallback and
-refusal, a legacy client, the ``Mcp-Name`` routing header, and the
-advertisement. The ``REQUIRED`` denial on a server that cannot run tasks is asked at
-the decision in ``test_task_wire_shape.py``.
-"""
-
 from __future__ import annotations
 
 import json
@@ -118,8 +109,7 @@ def test_a_declaring_client_gets_a_task_handle(client: Client) -> None:
 
 
 def test_the_handle_resolves_immediately_by_polling(client: Client) -> None:
-    """The durability requirement, seen from outside: the id the client was
-    handed works on the very next request."""
+    """The durability requirement, seen from outside."""
     task_id = _call(client, declares=True, name="t.optional")["taskId"]
     assert _result(_post(client, "tasks/get", {"taskId": task_id}))["status"] == "working"
 
@@ -135,24 +125,21 @@ def test_the_full_round_trip(client: Client) -> None:
 def test_a_non_declaring_client_gets_the_result_inline_when_the_policy_allows(
     client: Client,
 ) -> None:
-    """``OPTIONAL`` means a task *if it can*, and an ordinary call otherwise —
-    so an older client keeps working against the same tool."""
+    """``OPTIONAL`` means a task *if it can*, and an ordinary call otherwise."""
     result = _call(client, declares=False, name="t.optional")
     assert result["structuredContent"] == {"done": "yes"}
     assert "taskId" not in result
 
 
 def test_a_non_declaring_client_calling_a_task_only_tool_is_refused(client: Client) -> None:
-    """The case the spec names: unable to service the request without returning
-    a task handle the client cannot accept."""
+    """The case the spec names: unable to service the request without a task handle."""
     response = _post(client, "tools/call", {"name": "t.required", "arguments": {}}, declares=False)
     assert response.status_code == 400
     assert _error(response)["code"] == -32021
 
 
 def test_a_legacy_client_never_gets_a_task(client: Client) -> None:
-    """Not an era branch — it falls out of the shape. Legacy capabilities
-    arrived once at ``initialize``, so nothing is declared *on the request*."""
+    """Not an era branch — it falls out of the shape."""
     response = client.post(
         "/mcp/",
         data=json.dumps(
@@ -188,9 +175,7 @@ def test_a_legacy_client_never_gets_a_task(client: Client) -> None:
 
 
 def test_mcp_name_must_carry_the_task_id(client: Client) -> None:
-    """The extension requires it so a gateway can route a follow-up to the
-    instance holding that task's state. Without the mirroring registered, every
-    conformant ``tasks/*`` request would fail header validation."""
+    """The extension requires it so a gateway can route a follow-up to the holding instance."""
     task_id = _call(client, declares=True, name="t.optional")["taskId"]
     assert _post(client, "tasks/get", {"taskId": task_id}).status_code == 200
 
@@ -228,8 +213,7 @@ def _kernel_tool_server(**kwargs: Any) -> MCPServer:
 
 
 def test_discover_advertises_the_extension(client: Client) -> None:
-    """Over the wire, for the module's server: the extension appears in the
-    discovery document once the server can run tasks."""
+    """Over the wire: the extension appears in discovery once the server can run tasks."""
     response = client.post(
         "/mcp/",
         data=json.dumps(
@@ -253,17 +237,13 @@ def test_discover_advertises_the_extension(client: Client) -> None:
 
 
 def test_a_server_with_a_store_and_an_executor_advertises() -> None:
-    """The control of the two tests below, on their own path and their own kind
-    of server: with only a kernel tool registered, a server holding both halves
-    of the machinery advertises, so what they find missing is the machinery and
-    not an advertisement that never appears."""
+    """The control of the two tests below, on their own path and their own kind of server."""
     full = _kernel_tool_server(task_store=InMemoryTaskStore(), task_executor=RecordingExecutor())
     assert build_capabilities(context(full), modern=True).extensions == {TASKS_EXTENSION_ID: {}}
 
 
 def test_a_server_that_runs_no_tasks_advertises_nothing() -> None:
-    """A capability is a promise. Advertising one this server cannot keep would
-    have a client wait for a result that never comes."""
+    """A capability is a promise."""
     bare = _kernel_tool_server()
     assert build_capabilities(context(bare), modern=True).extensions is None
 
@@ -275,14 +255,12 @@ def test_a_store_without_an_executor_does_not_advertise() -> None:
 
 
 def test_supplying_an_executor_is_enough_to_get_a_store() -> None:
-    """The executor is the switch: a store appears, namespaced like the session
-    store, so the common case is one argument rather than two."""
+    """The executor is the switch: a store appears, namespaced like the session store."""
     server = _kernel_tool_server(task_executor=RecordingExecutor())
     assert isinstance(server.task_store, DjangoCacheTaskStore)
 
 
 def test_passing_task_store_none_is_not_a_request_for_the_default() -> None:
-    """Distinguishable from "not passed" - a way to say "I will wire the store
-    later" without silently getting one."""
+    """Distinguishable from not passed: a way to say that the store is wired later."""
     server = _kernel_tool_server(task_store=None, task_executor=RecordingExecutor())
     assert server.task_store is None

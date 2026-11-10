@@ -1,11 +1,3 @@
-"""Both task stores, against the same expectations.
-
-The in-memory one is a development convenience and the cache-backed one is the
-default, but a caller cannot tell them apart — so most of this runs against
-both, and only the properties that are genuinely backend-specific (expiry,
-serialisation, namespacing) get their own tests.
-"""
-
 from __future__ import annotations
 
 import dataclasses
@@ -107,11 +99,7 @@ def test_two_tasks_do_not_collide(store: Any) -> None:
 
 
 def test_the_cache_store_holds_a_plain_dict_not_a_pickled_dataclass() -> None:
-    """A pickled dataclass would be a copy of *this version's* class.
-
-    Rename a field and every in-flight task becomes unreadable at exactly the
-    moment a worker tries to finish it.
-    """
+    """A pickled dataclass would be a copy of *this version's* class."""
     cache.clear()
     store = DjangoCacheTaskStore()
     store.create(_record())
@@ -121,11 +109,7 @@ def test_the_cache_store_holds_a_plain_dict_not_a_pickled_dataclass() -> None:
 
 
 def test_save_renews_the_remaining_lifetime_not_the_whole_ttl() -> None:
-    """The bug this prevents: a task reporting often would never expire.
-
-    Expiry is stamped absolutely at creation and carried in the envelope, so a
-    later write shortens the cache timeout rather than restarting the clock.
-    """
+    """The bug this prevents: a task reporting often would never expire."""
     cache.clear()
     store = DjangoCacheTaskStore()
     store.create(_record(ttl_ms=60_000))
@@ -136,8 +120,7 @@ def test_save_renews_the_remaining_lifetime_not_the_whole_ttl() -> None:
 
 
 def test_a_task_with_no_ttl_still_gets_a_backstop() -> None:
-    """``None`` means "no expiry" on the wire; the cache still needs a bound,
-    or an un-polled task pins memory forever."""
+    """None means 'no expiry' on the wire; the cache still needs a bound."""
     cache.clear()
     store = DjangoCacheTaskStore()
     store.create(_record(ttl_ms=None))
@@ -146,8 +129,7 @@ def test_a_task_with_no_ttl_still_gets_a_backstop() -> None:
 
 
 def test_saving_a_task_the_cache_has_already_dropped_still_writes() -> None:
-    """The expiry lookup misses, so the write falls back to the no-TTL bound
-    rather than failing — the alternative is losing a worker's result."""
+    """The expiry lookup misses, so the write falls back to the no-TTL bound rather than failing."""
     cache.clear()
     store = DjangoCacheTaskStore(namespace="s")
     store.save(_record())
@@ -155,8 +137,7 @@ def test_saving_a_task_the_cache_has_already_dropped_still_writes() -> None:
 
 
 def test_an_already_expired_absolute_deadline_does_not_write_a_zero_timeout() -> None:
-    """A zero timeout means "expire immediately" on several backends, which
-    would drop the entry the caller is mid-way through writing."""
+    """A zero timeout means 'expire immediately' on several backends."""
     cache.clear()
     store = DjangoCacheTaskStore(namespace="s")
     store.create(_record(ttl_ms=1))
@@ -174,11 +155,7 @@ def test_an_already_expired_absolute_deadline_does_not_write_a_zero_timeout() ->
     ],
 )
 def test_an_unreadable_entry_reads_as_a_task_that_does_not_exist(entry: Any) -> None:
-    """Written by another version, or by something else sharing the cache.
-
-    ``-32602`` is the honest answer — the same one an expired task gets — and
-    it beats raising out of a poll the client cannot fix.
-    """
+    """Written by another version, or by something else sharing the cache."""
     cache.clear()
     store = DjangoCacheTaskStore()
     store.create(_record())
@@ -187,8 +164,7 @@ def test_an_unreadable_entry_reads_as_a_task_that_does_not_exist(entry: Any) -> 
 
 
 def test_two_servers_in_one_project_cannot_see_each_others_tasks() -> None:
-    """The same namespacing the session store does, for the same reason: one
-    flat key space would let either server read or destroy the other's work."""
+    """The same namespacing the session store does, for the same reason."""
     cache.clear()
     a = DjangoCacheTaskStore(namespace="server-a")
     b = DjangoCacheTaskStore(namespace="server-b")
@@ -201,7 +177,6 @@ def test_two_servers_in_one_project_cannot_see_each_others_tasks() -> None:
     "namespace",
     [
         # ``name`` is consumer-supplied prose; memcached rejects spaces and caps
-        # length. Hashing it is key hygiene, not secrecy.
         pytest.param("My Invoicing Server ✨", id="a-free-form-server-name"),
         pytest.param(None, id="no-namespace"),
     ],
@@ -214,7 +189,6 @@ def test_a_store_produces_a_usable_key_under_any_namespace(namespace: str | None
 
 
 # The un-namespaced key format, which the store documents: a namespace is
-# hashed into the prefix, and without one the key is the id straight after it.
 def _key(task_id: str) -> str:
     return f"spec-mcp:task:{task_id}"
 
@@ -227,12 +201,7 @@ def _envelope(task_id: str) -> Any:
 
 
 def _distinct_record() -> TaskRecord:
-    """A record whose every field differs from its default.
-
-    Kept beside the assertion below rather than reusing ``_record``: this one
-    exists to be *exhaustive*, and a shared fixture would drift toward whatever
-    the nearest test happened to need.
-    """
+    """A record whose every field differs from its default."""
     return TaskRecord(
         task=Task(
             task_id="codec-1",
@@ -274,23 +243,7 @@ def _default_of(f: Any) -> Any:
 
 
 def test_every_field_of_the_fixture_is_non_default() -> None:
-    """The fixture must exercise every field, or the round trip proves nothing.
-
-    **This is the half that catches a *new* field.** A field added to
-    ``TaskRecord`` or ``Task`` and not added here would keep its default,
-    round-trip vacuously, and leave the codec untested for it — so this asserts
-    exhaustiveness directly off ``dataclasses.fields`` rather than trusting the
-    fixture to be maintained.
-
-    **A missing default is not the same as a default of ``None``, and
-    conflating them put a hole in this check.** An earlier version mapped
-    ``MISSING`` onto ``None`` and then skipped every field whose default was
-    ``None`` — which is most of ``Task`` and both fields ``progress`` /
-    ``total`` were added as. The guard would have waved through exactly the
-    change it was built for. ``_REQUIRED`` keeps the two apart: a field with no
-    default can never match it, and a ``None``-defaulted field left at ``None``
-    is flagged like any other.
-    """
+    """The fixture must exercise every field, or the round trip proves nothing."""
     record = _distinct_record()
     stale: list[str] = []
     for obj, label in ((record, "TaskRecord"), (record.task, "Task")):
@@ -302,16 +255,7 @@ def test_every_field_of_the_fixture_is_non_default() -> None:
 
 @pytest.mark.django_db
 def test_the_cache_codec_preserves_every_field() -> None:
-    """Save → load must return a record equal field by field.
-
-    **This is the half that catches a *forgotten* field.** ``DjangoCacheTaskStore``
-    hand-writes both directions (``{"enqueued": record.enqueued}`` out,
-    ``enqueued=bool(raw.get("enqueued"))`` back), so a field added to the record
-    and missed in either direction is **silently dropped** — and it is dropped
-    exactly at the worker-to-polling-reader hand-off, the one place nobody is
-    watching. 100% branch coverage cannot catch it: a codec that drops a field
-    still executes every line of itself. Completeness is not reachability.
-    """
+    """Save → load must return a record equal field by field."""
     store = DjangoCacheTaskStore(namespace="codec")
     original = _distinct_record()
     store.create(original)
@@ -353,8 +297,7 @@ _A_0_6_0_RECORD: dict[str, Any] = {
 
 
 def test_a_record_in_the_0_6_0_shape_still_loads() -> None:
-    """A record written before ``can_elicit`` and ``input_round`` existed loads as a
-    task that cannot ask and has asked nothing, so it runs as it would have."""
+    """A record written before can_elicit and input_round existed runs as it would have."""
     store = DjangoCacheTaskStore(namespace="upgrade")
     cache.set(store._key("upgrade-1"), dict(_A_0_6_0_RECORD))
 
@@ -379,21 +322,11 @@ def test_a_record_in_the_0_6_0_shape_still_loads() -> None:
     ],
 )
 def test_a_malformed_id_is_answered_as_a_miss_not_an_exception(task_id: str) -> None:
-    """``taskId`` comes off the wire and lands in a cache key.
-
-    The memcached backends reject keys holding a space or a control character,
-    and keys over 250 bytes — raising out of a handler that has no arm for it,
-    so a client gets an unhandled 500 where the protocol says "unknown task".
-    ``CacheKeyWarning`` is the same rejection Django's own key validator
-    reports, promoted to an error here to stand in for a memcached backend.
-    Nothing is leaked by checking: an id that cannot be one we minted cannot
-    name a task that exists.
-    """
+    """``taskId`` comes off the wire and lands in a cache key."""
     store = DjangoCacheTaskStore(namespace="ns")
     with warnings.catch_warnings():
         warnings.simplefilter("error", CacheKeyWarning)
         assert store.get(task_id) is None
-        # And the same for the write side, which a cancel reaches.
         store.delete(task_id)
 
 

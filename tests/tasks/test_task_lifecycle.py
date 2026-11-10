@@ -1,16 +1,3 @@
-"""Creating tasks, moving them between states, and running them.
-
-The three functions that own a task's life: ``create_task`` on the request
-path, ``transition_task`` wherever a status changes, and ``run_task`` in the
-worker.
-
-Asked of kernel tools registered with a ``task_policy`` (``policy_server``
-and tools each test registers), and without a spec where the question names
-none: the store, the transitions, the worker token, the store being durable
-before the hand-off, and ``run_task`` on a task naming no live tool or on a
-server with no store.
-"""
-
 from __future__ import annotations
 
 from dataclasses import replace
@@ -74,8 +61,7 @@ def test_the_handle_carries_what_the_client_needs_to_poll(
 
 
 def test_ids_are_unguessable(store: InMemoryTaskStore, executor: RecordingExecutor) -> None:
-    """With no ``tasks/list`` and no session, the id *is* the containment
-    boundary — so this is a security property, not a nicety."""
+    """With no ``tasks/list`` and no session, the id *is* the containment boundary."""
     ids = {_create(store, executor).task_id for _ in range(20)}
     assert len(ids) == 20
     assert all(len(i) > 30 for i in ids)
@@ -84,8 +70,7 @@ def test_ids_are_unguessable(store: InMemoryTaskStore, executor: RecordingExecut
 def test_the_authorization_context_is_stored_not_just_the_principal(
     store: InMemoryTaskStore, executor: RecordingExecutor
 ) -> None:
-    """Without the scopes, the worker rebuilds a token that proves nothing and
-    every binding with ``scopes=`` denies work it had already authorized."""
+    """Without the scopes the worker rebuilds a token that proves nothing, and work is denied."""
     task: Task = _create(
         store, executor, token=TokenInfo(user=None, scopes=("a", "b"), audience="aud")
     )
@@ -98,8 +83,7 @@ def test_the_authorization_context_is_stored_not_just_the_principal(
 def test_a_broker_that_is_down_produces_a_failed_task_not_a_failed_request(
     store: InMemoryTaskStore,
 ) -> None:
-    """By the time ``enqueue`` raises the task exists, so returning an error
-    would leave the client with no handle and a record stuck in ``working``."""
+    """By the time ``enqueue`` raises the task exists."""
     task: Task = _create(store, BrokenExecutor())
     assert task.status is TaskStatus.FAILED
     assert "broker unreachable" in (task.status_message or "")
@@ -124,11 +108,7 @@ def test_a_failed_hand_off_leaves_the_task_unclaimable(store: InMemoryTaskStore)
 def test_a_finished_task_cannot_be_reopened(
     store: InMemoryTaskStore, executor: RecordingExecutor
 ) -> None:
-    """The race this exists for: a cancel landing just after completion.
-
-    Nothing here locks, so the second writer would otherwise win and the client
-    would be told its finished work never ran.
-    """
+    """The race this exists for: a cancel landing just after completion."""
     task: Task = _create(store, executor)
     transition_task(store, task.task_id, status=TaskStatus.COMPLETED, result={"ok": 1})
     after = transition_task(store, task.task_id, status=TaskStatus.CANCELLED)
@@ -139,8 +119,7 @@ def test_a_finished_task_cannot_be_reopened(
 def test_a_refused_transition_returns_the_state_that_actually_holds(
     store: InMemoryTaskStore, executor: RecordingExecutor
 ) -> None:
-    """Not an error — the caller asked for something already decided, and the
-    record it gets back is the answer."""
+    """Not an error — the caller asked for something already decided."""
     task: Task = _create(store, executor)
     transition_task(store, task.task_id, status=TaskStatus.CANCELLED)
     assert transition_task(store, task.task_id, status=TaskStatus.COMPLETED).status is (
@@ -186,8 +165,7 @@ def test_running_a_task_completes_it_with_the_tool_result(
 def test_a_required_tool_runs_as_a_task_too(
     policy_server: MCPServer, store: InMemoryTaskStore
 ) -> None:
-    """The worker's run is the only place a ``REQUIRED`` tool's work can happen,
-    so its replay must not be asked for a task again."""
+    """The worker's run is the only place a ``REQUIRED`` tool's work can happen."""
     task_id = _ask(policy_server, "tasks.required")
     policy_server.run_task(task_id)
     record: TaskRecord = store.get(task_id)
@@ -199,8 +177,7 @@ def test_a_required_tool_runs_as_a_task_too(
 def test_a_selector_tool_runs_as_a_task(
     store: InMemoryTaskStore, executor: RecordingExecutor
 ) -> None:
-    """A selector takes a ``task_policy`` as a service does, and its worker
-    presents the row the inline call would."""
+    """A selector takes a ``task_policy`` as a service does."""
     server = MCPServer(
         name="tasks-selector",
         auth_backend=AllowAnyBackend(),
@@ -257,8 +234,7 @@ def _gated(store: InMemoryTaskStore, executor: RecordingExecutor) -> tuple[MCPSe
 def test_a_caller_the_spec_refuses_is_given_no_task(
     store: InMemoryTaskStore, executor: RecordingExecutor
 ) -> None:
-    """The spec's own ``permissions`` are asked before anything durable exists,
-    as the inline call asks them, so a refused caller queues nothing."""
+    """The spec's own ``permissions`` are asked before anything durable exists."""
     server, check = _gated(store, executor)
     check.admits = False
     result = handle_tools_call({"name": "tasks.gated", "arguments": {}}, context(server))
@@ -270,9 +246,7 @@ def test_a_caller_the_spec_refuses_is_given_no_task(
 def test_the_worker_asks_the_spec_again(
     store: InMemoryTaskStore, executor: RecordingExecutor
 ) -> None:
-    """Admitted when the task was created and refused by the time it runs: the
-    worker's ``dispatch`` asks the spec's permissions afresh, and the refusal
-    fails the task rather than running the operation."""
+    """Admitted when the task was created and refused by the time it runs."""
     server, check = _gated(store, executor)
     task_id = _ask(server, "tasks.gated")
     asked_at_creation = check.asked
@@ -286,8 +260,7 @@ def test_the_worker_asks_the_spec_again(
 
 @pytest.mark.django_db
 def test_a_redelivered_task_runs_once(server: MCPServer, store: InMemoryTaskStore) -> None:
-    """Queues deliver at least once. Running a mutation twice because the
-    broker retried would be a data bug with no trace."""
+    """Queues deliver at least once."""
     calls: list[int] = []
 
     def counting() -> dict[str, str]:
@@ -305,8 +278,7 @@ def test_a_redelivered_task_runs_once(server: MCPServer, store: InMemoryTaskStor
 def test_a_protocol_error_becomes_a_failed_task(
     server: MCPServer, store: InMemoryTaskStore, executor: RecordingExecutor
 ) -> None:
-    """A JSON-RPC error has no response left to ride in — the client is long
-    gone — so the only place to put it is the task's own status."""
+    """A JSON-RPC error has no response left to ride in — the client is long gone."""
     task: Task = _create(store, executor, tool_name="does.not.exist")
     server.run_task(task.task_id)
     record: TaskRecord = store.get(task.task_id)
@@ -318,9 +290,7 @@ def test_a_protocol_error_becomes_a_failed_task(
 def test_a_refusal_the_worker_meets_keeps_its_data_on_the_record(
     server: MCPServer, store: InMemoryTaskStore
 ) -> None:
-    """A JSON-RPC error carrying ``data`` keeps it: the worker's replay of a
-    call whose token lost a scope is refused with the scopes it needed, and the
-    client polling the task is the one who has to read them."""
+    """A JSON-RPC error carrying data keeps it, so the client sees the scopes it needed."""
     register_kernel_tool(
         server, "tasks.gated", done, task_policy=TaskPolicy.OPTIONAL, scopes=("things:write",)
     )
@@ -340,8 +310,7 @@ def test_a_refusal_the_worker_meets_keeps_its_data_on_the_record(
 def test_an_unhandled_exception_fails_the_task_and_still_propagates(
     server: MCPServer, store: InMemoryTaskStore
 ) -> None:
-    """Failing the task stops the client polling forever; re-raising lets the
-    queue consumer record the traceback an operator needs."""
+    """Failing the task stops the client polling forever."""
 
     def explode() -> Any:
         raise RuntimeError("boom")
@@ -359,8 +328,7 @@ def test_an_unhandled_exception_fails_the_task_and_still_propagates(
 def test_a_worker_does_not_charge_the_rate_limit_a_second_time(
     server: MCPServer, store: InMemoryTaskStore
 ) -> None:
-    """The limit was consumed when the client asked. Charging again on replay
-    would bill one client call twice and halve every configured quota."""
+    """The limit was consumed when the client asked."""
     consumed: list[int] = []
 
     class _Limiter:
@@ -382,8 +350,7 @@ def test_a_worker_does_not_charge_the_rate_limit_a_second_time(
 def test_a_task_worker_hands_the_seeds_to_the_tool_it_runs(
     store: InMemoryTaskStore, executor: RecordingExecutor
 ) -> None:
-    """The worker's context carries the server's ``pool_seeds``, so a seed the
-    inline call fills is filled off the request path too."""
+    """The worker's context carries the server's ``pool_seeds``."""
 
     def whoami(*, tenant: str) -> dict[str, str]:
         return {"tenant": tenant}
@@ -416,8 +383,7 @@ def _worker_record(**fields: Any) -> TaskRecord:
 def test_the_worker_rereads_the_user_rather_than_reconstructing_it(
     django_user_model: Any,
 ) -> None:
-    """A task can sit in a queue long enough for the answers permissions ask to
-    change. The point in time that matters is when the work runs."""
+    """A task can sit in a queue long enough for the answers permissions ask to change."""
     user = django_user_model.objects.create_user(username="u1")
     record = _worker_record(
         principal_id=f"user:{user.pk}",
@@ -435,7 +401,6 @@ def test_the_worker_rereads_the_user_rather_than_reconstructing_it(
     ("principal_id", "user_pk"),
     [
         # A deleted account should fail the task's permission checks, which is
-        # what anonymous does, and fail as a denial rather than a worker crash.
         pytest.param("user:9999", 9999, id="a-deleted-user"),
         pytest.param("anonymous", None, id="an-anonymous-caller"),
     ],
@@ -449,14 +414,7 @@ def test_a_user_the_worker_cannot_find_runs_as_anonymous(
 
 @pytest.mark.django_db
 def test_a_deactivated_user_degrades_to_anonymous_too(django_user_model: Any) -> None:
-    """Re-reading the row is only half of honouring a revocation.
-
-    Nothing downstream consults ``is_active`` — ``IsAuthenticated`` is true of
-    an inactive user — so a task queued before an account was disabled would
-    have run under it, and the re-read would have honoured the deactivation in
-    appearance only. This is the check Django's own ``ModelBackend`` makes
-    before it will authenticate anyone, applied at the moment the work runs.
-    """
+    """Re-reading the row is only half of honouring a revocation."""
     user = django_user_model.objects.create_user(username="gone-away")
     record = _worker_record(
         principal_id=f"user:{user.pk}",
@@ -474,13 +432,7 @@ def test_a_deactivated_user_degrades_to_anonymous_too(django_user_model: Any) ->
 def test_the_scopes_a_worker_replays_are_the_ones_frozen_at_creation(
     django_user_model: Any,
 ) -> None:
-    """Stated because it is the asymmetry, not an oversight to be read past.
-
-    ``raw`` — the backend handle that could be re-validated — is deliberately
-    not persisted, so there is nothing here to re-check a token against: a
-    grant narrowed or revoked after creation still buys the task the scopes it
-    was created with. ``TASK_TTL_MS`` is what bounds that window.
-    """
+    """Stated because it is the asymmetry, not an oversight to be read past."""
     user = django_user_model.objects.create_user(username="still-here")
     record = _worker_record(
         principal_id=f"user:{user.pk}",
@@ -507,13 +459,7 @@ def test_with_task_leaves_the_original_untouched() -> None:
 def test_the_task_is_durable_before_the_executor_is_called(
     store: InMemoryTaskStore, executor: RecordingExecutor
 ) -> None:
-    """Normative, and the one ordering that actually matters.
-
-    The spec: a server MUST NOT return a task handle until a ``tasks/get`` for
-    that id would resolve. A worker on another machine can pick the task up the
-    instant it is queued, so "write after queueing" is a race that hands out an
-    id nothing can find.
-    """
+    """Normative, and the one ordering that actually matters."""
     _create(store, executor)
     assert executor.seen_in_store == [True]
 
@@ -533,8 +479,7 @@ def test_running_a_task_that_never_reached_the_queue_is_a_no_op(
 
 
 def test_run_task_on_a_server_with_no_store_refuses_loudly() -> None:
-    """Silence here would look like success: the job would finish and the
-    client would poll a handle forever."""
+    """Silence here would look like success: the client would poll a handle forever."""
     from django.core.exceptions import ImproperlyConfigured
 
     from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend

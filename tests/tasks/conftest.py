@@ -1,12 +1,3 @@
-"""Shared fixtures for the tasks suite.
-
-The executors here are the point of the seam: neither imports a queue, and the
-package never learns which one it got.
-
-``policy_server`` carries one kernel tool per ``TaskPolicy``; ``server``,
-below, carries none.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -24,16 +15,10 @@ from django_spec_mcp.types.tasks_extension_id import TASKS_EXTENSION_ID
 
 
 class RecordingExecutor:
-    """Records what it was handed instead of queueing it.
-
-    Stands in for the Celery call. The only thing a test needs to assert about
-    the hand-off is *that* it happened, with which id, and when relative to the
-    store write.
-    """
+    """Records what it was handed instead of queueing it."""
 
     def __init__(self, store: Any = None) -> None:
         self.enqueued: list[str] = []
-        # When set, every ``enqueue`` reads the store back — which is how the
         # "durable before hand-off" requirement is actually observable.
         self._store = store
         self.seen_in_store: list[bool] = []

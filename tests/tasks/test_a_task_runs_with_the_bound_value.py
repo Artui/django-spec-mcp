@@ -1,14 +1,3 @@
-"""A kernel tool's task is judged, and recorded, with the server's value in place.
-
-The binding's ``server_arguments`` are applied before the task is created, so
-the permission check at its creation sees the bound value, and the task stores
-the arguments the tool will run with: the bound value over the caller's, and
-the withheld name dropped. Applied after, the check would see the caller's
-value and the task record it, while the worker, which applies the binding
-again, still ran with the bound one. Held for both handlers, since each orders
-the two steps.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
