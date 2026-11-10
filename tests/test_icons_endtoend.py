@@ -1,15 +1,3 @@
-"""Icons declared at registration reach every listing that can carry them.
-
-The spec attaches ``icons`` to four listable types plus the server's own
-``Implementation``. Each is wired separately, so each is asserted separately —
-a single spot-check would not have caught the one that was missed.
-
-The tools and resources are kernel specs registered with ``register_tool`` and
-``register_resource``. A kernel resource is a ``RETRIEVE`` selector, so the
-fixed-URI resource is one reading nothing. The prompt and server cases build no
-spec.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Callable

@@ -1,15 +1,3 @@
-"""A tool whose result is a scalar carries no ``structuredContent``.
-
-MCP 2025-11-25 declares ``structuredContent?: { [key: string]: unknown }``, and
-makes it optional when the tool declares no ``outputSchema``. A spec with no
-presenter whose service returns a bool, a number or a string advertises no
-schema, so its result is the text block alone, carrying the scalar as JSON,
-rather than the bare scalar as structured content a strict client rejects.
-
-Each entry point is driven, because each answers on its own path: the sync wire
-handler, the in-process ``call_tool`` and ``acall_tool``.
-"""
-
 from __future__ import annotations
 
 import json

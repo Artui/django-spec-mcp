@@ -1,20 +1,3 @@
-"""Affordances on a kernel tool, on the wire: the advertised schema names the key it returns.
-
-``assert_tool_result_conforms`` cannot see this gap, which is the reason for the
-test. It validates a result against the schema, and a schema that does not forbid
-extra keys validates a key it never mentions, so a result carrying an
-``affordances`` object its tool never advertised conforms. Here the question is
-the stronger one a client or a model asks of a schema: is every key I receive one
-it describes?
-
-Asked of kernel specs: a retrieve, a list and a paged list selector tool, and a
-service tool presenting through its output selector, each declaring ``cancel``.
-A kernel selector carries affordance answers on model instances and mappings, and
-its ``DataclassPresenter`` reads by attribute, so the row is an ``Invoice``
-rather than a mapping. The declarations are in
-``tests/testapp/affordances.py``.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -100,7 +83,5 @@ async def test_the_advertised_schema_describes_the_affordances_a_call_returns(na
     assert _answers(structured) == [
         {"cancel": {"available": False, "code": "books_closed", "reason": "The books are closed."}}
     ]
-    # ...the conformance helper passes, as it would while the schema was silent...
     assert_tool_result_conforms(tool, result)
-    # ...and only this tells a described key from a tolerated one.
     assert _undescribed(tool["outputSchema"], structured) == []

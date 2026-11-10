@@ -1,28 +1,3 @@
-"""The advertised tool schemas, pinned as the wire serves them.
-
-A deployed agent holds what ``tools/list`` advertised: each tool's name, its
-description, its ``inputSchema`` and the rest. A change to any of them is a
-change to an API whose callers are not in this repository, so the listing is
-checked in at ``tests/testapp/tool_schemas.json`` and this test diffs it.
-
-The dump is what the wire answers: a ``tools/list`` posted through the HTTP
-endpoint, every page of it, read back out of the JSON-RPC response. Nothing
-here builds an entry by hand, so the file moves when the server's output
-does, and only then.
-
-The server below is built for the dump, over the test app's shapes: one tool
-per schema feature the listing carries, not one per test spec. Adding a
-feature to the listing earns a tool here.
-
-A schema change regenerates the dump in the same pull request::
-
-    make tool-schemas
-
-which runs this test with ``TOOL_SCHEMAS_WRITE=1`` set, so it writes the file
-instead of comparing and then skips, so a write is never reported as a pass; the
-diff of ``tool_schemas.json`` is then the change a reviewer reads.
-"""
-
 from __future__ import annotations
 
 import difflib
@@ -133,7 +108,6 @@ def _server() -> MCPServer:
         name="tool-schemas", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore()
     )
     # A service: a required field, a defaulted one, and the registration's
-    # display fields.
     server.register_tool(
         ServiceSpec(
             service=record_invoice,
@@ -155,9 +129,6 @@ def _server() -> MCPServer:
         annotations={"destructiveHint": False, "idempotentHint": False},
         meta={"example.test/owner": "billing"},
     )
-    # A retrieve: a required read, and an output marked for the agent audience,
-    # so the handle line joins the description and a hidden field leaves the
-    # output schema.
     server.register_tool(
         SelectorSpec(
             kind=SelectorKind.RETRIEVE,
@@ -170,9 +141,6 @@ def _server() -> MCPServer:
         description="Fetch a single invoice by id.",
         annotations={"readOnlyHint": True},
     )
-    # A paged list: ``page`` and ``limit`` under a bound, a filter set's
-    # ``ordering`` and filter, and read-shaping ``fields`` (with help) and
-    # ``expand`` (without).
     server.register_tool(
         SelectorSpec(
             kind=SelectorKind.LIST,
@@ -192,7 +160,6 @@ def _server() -> MCPServer:
         paginate=True,
         max_page_size=50,
     )
-    # An unpaged list, the shape a list tool has without ``paginate``.
     server.register_tool(
         SelectorSpec(
             kind=SelectorKind.LIST,
@@ -203,8 +170,6 @@ def _server() -> MCPServer:
         name="invoices.list",
         description="List every invoice.",
     )
-    # Server arguments: ``project`` bound to a value, ``draw`` withheld, so
-    # only the optional ``note`` is left for the caller.
     server.register_tool(
         SelectorSpec(
             kind=SelectorKind.RETRIEVE,
@@ -223,8 +188,6 @@ def _server() -> MCPServer:
         description="Fetch the bound project's invoice.",
         server_arguments=ServerArguments(values={"project": 7}, withheld=frozenset({"draw"})),
     )
-    # A retrieve that may find nothing: ``allow_none`` lets the output schema
-    # admit an empty result.
     server.register_tool(
         SelectorSpec(
             kind=SelectorKind.RETRIEVE,
@@ -236,8 +199,6 @@ def _server() -> MCPServer:
         name="invoices.maybe",
         description="Fetch an invoice, if there is one.",
     )
-    # A service returning many rows, or nothing: ``returns_many`` makes the
-    # output an array, and ``allow_none`` keeps it an array that may be empty.
     server.register_tool(
         ServiceSpec(
             service=_maybe_invoices,
@@ -249,8 +210,6 @@ def _server() -> MCPServer:
         name="invoices.returned",
         description="Rows or nothing.",
     )
-    # An image result: ``content_kind`` and ``content_mime_type`` change what
-    # the tool declares it returns.
     server.register_tool(
         ServiceSpec(
             service=_chart,
@@ -262,9 +221,6 @@ def _server() -> MCPServer:
         content_kind=ToolContentKind.IMAGE,
         content_mime_type="image/png",
     )
-    # An MCP Apps tool: ``_meta.ui`` names a registered resource and who may
-    # see the tool, ``unknown_arguments`` loosens the input schema, and
-    # ``include_output_schema=False`` drops the output schema.
     server.register_ui_resource(name="table", uri="ui://invoices/table.html", html="<h1>x</h1>")
     server.register_tool(
         ServiceSpec(
@@ -279,9 +235,6 @@ def _server() -> MCPServer:
         unknown_arguments=UnknownArguments.IGNORE,
         include_output_schema=False,
     )
-    # A bulk service: ``many`` wraps the input and the output in arrays, the
-    # input under ``items`` and bounded by ``many_min_length`` and
-    # ``many_max_length``.
     server.register_tool(
         ServiceSpec(
             service=record_invoice,
@@ -295,8 +248,6 @@ def _server() -> MCPServer:
         name="invoices.create_many",
         description="Create several invoices.",
     )
-    # A Validator declaring itself per transport: the listing reads it under the
-    # ``mcp`` stamp, so ``session_ref`` is asked for and ``operator`` is not.
     server.register_tool(
         ServiceSpec(
             service=record_invoice,
@@ -349,7 +300,6 @@ def test_the_advertised_tool_schemas_match_the_checked_in_dump():
     if WRITE:
         DUMP.write_text(current, encoding="utf-8")
         # A skip, not a pass: a ``TOOL_SCHEMAS_WRITE=1`` left exported must not
-        # turn drift into a silent rewrite that CI reports green.
         pytest.skip("wrote tests/testapp/tool_schemas.json")
     checked_in = DUMP.read_text(encoding="utf-8") if DUMP.exists() else ""
     if current != checked_in:
@@ -374,8 +324,6 @@ def test_the_advertised_tool_schemas_match_the_checked_in_dump():
 
 def test_every_advertised_output_schema_is_an_object():
     # MCP 2025-11-25 declares ``outputSchema.type: "object"``, so a list a
-    # tool presents travels under ``items`` rather than as the root. Read off
-    # the checked-in dump, which the test above holds to the wire.
     listing = json.loads(DUMP.read_text(encoding="utf-8"))
     advertised = {
         tool["name"]: tool["outputSchema"]["type"]

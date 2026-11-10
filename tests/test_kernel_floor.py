@@ -1,13 +1,3 @@
-"""What the kernel floor in ``pyproject.toml`` rests on.
-
-The floor, ``django-service-specs>=0.26.0``, is a chosen one: ``apply_server_arguments``
-and ``server_owned_keys`` take ``call_context=`` from that release, and below it the
-keyword raises ``TypeError``, which the rest of the suite holds. These two behaviours
-are the 0.22.0 and 0.23.0 ones the docs and the changelog tell a project to rely on,
-and each is asserted here so that a floor lowered past its release fails a test rather
-than holding by luck.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -39,15 +29,12 @@ def test_a_nested_selector_seat_declaring_permissions_is_refused_when_built(
     seat: str, kind: SelectorKind, selector: Any
 ) -> None:
     # 0.22.0: ``Unrestricted()`` is refused as any check is, and the message
-    # names the seat, so the loosest match that still tells the seats apart.
     with pytest.raises(ImproperlyConfigured, match=seat):
         ServiceSpec(service=record_invoice, permissions=OPEN, **{seat: _seat(kind, selector)})
 
 
 def test_a_precondition_naming_a_seed_nothing_fills_is_refused_at_registration() -> None:
     # 0.23.0: ``check_seeds`` reads a precondition's signature, so ``frozen``,
-    # which no registered seed fills, is refused when the tool registers. On
-    # 0.22.0 the spec registered and failed every call.
     def _check(*, frozen: bool) -> None:
         return None
 

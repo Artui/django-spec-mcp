@@ -1,18 +1,3 @@
-"""A result that presents as a list is served as an object, and its schema says so.
-
-MCP 2025-11-25 declares ``outputSchema.type`` as ``"object"`` and
-``structuredContent`` as ``{ [key: string]: unknown }``. A list tool served
-unpaged, a ``many`` service and a ``returns_many`` one each present a list, so
-the list travels under ``items``, the key the paged envelope already uses:
-``{"items": [...]}`` as ``structuredContent`` and as the text block, against an
-``outputSchema`` whose root is an object holding the array under ``items``.
-
-Each entry point is driven, because each answers on its own path: the sync wire
-handler, the in-process ``call_tool`` and ``acall_tool``. What a client checks is
-the result against the listing, so every result is validated against the schema
-``tools/list`` advertised for it.
-"""
-
 from __future__ import annotations
 
 import json
@@ -210,7 +195,6 @@ def test_a_list_of_resource_links_keeps_its_blocks_and_wraps_its_structured_cont
     call: Any,
 ) -> None:
     # The blocks are built from the presented list, one link per row; only the
-    # structured content is wrapped.
     server = _server()
 
     result = call(server, "links", {})

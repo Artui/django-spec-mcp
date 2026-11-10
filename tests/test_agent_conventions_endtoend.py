@@ -1,16 +1,3 @@
-"""``MCPServer(conventions=...)``: each line lands where it is written, and only there.
-
-The server decides **whether** a line appears -- a tool with no handle gets no
-handle line, an unpaginated tool no scope sentence -- and the conventions decide
-**what it says**. These tests drive a real server through ``list_tools``,
-``acall_tool`` and ``call_tool`` and compare everything it answers, so a field
-reaching a place it should not, or failing to reach one it should, shows up as a
-difference.
-
-Asked of kernel specs (``tests/testapp/conventions.py``). The scope sentence
-lands once, on the param.
-"""
-
 from __future__ import annotations
 
 import json
@@ -74,8 +61,6 @@ async def test_each_field_lands_where_it_is_written_and_only_there(field: str) -
     # Present where the table says, so the replacement below is not vacuous.
     assert default.count(default_text) == WHERE[field]
     assert custom.count(_rendered(sentinel)) == WHERE[field]
-    # And nothing else moved: the custom server answers exactly what the
-    # default one does, with this one line swapped.
     assert custom == default.replace(default_text, _rendered(sentinel))
 
 
@@ -101,10 +86,6 @@ async def test_none_drops_the_handle_wording_and_the_scope_sentence() -> None:
 @pytest.mark.django_db(transaction=True)
 async def test_a_doubled_brace_reaches_the_model_as_one_in_every_field() -> None:
     # Every field is a ``str.format`` template, rendered whether or not it has a
-    # placeholder, so ``{{`` is one brace wherever a field lands -- the rule the
-    # Pydantic-AI toolset applies to the same fields. Only ``missing_arguments``
-    # was rendered before; the other three were written out as given, doubled
-    # braces and all.
     await Invoice.objects.acreate(number="INV-1")
     server = conventions_server(
         AgentConventions(
@@ -119,17 +100,13 @@ async def test_a_doubled_brace_reaches_the_model_as_one_in_every_field() -> None
 
     tools = {tool["name"]: tool for tool in seen["listing"]["tools"]}
     listed, rename = tools["invoices.list"], tools["invoices.rename"]
-    # The output-schema description of a handle, on a bare row and on a page's item.
     assert rename["outputSchema"]["properties"]["id"]["description"] == "Handle {d}."
     item = listed["outputSchema"]["properties"]["items"]["items"]
     assert item["properties"]["id"]["description"] == "Handle {d}."
-    # The handle line in each tool's description.
     assert rename["description"] == "Rename an invoice.\n\nLine {l}."
     assert listed["description"] == "List invoices.\n\nLine {l}."
-    # The scope sentence on the paged param.
     fields = listed["inputSchema"]["properties"]["fields"]
     assert fields["description"] == "Fields to return. Scope {s}."
-    # The missing-argument message, from both in-process routes.
     assert tool_error(seen["missing"])["message"] == "Missing {m}: `pk`."
     assert tool_error(seen["missing_in_process"])["message"] == "Missing {m}: `pk`."
 
@@ -137,8 +114,6 @@ async def test_a_doubled_brace_reaches_the_model_as_one_in_every_field() -> None
 @pytest.mark.django_db(transaction=True)
 async def test_two_servers_in_one_process_keep_their_own_wording() -> None:
     # Conventions are instance state: nothing is read from, or written to, the
-    # module, so a second server cannot change what the first one says, in
-    # either order.
     await Invoice.objects.acreate(number="INV-1")
     first = conventions_server(
         AgentConventions(handle_line="First line.", missing_arguments="First: {names}.")
@@ -176,10 +151,6 @@ async def test_two_servers_in_one_process_keep_their_own_wording() -> None:
 @pytest.mark.django_db
 def test_a_task_runs_under_its_servers_conventions() -> None:
     # A task runs off the request path, in a context the server rebuilds for
-    # the worker from its own state, so that rebuild has to carry the wording
-    # too or every task-run call answers in the defaults. Only
-    # ``missing_arguments`` is held here: the page-scope sentence reaches a
-    # kernel tool only in the listing, which a task run never produces.
     Invoice.objects.create(number="INV-1")
     store = InMemoryTaskStore()
     executor = RecordingExecutor(store)

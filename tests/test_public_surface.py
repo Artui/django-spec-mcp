@@ -1,24 +1,3 @@
-"""Every name a module advertises in ``__all__`` must be a name it actually binds.
-
-``__all__`` is a claim, and nothing else checks it. A name listed but never
-imported passes lint, passes types, passes the whole suite — and fails for the
-first person who writes ``from django_spec_mcp.handlers import <name>``,
-which is exactly the spelling the docs teach. It also breaks ``import *``
-outright, with an ``AttributeError`` naming a symbol that plainly exists one
-file away.
-
-An OAuth helper listed in its subpackage's ``__all__`` with no import beside
-it is the shape of defect this catches.
-
-**Checked statically, against the source, rather than with ``hasattr`` on the
-imported module** — and the difference is the whole test. Importing
-``pkg.thing`` binds ``thing`` as an attribute of ``pkg``, so once anything has
-imported the submodule (a sibling, a test, the walk itself), ``hasattr(pkg,
-"thing")`` is ``True`` while ``from pkg import thing`` hands back a *module*
-that raises ``TypeError: 'module' object is not callable``. A runtime check
-reports that as fine, and would pass with the defect present.
-"""
-
 from __future__ import annotations
 
 import ast

@@ -1,17 +1,3 @@
-"""Consumer-reported ergonomics, on a kernel tool: places the package was correct but silent.
-
-Every case here was reported by a first-party integration that lost debugging
-hours to it. None was a broken guarantee: each was a convention the package
-depended on and enforced nowhere, or a decision it made and never wrote down.
-
-The registration cases ask ``register_tool`` with kernel specs: the
-structured-output pair is refused at registration, and an unguarded spec is
-refused by default. The guard is the spec's own ``permissions``, a
-``PermissionCheck`` list; the scope gate, the kernel tool's ``scopes=``, does
-not count as one. The observability cases build no
-spec.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -55,12 +41,7 @@ class TestStructuredOutputCouplingAtRegistration:
             server.register_tool(_guarded(), name="t.x", description="d")
 
     def test_a_binding_override_can_make_the_global_pair_legal(self) -> None:
-        """Why this check cannot live on the global config alone.
-
-        Server-wide "schema on, content off" is legitimate precisely when every
-        binding overrides the content back on, so checking the two settings at
-        ``build_mcp_config`` time would reject a working configuration.
-        """
+        """Why this check cannot live on the global config alone."""
         server = self._server(include_output_schema=True, include_structured_content=False)
 
         binding = server.register_tool(
@@ -81,12 +62,7 @@ class TestUnguardedToolsAreRefusedByDefault:
     """The strict default, and the escape hatch that makes it shippable."""
 
     def test_the_shipped_default_is_strict(self) -> None:
-        """Pinned against the settings file, because the suite opts *out*.
-
-        ``tests/conftest_settings.py`` sets this False so the fixtures whose
-        subject is not permissions keep working. That override could otherwise
-        mask a regression back to permissive, so assert the shipped value here.
-        """
+        """Pinned against the settings file, because the suite opts *out*."""
         from django_spec_mcp.conf import DEFAULTS
 
         assert DEFAULTS["REQUIRE_TOOL_PERMISSIONS"] is True
@@ -97,12 +73,7 @@ class TestUnguardedToolsAreRefusedByDefault:
             server.register_tool(_spec(), name="t.open", description="d")
 
     def test_the_error_names_the_way_out_not_the_way_in(self) -> None:
-        """The raise and the warning need *opposite* remedies.
-
-        The warning says why the call runs unchecked. Reusing that text on the
-        raise tells you to change the setting that just fired, which reads as a
-        bug in the framework rather than a problem with your code.
-        """
+        """The raise and the warning need *opposite* remedies."""
         server = MCPServer(name="t", config=build_mcp_config(require_tool_permissions=True))
         with pytest.raises(ImproperlyConfigured) as excinfo:
             server.register_tool(_spec(), name="t.open", description="d")
@@ -150,13 +121,7 @@ class TestObservability:
         assert get_logger("django_spec_mcp.transport.x").name.startswith("django_spec_mcp")
 
     def test_a_rejected_session_names_its_exact_cause_server_side(self, caplog) -> None:
-        """The no-oracle rule constrains the response, not the log.
-
-        The wire deliberately merges unknown-id with wrong-principal. An
-        operator is not the adversary that protects against, so the log names
-        which one fired — the single line that would have ended the incident
-        this wave came out of on day one.
-        """
+        """The no-oracle rule constrains the response, not the log."""
         from tests.transport.test_sessionless_legacy import _post_request, _view
 
         with caplog.at_level(logging.WARNING, logger="django_spec_mcp"):

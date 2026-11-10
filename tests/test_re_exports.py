@@ -1,13 +1,3 @@
-"""The kernel boundary: this package does not re-export the kernel's API.
-
-A kernel tool is registered from ``django_service_specs`` names: the spec
-classes, ``SelectorKind``, ``Parameter`` / ``Parameters``, a ``PermissionCheck``,
-the dataclass Validator and Presenter, ``PoolSeeds``. Each is importable from the
-kernel's own root, and a re-export from here would pin this package's public API
-to that layout, so a move there would break an import from here. No fresh spec
-package re-exports a kernel name from its root.
-"""
-
 from __future__ import annotations
 
 import django_service_specs

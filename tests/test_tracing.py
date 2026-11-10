@@ -1,14 +1,3 @@
-"""OpenTelemetry instrumentation around tools/call, resources/read, prompts/get.
-
-Tests use an in-memory ``InMemorySpanExporter`` so they verify the wire shape
-(span names, attributes) without needing a real OTel collector.
-
-The tool and the resource are kernel specs registered with ``register_tool`` and
-``register_resource``; the service raising ``ServiceError`` is registered the
-same way, since a kernel binding is built by the registrar. The prompt,
-rejection and no-OTel cases build no spec.
-"""
-
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
@@ -129,11 +118,7 @@ def test_prompts_get_emits_span(exporter: InMemorySpanExporter) -> None:
 
 
 def test_validation_rejects_do_not_emit_span(exporter: InMemorySpanExporter) -> None:
-    """Cheap input rejections (unknown tool, bad params) don't open a span.
-
-    The span is scoped to dispatch — opening it for every parse error would
-    flood traces with no useful info.
-    """
+    """Cheap input rejections (unknown tool, bad params) don't open a span."""
     server = make_server(session_store=InMemorySessionStore())
     handle_tools_call({"name": "does.not.exist", "arguments": {}}, _ctx(server))
     handle_resources_read({"uri": "nope://x"}, _ctx(server))
@@ -153,7 +138,6 @@ def test_span_helper_is_noop_without_otel(monkeypatch) -> None:
 
     monkeypatch.setattr(tracing, "_otel_trace", None)
     with tracing.span("mcp.x", attributes={"a": 1}) as s:
-        # All Span-like methods exist and silently no-op.
         s.set_attribute("k", "v")
         s.set_status(None)
         s.record_exception(RuntimeError("boom"))
@@ -173,8 +157,6 @@ def _server_raising_service_error() -> MCPServer:
     return server
 
 
-# The sync handler, and the async one driven to a result, so each question is asked
-# of both from one body.
 @pytest.fixture(params=["sync", "async"])
 def tools_call(request: pytest.FixtureRequest) -> Callable[[dict[str, Any], MCPCallContext], Any]:
     return handle_tools_call if request.param == "sync" else async_to_sync(handle_tools_call_async)
@@ -250,8 +232,7 @@ def _server_mapping_an_exception(*, raised_by: str) -> MCPServer:
 def test_a_mapped_exception_is_recorded_on_the_call_s_span_when_asked(
     exporter: InMemorySpanExporter, settings, tools_call, raised_by: str, record: bool
 ) -> None:
-    """The handler ends the call inside a well-formed result, so the tracer never sees
-    the exception leave; each of the call's arms hands the span along."""
+    """The handler ends the call inside a well-formed result."""
     settings.SPEC_MCP = {"RECORD_SERVICE_EXCEPTIONS": record}
     server = _server_mapping_an_exception(raised_by=raised_by)
     out = tools_call(
@@ -281,8 +262,7 @@ GATED = ("rows:delete",)
 def _task_server(
     *, scopes: tuple[str, ...] | None = None, limiter: _Limiter | None = None
 ) -> MCPServer:
-    """A task-running server holding ``rows.delete`` as an optional task, behind
-    ``scopes`` and ``limiter`` when given."""
+    """A task-running server holding ``rows.delete`` as an optional task."""
     store = InMemoryTaskStore()
     server = make_server(task_store=store, task_executor=RecordingExecutor(store))
     server.register_tool(
@@ -313,10 +293,7 @@ def _asking_context(server: MCPServer, *, scopes: tuple[str, ...] = ()) -> MCPCa
 def test_a_task_path_refusal_is_answered_inside_the_span(
     exporter: InMemorySpanExporter, tools_call, refusal: str
 ) -> None:
-    """A refusal on the task path is answered as inline is, inside an
-    ``mcp.tools.call`` span: before, task creation opened none, so the outcomes the
-    two paths share were traced on one only. Fails with the checks of
-    ``admit_task_call`` answered before the span opens, for any of the four."""
+    """A refusal on the task path is answered as inline is, inside an ``mcp.tools.call`` span."""
     limiter = _Limiter()
     limiter.refuse = refusal == "rate-limited"
     server = _task_server(
@@ -343,9 +320,7 @@ def test_a_task_path_refusal_is_answered_inside_the_span(
 def test_an_answer_refused_on_a_waiting_task_is_traced(
     exporter: InMemorySpanExporter, refusal: str
 ) -> None:
-    """An answer to a waiting task meets task creation's checks, inside its span:
-    its scope gate, its charge and a declined answer. Fails with the checks of
-    ``admit_task_call`` answered before the span opens, for any of the three."""
+    """An answer to a waiting task meets task creation's checks, inside its span: its scope gate."""
     limiter = _Limiter()
     server = _task_server(scopes=GATED if refusal == "denied" else None, limiter=limiter)
     handle: Any = handle_tools_call(
@@ -361,7 +336,6 @@ def test_an_answer_refused_on_a_waiting_task_is_traced(
     )
     exporter.clear()
 
-    # A caller holding the scope, except in the case that lost it.
     ctx = _asking_context(server, scopes=() if refusal == "denied" else GATED)
     out = handle_tasks_update({"taskId": handle["taskId"], "inputResponses": {key: answer}}, ctx)
 

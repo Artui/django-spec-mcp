@@ -1,5 +1,3 @@
-"""A JSON-RPC client for the kernel mounts, choosing the caller per request."""
-
 from __future__ import annotations
 
 import json
@@ -11,11 +9,7 @@ PROTOCOL_VERSION = "2025-11-25"
 
 
 class KernelClient:
-    """Posts JSON-RPC to ``/mcp/`` as the caller ``HeaderAuthBackend`` reads.
-
-    ``user`` and ``scopes`` become the ``X-Test-User`` / ``X-Test-Scopes``
-    headers; ``initialize`` opens the session every later call carries.
-    """
+    """Posts JSON-RPC to ``/mcp/`` as the caller ``HeaderAuthBackend`` reads."""
 
     def __init__(self, client: Client, *, user: str | None = None, scopes: str = "") -> None:
         self.client = client

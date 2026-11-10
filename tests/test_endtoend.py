@@ -1,9 +1,3 @@
-"""The default mount, end to end: the kernel test server through the live transport.
-
-``ROOT_URLCONF`` mounts ``tests.testapp.mcp.build_server``, whose tools and
-resource are kernel specs.
-"""
-
 from __future__ import annotations
 
 import json
@@ -123,11 +117,7 @@ def test_call_without_protocol_version_returns_400(client: Client) -> None:
 
 
 def test_call_without_protocol_version_accepted_when_disabled(client: Client) -> None:
-    """require_protocol_version_header=False lets header-omitting clients through.
-
-    Builds and mounts its own server: the flag is resolved once at construction,
-    and the session has to be minted against that same server's store.
-    """
+    """require_protocol_version_header=False lets header-omitting clients through."""
     server = build_server(
         config=build_mcp_config(allowed_origins=["*"], require_protocol_version_header=False)
     )

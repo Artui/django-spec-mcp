@@ -1,13 +1,3 @@
-"""Smoke test: the tracked examples import + build against the shipped API.
-
-The examples are standalone Django projects (their own settings + apps), so each
-is exercised in a subprocess with its own ``DJANGO_SETTINGS_MODULE`` rather than
-imported into this suite's Django context. ``build_server()`` performs every
-tool / resource / prompt registration, so a stale API surfaces here as a
-non-zero exit — the guard that would have caught the 0.8 ``filter_set=`` /
-missing-``kind`` breakage.
-"""
-
 from __future__ import annotations
 
 import ast
@@ -145,15 +135,7 @@ _INVOICING_FIELD_SELECTION = textwrap.dedent(
 
 
 def test_invoicing_field_selection_is_per_item_and_refuses_the_envelope() -> None:
-    """The example's paged list tool, selected per row and then against the envelope.
-
-    Not only that the example runs: that it demonstrates what it claims. A row
-    selection narrows each item, and a selection written against the page
-    envelope (the shape the tool's ``outputSchema`` shows) is an ``isError``
-    ``validation_error`` keyed by the argument, refused by the ``fields``
-    shape's choices before the selector runs. The FilterSet's filters and its
-    ordering narrow and sort the same page.
-    """
+    """The example's paged list tool, selected per row and then against the envelope."""
     replies = json.loads(_run_in_example("invoicing", _INVOICING_FIELD_SELECTION))
 
     rows = replies["rows"]
@@ -175,7 +157,6 @@ def test_invoicing_field_selection_is_per_item_and_refuses_the_envelope() -> Non
         },
     }
 
-    # ``min_amount`` drops INV-B, and ``ordering`` sorts by amount, largest first.
     ordered = replies["ordered"]["body"]["result"]["structuredContent"]
     assert ordered["items"] == [{"number": "INV-A"}, {"number": "INV-C"}]
 
@@ -250,19 +231,7 @@ _INVOICING_LOOKUP_EMPTY_IDEMPOTENT_SEEDS = _INVOICING_CLIENT + textwrap.dedent(
 
 
 def test_invoicing_demonstrates_lookup_empty_result_idempotency_and_seeds() -> None:
-    """Six behaviours the example registers, asserted as a client sees them.
-
-    ``invoices.set_amount`` advertises its target lookup, requires it because
-    the lookup has no default, refuses a call without it, lists
-    ``idempotentHint``, and keeps a strict ``outputSchema`` because it has no
-    output re-read, its refusal worded by ``conventions=``; ``invoices.find`` answers a miss with
-    ``{}`` under a schema that admits it; ``invoices.outstanding`` reads the mount's
-    ``currency`` seed, does not advertise it, and refuses a client
-    ``currency`` rather than read it; ``invoices.unsent`` binds ``sent`` with
-    ``server_arguments=``, so it is not advertised and a client's ``sent`` is
-    dropped; and ``invoices.create`` answers refused arguments with a
-    ``validation_error`` result, not a JSON-RPC ``-32602``.
-    """
+    """Six behaviours the example registers, asserted as a client sees them."""
     replies = json.loads(_run_in_example("invoicing", _INVOICING_LOOKUP_EMPTY_IDEMPOTENT_SEEDS))
     tools = replies["tools"]
 
@@ -271,17 +240,12 @@ def test_invoicing_demonstrates_lookup_empty_result_idempotency_and_seeds() -> N
     assert set(set_amount["inputSchema"]["required"]) == {"number", "amount_cents"}
     assert set_amount["annotations"]["idempotentHint"] is True
     assert replies["set_amount"]["structuredContent"]["amount_cents"] == 250
-    # The project's own exception, answered as the example's ``exception_map=`` says.
     already_sent = replies["already_sent"]
     assert already_sent["isError"] is True
     assert json.loads(already_sent["content"][0]["text"])["error"] == {
         "type": "invoice_already_sent",
         "message": "Invoice INV-B is already sent",
     }
-    # The lookup's ``number`` has no default, so a call leaving it out is
-    # refused before the lookup would have raised ``TypeError``: named in the
-    # message, and keyed in the detail the way a serializer keys a missing field.
-    # The message is the example's ``conventions=``, served over the wire.
     no_number = replies["no_number"]
     assert no_number["isError"] is True
     assert json.loads(no_number["content"][0]["text"])["error"] == {
@@ -293,7 +257,6 @@ def test_invoicing_demonstrates_lookup_empty_result_idempotency_and_seeds() -> N
         "detail": {"number": ["This field is required."]},
     }
     assert tools["invoices.find"]["inputSchema"]["required"] == ["number"]
-    # A convention the example does not override keeps the package's words.
     assert tools["invoices.list"]["inputSchema"]["properties"]["fields"]["description"] == (
         "Invoice fields to return, e.g. id and number. On a paged result it "
         "applies to each item in `items`, never to the page envelope (`items`, `page`, "
@@ -304,8 +267,6 @@ def test_invoicing_demonstrates_lookup_empty_result_idempotency_and_seeds() -> N
     assert {"maxProperties": 0} in find_schema["anyOf"]
     assert replies["find_miss"]["structuredContent"] == {}
     assert not replies["find_miss"].get("isError")
-    # A service with no output re-read selector renders its own return, which
-    # cannot be filtered away, so its schema keeps a strict ``required``.
     set_amount_output = set_amount["outputSchema"]
     assert "anyOf" not in set_amount_output
     assert "number" in set_amount_output["required"]
@@ -314,25 +275,18 @@ def test_invoicing_demonstrates_lookup_empty_result_idempotency_and_seeds() -> N
         "amount_cents": 250,
         "currency": "EUR",
     }
-    # Filled by the server, so not asked of the client, and a client's own
-    # ``currency`` is refused rather than read in the seed's place.
     assert "currency" not in tools["invoices.outstanding"]["inputSchema"]["properties"]
     assert replies["currency"]["isError"] is True
     assert json.loads(replies["currency"]["content"][0]["text"])["error"]["detail"] == {
         "currency": ["Unknown argument."]
     }
 
-    # Bound by the mount's ``server_arguments``: not advertised, not required,
-    # and a client's ``sent: true`` is dropped, so only the unsent invoice
-    # comes back.
     unsent_schema = tools["invoices.unsent"]["inputSchema"]
     assert "sent" not in unsent_schema["properties"]
     assert "sent" not in unsent_schema.get("required", [])
     assert not replies["unsent"].get("isError"), replies["unsent"]
     assert [row["number"] for row in replies["unsent"]["structuredContent"]["items"]] == ["INV-A"]
 
-    # Refused input is a tool execution error the model reads, with the
-    # form's errors keyed by field under ``detail``.
     refused = replies["refused"]
     assert refused["isError"] is True
     error = json.loads(refused["content"][0]["text"])["error"]
@@ -359,15 +313,7 @@ _INVOICING_SPREAD_CLOSED_AND_EMPTY = _INVOICING_CLIENT + textwrap.dedent(
 
 
 def test_invoicing_demonstrates_a_closed_spread_schema_and_a_declared_empty_result() -> None:
-    """``invoices.apply_credit``, a service tool with no Validator.
-
-    Its spec's ``reads`` are the service's own keywords, so the ``inputSchema``
-    lists ``credit_cents`` beside the lookup's ``number`` and, under the default
-    ``REJECT``, is closed: a call naming ``memo`` is a ``validation_error``
-    keyed by it, and nothing ran. The spec declares
-    ``allow_none=True`` with no output re-read, so its ``outputSchema`` admits
-    the ``{}`` that a credit settling the invoice is served as.
-    """
+    """``invoices.apply_credit``, a service tool with no Validator."""
     replies = json.loads(_run_in_example("invoicing", _INVOICING_SPREAD_CLOSED_AND_EMPTY))
 
     input_schema = replies["tool"]["inputSchema"]
@@ -387,7 +333,6 @@ def test_invoicing_demonstrates_a_closed_spread_schema_and_a_declared_empty_resu
     assert {"maxProperties": 0} in replies["tool"]["outputSchema"]["anyOf"]
     assert not replies["settles"].get("isError")
     assert replies["settles"]["structuredContent"] == {}
-    # The refused call took nothing off; the settling one deleted ``INV-B``.
     assert replies["remaining"] == {"INV-A": 60}
 
 
@@ -414,14 +359,7 @@ _INVOICING_RESOURCE_PROMPT_AND_SEND = _INVOICING_CLIENT + textwrap.dedent(
 
 
 def test_invoicing_serves_its_resource_prompt_and_send_tool() -> None:
-    """The ``invoice`` resource, the email prompt and ``invoices.mark_sent``.
-
-    The resource reads one row through the URI template's ``pk``, presented by
-    the same dataclass as the tools, and a URI naming no invoice is a missing
-    resource; the prompt, gated by the kernel's ``Unrestricted()`` as the specs
-    are, renders from the database; and
-    marking an invoice sent twice is a ``service_error`` result the second time.
-    """
+    """The ``invoice`` resource, the email prompt and ``invoices.mark_sent``."""
     replies = json.loads(_run_in_example("invoicing", _INVOICING_RESOURCE_PROMPT_AND_SEND))
     pk = replies["pk"]
 
@@ -439,7 +377,6 @@ def test_invoicing_serves_its_resource_prompt_and_send_tool() -> None:
     assert replies["missing"]["error"]["code"] == -32602
     assert replies["missing"]["error"]["message"] == "Resource not found: 'invoices://999'"
 
-    # Gated by the kernel's own check, the one every spec here declares.
     assert replies["prompt_checks"] == ["Unrestricted"]
     [message] = replies["prompt"]["messages"]
     assert message["role"] == "user"
@@ -475,13 +412,7 @@ _INVOICING_PER_TRANSPORT = _INVOICING_CLIENT + textwrap.dedent(
 
 
 def test_invoicing_lists_a_field_its_validator_declares_only_to_mcp() -> None:
-    """``invoices.write_off`` asks ``reason`` of a caller over MCP, and of no one else.
-
-    ``tools/list`` reads the Validator under the stamp ``tools/call`` dispatches
-    under, so the field is listed and required, and the call agrees: it refuses a
-    client leaving it out and takes one sending it. The last two assertions hold
-    that the field is the transport's: declared to neither no call nor another.
-    """
+    """``invoices.write_off`` asks ``reason`` of a caller over MCP, and of no one else."""
     replies = json.loads(_run_in_example("invoicing", _INVOICING_PER_TRANSPORT))
 
     schema = replies["write_off"]["inputSchema"]
@@ -593,18 +524,10 @@ _INVOICING_AUTH = textwrap.dedent(
 
 
 def test_invoicing_authenticates_bearer_tokens_and_gates_its_prompt_on_a_scope() -> None:
-    """The example's demo backend and the prompt's ``scopes=`` gate, as a client meets them.
-
-    A request with no token, or a token the backend does not know, is a ``401``
-    whose challenge points at the metadata document, which is served where it points and,
-    the same, at RFC 9728's origin location, and names ``invalid_token`` only for the token sent;
-    a token without ``invoices:email`` is the ``403`` naming that scope; that token still calls
-    a tool and reads the resource, ungated by it; the clerk's token renders the prompt.
-    """
+    """The example's demo backend and the prompt's ``scopes=`` gate, as a client meets them."""
     replies = json.loads(_run_in_example("invoicing", _INVOICING_AUTH))
     pointer = "http://localhost:8000/mcp/.well-known/oauth-protected-resource"
 
-    # Only the request that sent a token is told it is ``invalid_token``.
     for refused, error in (("anonymous", ""), ("unknown", ', error="invalid_token"')):
         assert replies[refused] == {
             "status": 401,
@@ -622,7 +545,6 @@ def test_invoicing_authenticates_bearer_tokens_and_gates_its_prompt_on_a_scope()
         },
     }
 
-    # The origin's RFC 9728 location answers with the document the mount's route does.
     assert replies["well_known"] == replies["metadata"]
 
     intern = replies["intern"]
@@ -641,7 +563,6 @@ def test_invoicing_authenticates_bearer_tokens_and_gates_its_prompt_on_a_scope()
         },
     }
 
-    # The scope gates the prompt alone: the same token is served a tool and the resource.
     tool = replies["intern_tool"]
     assert (tool["status"], tool["challenge"]) == (200, None)
     assert "isError" not in tool["body"]["result"]
@@ -735,14 +656,7 @@ _JOB_STATUS = textwrap.dedent(
 
 
 def test_job_status_starts_a_job_and_serves_its_status(tmp_path: Path) -> None:
-    """``jobs.start`` answers at once, the resource follows the job, ``jobs.list`` filters, orders.
-
-    The start returns the queued row with its id as a string, before the work
-    runs; an out-of-range duration is a ``validation_error`` result; reading
-    ``jobs://{job_id}`` follows the row to ``done``; the FilterSet's
-    ``status`` narrows the list and its ``created`` ordering sorts it; and a
-    job that does not exist is a missing resource.
-    """
+    """``jobs.start`` answers at once, the resource follows the job, ``jobs.list`` filters."""
     replies = json.loads(_run_in_example("job_status", _JOB_STATUS, str(tmp_path / "jobs.sqlite3")))
 
     started = replies["started"]["structuredContent"]

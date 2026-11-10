@@ -1,5 +1,3 @@
-"""A kernel mount through the real JSON-RPC view, asserting the served payloads."""
-
 from __future__ import annotations
 
 import json
