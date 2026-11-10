@@ -1,19 +1,3 @@
-"""The multi-round trip, end to end through ``handle_tools_call``.
-
-The pattern under test is the one ``2026-07-28`` put in place of
-server-initiated requests: a call that needs something answers with an
-``InputRequiredResult`` and *ends*, and the client comes back with a fresh
-request carrying the answer. Nothing is held between the two — which is what
-these tests are really pinning, since every one of them builds a new context
-rather than reusing one.
-
-Asked here of kernel service tools: ``rows.delete`` and its two neighbours are
-kernel ``ServiceSpec`` objects registered with ``register_tool``, validating
-through a dataclass, so the answer reaches the service as a spread keyword
-argument and the call runs through the kernel's ``dispatch``. The module's own
-``server`` fixture builds that server.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -64,8 +48,7 @@ def _accept(content: dict[str, Any]) -> dict[str, Any]:
 
 
 def test_a_call_that_needs_nothing_is_untouched(server: MCPServer) -> None:
-    """The overwhelming majority of calls. Nothing about the exchange should be
-    visible to a tool that never asks."""
+    """The overwhelming majority of calls."""
     out = _call(server, {"count": 5})
     assert out["structuredContent"] == {"deleted": 5, "confirmed": False, "reason": ""}
     assert "resultType" not in out
@@ -94,15 +77,13 @@ def test_the_question_is_an_elicitation_request_in_the_specs_shape(server: MCPSe
 
 
 def test_the_service_message_is_carried_verbatim(server: MCPServer) -> None:
-    """The service composed a sentence about *its* data — 400 rows — and that
-    sentence is the only thing the user will read."""
+    """The service composed a sentence about *its* data — 400 rows."""
     message = _call(server, {"count": 987})["inputRequests"][ELICITATION_KEY]["params"]["message"]
     assert message == "987 rows match. Confirm to proceed."
 
 
 def test_the_result_is_not_an_error(server: MCPServer) -> None:
-    """Worth pinning: this is a *successful* result with a different shape,
-    not a failure. A client that treats it as one would never retry."""
+    """Worth pinning: this is a *successful* result with a different shape, not a failure."""
     out = _call(server, {"count": 400})
     assert "isError" not in out
     assert "content" not in out
@@ -123,9 +104,7 @@ def test_retrying_with_the_answer_completes_the_call(server: MCPServer) -> None:
 
 
 def test_the_answer_reaches_the_service_as_an_ordinary_argument(server: MCPServer) -> None:
-    """The load-bearing claim of the whole design: the service declared
-    ``confirmed`` as a normal argument and read it as one. It has no
-    idea a dialog happened."""
+    """The load-bearing claim: ``confirmed`` is a normal argument the service reads."""
     asked = _call(server, {"count": 400})
     out = _call(
         server,
@@ -137,17 +116,13 @@ def test_the_answer_reaches_the_service_as_an_ordinary_argument(server: MCPServe
 
 
 def test_an_answer_is_accepted_without_any_request_state(server: MCPServer) -> None:
-    """A client that dropped the token is not an attacker — it is a client that
-    will simply be asked again if the answer turns out not to be enough. There
-    is nothing to defend here: anyone who can send ``inputResponses`` can send
-    ``arguments``."""
+    """A client that dropped the token is not an attacker."""
     out = _call(server, {"count": 400}, inputResponses=_accept({"confirmed": True}))
     assert out["structuredContent"]["deleted"] == 400
 
 
 def test_an_empty_form_submission_just_asks_again(server: MCPServer) -> None:
-    """Accept with nothing in it. The service raises again, so the question is
-    re-issued — the spec's own instruction for missing information."""
+    """Accept with nothing in it."""
     asked = _call(server, {"count": 400})
     out = _call(
         server, {"count": 400}, inputResponses=_accept({}), requestState=asked["requestState"]
@@ -175,10 +150,7 @@ def test_a_second_question_is_asked_after_the_first_is_answered(server: MCPServe
 
 
 def test_the_first_answer_survives_the_second_question(server: MCPServer) -> None:
-    """Why ``requestState`` carries the answers at all. The retry below sends
-    only the *reason* — the client has no obligation to resend an earlier
-    round's ``inputResponses`` — so without accumulation the service would ask
-    for the confirmation a second time, forever."""
+    """Why ``requestState`` carries the answers at all."""
     first = _call(server, {"count": 2000})
     second = _call(
         server,
@@ -200,9 +172,7 @@ def test_the_first_answer_survives_the_second_question(server: MCPServer) -> Non
 
 
 def test_the_carried_answers_do_not_include_the_clients_own_arguments(server: MCPServer) -> None:
-    """The state holds what the *user* supplied and nothing else. Folding the
-    client's arguments in would mean a token that could rewrite the very call it
-    is bound to."""
+    """The state holds what the *user* supplied and nothing else."""
     asked = _call(server, {"count": 400})
     payload = signing.loads(asked["requestState"], salt=REQUEST_STATE_SALT)
     assert payload["a"] == {}
@@ -238,8 +208,7 @@ def test_a_declined_question_stops_the_call(server: MCPServer) -> None:
 
 
 def test_a_cancelled_question_is_reported_as_its_own_thing(server: MCPServer) -> None:
-    """Not the same as a decline, and the difference is worth a client's
-    attention: nobody decided anything, so retrying is reasonable."""
+    """Not the same as a decline, and the difference is worth a client's attention."""
     out = _call(server, {"count": 400}, inputResponses={ELICITATION_KEY: {"action": "cancel"}})
     error = tool_error(out)
     assert error["type"] == "input_cancelled"
@@ -247,8 +216,7 @@ def test_a_cancelled_question_is_reported_as_its_own_thing(server: MCPServer) ->
 
 
 def test_a_refusal_does_not_run_the_service(server: MCPServer) -> None:
-    """Nothing about a decline should reach the tool — including a decline on a
-    call the tool would have run happily."""
+    """Nothing about a decline should reach the tool."""
     out = _call(server, {"count": 5}, inputResponses={ELICITATION_KEY: {"action": "decline"}})
     assert tool_error(out)["type"] == "input_declined"
 
@@ -262,9 +230,7 @@ def test_a_refusal_is_not_re_asked(server: MCPServer) -> None:
 
 
 def test_a_client_that_declared_no_elicitation_is_told_what_is_missing(server: MCPServer) -> None:
-    """Degrades rather than failing. The spec forbids *asking* such a client;
-    it does not require a protocol error, and an error would throw away the one
-    thing a model could act on."""
+    """Degrades rather than failing."""
     out = _call(server, {"count": 400}, ctx={"capabilities": {}})
     error = tool_error(out)
     assert error["type"] == "input_required"
@@ -278,16 +244,13 @@ def test_a_url_only_client_cannot_be_sent_a_form(server: MCPServer) -> None:
 
 
 def test_a_legacy_client_degrades_without_an_era_branch(server: MCPServer) -> None:
-    """A legacy request declares its capabilities once, at ``initialize``, so
-    this map is empty for it — and the capability gate answers correctly without
-    anything anywhere testing the protocol version."""
+    """A legacy request declares its capabilities once, at ``initialize``."""
     out = _call(server, {"count": 400}, ctx={"capabilities": {}, "protocol_version": "2025-11-25"})
     assert tool_error(out)["type"] == "input_required"
 
 
 def test_a_service_that_cannot_say_what_it_needs_degrades(server: MCPServer) -> None:
-    """``AdditionalInputRequired`` allows a bare message. There is no form to
-    render from one, so the message is the whole answer."""
+    """``AdditionalInputRequired`` allows a bare message."""
     ctx = context(server)
     out = handle_tools_call({"name": "rows.vague", "arguments": {"count": 1}}, ctx)
     error = tool_error(out)
@@ -297,10 +260,7 @@ def test_a_service_that_cannot_say_what_it_needs_degrades(server: MCPServer) -> 
 
 
 def test_an_unrenderable_schema_is_an_internal_error(server: MCPServer) -> None:
-    """Loud on purpose, and checked *before* the capability gate — a service
-    that asks for a nested object is broken for every caller, and finding out
-    only when an elicitation-capable client happens to call is how it survives
-    to production."""
+    """Loud on purpose, and checked *before* the capability gate."""
     ctx = context(server)
     out = handle_tools_call({"name": "rows.unrenderable", "arguments": {"count": 1}}, ctx)
     assert isinstance(out, JsonRpcError)
@@ -320,8 +280,7 @@ def test_an_unrenderable_schema_fails_even_for_a_client_that_cannot_be_asked(
 
 
 def test_a_service_that_can_never_be_satisfied_stops_asking(server: MCPServer) -> None:
-    """Two questions with a budget of one: the second is refused rather than
-    put to the user."""
+    """Two questions with a budget of one: the second is refused rather than put to the user."""
     first = _call(server, {"count": 2000}, ctx={"max_input_rounds": 1})
     out = _call(
         server,
@@ -336,8 +295,7 @@ def test_a_service_that_can_never_be_satisfied_stops_asking(server: MCPServer) -
 
 
 def test_the_budget_counts_rounds_not_calls(server: MCPServer) -> None:
-    """A client that keeps dropping the token is never over budget — it is
-    starting over each time, and the user is being asked once each time."""
+    """A client that keeps dropping the token is never over budget."""
     for _ in range(4):
         out = _call(server, {"count": 400}, ctx={"max_input_rounds": 1})
         assert out["resultType"] == "input_required"
@@ -351,10 +309,7 @@ def _asks_for_an_undeclared_name(*, count: int, confirmed: bool = False, reason:
 
 
 def test_a_question_whose_answer_the_spec_refuses_is_an_internal_error() -> None:
-    """A question the spec cannot take back: the answer
-    to ``confirm`` comes back as an argument the spec does not declare, which
-    the closed argument set refuses as unknown on the second round. So the
-    first round refuses the question, as an unrenderable one is refused."""
+    """A question the spec cannot take back: the answer comes back as an undeclared argument."""
     server = MCPServer(name="undeclared", auth_backend=AllowAnyBackend())
     server.register_tool(
         ServiceSpec(
@@ -415,9 +370,7 @@ def _provides_the_account() -> _AccountScope:
 
 
 def test_a_field_the_server_fills_is_not_admitted() -> None:
-    """``account`` is a declared field, and the server answers it for the mount, so the
-    answer a user typed would be replaced: the question is refused. Without the
-    subtraction of the binding's ``server_arguments`` it would be asked."""
+    """``account`` is a declared field, and the server answers it for the mount."""
     server = _asking_server(
         _asks_for_account,
         validator=DataclassValidator(_Scoped),
@@ -430,8 +383,7 @@ def test_a_field_the_server_fills_is_not_admitted() -> None:
 
 
 def test_a_key_a_provider_fills_is_not_admitted() -> None:
-    """A typed ``kwargs=`` provider always fills ``account``, whatever the client sends.
-    Without the subtraction of the kernel's ``server_owned_keys`` it would be asked."""
+    """A typed ``kwargs=`` provider always fills ``account``, whatever the client sends."""
     server = _asking_server(
         _asks_for_account,
         reads=Parameters([Parameter("account", "string")]),
@@ -459,8 +411,7 @@ def test_a_field_the_caller_sends_is_admitted() -> None:
 
 
 def test_a_tool_ignoring_unknown_arguments_drops_an_answer_the_spec_does_not_declare() -> None:
-    """Under ``IGNORE`` the answer is dropped rather than refused, so the service would
-    ask again until the budget ran out: the question is refused as under ``REJECT``."""
+    """Under ``IGNORE`` the answer is dropped rather than refused."""
     server = _asking_server(_asks_for_account, unknown_arguments=UnknownArguments.IGNORE)
     out = _call(server, {})
     assert isinstance(out, JsonRpcError)

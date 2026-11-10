@@ -1,11 +1,3 @@
-"""A tool that cannot finish without asking, and the contexts that ask it.
-
-``rows.delete`` is deliberately a two-question service: past 100 rows it wants a
-confirmation, past 1000 it also wants a reason. One service therefore exercises
-the single-round case, the multi-round case, and the thing multi-round exists
-for — that the first answer must survive the second question.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -104,12 +96,7 @@ def context(
     user: Any = None,
     **config_overrides: Any,
 ) -> MCPCallContext:
-    """A modern request context that can be asked, unless told otherwise.
-
-    ``capabilities=None`` declares form elicitation — the ordinary case. Pass
-    ``{}`` for a client that declared none, which is also what every legacy
-    request looks like from a handler's side.
-    """
+    """A modern request context that can be asked, unless told otherwise."""
     http_request = HttpRequest()
     http_request.method = "POST"
     return MCPCallContext(

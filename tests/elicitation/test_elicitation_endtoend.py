@@ -1,15 +1,3 @@
-"""The exchange over the actual HTTP transport.
-
-The handler suite proves the logic; this proves a conformant client can drive it
-— that ``inputResponses`` and ``requestState`` survive the transport, that the
-result comes back inside a ``200`` rather than an error status, and that the
-retry is what the spec says it is: **a second, independent request**, with its
-own id, on a server holding nothing in between.
-
-Asked of the kernel ``rows.delete``, whose answers come back as spread
-arguments.
-"""
-
 from __future__ import annotations
 
 import json
@@ -62,8 +50,7 @@ def _result(response: Any) -> dict[str, Any]:
 
 
 def test_the_question_comes_back_inside_an_ordinary_success(client: Client) -> None:
-    """``200`` with a ``result``, not an error status and not an ``error``
-    member. A client that reads the status alone must see nothing unusual."""
+    """``200`` with a ``result``, not an error status and not an ``error`` member."""
     result = _result(_post(client, {"name": TOOL, "arguments": {"count": 400}}))
     assert result["resultType"] == "input_required"
     assert result["inputRequests"][ELICITATION_KEY]["method"] == "elicitation/create"
@@ -90,10 +77,7 @@ def test_a_client_can_complete_the_round_trip(client: Client) -> None:
 
 
 def test_the_retry_is_an_independent_request(client: Client) -> None:
-    """The whole reason MRTR replaced server-initiated requests. Different
-    JSON-RPC id, no session header, nothing correlating the two but the token
-    the client carried — which is what lets the second request land on a
-    different process entirely."""
+    """The whole reason MRTR replaced server-initiated requests."""
     asked = _result(
         _post(
             client,

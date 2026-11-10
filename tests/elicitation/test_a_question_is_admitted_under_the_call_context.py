@@ -1,12 +1,3 @@
-"""The names an ``AdditionalInputRequired`` may ask under are the ones dispatch takes.
-
-A Validator may declare ``parameters(self, *, call_context=None)``, and the
-kernel's dispatch validates a call against the declaration its own
-``call_context`` gives. The answer to a question comes back as an argument,
-so a question for a name that declaration leaves out could never be answered:
-it is refused as a malformed question, ``-32603``, rather than asked.
-"""
-
 from __future__ import annotations
 
 from typing import Any
@@ -79,9 +70,7 @@ async def test_dispatch_refuses_a_name_the_call_s_declaration_leaves_out(is_asyn
 async def test_a_question_for_a_name_the_call_s_declaration_leaves_out_is_an_internal_error(
     is_async: bool,
 ) -> None:
-    """Both halves hand ``tool_refusal_scene`` the admission's ``call_context``;
-    handed ``None`` the question would be checked against the wider declaration
-    and asked, so each half is pinned by this case."""
+    """Both halves hand ``tool_refusal_scene`` the admission's ``call_context``."""
     server = _server()
     out = await _call({"name": TOOL, "arguments": {"count": 1}}, context(server), is_async)
     assert isinstance(out, JsonRpcError), out

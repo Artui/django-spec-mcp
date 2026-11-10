@@ -1,5 +1,3 @@
-"""The three wire objects, in isolation from the flow that produces them."""
-
 from __future__ import annotations
 
 from typing import Any
@@ -20,9 +18,7 @@ SCHEMA: dict[str, Any] = {"type": "object", "properties": {"ok": {"type": "boole
 
 
 def test_an_elicit_request_names_its_mode_explicitly() -> None:
-    """``"form"`` is the schema default, but a client supporting both modes
-    branches on the field, and saving one key is not worth making it know the
-    rule."""
+    """``form`` is the schema default, so clients must branch on the mode field."""
     assert ElicitRequest("Confirm?", SCHEMA).to_dict() == {
         "method": "elicitation/create",
         "params": {"mode": "form", "message": "Confirm?", "requestedSchema": SCHEMA},
@@ -33,9 +29,7 @@ def test_an_elicit_request_names_its_mode_explicitly() -> None:
 
 
 def test_the_result_names_its_own_type() -> None:
-    """Stamped here rather than by the response envelope, which defaults every
-    result to ``complete`` and steps aside only for one that already said
-    otherwise."""
+    """Stamped here rather than by the response envelope."""
     out = InputRequiredResult(
         input_requests={ELICITATION_KEY: ElicitRequest("Confirm?", SCHEMA)},
         request_state="token",
@@ -46,9 +40,7 @@ def test_the_result_names_its_own_type() -> None:
 
 
 def test_state_alone_is_a_legal_result() -> None:
-    """The spec's load-shedding case — *"come back with this and I will carry
-    on"*, no question asked. Nothing here produces one, but the type permits
-    what the spec permits."""
+    """The spec's load-shedding case, with no question asked; nothing here produces one."""
     assert InputRequiredResult(request_state="token").to_dict() == {
         "resultType": "input_required",
         "requestState": "token",
@@ -63,9 +55,7 @@ def test_a_question_alone_is_a_legal_result() -> None:
 
 
 def test_a_result_with_neither_is_refused() -> None:
-    """*"At least one of ``inputRequests`` or ``requestState`` MUST be
-    present"*. One with neither tells the client nothing it can act on, so it is
-    a construction error rather than something to discover on the wire."""
+    """One with neither field tells the client nothing it can act on: a construction error."""
     with pytest.raises(ValueError, match="must carry"):
         InputRequiredResult()
 
@@ -90,8 +80,7 @@ def test_a_refusal_carries_no_content(action: str) -> None:
 
 
 def test_other_keys_are_ignored_rather_than_rejected() -> None:
-    """The spec's instruction, and what keeps a client free to batch answers for
-    requests this server never sent."""
+    """The spec's instruction, and what keeps a client free to batch answers."""
     answer = read_elicit_answer(
         {
             "inputResponses": {
@@ -116,10 +105,7 @@ def test_other_keys_are_ignored_rather_than_rejected() -> None:
     ],
 )
 def test_anything_unusable_reads_as_no_answer(params: dict[str, Any]) -> None:
-    """Deliberately the same outcome as "the client did not answer": the
-    service raises again, the question is re-issued, and the spec's *"respond
-    with a new InputRequiredResult rather than returning an error"* happens
-    without this layer knowing it is happening."""
+    """Deliberately the same outcome as 'the client did not answer': the service raises again."""
     assert read_elicit_answer(params) is None
 
 
@@ -147,9 +133,5 @@ def test_content_that_is_not_an_object_is_treated_as_empty() -> None:
     ],
 )
 def test_who_may_be_asked(capabilities: dict[str, Any], expected: bool) -> None:
-    """``{}`` means yes. Form was the only mode before this revision added URL
-    mode, so a client that omits the sub-keys is declaring the form-only
-    behaviour — which is exactly what the schema's "form mode only (implicit)"
-    example shows. A *non-empty* object is an enumeration, so url-only is a
-    client this package cannot ask."""
+    """``{}`` means yes."""
     assert can_ask_client(capabilities) is expected
