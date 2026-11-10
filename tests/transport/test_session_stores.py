@@ -42,7 +42,6 @@ def test_django_cache_store_lifecycle() -> None:
 
 def test_django_cache_store_legacy_boolean_value_is_ownerless() -> None:
     # Pre-0.7 sessions cached ``True`` instead of a principal id; ``owner``
-    # treats them as ownerless so the client re-initializes.
     from django.core.cache import cache
 
     cache.set("spec-mcp:session:legacy-id", True, timeout=60)
@@ -75,12 +74,7 @@ class TestSessionExpiryWindows:
         assert store._ttl_seconds == 5  # noqa: SLF001
 
     def test_reading_a_session_refreshes_its_idle_window(self, monkeypatch) -> None:
-        """A session in continuous use must not lapse.
-
-        Asserted on the timeout the store *passes* rather than on a remaining
-        TTL, because ``cache.ttl()`` is a django-redis extension and the suite
-        runs on LocMem — a backend-agnostic assertion of the same intent.
-        """
+        """A session in continuous use must not lapse."""
         store = DjangoCacheSessionStore(namespace="idle", ttl_seconds=1000)
         sid = store.create(principal_id="alice")
         timeouts = _record_set_timeouts(monkeypatch)
@@ -88,12 +82,7 @@ class TestSessionExpiryWindows:
         assert timeouts == [1000], "the read should have re-set the key with a full idle window"
 
     def test_absolute_cap_clips_the_refreshed_window(self, monkeypatch) -> None:
-        """A continuously-used session still cannot outlive its max age.
-
-        Without this the sliding window is unbounded, and a revoked principal
-        stays alive for as long as it keeps talking — the binding is only ever
-        checked once, at ``initialize``.
-        """
+        """A continuously-used session still cannot outlive its max age."""
         store = DjangoCacheSessionStore(namespace="cap", ttl_seconds=10_000, max_age_seconds=60)
         sid = store.create(principal_id="alice")
         timeouts = _record_set_timeouts(monkeypatch)
@@ -107,12 +96,7 @@ class TestSessionExpiryWindows:
         assert not store.exists(sid), "an expired session should be evicted, not left behind"
 
     def test_no_absolute_cap_means_a_pure_idle_window(self, monkeypatch) -> None:
-        """``None`` **in the setting** disables the cap.
-
-        Not the same as ``max_age_seconds=None`` on the constructor, which is
-        the tri-state "defer to the setting" — the usual shape in this package,
-        and easy to mistake for "no cap" when writing a test.
-        """
+        """``None`` **in the setting** disables the cap."""
         from django.test import override_settings
 
         store = DjangoCacheSessionStore(namespace="nocap", ttl_seconds=1000)
@@ -143,15 +127,7 @@ class TestSessionExpiryWindows:
     ],
 )
 def test_a_malformed_session_id_is_a_miss_not_an_exception(session_id: str) -> None:
-    """The same defect as the task store's, from the header side.
-
-    ``Mcp-Session-Id`` arrives off the wire and goes straight into a cache key,
-    and the memcached backends raise on a key holding a space or a control
-    character, or one over 250 bytes. ``CacheKeyWarning`` is the rejection
-    Django's own validator reports, promoted to an error here to stand in for
-    such a backend. An id that cannot be one this store minted names no session
-    either, so it is the miss it looks like.
-    """
+    """The same defect as the task store's, from the header side."""
     store = DjangoCacheSessionStore(namespace="ns")
     with warnings.catch_warnings():
         warnings.simplefilter("error", CacheKeyWarning)

@@ -1,16 +1,3 @@
-"""An ``Accept`` naming only ``text/event-stream`` reaches the async endpoint.
-
-The spec tells a client opening the GET stream to send exactly that header,
-and the async endpoint answers with server-sent events on GET, on a
-subscription and on a streamed call. Negotiating against JSON alone would make
-this request a ``406``, and the GET stream could then be opened only by a
-client sending an ``Accept`` the spec does not ask for. The sync endpoint never
-streams: a GET or HEAD there is its
-bodyless ``405``, which the spec allows a server offering no stream, whatever
-the ``Accept``, while a POST asking for nothing but a stream is still refused
-(``test_the_sync_endpoint_refuses_an_accept_naming_only_a_stream``).
-"""
-
 from __future__ import annotations
 
 import json

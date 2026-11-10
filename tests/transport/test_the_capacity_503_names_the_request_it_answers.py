@@ -1,10 +1,3 @@
-"""A ``subscriptions/listen`` refused at the concurrency cap echoes the request's ``id``.
-
-The ``503`` is a JSON-RPC error answering one request; a client matching by
-``id`` cannot place it if the ``id`` is null. Subscriptions are an async-view
-feature, so there is no sync twin.
-"""
-
 from __future__ import annotations
 
 import json

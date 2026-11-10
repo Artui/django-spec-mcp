@@ -1,12 +1,3 @@
-"""The ``400`` for an unsupported protocol version echoes the request's ``id``, in both eras.
-
-A client matching responses to requests by ``id`` cannot place an error whose
-``id`` is null. Both views answer a legacy request's ``400`` from their own call
-site, so the test runs on each. A modern request's comes from the header check
-both views share (``modern_header_refusal``), which answers every modern header
-refusal, so it runs on each view too.
-"""
-
 from __future__ import annotations
 
 from django_spec_mcp.types.protocol_version_meta_key import PROTOCOL_VERSION_META_KEY

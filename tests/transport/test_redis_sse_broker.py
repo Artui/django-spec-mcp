@@ -14,17 +14,10 @@ def _client() -> FakeAsyncRedis:
 
 
 async def _wait_for_subscriber(client, channel: str, *, timeout: float = 0.5) -> None:
-    """Wait until the listener task has actually subscribed to ``channel``.
-
-    ``RedisSSEBroker.subscribe`` returns immediately (the listener subscribes
-    inside a background task). Tests that publish straight after would race
-    the subscription. Poll the Redis-side ``PUBSUB NUMSUB`` until at least
-    one subscriber is registered.
-    """
+    """Wait until the listener task has actually subscribed to ``channel``."""
     deadline: float = asyncio.get_running_loop().time() + timeout
     while True:
         info = await client.pubsub_numsub(channel)
-        # ``pubsub_numsub`` returns ``[(channel, count), ...]`` (bytes keys).
         for entry in info:
             ch, count = entry
             if (ch.decode() if isinstance(ch, bytes) else ch) == channel and count > 0:
@@ -75,7 +68,6 @@ async def test_resubscribe_replaces_previous_listener() -> None:
     first = broker.subscribe("s1")
     second = broker.subscribe("s1")
     assert first is not second
-    # The first queue's task was cancelled; the new queue is what's tracked.
     assert broker._queues["s1"] is second  # type: ignore[attr-defined]
     broker.unsubscribe("s1", second)
     await client.aclose()
@@ -87,7 +79,6 @@ async def test_unsubscribe_with_stale_queue_is_noop() -> None:
     broker = RedisSSEBroker(client)
     old = broker.subscribe("s")
     new = broker.subscribe("s")
-    # Old subscriber's cleanup must not remove the new entry.
     broker.unsubscribe("s", old)
     assert broker.has_subscriber("s")
     broker.unsubscribe("s", new)
@@ -136,10 +127,7 @@ async def test_import_error_when_redis_absent(monkeypatch) -> None:
 
 
 async def test_a_stalled_reader_cannot_grow_the_listener_queue_without_limit() -> None:
-    """The Redis broker has the same shape as the in-memory one: a listener task
-    pumps the channel into a local queue nobody is draining. Blocking there
-    would be worse than dropping — it stops the pump, so one unread stream
-    becomes backpressure on the Redis connection itself."""
+    """The Redis broker has the same shape as the in-memory one: a listener task pumps a queue."""
     client = _client()
     broker = RedisSSEBroker(client, max_queued_events=1)
     queue = broker.subscribe("s1")
@@ -148,8 +136,6 @@ async def test_a_stalled_reader_cannot_grow_the_listener_queue_without_limit() -
     for n in (1, 2, 3):
         await broker.publish("s1", {"n": n})
 
-    # The pump is a background task, so settle on the bound rather than racing
-    # it: the queue can never exceed one, and the newest payload is what stays.
     deadline: float = asyncio.get_running_loop().time() + 1.0
     while asyncio.get_running_loop().time() < deadline:
         assert queue.qsize() <= 1
@@ -169,8 +155,7 @@ def test_an_unusable_queue_bound_is_refused_at_construction() -> None:
 
 
 async def test_active_streams_counts_this_workers_subscribers() -> None:
-    """A cluster-wide count would neither measure the thing the cap protects —
-    this process's task pool — nor be worth a round-trip per GET."""
+    """A cluster-wide count would neither measure the thing the cap protects."""
     client = _client()
     broker = RedisSSEBroker(client)
     assert broker.active_streams == 0

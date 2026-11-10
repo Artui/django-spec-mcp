@@ -1,12 +1,3 @@
-"""The async streamable HTTP view, serving the test app's kernel operations.
-
-Every call here reaches a kernel spec registered with ``register_tool`` or
-``register_resource``: ``build_kernel_server`` mounted on the async URL conf.
-
-The view is a plain Django view, which no framework setting reaches, and what a
-tool raising is answered with is held by ``test_dispatch_backstop.py``.
-"""
-
 from __future__ import annotations
 
 import asyncio
@@ -172,17 +163,12 @@ async def test_async_delete_terminates_session(async_urlconf) -> None:
 @pytest.mark.parametrize(
     ("body", "raises"),
     [
-        # Nested past the decoder's recursion limit. No fixed depth is past it
-        # on every run, so ``None`` stands for a body found on the thread that
-        # decodes it, under the 1 MiB default cap: see ``tests.utils``.
         pytest.param(None, RecursionError, id="nested-past-the-recursion-limit"),
-        # Over the 4300-digit cap on int conversion: a plain ``ValueError``.
         pytest.param(
             b'{"jsonrpc": "2.0", "id": 1, "method": "ping", "params": {"n": ' + b"9" * 5000 + b"}}",
             ValueError,
             id="integer-over-the-digit-limit",
         ),
-        # Not UTF-8: a ``UnicodeDecodeError`` from decoding the bytes.
         pytest.param(
             b'{"jsonrpc": "2.0", "id": 1, "method": "\xff"}',
             UnicodeDecodeError,
@@ -193,15 +179,7 @@ async def test_async_delete_terminates_session(async_urlconf) -> None:
 def test_async_body_json_cannot_decode_is_a_parse_error(
     async_urlconf, body: bytes | None, raises: type[Exception]
 ) -> None:
-    """None of these is a ``JSONDecodeError``, and each escaped as a 500.
-
-    The parse runs before authentication, so anyone could send one. The id is
-    ``null`` because a body that never decoded has no id to echo. A sync test
-    on purpose: the async view parses on the thread running its event loop, so
-    the loop is started on the bounded stack rather than on pytest's, and the
-    nested body is found on that thread because the bound is a floor rather than
-    a size.
-    """
+    """None of these is a ``JSONDecodeError``, and each escaped as a 500."""
 
     async def post(sent: bytes) -> Any:
         return await AsyncClient().post(
@@ -214,8 +192,6 @@ def test_async_body_json_cannot_decode_is_a_parse_error(
     def run() -> Any:
         sent: bytes = body if body is not None else nested_past_the_decoders_limit_here()
         # Checked on the thread that decodes it, because that thread's stack
-        # is what the nested body's limit depends on. A body that decoded here
-        # would be answered by a later check and pass without the fix.
         with pytest.raises(raises) as raised:
             json.loads(sent)
         assert raised.type is raises
@@ -223,8 +199,6 @@ def test_async_body_json_cannot_decode_is_a_parse_error(
 
     response = on_a_bounded_stack(run)
     payload: Any = response.json()
-    # Neither the size cap, which runs before the parse, nor the shape check
-    # a body that decoded would reach after it.
     assert payload["error"]["message"] != "Request body too large"
     assert payload["error"]["message"] != "JSON-RPC message must be a JSON object"
     assert response.status_code == 400
@@ -236,12 +210,7 @@ def test_async_body_json_cannot_decode_is_a_parse_error(
 
 
 async def test_async_get_missing_protocol_version_allowed_when_disabled() -> None:
-    """The GET (SSE) path mirrors POST when the relaxation is enabled.
-
-    With the flag off, a header-less GET would 400 on the version check. With it
-    on, the request progresses past that check and 404s on the missing session
-    id instead — which is what we assert here.
-    """
+    """The GET (SSE) path mirrors POST when the relaxation is enabled."""
     server = build_kernel_server(
         config=build_mcp_config(allowed_origins=["*"], require_protocol_version_header=False)
     )
@@ -303,8 +272,6 @@ def test_async_view_names_its_class() -> None:
     assert view.view_class is AsyncStreamableHttpView
     assert not hasattr(view, "cls")
     assert not hasattr(view, "actions")
-    # No wrapper sits between Django and the view, so there is nothing for
-    # ``__wrapped__`` to point introspection at.
     assert not hasattr(view, "__wrapped__")
 
 
@@ -337,12 +304,7 @@ class _Deny(PermissionCheck):
 
 
 def _gated_server() -> MCPServer:
-    """A tool behind a scope the ``AllowAnyBackend`` token lacks, and one its spec denies.
-
-    ``AllowAnyBackend`` authenticates the request but issues no scopes, so the
-    first denial is a *scope* failure, the branch that carries ``scope=`` in
-    the challenge. The second is the spec's own check, which names no scope.
-    """
+    """A tool behind a scope the ``AllowAnyBackend`` token lacks, and one its spec denies."""
     server = MCPServer(
         name="async-gated", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore()
     )
@@ -381,11 +343,7 @@ async def _call_gated(name: str) -> Any:
 
 @pytest.mark.django_db(transaction=True)
 async def test_async_permission_denial_is_403_with_a_scope_challenge() -> None:
-    """The async transport maps a denial the same way the sync one does.
-
-    Held on its own because a mapping only one path tests is how the two
-    paths drift.
-    """
+    """The async transport maps a denial the same way the sync one does."""
     response = await _call_gated("gated")
     assert response.status_code == 403, response.content
     assert response.json()["error"]["data"]["requiredScopes"] == ["invoices:write"]
@@ -396,9 +354,7 @@ async def test_async_permission_denial_is_403_with_a_scope_challenge() -> None:
 
 @pytest.mark.django_db(transaction=True)
 async def test_async_spec_check_denial_is_403_with_a_plain_challenge() -> None:
-    """The kernel's ``NotPermitted`` reaches the wire as the scope gate's denial
-    does, a ``403`` with ``-32006``, and its challenge names no scope, since the
-    check asked for none."""
+    """The kernel's ``NotPermitted`` reaches the wire as the scope gate's denial does."""
     response = await _call_gated("denied")
     assert response.status_code == 403, response.content
     assert response.json()["error"] == {"code": -32006, "message": "Insufficient permission"}

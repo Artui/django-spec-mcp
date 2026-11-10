@@ -55,7 +55,6 @@ async def test_get_with_valid_session_returns_stream(async_urlconf) -> None:
     assert response.status_code == 200
     assert response["Content-Type"].startswith("text/event-stream")
     assert response["Cache-Control"] == "no-cache"
-    # Drain a single chunk so the streaming generator unwinds cleanly.
     streaming = response.streaming_content
     first = await streaming.__anext__()
     assert first == b": stream open\n\n"
@@ -63,11 +62,7 @@ async def test_get_with_valid_session_returns_stream(async_urlconf) -> None:
 
 
 async def test_published_payload_reaches_open_stream() -> None:
-    """A payload pushed via the broker arrives as a ``data:`` SSE event.
-
-    Driving the view directly with ``RequestFactory`` lets us own the broker
-    instance and synchronise publish vs read without racing the test.
-    """
+    """A payload pushed via the broker arrives as a ``data:`` SSE event."""
     broker = InMemorySSEBroker()
     store = InMemorySessionStore()
     sid = store.create(principal_id="anonymous")
@@ -91,7 +86,6 @@ async def test_published_payload_reaches_open_stream() -> None:
     opening = await streaming.__anext__()
     assert opening == b": stream open\n\n"
 
-    # Push from "another part of the app" — the running stream should receive it.
     await broker.publish(sid, {"event": "did-thing"})
     payload_frame = await asyncio.wait_for(streaming.__anext__(), timeout=1.0)
     assert payload_frame.startswith(b"data: ")
@@ -105,12 +99,7 @@ async def test_published_payload_reaches_open_stream() -> None:
 
 
 async def test_resume_replays_buffered_events_then_live() -> None:
-    """A reconnect with ``Last-Event-ID`` drains buffered events first, then live.
-
-    Drives the view via ``RequestFactory`` so the broker / buffer / session
-    store are all owned by the test — there's no race between recording the
-    pre-reconnect events and the GET handler reading them.
-    """
+    """A reconnect with ``Last-Event-ID`` drains buffered events first, then live."""
     from django_spec_mcp.transport.in_memory_sse_replay_buffer import (
         InMemorySSEReplayBuffer,
     )
@@ -120,7 +109,6 @@ async def test_resume_replays_buffered_events_then_live() -> None:
     store = InMemorySessionStore()
     sid = store.create(principal_id="anonymous")
 
-    # Pre-record three events; the client claims to have seen the first.
     first = await buffer.record(sid, {"n": 1})
     second = await buffer.record(sid, {"n": 2})
     third = await buffer.record(sid, {"n": 3})
@@ -181,7 +169,6 @@ async def test_delete_purges_replay_buffer() -> None:
     response = await view(request)
     assert response.status_code == 204
 
-    # Buffer was forgotten — replay yields nothing now.
     out: list[tuple[str, object]] = []
     async for pair in buffer.replay(sid, "0000000000000000"):
         out.append(pair)
@@ -201,15 +188,10 @@ def _get_stream_view(broker: InMemorySSEBroker, store: InMemorySessionStore, **c
 
 
 async def test_a_worker_refuses_a_stream_past_its_concurrency_cap() -> None:
-    """Minting sessions is uncapped and each one addresses its own stream, so a
-    caller looping ``initialize`` and then ``GET`` parks an ASGI task per
-    session — each keep-aliving itself past any proxy's idle timeout.
-    ``subscriptions/listen`` is bounded on exactly these terms; this is the
-    surface that is on by default."""
+    """Minting sessions is uncapped and each one addresses its own stream."""
     broker = InMemorySSEBroker()
     store = InMemorySessionStore()
     sid = store.create(principal_id="anonymous")
-    # One stream already running on this worker.
     broker.subscribe("someone-else")
 
     view = _get_stream_view(broker, store, max_concurrent_sse_streams=1)
@@ -238,8 +220,7 @@ async def test_the_cap_can_be_lifted() -> None:
 
 
 async def test_the_stream_carries_the_configured_lifetime() -> None:
-    """The GET handler opened streams with no ``max_seconds`` at all, so the
-    cap has to reach the generator, not just exist in the config."""
+    """The GET handler opened streams with no max_seconds, so the cap must reach the generator."""
     broker = InMemorySSEBroker()
     store = InMemorySessionStore()
     sid = store.create(principal_id="anonymous")

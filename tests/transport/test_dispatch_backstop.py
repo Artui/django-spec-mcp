@@ -1,30 +1,3 @@
-"""An exception escaping dispatch is still answered with a JSON-RPC reply.
-
-Every case goes through the real URL conf, on both views and in both eras,
-because the backstop lives at the HTTP edge: the handlers are not asked to
-catch everything, and without it an escaping exception becomes Django's
-``500`` page, a reply with no ``jsonrpc`` and no ``id`` that no client can
-match to its request.
-
-The second half pins the responses the backstop must **not** absorb. None of
-them is an exception escaping dispatch - each is either a value a handler
-returns or a rejection made before dispatch runs - but a backstop placed one
-level too wide would turn every one into a ``-32603``, so each is held here on
-every path the backstop sits on.
-
-The clients are built with ``raise_request_exception=False`` so that the
-pre-backstop behaviour fails these tests on their assertions (a status, a
-content type) rather than by re-raising the handler's exception into the test.
-
-The tools and the resource are kernel specs registered with ``register_tool``
-and ``register_resource``, and a consumer permission is a kernel
-``PermissionCheck`` on the spec. A presenter raising while it renders is asked
-in ``test_a_presenter_that_raises_is_a_json_rpc_internal_error``. The
-endpoints are plain Django views, so no framework throttle setting reaches them;
-a tool's limit is ``rate_limits=``
-(``test_a_rate_limit_keeps_its_error_and_retry_hint``).
-"""
-
 from __future__ import annotations
 
 import json
@@ -104,12 +77,7 @@ def _list_does_not_exist() -> Any:
 
 
 class _UpstreamForbidden(Exception):
-    """Shaped like an HTTP client's error for an upstream ``403``.
-
-    ``openai.PermissionDeniedError`` and ``anthropic.PermissionDeniedError``
-    both carry ``status_code = 403``: a tool whose upstream key was rejected is
-    the server's fault, not a refusal of the caller.
-    """
+    """Shaped like an HTTP client's error for an upstream ``403``."""
 
     status_code = 403
 
@@ -195,8 +163,6 @@ def _server() -> MCPServer:
         subscription_broker=InMemorySubscriptionBroker(),
     )
     # Paged, so the presenter runs over rows the selector really returned:
-    # the rejection has no caller-supplied value to blame and is a server
-    # fault that always reaches the backstop.
     server.register_tool(
         _selector(_rows, presenter=_RejectingPresenter(_Row)), name="boom.render", paginate=True
     )
@@ -363,13 +329,7 @@ _PATHS = pytest.mark.parametrize(
 async def test_a_selectors_http404_is_a_not_found_result_not_a_server_fault(
     is_async: bool, modern: bool, tool: str, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """``get_object_or_404`` in a selector is a missing row, as ``DoesNotExist`` is.
-
-    ``Http404`` is not an ``ObjectDoesNotExist``, so before the kernel mapped it
-    it reached the backstop: a ``500`` with ``-32603`` and an ERROR line. It is
-    now a ``200`` whose tool result is the kernel's ``not_found``, and nothing is
-    logged, because nothing went wrong.
-    """
+    """``get_object_or_404`` in a selector is a missing row, as ``DoesNotExist`` is."""
     caplog.set_level(logging.ERROR, logger="django_spec_mcp")
     response = await _post(
         is_async, _server(), "tools/call", {"name": tool, "arguments": {}}, modern=modern
@@ -380,9 +340,7 @@ async def test_a_selectors_http404_is_a_not_found_result_not_a_server_fault(
     assert "error" not in body
     error = tool_error(body["result"])
     assert error["type"] == "not_found"
-    # A LIST has no instance to miss, usually a parent, so it does not say one.
     assert ("instance" in error["message"]) == (tool == "missing.retrieve")
-    # The exception text is the selector's own and is not the client's to read.
     assert "db-primary" not in response.content.decode()
     assert [r for r in caplog.records if r.levelno >= logging.ERROR] == []
 
@@ -391,14 +349,7 @@ async def test_a_selectors_http404_is_a_not_found_result_not_a_server_fault(
 async def test_a_presenter_that_raises_is_a_json_rpc_internal_error(
     is_async: bool, modern: bool, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """The kernel form of the reported case: an exception raised while rendering.
-
-    Before the backstop such an exception came back as a ``400`` with a bare
-    list for a body. A presenter's exception is the server's fault, the one
-    exception being a ``ServiceValidationError`` refusing a shape the caller
-    sent, which is the caller's ``validation_error``
-    (``test_kernel_presenter_refusal.py``).
-    """
+    """The kernel form of the reported case: an exception raised while rendering."""
     caplog.set_level(logging.ERROR, logger="django_spec_mcp")
     response = await _post(
         is_async, _server(), "tools/call", {"name": "boom.render", "arguments": {}}, modern=modern
@@ -412,8 +363,7 @@ async def test_a_presenter_that_raises_is_a_json_rpc_internal_error(
 async def test_a_list_selectors_does_not_exist_stays_a_server_fault(
     is_async: bool, modern: bool, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """Only ``Http404`` is a LIST's "not found"; ``DoesNotExist`` escaping a LIST
-    selector is a bug in the selector, so it is still a ``-32603`` and logged."""
+    """Only Http404 is a LIST's not-found; DoesNotExist escaping a selector is a bug."""
     caplog.set_level(logging.ERROR, logger="django_spec_mcp")
     response = await _post(
         is_async,
@@ -458,14 +408,7 @@ async def test_an_exception_declaring_a_403_is_still_a_server_fault(
     raised: type[Exception],
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """Only a ``PermissionDenied`` is a denial; a ``status_code`` of ``403`` is not.
-
-    An upstream API refusing the server's own key raises exactly this shape,
-    from a tool's body or from a check calling out, and answering it with a
-    ``403`` and a Bearer challenge would tell the caller to fetch a token that
-    cannot help, logged below ``ERROR`` where nobody looks. Nor is a class
-    merely named ``PermissionDenied``: only Django's, so DRF's is a fault too.
-    """
+    """Only a ``PermissionDenied`` is a denial; a ``status_code`` of ``403`` is not."""
     caplog.set_level(logging.ERROR, logger="django_spec_mcp")
     response = await _post(
         is_async, _server(), "tools/call", {"name": tool, "arguments": {}}, modern=modern
@@ -496,11 +439,7 @@ async def test_a_permission_class_that_raises_is_a_json_rpc_internal_error(
 async def test_a_permission_preflight_that_raises_before_a_stream_is_a_json_rpc_error(
     modern: bool, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """A ``progressToken`` moves the permission check ahead of the stream.
-
-    It runs before any status is committed, so the backstop can still answer
-    with a ``500`` and a JSON body rather than opening a stream.
-    """
+    """A ``progressToken`` moves the permission check ahead of the stream."""
     caplog.set_level(logging.ERROR, logger="django_spec_mcp")
     response = await _post_async(
         _server(),
@@ -539,11 +478,7 @@ async def test_a_subscription_grant_that_raises_is_a_json_rpc_internal_error(
 async def test_a_streamed_dispatch_that_raises_ends_with_a_generic_error_frame(
     tool: str, exc_type: type, modern: bool, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """Once the stream is open the status is spent, so the error rides as the last frame.
-
-    The frame never carries the exception's own text, which is written for an
-    operator rather than a client.
-    """
+    """Once the stream is open the status is spent, so the error rides as the last frame."""
     caplog.set_level(logging.ERROR, logger="django_spec_mcp")
     response = await _post_async(
         _server(), "tools/call", {"name": tool, "arguments": {}}, modern=modern, progress=True
@@ -568,12 +503,7 @@ async def test_a_streamed_dispatch_that_raises_ends_with_a_generic_error_frame(
 async def test_a_notification_is_never_dispatched_so_nothing_can_raise(
     is_async: bool, modern: bool, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """A notification is acknowledged before dispatch, so its handler never runs.
-
-    JSON-RPC forbids replying to one, and nothing here would: the ``202``
-    comes back with no body and nothing is logged, even when the method
-    named would raise if it were dispatched.
-    """
+    """A notification is acknowledged before dispatch, so its handler never runs."""
     caplog.set_level(logging.ERROR, logger="django_spec_mcp")
     response = await _post(
         is_async,
@@ -631,7 +561,6 @@ def _assert_raised_denial(response: Any, caplog: pytest.LogCaptureFixture) -> No
     assert body["error"] == {"code": -32006, "message": "Insufficient permission"}
     assert "WWW-Authenticate" in response
     assert SECRET not in response.content.decode()
-    # A refusal, so nothing lands at ERROR: that level is for server faults.
     assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
 
 
@@ -640,10 +569,7 @@ def _assert_raised_denial(response: Any, caplog: pytest.LogCaptureFixture) -> No
 async def test_a_raised_permission_denial_is_a_denial_not_a_fault(
     is_async: bool, modern: bool, tool: str, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """A permission check that raises instead of returning ``False``.
-
-    A catch-all ``-32603`` would report a refusal as a ``500``.
-    """
+    """A permission check that raises instead of returning ``False``."""
     caplog.set_level(logging.ERROR, logger="django_spec_mcp")
     response = await _post(
         is_async, _server(), "tools/call", {"name": tool, "arguments": {}}, modern=modern

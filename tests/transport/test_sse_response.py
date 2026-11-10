@@ -49,8 +49,6 @@ async def test_stream_events_emits_keepalive_on_idle() -> None:
     gen = stream_events(broker, "s", keepalive_interval=0.05)
     await gen.__anext__()  # opening comment
     first = await asyncio.wait_for(gen.__anext__(), timeout=0.5)
-    # Drive a second loop iteration so the ``continue`` after the keep-alive
-    # actually executes (the generator otherwise stays parked at ``yield``).
     second = await asyncio.wait_for(gen.__anext__(), timeout=0.5)
     assert first == b": keepalive\n\n"
     assert second == b": keepalive\n\n"
@@ -78,7 +76,6 @@ async def test_stream_replays_buffered_events_before_live() -> None:
     """A reconnect with ``last_event_id`` drains the buffer first, then live."""
     broker = InMemorySSEBroker()
     buffer = InMemorySSEReplayBuffer()
-    # Pre-record three events. Client claims to have seen the first.
     first = await buffer.record("s", {"n": 1})
     second = await buffer.record("s", {"n": 2})
     third = await buffer.record("s", {"n": 3})
@@ -91,8 +88,6 @@ async def test_stream_replays_buffered_events_before_live() -> None:
         last_event_id=first,
     )
     assert (await gen.__anext__()) == b": stream open\n\n"
-    # Replay yields events strictly after ``first``: event 2 then event 3,
-    # each carrying the ``id:`` prefix.
     frame_2 = await asyncio.wait_for(gen.__anext__(), timeout=1.0)
     frame_3 = await asyncio.wait_for(gen.__anext__(), timeout=1.0)
     assert frame_2 == f"id: {second}\ndata: ".encode() + b'{"n":2}\n\n'
@@ -108,7 +103,6 @@ async def test_live_events_unwrap_event_id_when_buffer_present() -> None:
     async def producer() -> None:
         await asyncio.sleep(0.01)
         # Simulate what ``MCPServer.notify`` publishes when a buffer is wired:
-        # a wrapped envelope with the event ID inside.
         await broker.publish(
             "s",
             {"_mcp_event_id": "0000000000000007", "_mcp_payload": {"hi": "world"}},
@@ -119,7 +113,7 @@ async def test_live_events_unwrap_event_id_when_buffer_present() -> None:
     gen = stream_events(
         broker, "s", keepalive_interval=1.0, replay_buffer=buffer, last_event_id=None
     )
-    await gen.__anext__()  # opening
+    await gen.__anext__()
     frame = await asyncio.wait_for(gen.__anext__(), timeout=1.0)
     assert frame == b'id: 0000000000000007\ndata: {"hi":"world"}\n\n'
     await gen.aclose()
@@ -133,7 +127,6 @@ async def test_live_events_passthrough_when_no_event_id_wrapper() -> None:
     async def producer() -> None:
         await asyncio.sleep(0.01)
         # Plain payload — no wrapper. The generator falls back to the
-        # buffer-less wire shape (no ``id:`` line).
         await broker.publish("s", {"plain": True})
 
     asyncio.create_task(producer())
@@ -151,7 +144,7 @@ async def test_replay_yields_nothing_falls_through_to_live() -> None:
     """``Last-Event-ID`` past the latest recorded event → replay is empty, live runs."""
     broker = InMemorySSEBroker()
     buffer = InMemorySSEReplayBuffer()
-    head = await buffer.record("s", {"n": 1})  # client claims to have seen everything
+    head = await buffer.record("s", {"n": 1})
 
     gen = stream_events(
         broker,
@@ -161,7 +154,6 @@ async def test_replay_yields_nothing_falls_through_to_live() -> None:
         last_event_id=head,
     )
     assert (await gen.__anext__()) == b": stream open\n\n"
-    # No replay (client up to date) → next frame is a keep-alive (idle live mode).
     frame = await asyncio.wait_for(gen.__anext__(), timeout=0.5)
     assert frame == b": keepalive\n\n"
     await gen.aclose()
@@ -171,27 +163,22 @@ async def test_no_replay_when_last_event_id_omitted() -> None:
     """Header absent → no replay even when a buffer is configured."""
     broker = InMemorySSEBroker()
     buffer = InMemorySSEReplayBuffer()
-    await buffer.record("s", {"n": 1})  # buffered but client didn't ask to resume
+    await buffer.record("s", {"n": 1})
 
     gen = stream_events(
         broker, "s", keepalive_interval=0.05, replay_buffer=buffer, last_event_id=None
     )
     assert (await gen.__anext__()) == b": stream open\n\n"
-    # Next frame must be a keep-alive — no replay, no live events queued.
     frame = await asyncio.wait_for(gen.__anext__(), timeout=0.5)
     assert frame == b": keepalive\n\n"
     await gen.aclose()
 
 
 async def test_the_stream_closes_itself_once_its_lifetime_elapses() -> None:
-    """Without a cap the generator is a bare ``while True`` whose only exit is
-    the client leaving — and it keep-alives itself past every proxy timeout, so
-    the client never has to. Ending it forces a reconnect, which re-runs the
-    authentication the stream was opened under."""
+    """Without a cap the generator is a bare while True, whose only exit is the client leaving."""
     broker = InMemorySSEBroker()
     gen = stream_events(broker, "s", keepalive_interval=60.0, max_seconds=0.0)
     assert await gen.__anext__() == b": stream open\n\n"
-    # A comment frame rather than an abrupt cut, so the wire says which it was.
     assert await asyncio.wait_for(gen.__anext__(), timeout=1.0) == b": stream closed\n\n"
     with pytest.raises(StopAsyncIteration):
         await gen.__anext__()

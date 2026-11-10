@@ -1,11 +1,3 @@
-"""A server's ``exception_map=`` reaches the wire through both views, in both eras.
-
-Over HTTP the handlers never see the server: each view builds the request's context
-from what ``MCPServer`` handed ``as_view``. A map dropped there leaves a mapped
-exception a ``-32603`` on the wire while ``call_tool`` answers it, which is why each
-view is driven here rather than the handlers alone.
-"""
-
 from __future__ import annotations
 
 import json
@@ -173,8 +165,7 @@ async def _last_frame(response: Any) -> dict[str, Any]:
 
 @pytest.mark.parametrize("era", [LEGACY, MODERN])
 async def test_a_mapped_exception_from_a_check_is_answered_on_the_stream(era: str) -> None:
-    """A ``progressToken`` moves the checks ahead of the stream, where an unmapped
-    exception is a ``500``. A mapped one is left to the run, so it is a tool result."""
+    """A ``progressToken`` moves the checks ahead of the stream."""
     response = await _streamed(_check_server(exception_map={TenantGone: _gone}), era)
     assert response.streaming
     assert tool_error((await _last_frame(response))["result"])["message"] == "from the check"

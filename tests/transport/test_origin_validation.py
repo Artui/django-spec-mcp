@@ -24,7 +24,6 @@ def test_empty_allowlist_rejects_origins() -> None:
 
 
 def test_two_servers_can_allow_different_origins() -> None:
-    """The allowlist arrives as a value rather than a global read — which is the
-    point: it comes from each server's own config."""
+    """The allowlist arrives as a value rather than a global read — which is the point."""
     assert is_origin_allowed("https://internal.example", ["https://internal.example"]) is True
     assert is_origin_allowed("https://internal.example", ["https://public.example"]) is False

@@ -1,10 +1,3 @@
-"""The 2026-07-28 transport: era detection, header validation, status codes.
-
-Every request here goes through the real URL conf, because the whole subject is
-what happens at the HTTP edge — which status code, which headers, whether a
-session is minted. Asserting on handler return values would test none of it.
-"""
-
 from __future__ import annotations
 
 import base64
@@ -91,8 +84,7 @@ def test_the_legacy_path_is_untouched(client: Client, initialized_session: str) 
 
 @pytest.mark.django_db(transaction=True)
 def test_initialize_never_offers_a_modern_version(client: Client) -> None:
-    """``initialize`` does not exist in 2026-07-28, so offering it would hand
-    the client a revision whose next request this transport would refuse."""
+    """initialize does not exist in 2026-07-28, so offering it would strand the client."""
     response = client.post(
         "/mcp/",
         data=json.dumps({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {}}),
@@ -128,8 +120,7 @@ def test_a_missing_method_header_is_rejected(client: Client) -> None:
 
 @pytest.mark.django_db(transaction=True)
 def test_a_method_header_that_contradicts_the_body_is_rejected(client: Client) -> None:
-    """The confused-deputy case: a gateway routes on the header, the server
-    executes the body, and they disagree about what is being called."""
+    """The confused-deputy case: a gateway routes on the header, the server executes the body."""
     response = _post(client, "tools/list", headers={"Mcp-Method": "tools/call"})
     assert response.status_code == 400, response.content
     assert "Mcp-Method" in response.json()["error"]["message"]
@@ -218,8 +209,7 @@ def test_an_unsupported_version_lists_what_is_supported(client: Client) -> None:
 
 @pytest.mark.django_db(transaction=True)
 def test_a_legacy_version_claimed_by_a_modern_request_is_unsupported(client: Client) -> None:
-    """Modern ``_meta`` naming a legacy revision is not a legacy request — it
-    is a modern one asking for a version the modern path does not serve."""
+    """Modern ``_meta`` naming a legacy revision is not a legacy request."""
     response = _post(client, "tools/list", version=LEGACY)
     assert response.status_code == 400, response.content
     assert response.json()["error"]["code"] == -32022
@@ -277,11 +267,7 @@ def test_delete_still_works_for_a_legacy_caller(client: Client) -> None:
 
 @pytest.mark.django_db(transaction=True)
 async def test_the_async_get_stream_is_405_for_a_modern_caller() -> None:
-    """The standalone GET stream was removed in 2026-07-28.
-
-    Mounts the async URL conf directly rather than through the module-level
-    ``urls`` marker, which this file points at the sync transport.
-    """
+    """The standalone GET stream was removed in 2026-07-28."""
     with override_settings(ROOT_URLCONF="tests.testapp.async_urls"):
         response = await AsyncClient().get("/mcp/", headers={"Mcp-Protocol-Version": MODERN})
     assert response.status_code == 405
@@ -289,8 +275,7 @@ async def test_the_async_get_stream_is_405_for_a_modern_caller() -> None:
 
 @pytest.mark.django_db(transaction=True)
 async def test_the_async_modern_path_matches_the_sync_one() -> None:
-    """The two transports are parallel implementations, so parity is asserted
-    rather than assumed — that is exactly where they have drifted before."""
+    """The two transports are parallel implementations."""
     with override_settings(ROOT_URLCONF="tests.testapp.async_urls"):
         client = AsyncClient()
         ok = await client.post(
@@ -330,8 +315,7 @@ async def test_the_async_modern_path_matches_the_sync_one() -> None:
 
 @pytest.mark.django_db(transaction=True)
 async def test_a_modern_permission_denial_is_403_with_a_challenge_async() -> None:
-    """The status and the challenge survive the era change — a client still
-    learns what to ask for rather than retrying the same token."""
+    """The status and the challenge survive the era change."""
     from tests.conformance.mcp import build_conformance_server
     from tests.testapp.urlconf_for import urlconf_for
 
@@ -363,12 +347,7 @@ async def test_a_modern_permission_denial_is_403_with_a_challenge_async() -> Non
 
 
 def test_a_broken_meta_reads_as_legacy() -> None:
-    """A missing modern marker and a malformed one are indistinguishable here.
-
-    Answering a legacy client with a modern header-validation error would be
-    the more confusing of the two failures, so ``from_params`` degrades to
-    "legacy" and lets the legacy path have its say.
-    """
+    """A missing modern marker and a malformed one are indistinguishable here."""
     from django_spec_mcp.transport.types.request_metadata import RequestMetadata
 
     assert RequestMetadata.from_params(None) is None
@@ -401,7 +380,6 @@ def test_client_info_is_projected_as_far_as_it_goes() -> None:
     assert partial.client_info is not None
     assert partial.client_info.name == "C"
     assert partial.client_info.version == ""
-    # A non-mapping capabilities declaration degrades to "declared nothing".
     assert partial.client_capabilities == {}
 
     nameless = RequestMetadata.from_params(
