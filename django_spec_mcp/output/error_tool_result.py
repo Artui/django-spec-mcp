@@ -16,27 +16,7 @@ def build_error_tool_result(
     error_type: str,
     detail: Mapping[str, Any] | None = None,
 ) -> ToolResult:
-    """Build an ``isError: true``
-    [`ToolResult`][django_spec_mcp.protocol.types.tool_result.ToolResult] for a
-    tool-level failure.
-
-    Per the MCP spec, *execution* failures (business rules, validation of
-    well-shaped input, missing rows) come back as tool results the model can
-    read and self-correct from; JSON-RPC protocol errors are reserved for faults
-    in the call itself — malformed params shape, unknown tool, auth, rate limits.
-
-    The payload is rendered as JSON text in ``content[0]``:
-
-        {"error": {"type": "service_error", "message": "...", "detail": {...}}}
-
-    ``structuredContent`` is deliberately omitted: the spec ties it to the
-    tool's ``outputSchema``, which describes the *success* shape, so a strict
-    client validating an error payload against it would reject the result.
-
-    ``detail`` is merged into the ``error`` object — per-field validation detail
-    and the ``code`` a refused call carries
-    (``handlers.utils.service_error_result`` adds it for an ``ActionUnavailable``).
-    """
+    """Build an ``isError: true`` tool result for a tool-level failure."""
     error: dict[str, Any] = {"type": error_type, "message": message}
     if detail:
         error.update(detail)

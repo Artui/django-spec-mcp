@@ -36,24 +36,9 @@ def build_content_blocks(
     content_kind: ToolContentKind,
     mime_type: str | None,
 ) -> list[ToolContentBlock] | str:
-    """Project a rendered tool payload into non-text ``content`` blocks.
-
-    Returns the blocks, or an **explanatory message** when the payload does not
-    match the kind the binding declared — a message rather than a response, so
-    each caller wraps it in the envelope it is already building (as with
-    ``enforce_result_bytes``).
-
-    A mismatch is a server-side mistake that can only be caught here, since a
-    callable's return type is not knowable at registration. It surfaces as a
-    tool-level error rather than an exception so the client still gets a
-    well-formed response.
-
-    ``TEXT`` never reaches this function;
-    [`build_tool_result`][django_spec_mcp.output.tool_result.build_tool_result]
-    handles it directly, encoding the payload as JSON."""
+    """Project a rendered tool payload into non-text ``content`` blocks."""
     if content_kind is ToolContentKind.RESOURCE_LINK:
         return _resource_links(payload)
-    # IMAGE / AUDIO — the payload is the media itself.
     if not isinstance(payload, bytes | bytearray | memoryview | str):
         return (
             f"declares content_kind={content_kind.name} but produced "
@@ -64,8 +49,6 @@ def build_content_blocks(
     factory = (
         ToolContentBlock.image if content_kind is ToolContentKind.IMAGE else ToolContentBlock.audio
     )
-    # ``mime_type`` is guaranteed non-None by the binding's own validation:
-    # declaring IMAGE / AUDIO without one is refused at registration.
     return [factory(_as_bytes(payload), mime_type=mime_type or "")]
 
 
@@ -77,12 +60,7 @@ def _as_bytes(payload: bytes | bytearray | memoryview | str) -> bytes | str:
 
 
 def _resource_links(payload: Any) -> list[ToolContentBlock] | str:
-    """One ``resource_link`` per mapping in the payload.
-
-    A single mapping and a sequence of them are both accepted, tuples included:
-    a tool resolving one document and one resolving several should not need
-    different plumbing.
-    """
+    """One ``resource_link`` per mapping in the payload."""
     items: Any = [payload] if isinstance(payload, Mapping) else payload
     if not isinstance(items, list | tuple) or not all(isinstance(item, Mapping) for item in items):
         return (
@@ -115,12 +93,7 @@ def _resource_links(payload: Any) -> list[ToolContentBlock] | str:
 
 
 def _refuse_link_uri(uri: Any) -> str | None:
-    """An explanatory message when ``uri`` must not be handed to a host, else ``None``.
-
-    Same shape as the other mismatches here: the caller wraps it in the envelope
-    it is already building, so the client gets a tool-level error rather than a
-    block it should not have been sent.
-    """
+    """An explanatory message when ``uri`` must not be handed to a host, else ``None``."""
     if not isinstance(uri, str):
         return (
             "declares content_kind=RESOURCE_LINK but produced an entry whose "
@@ -130,8 +103,6 @@ def _refuse_link_uri(uri: Any) -> str | None:
     try:
         scheme: str = urlsplit(uri).scheme
     except ValueError:
-        # ``urlsplit`` raises on a malformed authority (an unclosed IPv6
-        # literal). Unparseable is unlinkable.
         scheme = ""
     if not _URI_SCHEME_RE.match(scheme):
         return (

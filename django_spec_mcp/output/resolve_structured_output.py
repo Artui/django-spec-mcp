@@ -11,25 +11,7 @@ def resolve_structured_output(
     default_output_schema: bool,
     default_structured_content: bool,
 ) -> tuple[bool, bool]:
-    """Collapse the structured-output tri-state overrides against globals.
-
-    Each override is tri-state: ``None`` defers to the passed-in server-level
-    default, ``True`` / ``False`` force the behaviour regardless.
-
-    The MCP spec requires a tool declaring an ``outputSchema`` to always return
-    conforming ``structuredContent``; the reverse is allowed. This enforces that
-    asymmetry rather than emitting a non-compliant response.
-
-    Returns:
-        ``(output_schema, structured_content)`` — whether the binding advertises
-        ``outputSchema`` in ``tools/list`` and emits ``structuredContent`` in
-        ``tools/call``.
-
-    Raises:
-        django.core.exceptions.ImproperlyConfigured: If the effective
-            combination would advertise the schema while suppressing the
-            content.
-    """
+    """Collapse the structured-output tri-state overrides against globals."""
     output_schema: bool = (
         include_output_schema_override
         if include_output_schema_override is not None
