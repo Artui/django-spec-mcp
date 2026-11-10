@@ -1,6 +1,3 @@
-"""Internal helpers shared by
-[`MCPServer`][django_spec_mcp.server.mcp_server.MCPServer]'s registration methods."""
-
 from __future__ import annotations
 
 import warnings
@@ -16,36 +13,13 @@ from django_spec_mcp.types.ui_resource_mime_type import UI_RESOURCE_MIME_TYPE
 
 
 class UnguardedToolWarning(UserWarning):
-    """A tool, resource or prompt was registered with no MCP permissions at all.
-
-    Its own category so consumers can filter it precisely via
-    ``warnings.filterwarnings``. Named for tools, though every registration
-    kind reports through it, so one filter covers them all.
-    """
+    """A tool, resource or prompt was registered with no MCP permissions at all."""
 
 
 def check_tool_permissions_declared(
     name: str, *, guarded: bool, require: bool, kind: str = "tool"
 ) -> None:
-    """Warn (or raise) when a registered binding carries neither permissions nor scopes.
-
-    Asked of a prompt, the one registration whose ``permissions=`` and
-    ``scopes=`` are its whole gate: a kernel tool or resource is guarded by its
-    spec's own ``PermissionCheck``s, which ``check_kernel_spec_guarded`` asks
-    about, and a view reads nothing of the caller's (``register_ui_resource``).
-    ``guarded`` is whether either is declared, and ``register_prompt`` holds
-    each half: ``test_a_prompt_with_checks_alone_counts_as_guarded`` fails
-    without the checks, ``test_a_prompt_takes_a_scope_gate_and_counts_as_guarded``
-    without the scopes. Neither means nothing gates the render beyond transport
-    authentication.
-
-    ``kind`` names the registration in the message. It is governed by the
-    ``REQUIRE_TOOL_PERMISSIONS`` setting, the one every unguarded registration
-    has answered to, because a prompt's render reaches data as a tool does.
-
-    Emits on every unguarded registration — no warn-once module state, per the
-    repo's no-module-level-mutable-state rule.
-    """
+    """Warn (or raise) when a registered binding carries neither permissions nor scopes."""
     if guarded:
         return
     problem = (
@@ -54,9 +28,6 @@ def check_tool_permissions_declared(
         "permissions=[...] or scopes=[...] at registration."
     )
     if require:
-        # The remedy on this branch is the opposite of the warning's: the check
-        # is already strict, so name the way *out*, not the setting that just
-        # raised.
         raise ImproperlyConfigured(
             f"{problem} To downgrade this to a warning while you migrate, set "
             "SPEC_MCP['REQUIRE_TOOL_PERMISSIONS'] = False."
@@ -71,29 +42,13 @@ def check_tool_permissions_declared(
 
 
 class UndescribedToolWarning(UserWarning):
-    """A tool was registered with no description.
-
-    Its own category, matching ``UnguardedToolWarning``.
-    """
+    """A tool was registered with no description."""
 
 
 def check_tool_description_present(
     name: str, description: str | None, *, require: bool, stacklevel: int = 3
 ) -> None:
-    """Warn (or raise) when a tool binding carries no description.
-
-    ``stacklevel`` is counted from this function. The default is right for a
-    registrar that calls this directly and is itself called by the user's code;
-    a registrar that sits deeper passes its own count, as the kernel registrars
-    do (``test_the_warning_points_at_the_registering_line_not_this_package``).
-
-    Deliberately **no docstring fallback.** A docstring is written for the next
-    developer, not for a model choosing between tools, so promoting one would
-    ship prose never reviewed for that audience and silence the warning that
-    would have prompted someone to write the right thing. The decorator paths
-    that already fall back to ``fn.__doc__`` keep doing so; this reports
-    whatever survived that.
-    """
+    """Warn (or raise) when a tool binding carries no description."""
     if description and description.strip():
         return
     message = (
@@ -109,29 +64,13 @@ def check_tool_description_present(
 
 
 class UnboundedListWarning(UserWarning):
-    """A LIST selector tool was registered without pagination.
-
-    Its own category, matching ``UnguardedToolWarning``.
-    """
+    """A LIST selector tool was registered without pagination."""
 
 
 def check_list_pagination_declared(
     name: str, *, paginate: bool, require: bool, stacklevel: int = 3
 ) -> None:
-    """Warn (or raise) when a LIST selector tool has no pagination.
-
-    ``stacklevel`` is counted from this function, as on
-    ``check_tool_description_present``
-    (``test_the_warning_points_at_the_registering_line_not_this_package``).
-
-    **Why this warns rather than silently clamping.** A ``paginate=True`` tool
-    clamps safely because ``totalPages`` / ``hasNext`` tell the model rows were
-    left behind; an unpaginated result carries no such metadata, so a clamped
-    one would look complete. There is nowhere honest to put the truth except
-    the registration, hence a warning here and ``MAX_PAGE_SIZE`` as the backstop
-    at dispatch -- applied as a ``LIMIT`` before the rows are rendered, so an
-    oversized result is refused rather than fetched whole and then measured.
-    """
+    """Warn (or raise) when a LIST selector tool has no pagination."""
     if paginate:
         return
     message = (
@@ -159,24 +98,7 @@ def build_ui_tool_meta(
     include_structured_content: bool | None,
     default_structured_content: bool,
 ) -> dict[str, Any]:
-    """Validate a tool's view link and return its ``_meta`` contribution.
-
-    Empty dict when the tool declares no link, so the caller can hand the
-    result to ``merge_meta`` unconditionally.
-
-    Four ways a link can be wrong, each of which would otherwise fail at
-    runtime as a view that silently never renders, so all four raise here:
-    ``ui=`` and a ``"ui"`` key in ``meta=`` together (same ``_meta`` key, so
-    one would quietly win); a ``resource_uri`` naming no view on this server
-    (a host resolves it against the server it read the tool from, so a view
-    must be registered *before* the tool linking to it, and a templated URI
-    names none, since ``register_ui_resource`` refuses one); a
-    ``resource_uri`` that a URI template splits more than one way, which is
-    reachable only through a *data* resource's template, since neither
-    ``register_ui_resource`` nor the registry takes a templated view; and a tool not emitting
-    ``structuredContent``, the payload a view renders from — checked against
-    the effective value, so a project that turned it off globally is caught too.
-    """
+    """Validate a tool's view link and return its ``_meta`` contribution."""
     if ui is None:
         return {}
     if meta is not None and UI_META_KEY in meta:
@@ -186,11 +108,6 @@ def build_ui_tool_meta(
             "ui= alone, or drop it and hand-write the whole bundle in meta=."
         )
 
-    # ``resolve`` raises ValueError for one reason only: a URI its template
-    # splits more than one way. It walks every binding, so the template is a
-    # data resource's: the registry refuses a templated view, however it was
-    # built. The registry's message names neither the tool nor that the link is
-    # what asked, so say both.
     try:
         resolved = resources.resolve(ui.resource_uri)
     except ValueError as exc:
@@ -234,12 +151,7 @@ def check_completions_declared(
     completions: dict[str, Any],
     completable: Iterable[str],
 ) -> None:
-    """Refuse a completer keyed to an argument that doesn't exist.
-
-    A misspelled completer never fires, and its failure is silence in a
-    dropdown rather than a log line. The argument names are known at
-    registration, so the typo is catchable at startup.
-    """
+    """Refuse a completer keyed to an argument that doesn't exist."""
     known: set[str] = set(completable)
     unknown: list[str] = sorted(set(completions) - known)
     if not unknown:
