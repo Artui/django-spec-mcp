@@ -40,46 +40,7 @@ def ui_view_to_resource(
     meta: dict[str, Any] | None = None,
     always_listed: bool = False,
 ) -> ResourceBinding:
-    """Lift an interactive HTML view into a
-    [`ResourceBinding`][django_spec_mcp.registry.types.resource_binding.ResourceBinding].
-
-    The sibling of ``selector_to_resource`` for the MCP Apps extension.
-    A view is an ordinary resource with three things fixed: the Apps mime
-    type, ``TEXT`` body encoding (JSON-encoding HTML would return a quoted
-    string literal, not a document), and a ``_meta`` bundle under the Apps key.
-
-    Being an ordinary resource is the point: URI-collision checking, the listing
-    handlers, permission filtering and ``always_listed`` all work with no
-    special case, and a view can still be guarded with ``permissions=`` (kernel
-    ``PermissionCheck``s, each handed the binding as the spec) and ``scopes=``,
-    both held to their rules by ``ResourceBinding`` itself.
-
-    Exactly one content source:
-
-    - ``body_template_name`` — a Django template holding the view's *markup
-      only*, wrapped here in a document that carries the ``ui/*`` bridge. The
-      recommended source, and the only one that does not ask a project to
-      implement the extension's postMessage protocol itself — see
-      [`build_app_document`][django_spec_mcp.ui.build_app_document.build_app_document].
-      ``diagnostics=`` rides with it: whether a protocol failure is written
-      into the document as well as logged, ``None`` following
-      ``settings.DEBUG``.
-    - ``template_name`` — a Django template holding a **whole document**.
-      Everything the view needs, the bridge included, is then the template's own
-      responsibility.
-    - ``html`` — a literal document, for a view small enough to inline.
-    - ``render`` — a callable returning the document, for a project that
-      assembles it some other way. It **must take no arguments**, and one that
-      declares a parameter is refused here rather than guarded later: the read
-      path resolves the callable against a pool carrying ``request`` and ``user``,
-      so a parameter would be handed the authenticated caller — which is exactly
-      what the permissions exemption on views assumes cannot happen.
-
-    Both template sources render with **no context**, and that is deliberate:
-    hosts may prefetch and cache a view before any tool call, so a view is a
-    *shell*, hydrated at runtime from tool results. Rendering tenant data into
-    one would leak it across the cache.
-    """
+    """Lift an interactive HTML view into a resource binding."""
     sources = [s for s in (template_name, body_template_name, html, render) if s is not None]
     if len(sources) != 1:
         raise ValueError(
@@ -100,16 +61,12 @@ def ui_view_to_resource(
 
     resolved: Callable[[], str]
     if template_name is not None:
-        # Rendered per read rather than once at registration so a template edit
-        # shows up without a restart, matching every other Django template.
+        # Rendered per read, so a template edit shows without a restart.
         def resolved() -> str:
             return render_to_string(template_name)
 
     elif body_template_name is not None:
-        # Rendered per read for the same reason a whole-document template is —
-        # an edit shows up without a restart — while the shell and the bridge
-        # around it are the package's, composed from a source string cached for
-        # the life of the process because it ships in the wheel.
+        # Rendered per read like a whole-document template, so an edit needs no restart.
         def resolved() -> str:
             return build_app_document(
                 render_to_string(body_template_name),
@@ -150,30 +107,7 @@ __all__ = ["ui_view_to_resource"]
 
 
 def _refuse_caller_aware_render(name: str, render: Callable[..., str]) -> None:
-    """Refuse a view's render callable that would be handed the caller.
-
-    A view is the one registration on this server that skips
-    ``check_tool_permissions_declared``, and the exemption rests entirely on a
-    view's content being caller-blind: hosts may prefetch a view and reuse the
-    document for whoever they serve next, which is why the template renders with
-    no context and why an unguarded view exposes nothing.
-
-    ``render=`` is where that argument needs enforcing: ``handle_resources_read``
-    resolves every binding's callable by name against a pool that deliberately
-    carries ``request`` and ``user``, so ``render=lambda user: ...`` would be
-    handed the authenticated caller, registered without permissions because of
-    the exemption, and served into a document a host may cache across callers --
-    three assumptions that are each fine alone.
-
-    Refused here rather than guarded later, for the reason every other
-    registration-time refusal on this server exists: the failure is invisible at
-    runtime. A caller-aware view does not misbehave, it just quietly varies, and
-    whoever reads the exemption's comment stops looking.
-
-    ``*args`` is left alone: ``resolve_callable_kwargs`` only ever builds
-    keyword arguments, so a variadic-positional callable is still called with
-    nothing.
-    """
+    """Refuse a view's render callable that would be handed the caller."""
     parameters = inspect.signature(render).parameters
     fillable: list[str] = [
         parameter_name

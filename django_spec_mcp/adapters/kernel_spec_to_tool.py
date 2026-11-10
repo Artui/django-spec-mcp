@@ -52,29 +52,7 @@ def kernel_spec_to_tool(
     unknown_arguments: UnknownArguments,
     server_arguments: ServerArguments | None,
 ) -> KernelToolBinding:
-    """Build the binding ``MCPServer.register_tool`` registers for a kernel spec.
-
-    Refuses, before anything is built, what the binding cannot mean:
-
-    - ``spec`` that is not a kernel ``ServiceSpec`` or ``SelectorSpec``, a
-      ``TypeError``.
-    - a knob of the other kind of tool: ``paginate`` / ``max_page_size`` on a
-      service tool or a ``RETRIEVE``, ``invalidates`` on a selector tool.
-    - ``scopes=()``, which reads as a gate and admits everyone. A bare string
-      is one scope.
-    - ``UnknownArguments.PASSTHROUGH``, which the kernel never honours: an
-      argument a spec does not declare reaches no callable.
-
-    Then compiles the spec's two schemas, so a declaration the kernel cannot
-    describe fails here rather than taking every later ``tools/list`` down
-    with it. The input schema reads under the stamp a listing reads under, so what
-    a Validator declares only to an MCP call fails here too
-    (``test_a_field_failing_assembly_under_mcp_alone_raises_at_register_tool``).
-
-    The MCP hints are derived by ``merge_tool_annotations``: a selector tool is read-only, a service tool
-    destructive with its declared ``idempotent`` as ``idempotentHint``, and a
-    hint passed in ``annotations`` wins.
-    """
+    """Build the binding ``MCPServer.register_tool`` registers for a kernel spec."""
     if not isinstance(spec, ServiceSpec | SelectorSpec):
         raise TypeError(
             f"Tool {name!r}: register_tool takes a django_service_specs ServiceSpec or "
@@ -87,8 +65,6 @@ def kernel_spec_to_tool(
             "where an argument the spec does not declare never reaches a callable. Pass "
             "UnknownArguments.IGNORE or UnknownArguments.REJECT."
         )
-    # Compiled here for what they raise: a declaration the kernel cannot describe
-    # fails the server's startup, not the first listing.
     spec_input_schema(
         spec, unknown_arguments=unknown_arguments, call_context=call_context(None, name)
     )
@@ -111,8 +87,6 @@ def kernel_spec_to_tool(
         content_mime_type=content_mime_type,
         include_structured_content=include_structured_content,
         include_output_schema=include_output_schema,
-        # Kept on the binding for ``maybe_create_task``, which decides at the
-        # call (``test_a_task_policy_is_kept_on_the_binding``).
         task_policy=task_policy,
         invalidates=invalidates,
         paginate=paginate,
@@ -121,8 +95,6 @@ def kernel_spec_to_tool(
         dispatch_timeout=dispatch_timeout,
         always_listed=always_listed,
         rate_limits=rate_limits,
-        # Read as the field holds them; the binding builds its gate from them, and
-        # refuses ``()``, whoever constructs it.
         scopes=scope_names(f"Tool {name!r}", scopes),
         unknown_arguments=unknown_arguments,
         server_arguments=server_arguments or ServerArguments(),
@@ -136,12 +108,7 @@ def _refuse_other_kinds_knobs(
     paginate: bool,
     max_page_size: int | None | UnsetType,
 ) -> None:
-    """Refuse a knob that belongs to the other kind of tool.
-
-    ``paginate`` and ``max_page_size`` are each refused on their own, so a
-    service tool given only ``max_page_size`` is refused as one given only
-    ``paginate`` is (``test_a_service_tool_refuses_each_selector_knob``).
-    """
+    """Refuse a knob that belongs to the other kind of tool."""
     pages: bool = paginate or max_page_size is not UNSET
     if isinstance(spec, ServiceSpec):
         if pages:
@@ -155,9 +122,6 @@ def _refuse_other_kinds_knobs(
             f"Tool {name!r}: invalidates belongs to a service tool; a selector tool "
             "reads and changes nothing."
         )
-    # ``test_a_list_tool_takes_the_page_knobs`` holds the kind test, and every
-    # RETRIEVE tool registered without page knobs (the testapp's ``invoices.get``,
-    # through ``test_initialize_lists_and_calls_through_the_kernel``) holds ``pages``.
     if pages and spec.kind is not SelectorKind.LIST:
         raise ImproperlyConfigured(
             f"Tool {name!r}: paginate and max_page_size belong to a LIST selector "

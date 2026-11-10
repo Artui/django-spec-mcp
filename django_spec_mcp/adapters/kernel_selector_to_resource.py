@@ -30,16 +30,7 @@ def kernel_selector_to_resource(
     mime_type: str,
     encoding: ResourceEncoding,
 ) -> KernelResourceBinding:
-    """Build the binding ``MCPServer.register_resource`` registers for a kernel spec.
-
-    Refuses a ``spec`` that is not a kernel ``SelectorSpec`` with a
-    ``TypeError``, a ``LIST`` one, since a resource read answers one document
-    for one URI, and ``scopes=()``, which reads as a gate and admits everyone.
-    The URI-template variables are the arguments the read dispatches with, so
-    the spec's ``reads`` name them. ``mime_type`` and ``encoding`` are the
-    binding's as given: the presenter renders the row, and ``encoding`` says
-    whether what it returns is a JSON value, a document or bytes.
-    """
+    """Build the binding ``MCPServer.register_resource`` registers for a kernel spec."""
     if not isinstance(spec, SelectorSpec):
         raise TypeError(
             f"Resource {name!r}: register_resource takes a django_service_specs "
@@ -56,8 +47,6 @@ def kernel_selector_to_resource(
         description=description,
         selector=spec.selector,
         spec=spec,
-        # Read as the field holds them; the binding builds its gate from them, and
-        # refuses ``()``, whoever constructs it.
         scopes=scope_names(f"Resource {name!r}", scopes),
         rate_limits=rate_limits,
         annotations=dict(annotations or {}),
