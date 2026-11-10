@@ -1,5 +1,3 @@
-"""``ToolRegistry`` holds kernel bindings by name, in registration order."""
-
 from __future__ import annotations
 
 import pytest

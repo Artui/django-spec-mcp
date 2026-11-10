@@ -1,13 +1,3 @@
-"""A control character is not part of a ``{var}`` value; such a URI is unknown.
-
-Each ``{var}`` matches one or more characters other than ``/`` and other than
-control characters, so ``invoices://7\\n`` fits no template, and neither does
-``reports://\\n`` fit the concrete ``reports://`` binding (the URIs are not
-equal). A read is refused as an unknown resource (``-32602`` under
-``2026-07-28``, ``-32002`` under ``2025-11-25``), on the sync and the async
-path alike, and a subscription leaves the URI out of its grant.
-"""
-
 from __future__ import annotations
 
 from typing import Any
