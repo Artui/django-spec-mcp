@@ -6,14 +6,7 @@ from typing import Any
 
 @dataclass(frozen=True)
 class ProtectedResourceMetadata:
-    """RFC 9728 OAuth 2.0 Protected Resource Metadata payload.
-
-    Returned by ``MCPAuthBackend.protected_resource_metadata`` and
-    serialised onto the wire by the PRM view. Keys map 1:1 to the RFC 9728
-    field names, except ``warning``: a package-local extension serialised as
-    ``_warning``, which ``AllowAnyBackend`` uses to make dev-mode
-    misconfiguration loud in client tooling.
-    """
+    """RFC 9728 OAuth 2.0 Protected Resource Metadata payload."""
 
     resource: str
     authorization_servers: list[str] = field(default_factory=list)
