@@ -1,12 +1,3 @@
-"""One kernel declaration of ``affordances``, shared by the tests that advertise and call it.
-
-Every condition is a callable rather than a condition on the row, so answering
-one needs no query of its own. A kernel selector carries the answers on model
-instances and mappings, and ``DataclassPresenter`` reads by attribute, so the
-order a selector returns is an ``Invoice`` row: a test that calls a tool needs
-one in the database, and a test that only lists the tools needs none.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass

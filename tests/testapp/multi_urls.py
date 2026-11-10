@@ -1,9 +1,3 @@
-"""Two MCP servers mounted in one project — the multi-instance scenario.
-
-Collaborators are passed explicitly rather than resolved from settings, so each
-server is independent of test-suite globals (and of the other server).
-"""
-
 from __future__ import annotations
 
 from django.urls import path

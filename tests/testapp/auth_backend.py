@@ -1,5 +1,3 @@
-"""An auth backend for tests, resolving the caller from two request headers."""
-
 from __future__ import annotations
 
 from django.contrib.auth import get_user_model
@@ -17,13 +15,7 @@ SCOPES_HEADER = "X-Test-Scopes"
 
 
 class HeaderAuthBackend(AllowAnyBackend):
-    """Resolve the principal and its scopes from ``X-Test-User`` / ``X-Test-Scopes``.
-
-    A mount passes it explicitly, so a test chooses the caller per request:
-    the named user, looked up by username (inactive users included, so a
-    deactivated principal can be sent), or ``AnonymousUser`` with no header.
-    An unknown username is unauthenticated, answered by the transport's 401.
-    """
+    """Resolve the principal and its scopes from ``X-Test-User`` / ``X-Test-Scopes``."""
 
     def authenticate(self, request: HttpRequest) -> TokenInfo | None:
         username: str | None = request.headers.get(USER_HEADER)
