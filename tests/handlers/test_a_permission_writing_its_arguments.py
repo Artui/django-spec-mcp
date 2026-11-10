@@ -1,4 +1,4 @@
-"""A permission writing into its ``arguments`` reaches neither the next check, the service nor the caller.
+"""A permission writing into ``arguments`` reaches no next check, service or caller.
 
 A check that declares ``arguments`` is handed the call's shape-checked
 arguments as a read-only mapping, a copy of the top level behind a proxy, so a
@@ -61,7 +61,7 @@ class _Note:
 
 
 class _Stamps(PermissionCheck):
-    """Tries to stamp ``owner`` into its ``arguments``, and either lets the fault out or swallows it."""
+    """Tries to stamp ``owner`` into ``arguments``, and lets the fault out or swallows it."""
 
     def __init__(self, *, swallow: bool) -> None:
         self.swallow = swallow

@@ -1,7 +1,7 @@
 """Client-supplied names never outrank the transport's own seeds, on a kernel resource too.
 
-Every method that lets a caller route a value into a pool, a prompt argument, a URI-template variable or a
-completion sibling, has to keep the dispatcher's own names out of the caller's
+Every method letting a caller route a value into a pool, a prompt argument, a URI-template variable,
+or a completion sibling, has to keep the dispatcher's own names out of the caller's
 reach, or an argument called ``user`` binds to the parameter the dispatcher owns
 and the callable runs under a principal the caller named.
 

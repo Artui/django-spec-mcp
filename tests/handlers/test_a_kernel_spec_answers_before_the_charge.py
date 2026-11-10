@@ -362,7 +362,7 @@ class _Reads(PermissionCheck):
 
 
 class _Rewrites(PermissionCheck):
-    """Admits every caller, setting ``pk`` to ``1`` in any ``dict`` it is handed as ``arguments``."""
+    """Admits every caller, setting ``pk`` to ``1`` in any ``dict`` handed as ``arguments``."""
 
     def has_permission(self, principal: Any, spec: Any, *, arguments: Any) -> bool:
         if isinstance(arguments, dict):

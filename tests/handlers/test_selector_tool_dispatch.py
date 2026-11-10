@@ -6,7 +6,7 @@ and ``handle_tools_call_async`` alike: a ``filter_set`` advertises its filters
 and narrows the rows, ``paginate=True`` lays one page out through the kernel's
 ``paginate_output`` with the untyped ``page`` / ``limit`` read as ints, a
 declared read is shape-checked, a list return pages in memory, ``None`` under
-``allow_none`` is the empty list and without it an internal error, and the spec's permissions, the rate limits,
+``allow_none`` is the empty list (else an internal error), the spec's permissions and rate limits,
 a ``ServiceValidationError`` and a ``ServiceError`` are each answered on the
 tool result or the JSON-RPC error. The async-only questions are in
 ``test_selector_tool_dispatch_async.py``.
@@ -294,8 +294,8 @@ async def test_a_declared_read_is_shape_checked(is_async: bool) -> None:
 
 @routes
 async def test_none_under_allow_none_is_the_empty_list(is_async: bool) -> None:
-    # A kernel spec says ``None`` is an answer by declaring ``allow_none=True``; without it the kernel's ``present``
-    # raises ``TypeError`` and the call is an internal error
+    # A kernel spec says ``None`` is an answer only with ``allow_none=True``; without it the
+    # kernel's ``present`` raises ``TypeError`` and the call is an internal error
     # (test_none_without_allow_none_is_an_internal_error).
     out = await _call(_server(_invoices(lambda: None, allow_none=True)), {}, is_async=is_async)
 

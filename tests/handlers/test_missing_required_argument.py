@@ -8,8 +8,8 @@ transport answers that refusal as the validation ``isError`` on every route, so
 a selector's ``TypeError`` for a missing keyword, an HTTP 500 with ``-32603`` on
 the wire, has no way to arise.
 
-Every route and both protocol eras answer a result, the schema's ``required`` is what dispatch refuses, several missing
-names are answered together, a provider or a registered seed filling a read
+Every route and both eras answer a result; ``required`` is what dispatch refuses. Several
+missing names are answered together, a provider or a registered seed filling a read
 satisfies it, and a caller the tool is not for is refused for that before any
 argument is read.
 

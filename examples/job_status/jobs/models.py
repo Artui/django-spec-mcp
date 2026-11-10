@@ -6,7 +6,7 @@ from django.db import models
 
 
 class Job(models.Model):
-    """A long-running job. Status transitions: ``queued`` → ``running`` → ``done`` (or ``failed``)."""
+    """A long-running job: ``queued`` → ``running`` → ``done`` or ``failed``."""
 
     STATUS_CHOICES: list[tuple[str, str]] = [
         ("queued", "queued"),

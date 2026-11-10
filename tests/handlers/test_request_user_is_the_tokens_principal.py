@@ -5,7 +5,7 @@ on a view's read are each handed the transport's ``HttpRequest``. Over the wire
 its ``user`` is whatever the project's middleware resolved, a session cookie
 included, and the MCP caller is the bearer token's principal, which can be
 someone else. A callable authorizing on ``request.user`` must be judging the
-caller, so the request's ``user`` is held to the token's here, behind Django's own session middleware with
+caller, so ``request.user`` is held to the token here, behind Django's session middleware with
 a client logged in as someone the token does not name.
 """
 
