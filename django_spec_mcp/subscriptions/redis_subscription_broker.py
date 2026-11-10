@@ -13,46 +13,7 @@ _DEFAULT_CHANNEL_PREFIX: str = "spec-mcp:sub"
 
 
 class RedisSubscriptionBroker:
-    """Cross-process topic fan-out over Redis pub/sub. **The deployable one.**
-
-    [`InMemorySubscriptionBroker`][django_spec_mcp.subscriptions.in_memory_subscription_broker.InMemorySubscriptionBroker]
-    delivers to nobody once the publisher and the subscriber's stream land on
-    different workers, and does so
-    silently, so anything past one worker wants this:
-
-        from redis.asyncio import Redis
-        from django_spec_mcp.subscriptions.redis_subscription_broker import (
-            RedisSubscriptionBroker,
-        )
-
-        server = MCPServer(
-            name="my-app",
-            subscription_broker=RedisSubscriptionBroker(
-                Redis.from_url("redis://…"), namespace="my-app"
-            ),
-        )
-
-    **Pass ``namespace`` whenever one Redis serves more than one server.**
-    Topic names are built from caller-supplied values — a notification kind, a
-    resource URI — so two servers that register the same ``SelectorSpec`` under
-    the same URI derive the same topic. Sharing a broker (or two brokers on the
-    same default prefix) then routes one server's change signals to the other's
-    subscribers, past the ``resources/read`` permission ``grant_subscription``
-    gates them on. The cache-backed session and task stores fold the server's
-    ``name`` into their key prefix for exactly this reason; a Redis client is
-    the consumer's to construct, so here it is a constructor argument. The value
-    is hashed into the prefix, since ``name`` is free-form.
-
-    **One Redis channel per topic, one listener task per subscription.** The
-    mapping is many-to-many — a subscription watches several topics and several
-    subscriptions watch one topic — so each subscription gets a single task
-    subscribed to all of its channels, feeding the one queue its stream reads.
-    That keeps the task count proportional to live subscriptions rather than to
-    topics, and it is subscriptions that connections bound.
-
-    The Redis client's lifecycle belongs to the consumer — close it during ASGI
-    lifespan shutdown, as with the other Redis collaborators here.
-    """
+    """Cross-process topic fan-out over Redis pub/sub."""
 
     def __init__(
         self,
@@ -79,19 +40,9 @@ class RedisSubscriptionBroker:
         return f"{self._prefix}:{topic}"
 
     async def subscribe(self, topics: frozenset[str]) -> asyncio.Queue[Any]:
-        """Register the channels **before returning**, then pump them.
-
-        **The await is the whole point.** Registering inside the background task
-        would return a queue that is not yet subscribed, and the caller emits
-        "you are subscribed" immediately afterwards, so everything published in
-        that window goes nowhere while the client has been told otherwise — a
-        race this class's own deployment makes likely, since the publisher is
-        another process and waits for nobody.
-        """
+        """Register the channels **before returning**, then pump them."""
         queue: asyncio.Queue[Any] = asyncio.Queue()
         if not topics:
-            # An empty filter is legal: no channels, no pubsub, no task, and the
-            # acknowledgement is where the client learns it will hear nothing.
             return queue
         channels: list[str] = [self._channel(topic) for topic in sorted(topics)]
         pubsub = self._client.pubsub()
@@ -107,10 +58,7 @@ class RedisSubscriptionBroker:
         entry = self._pubsubs.pop(id(queue), None)
         if entry is not None:
             pubsub, channels = entry
-            # Scheduled rather than awaited: ``unsubscribe`` is called from a
-            # generator's ``finally``, which may run during interpreter or loop
-            # shutdown where awaiting is not available. Its failure mode — a
-            # channel released late — is bounded by the connection closing.
+            # Scheduled rather than awaited: ``unsubscribe`` runs in a generator's ``finally``.
             asyncio.ensure_future(self._release(pubsub, channels))  # noqa: RUF006
 
     @property
@@ -118,25 +66,14 @@ class RedisSubscriptionBroker:
         return len(self._tasks)
 
     async def _release(self, pubsub: Any, channels: list[str]) -> None:
-        """Give the channels back. Best-effort by construction.
-
-        During ASGI lifespan shutdown the client may already be closed by the
-        time a subscription unwinds, and neither call failing is worth raising
-        into a finished request.
-        """
+        """Give the channels back."""
         with contextlib.suppress(Exception):
             await pubsub.unsubscribe(*channels)
         with contextlib.suppress(Exception):
             await pubsub.aclose()
 
     async def publish(self, topic: str, payload: Any) -> int:
-        """Publish to ``topic``'s channel; returns Redis's subscriber count.
-
-        The count is **cluster-wide receivers, not confirmed deliveries**, and a
-        listener still connecting reports as zero. A diagnostic, not a delivery
-        guarantee: notifications are best-effort and a client that missed one
-        re-reads the resource.
-        """
+        """Publish to ``topic``'s channel; returns Redis's subscriber count."""
         message: bytes = json.dumps(payload).encode()
         receivers: int = await self._client.publish(self._channel(topic), message)
         return int(receivers)
