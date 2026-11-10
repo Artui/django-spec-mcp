@@ -1,10 +1,3 @@
-"""``bearer_challenge`` builds the ``WWW-Authenticate`` value a backend answers 401 with.
-
-The format is fixed here once so no project's backend writes it again. The
-parameter order is part of it: the realm, then the metadata pointer, then the
-error, then the scope, as a client parsing the header reads them.
-"""
-
 from __future__ import annotations
 
 from django_spec_mcp.auth import bearer_challenge

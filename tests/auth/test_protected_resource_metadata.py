@@ -1,5 +1,3 @@
-"""The RFC 9728 document a backend publishes, as it goes on the wire."""
-
 from __future__ import annotations
 
 from django_spec_mcp.auth.types.protected_resource_metadata import ProtectedResourceMetadata
