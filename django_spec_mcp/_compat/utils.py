@@ -23,23 +23,12 @@ async def arun_selector_sync_safe(fn: Callable[..., Any], kwargs: dict[str, Any]
 
 
 def namespace_digest(namespace: str) -> str:
-    """Reduce a free-form namespace (a server name) to a token a cache key, Redis
-    key or channel name can hold.
-
-    Not for secrecy - a server name is public. It only guarantees a well-formed
-    key on every backend.
-    """
+    """Reduce a free-form namespace (a server name) to a token a cache or channel key can hold."""
     return hashlib.sha256(namespace.encode("utf-8")).hexdigest()[:NAMESPACE_DIGEST_CHARS]
 
 
 def resolve_async_redis() -> Any:
-    """Resolve ``redis.asyncio.Redis`` without making it an import-time dependency.
-
-    ``redis`` is an optional extra, so importing a Redis-backed module without it
-    must not crash the package; the ``ImportError`` fires only when a consumer
-    constructs the store. Resolved through ``importlib`` so the binding stays
-    plain ``Any`` and the type checker cannot narrow it to the imported class.
-    """
+    """Resolve ``redis.asyncio.Redis`` without making it an import-time dependency."""
     try:
         return importlib.import_module("redis.asyncio").Redis
     except ImportError:  # pragma: no cover - exercised by the no-extras smoke job
