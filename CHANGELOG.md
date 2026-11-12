@@ -15,6 +15,13 @@ carries; releases up to 0.54.0 are in
 
 - **The API reference's docstrings are restored.** The comment-budget cut had reduced the
   docstrings the reference renders to one line each; they are back.
+- **The guide pages say what the code does at the edges.** Principal derivation, a
+  field's `required` from its `default`, a `requestState` that is not single-use,
+  synchronous completers, `tasks/cancel` on a finished task, the subscription
+  broker's `namespace=`, skipped invalidation templates, the scopes a task worker
+  keeps, a raised 403 that is a fault, and how `cacheScope` is derived. The session
+  store recipe now names the server `name` as the cache key prefix, and the
+  `ResultType` reference no longer says nothing produces `input_required`.
 
 ## [0.12.0] — 2026-11-09
 

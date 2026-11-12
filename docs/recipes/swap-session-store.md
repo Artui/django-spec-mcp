@@ -78,6 +78,6 @@ server = MCPServer(name="my-app", session_store=RedisSessionStore(redis_client))
 
 !!! note "Namespace it if you mount more than one server"
     The default `DjangoCacheSessionStore` keys its entries under the server's
-    `url_namespace`, so two mounts can't see each other's sessions. A store you
+    `name`, so two servers of different names can't see each other's sessions. A store you
     build yourself is yours to namespace — give each server its own key space,
     or a session minted at `/public/mcp` will satisfy `/internal/mcp`.

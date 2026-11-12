@@ -14,8 +14,7 @@ class ResultType(str, Enum):
     Attributes:
         COMPLETE: The result is the answer.
         INPUT_REQUIRED: The result asks the client for input and expects the
-            original request to be retried with the answers. Nothing here
-            produces one yet; the vocabulary is the spec's.
+            original request to be retried with the answers.
     """
 
     COMPLETE = "complete"

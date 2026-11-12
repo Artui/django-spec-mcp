@@ -973,6 +973,12 @@ asks again — so the question is when a client asks:
 A listing that asked any condition is served with `cacheScope: private`, because
 it was answered for this caller and is no longer identical for every caller.
 
+The `cacheScope` is derived from what shaped the answer, never configured. A
+catalog filtered by the caller's permissions, or one that answered an affordance
+the caller asked for, is `private`, and so is every `resources/read` body. A
+catalog the same for every caller is `public`. No setting makes a caller-specific
+answer shareable, so an intermediary may keep only what says `public`.
+
 **Saying why a tool is missing.** A listing only leaves a tool out; nothing on the
 wire says which tools were left out or why. An in-process consumer can ask:
 `MCPServer.unavailable_tools` names each tool the listing omits with the
@@ -1444,6 +1450,11 @@ caller's token at `request.mcp_token`, and `user` is the token's principal,
 handler slices it to the spec's cap of 100 and sets `hasMore` rather than
 draining it, so a queryset reads 101 rows, not the table.
 
+A completer is called synchronously and its result is not awaited. An `async def`
+completer returns a coroutine, which is not iterable, so the call fails as an
+internal error (`-32603`, logged) rather than offering values. Keep completers
+synchronous.
+
 Resource templates work the same way, keyed by the `{variable}` name:
 
 ```python
@@ -1606,6 +1617,12 @@ server = MCPServer(
 )
 ```
 
+Pass `namespace=` whenever one Redis serves more than one server. Topics are built
+from caller-supplied values, so two servers that register the same URI would
+otherwise share one topic, and a change one server announces would reach the other
+server's subscribers without passing the `resources/read` permission they were
+granted under. The example above is the one-server form.
+
 There is **no default broker**, deliberately. A server that quietly got an
 in-process one would advertise support and then deliver nothing the moment a
 second worker existed.
@@ -1677,6 +1694,11 @@ nothing). The arguments are the ones the tool ran with: on a retry, its
 `inputResponses` merged over the arguments as sent, so an answer naming another
 `{project_pk}` announces the project the service ran on. Publishing happens **after the transaction commits**, and a call that
 came back `isError` publishes nothing.
+
+A template is skipped without an error or a log line when one of its variables is
+missing, or is `None` once the result's `structuredContent` fields are merged over
+the arguments, so a result's `None` overrides an argument of the same name. Check
+the template's names against the fields the tool returns in `structuredContent`.
 
 **Its boundary is real, and is why the explicit trigger exists too.** It fires
 for calls that go through this server and for nothing else — a management
@@ -1833,6 +1855,10 @@ Then `tasks/get` until `completed` / `failed` / `cancelled`, honouring
 `pollIntervalMs`. `tasks/cancel` signals intent to stop; `tasks/update` answers
 a task that is parked on `input_required`.
 
+A `tasks/cancel` on a task that has already finished is acknowledged and changes
+nothing: the status stays what it was (`completed`, `failed` or `cancelled`). Read
+the status with `tasks/get` rather than trusting the acknowledgement.
+
 **`Mcp-Name` must carry the `taskId`** on all three methods — the extension
 requires it so a gateway can route a follow-up to the instance holding the
 task's state. A mismatch is `-32020`, exactly as for `tools/call`.
@@ -1873,7 +1899,7 @@ the spec, or the registration distinguishes the two paths.
 
 | | |
 |---|---|
-| Permissions run **twice** | Once before the task is created, so a denied call never reaches the queue and still gets its `403`; once again in the worker, against the same rebuilt token. The task stores the caller's scopes for exactly this reason. |
+| Permissions run **twice** | Once before the task is created, so a denied call never reaches the queue and still gets its `403`; once again in the worker, against the same rebuilt token. The task stores the caller's scopes for exactly this reason. The scopes are the ones stored when the task was created: a token revoked or narrowed after that keeps them until the task record expires (`TASK_TTL_MS`). The worker re-reads the user: a deleted or inactive user runs as `AnonymousUser`, so a user-based permission check is asked about an anonymous caller, while a `scopes=` gate still judges the stored scopes. |
 | Rate limits run **once** per request | Consuming a quota is a side effect, so it is charged when the client asks and not again on replay. Charging both would halve every configured limit. An answer to a task that asked is a request too, and pays for its round, as an inline retry does. |
 | A tool error is `completed`, not `failed` | The spec is explicit. A `ServiceError` produces a well-formed result carrying `isError: true`, and that is a task that finished. `failed` means the task machinery broke. |
 | There is no `tasks/list` | Deliberate in the spec: without sessions there is nothing to scope a listing by. Ids are high-entropy and ownership is checked on top — an id belonging to someone else answers exactly as one that never existed. |
@@ -1953,6 +1979,10 @@ the raise into a question, the client puts it to the user, and the answer arrive
 back as that ordinary argument — so the service reads it exactly as it would read
 anything else a caller sent.
 
+A field is `required` in the form unless its schema gives it a `default`. Give a
+field a `default` when the user may leave it blank; a field without one is one the
+user must answer.
+
 A tool admits an answer only under a name it takes from a client: a
 parameter the spec declares, less every name the server fills for the call (a
 `server_arguments` entry, a pool seed, a reflected `request` or `view` read, or a
@@ -2021,6 +2051,11 @@ before any of it is believed:
 | the authenticated principal | a token that leaked and is presented by someone else |
 | a digest of the original call | a confirmation given for a harmless call, replayed onto a destructive one |
 | a timestamp (`INPUT_REQUEST_TTL_SECONDS`) | anything captured from a log or a proxy and used later |
+
+A `requestState` is not single-use. Within `INPUT_REQUEST_TTL_SECONDS` the same
+state and answers can be presented again, and each presentation runs the service
+again from the top. A service whose effect must happen once needs its own
+idempotency key, checked before the effect runs.
 
 All four failures — including a bad signature — answer identically: the state is
 ignored and the user is asked again. Distinguishing them would turn the endpoint
