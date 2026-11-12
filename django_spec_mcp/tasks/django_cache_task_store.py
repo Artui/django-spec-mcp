@@ -19,7 +19,36 @@ _NO_TTL_FALLBACK_SECONDS: int = 60 * 60 * 24 * 7
 
 
 class DjangoCacheTaskStore:
-    """Task store backed by ``django.core.cache``."""
+    """Task store backed by ``django.core.cache``. **The default.**
+
+    Cross-process, which for tasks is not a nice-to-have: the web worker that
+    creates a task and the worker that finishes it are different processes, so
+    a store they do not share cannot work at all (see
+    [`InMemoryTaskStore`][django_spec_mcp.tasks.in_memory_task_store.InMemoryTaskStore]).
+
+    **Namespacing** follows
+    [`DjangoCacheSessionStore`][django_spec_mcp.transport.django_cache_session_store.DjangoCacheSessionStore]
+    exactly — the server's ``name``, hashed into the key prefix, so two servers in one
+    project cannot read or overwrite each other's tasks. The digest is for key hygiene
+    (``name`` is free-form; memcached rejects spaces and caps length), not secrecy.
+
+    **Records are serialised to plain dicts rather than pickled.** The cache
+    holds them across a deploy, and a pickled dataclass is a version of this
+    package's class definition: rename a field and every in-flight task becomes
+    unreadable exactly when a worker tries to finish it. Plain dicts also keep
+    the store usable under a JSON-serialising backend.
+
+    **Expiry** is absolute, stamped once at ``create`` from ``ttlMs`` and
+    carried in the envelope, so ``save`` renews the cache timeout to the
+    *remaining* lifetime rather than restarting the clock — otherwise a task
+    reporting progress often would never expire.
+
+    **A malformed id is a miss, not an exception.** ``taskId`` comes off the
+    wire and lands in a cache key, and the memcached backends reject keys with
+    spaces or control characters and keys over 250 bytes — raising out of a
+    handler with no arm for it. An id that cannot be one this package minted
+    cannot name a record either, so it is answered as the absence it is.
+    """
 
     def __init__(self, *, namespace: str | None = None) -> None:
         self._prefix: str = (
