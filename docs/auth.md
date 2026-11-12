@@ -141,6 +141,14 @@ answers at (`https://example.com/internal/mcp/.well-known/oauth-protected-resour
 for a server whose resource URL is `https://example.com/internal/mcp/`), or
 `None` when the backend publishes no metadata.
 
+The token's `user` decides who owns each session and task. An authenticated user
+with a primary key becomes the principal `user:<pk>`. An authenticated user with no
+`pk` is refused with `ImproperlyConfigured`, because every such caller would
+otherwise share one principal and could present the others' session ids and read
+their task results. A `None` user, or one that reports `is_authenticated` as false,
+maps to the shared `"anonymous"` principal, so return `AnonymousUser` only for a
+caller who is genuinely unauthenticated.
+
 ### Where a client finds the metadata
 
 A client looks for the RFC 9728 document in two places, in this order:

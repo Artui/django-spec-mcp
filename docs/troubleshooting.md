@@ -216,6 +216,11 @@ not a server fault, so it is answered `-32006` under `403` with the
 `WWW-Authenticate` challenge, exactly like a permission check that answered
 no, and nothing is logged at `ERROR`.
 
+Only Django's `PermissionDenied` is a refusal. An exception that merely carries a
+403, such as an upstream service's `Forbidden` error, is a server fault: it is
+logged at `ERROR` and answered as an internal error (`-32603`). Raise
+`PermissionDenied` where a refusal is meant.
+
 A progress-carrying call (one sent with a `progressToken`) has committed its
 `200` before the dispatch runs, so the same failure arrives as its last frame,
 a `-32603` whose message is `Internal error` too.
