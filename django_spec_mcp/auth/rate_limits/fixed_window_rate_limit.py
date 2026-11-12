@@ -13,7 +13,20 @@ _DEFAULT_KEY_PREFIX: str = "spec-mcp:rl"
 
 
 class FixedWindowRateLimit:
-    """A fixed-window-counter rate limiter backed by ``django.core.cache``."""
+    """A fixed-window-counter rate limiter backed by ``django.core.cache``.
+
+    The window is bucketed by absolute time: each integer multiple of
+    ``per_seconds`` since the epoch starts a new counter. Not as smooth as a
+    sliding window, but it needs no sorted set.
+
+    ``namespace`` keeps multiple limits on one binding (burst plus
+    steady-state) from sharing counters; ``key`` customises the bucket
+    dimension and defaults to per-token-user.
+
+    The cache **must** be a shared backend in multi-process deployments;
+    Django's ``locmem`` is fine for tests but enforces no global limit across
+    worker processes.
+    """
 
     def __init__(
         self,

@@ -15,7 +15,29 @@ ResultT = TypeVar("ResultT")
 
 @dataclass(frozen=True)
 class ResourceBinding(Generic[ResultT]):
-    """All wiring for a single MCP view: a resource read by calling a selector."""
+    """All wiring for a single MCP view: a resource read by calling a selector.
+
+    A view is a selector callable plus a URI. ``register_ui_resource`` builds
+    one for an MCP Apps UI resource, and a kernel spec is a
+    ``KernelResourceBinding`` instead. The MCP server invokes the selector
+    directly via ``resolve_callable_kwargs`` + ``run_selector`` over the
+    kernel's pool and the URI-template variables, and ``mime_type`` advertises
+    the type the body will carry. ``annotations`` and ``meta`` are emitted
+    verbatim on the listing entry, and ``meta`` also on the ``contents`` block
+    of ``resources/read``.
+
+    One built by hand and passed straight to ``server.resources.register`` is
+    registered unchecked: the registrars' refusals (an undeclared permission
+    under ``REQUIRE_TOOL_PERMISSIONS``, a template variable naming a seed or
+    one of the kernel's ``CALL_SEEDS``, a completer for no variable) are not asked, and
+    no kernel spec stands behind it to refuse an unguarded call, so it carries its own
+    ``permissions`` and ``scopes``. A
+    bare callable meant to be served with those checks is a ``RETRIEVE``
+    ``SelectorSpec`` registered with ``register_resource``.
+
+    The generic parameter is purely informational, letting callers pin the
+    selector's return type for type-checker help.
+    """
 
     name: str
     uri_template: str

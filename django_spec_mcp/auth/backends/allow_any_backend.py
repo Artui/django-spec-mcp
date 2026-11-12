@@ -11,7 +11,11 @@ from django_spec_mcp.auth.types.token_info import TokenInfo
 
 
 class AllowAnyBackend:
-    """Development / test backend that authenticates every request as anonymous."""
+    """Development / test backend that authenticates every request as anonymous.
+
+    DO NOT use in production. The ``protected_resource_metadata`` payload is
+    intentionally minimal so misconfiguration is loud rather than silent.
+    """
 
     def authenticate(self, request: HttpRequest) -> TokenInfo | None:
         user: Any = getattr(request, "user", None) or AnonymousUser()
