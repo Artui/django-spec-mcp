@@ -28,7 +28,35 @@ def _template_to_pattern(uri_template: str, *, lazy: bool = False) -> re.Pattern
 
 
 class ResourceRegistry:
-    """URI or URI-template to resource binding lookup."""
+    """URI or URI-template to
+    [`ResourceBinding`][django_spec_mcp.registry.types.resource_binding.ResourceBinding]
+    lookup.
+
+    Concrete resources are matched by exact URI, templates by a regex derived
+    from the template. ``resolve`` returns the binding plus the variables
+    extracted from the URI.
+
+    **Specificity, not registration order.** A template's ``{var}`` matches any
+    single segment free of control characters, so ``reports://{report_id}``
+    also matches ``reports://all-tenants-summary``. Resolving in registration order would
+    make *which permission stack guards a URI* a function of the order the two
+    were registered in — and the wrong answer is the permissive one, since the
+    template is the general case. Concrete URIs are therefore tried first, and
+    only then templates.
+
+    **A URI the template splits more than one way is refused, not guessed
+    at.** Where the literal text between two variables also occurs inside a
+    value, ``things://{a}-{b}`` fits ``things://1-2-3`` as ``a='1-2', b='3'``
+    and as ``a='1', b='2-3'``, and either answer would hand the selector
+    arguments the client may not have meant. ``resolve`` matches each URI with
+    every variable as long as it can be and again with every variable as short
+    as it can be; the first is the largest split by length in variable order,
+    the second the smallest, so they agree exactly when only one split exists.
+    When they differ, ``resolve`` raises ``ValueError`` naming both, and the
+    callers answer it: ``resources/read`` with ``-32602``, a subscription by
+    dropping the URI. The template keeps serving every URI it splits one way
+    (``test_the_same_template_still_serves_a_uri_it_splits_one_way``).
+    """
 
     def __init__(self) -> None:
         self._bindings: list[ResourceBinding] = []
@@ -55,7 +83,14 @@ class ResourceRegistry:
         )
 
     def resolve(self, uri: str) -> tuple[ResourceBinding, dict[str, str]] | None:
-        """The binding ``uri`` resolves to, or ``None`` when nothing matches."""
+        """The binding ``uri`` resolves to and the variables read from it, or
+        ``None`` when nothing matches.
+
+        Raises ``ValueError`` when the first template ``uri`` matches splits it
+        more than one way (see the class docstring). The refusal stops there
+        rather than trying later templates: which binding answers a URI must
+        not turn on whether its values happen to repeat a template's literals.
+        """
         for binding in (*self.concrete(), *self.templates()):
             greedy, lazy = self._patterns[binding.uri_template]
             match: re.Match[str] | None = greedy.fullmatch(uri)
@@ -73,7 +108,13 @@ class ResourceRegistry:
         return None
 
     def by_uri_template(self, uri_template: str) -> ResourceBinding | None:
-        """Exact lookup on the registered template string."""
+        """Exact lookup on the registered template string.
+
+        A caller holding the template itself — the completion API's
+        ``ref/resource``, say — must use this rather than ``resolve``:
+        ``things://{pk}`` satisfies its own pattern with ``pk="{pk}"``, so
+        ``resolve`` would answer, plausibly and wrongly.
+        """
         for binding in self._bindings:
             if binding.uri_template == uri_template:
                 return binding

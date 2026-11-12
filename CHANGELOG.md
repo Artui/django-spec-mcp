@@ -11,6 +11,11 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+### Documentation
+
+- **The API reference's docstrings are restored.** The comment-budget cut had reduced the
+  docstrings the reference renders to one line each; they are back.
+
 ## [0.12.0] — 2026-11-09
 
 ### Fixed

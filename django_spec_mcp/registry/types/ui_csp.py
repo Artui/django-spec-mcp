@@ -7,7 +7,26 @@ from typing import Any
 
 @dataclass(frozen=True)
 class UICsp:
-    """The network origins an interactive view needs, declared to the host."""
+    """The network origins an interactive view needs, declared to the host.
+
+    The server **declares**; the host **enforces**. A host builds the iframe's
+    Content-Security-Policy from this, so an origin the view talks to but does
+    not declare here is blocked at runtime, with nothing in the server logs to
+    say so.
+
+    Each field is a sequence of origins (``"https://api.example.com"``) mapping
+    onto one CSP directive. An empty one is omitted from the payload, so
+    declaring nothing declares nothing — which is not the same as declaring
+    "deny all", the host's default anyway.
+
+    Attributes:
+        connect_domains: ``fetch`` / ``XMLHttpRequest`` / WebSocket targets.
+        resource_domains: Images, stylesheets, scripts, fonts. A view loading
+            Django ``{% static %}`` assets must list the static origin here; a
+            self-contained single-file template needs nothing.
+        frame_domains: Origins the view may itself embed in an iframe.
+        base_uri_domains: Permitted values for the document's ``<base>``.
+    """
 
     connect_domains: Sequence[str] = ()
     resource_domains: Sequence[str] = ()

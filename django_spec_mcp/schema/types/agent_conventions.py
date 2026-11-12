@@ -17,7 +17,41 @@ from django_spec_mcp.schema.agent_conventions import (
 
 @dataclass(frozen=True)
 class AgentConventions:
-    """The sentences this server writes for a model, one field per sentence."""
+    """The sentences this server writes for a model, one field per sentence.
+
+    Passed as ``MCPServer(conventions=...)``, per server, because two servers in
+    one project can be talking to different readers. ``AgentConventions()`` is
+    the default, and its fields carry the wording a server uses when it is given
+    none; change one field and every other sentence stays the package's, so a
+    later correction to a line you did not override still reaches you.
+
+    The server still decides **whether** each sentence appears: a tool with no
+    handle gets no handle line, a tool that returns no page no scope sentence.
+    A field changes **what it says**, never when. ``None`` drops a sentence where
+    dropping one leaves a well-formed answer.
+
+    **Every field is a ``str.format`` template**, rendered wherever it lands
+    whether or not it has a placeholder, so a literal brace is written twice,
+    ``{{`` or ``}}``, in every field alike. The placeholders a field accepts are
+    the ones listed on it, and only ``missing_arguments`` accepts one. Anything
+    the server could not render raises ``ImproperlyConfigured`` naming the field
+    when the conventions are built, so a typo fails when the server is, rather
+    than inside the first call that reaches it. This is the Pydantic-AI
+    toolset's rule for its ``AgentConventions``, so one template reads the same
+    on both transports.
+
+    Some of these sentences state facts about how the server behaves: that a
+    selection applies to each item and never to the envelope, that the
+    envelope's keys are ``items``, ``page``, ``totalPages`` and ``hasNext``.
+    Wording you supply owns keeping those facts true.
+
+    Raises:
+        ImproperlyConfigured: A field uses a placeholder it does not accept, is
+            not a valid format string, cannot be rendered with the values it
+            will be given (``{names:q}``), is neither a string nor ``None``, or
+            is ``missing_arguments`` set to ``None`` or to an empty or
+            whitespace-only string.
+    """
 
     handle_field_description: str | None = HANDLE_DESCRIPTION
     """The ``outputSchema`` description of a handle field that declares none of

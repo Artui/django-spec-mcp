@@ -25,7 +25,22 @@ from django_spec_mcp.types.tool_content_kind import ToolContentKind
 
 @dataclass(frozen=True)
 class KernelToolBinding:
-    """All wiring for one MCP tool whose operation is a kernel spec."""
+    """All wiring for one MCP tool whose operation is a kernel spec.
+
+    ``spec`` is a ``django_service_specs`` ``ServiceSpec`` or ``SelectorSpec``, and
+    its class says which kind of tool this is: a service tool runs a mutation, a
+    selector tool reads. The call goes through the kernel's ``dispatch`` /
+    ``adispatch``, and the advertised schemas are the kernel's own
+    ``spec_caller_input_schema`` / ``spec_output_schema``, so the arguments a service
+    tool takes are the spec's parameters, spread at the top level of
+    ``arguments`` rather than nested under a ``data`` key.
+
+    Every other field is a fact of the MCP binding rather than of the operation:
+    the scope gate (``scopes``), ``rate_limits``, ``server_arguments``,
+    ``task_policy``, ``invalidates``, ``dispatch_timeout`` and
+    ``max_result_bytes`` are read by the ``tools/call`` shell around the
+    dispatch, never by the spec.
+    """
 
     name: str
     description: str | None
@@ -156,7 +171,10 @@ class KernelToolBinding:
 
     @cached_property
     def audience_projection(self) -> AudienceProjection:
-        """The spec's resolved audience markings, derived once per binding."""
+        """The spec's resolved audience markings, derived once per binding.
+
+        The kernel's own ``audience_projection_for_spec``, so the projected
+        payload and the advertised ``outputSchema`` read the same markings."""
         return audience_projection_for_spec(self.spec, name=f"Tool {self.name!r}")
 
 

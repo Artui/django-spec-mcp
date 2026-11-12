@@ -11,7 +11,19 @@ from django_spec_mcp.types.tool_content_kind import ToolContentKind
 def kernel_tool_output_schema(
     binding: KernelToolBinding, *, handle_description: str | None
 ) -> dict[str, Any] | None:
-    """The ``outputSchema`` a kernel tool can advertise."""
+    """The ``outputSchema`` a kernel tool can advertise, before the binding's
+    ``include_output_schema`` decides whether it does.
+
+    The kernel's ``spec_output_schema``, enveloped when the tool paginates and
+    projected through the binding's audience markings, so it names the fields
+    the presented payload carries, and with the ``"null"`` the kernel admits for
+    a spec that can present nothing restated as what this transport serves in
+    its place (``_admitting_nothing``, ``_a_list``). A list the kernel describes
+    as the root ``"array"`` is held under ``items`` (``_items_of``), because MCP
+    declares every ``outputSchema`` an object. ``None`` for an image or audio
+    tool, whose result is a media block with no structured content to describe,
+    and for a spec the kernel has no schema for.
+    """
     if binding.content_kind in (ToolContentKind.IMAGE, ToolContentKind.AUDIO):
         return None
     schema: dict[str, Any] | None = spec_output_schema(

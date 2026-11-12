@@ -8,7 +8,11 @@ from django_spec_mcp.protocol.types.icon import Icon
 
 @dataclass(frozen=True)
 class Resource:
-    """A concrete MCP resource as returned by ``resources/list``."""
+    """A concrete MCP resource as returned by ``resources/list``.
+
+    ``uri`` is the canonical address (e.g. ``"invoices://1"``); ``mime_type``
+    advertises how the contents will be encoded by ``resources/read``.
+    """
 
     uri: str
     name: str

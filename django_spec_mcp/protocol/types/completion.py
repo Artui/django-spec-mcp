@@ -6,7 +6,16 @@ from typing import Any
 
 @dataclass(frozen=True)
 class Completion:
-    """The ``completion`` object inside a ``completion/complete`` result."""
+    """The ``completion`` object inside a ``completion/complete`` result.
+
+    Attributes:
+        values: Suggestions ranked by relevance, capped at
+            ``MAX_COMPLETION_VALUES`` by the spec.
+        total: Count of all matches. Optional, and left unset by this package:
+            knowing it would mean counting every match, which is the work a
+            queryset-backed completer should be allowed to skip.
+        has_more: Whether the completer had more to give.
+    """
 
     values: tuple[str, ...] = ()
     total: int | None = None

@@ -7,14 +7,32 @@ from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 
 
 class ToolRegistry:
-    """Name to tool binding lookup."""
+    """Name to tool binding lookup.
+
+    Holds service and selector tools in one namespace, rejecting
+    duplicates loudly so a misconfigured project surfaces the conflict at
+    registration rather than silently shadowing a tool.
+
+    ``pool_seeds`` are the owning server's, which ``MCPServer`` passes: a
+    binding's ``server_arguments`` are checked against them, since dispatch
+    refuses a parameter a registered seed occupies.
+    """
 
     def __init__(self, *, pool_seeds: PoolSeeds = DEFAULT_POOL_SEEDS) -> None:
         self._bindings: dict[str, KernelToolBinding] = {}
         self._pool_seeds: PoolSeeds = pool_seeds
 
     def register(self, binding: KernelToolBinding) -> None:
-        """Add ``binding``, refusing a duplicate name."""
+        """Add ``binding``, refusing a duplicate name or server values that cannot hold.
+
+        The ``server_arguments`` check is made here rather than in the
+        registrars alone, because a binding built by hand and handed straight to
+        ``server.tools.register`` would otherwise reach every ``tools/call``
+        unchecked, and fail each one with ``ImproperlyConfigured`` where it
+        should have failed the server's startup
+        (``test_a_binding_built_by_hand_is_checked_when_it_is_registered``).
+        The registrars reach it as their last step, after the spec has compiled.
+        """
         if binding.name in self._bindings:
             raise ValueError(f"Duplicate MCP tool name: {binding.name!r}")
         _refuse_server_arguments_that_cannot_hold(binding, self._pool_seeds)
@@ -24,7 +42,14 @@ class ToolRegistry:
         return self._bindings.get(name)
 
     def all(self) -> list[KernelToolBinding]:
-        """Every binding, in **registration order**."""
+        """Every binding, in **registration order**.
+
+        ``tools/list`` has to be deterministic so clients can cache the catalog
+        and cursor pagination stays stable, which dict insertion order already
+        gives. Deliberately not sorted by name: registration order is authored
+        order, which is a better first page for a model than an alphabetical
+        one.
+        """
         return list(self._bindings.values())
 
     def __len__(self) -> int:

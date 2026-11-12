@@ -6,7 +6,17 @@ from typing import Any
 
 @dataclass(frozen=True)
 class ServerCapabilities:
-    """Capability bundle the server advertises in the ``initialize`` response."""
+    """Capability bundle the server advertises in the ``initialize`` response.
+
+    Every field defaults to ``None`` and is omitted from the payload when unset,
+    because a capability is a promise: a client that sees ``resources`` will
+    call ``resources/list``, and one that sees ``completions`` will send
+    ``completion/complete``. ``handle_initialize`` populates only what this
+    server can actually answer.
+
+    There is deliberately no ``logging`` field — the ``2026-07-28`` revision
+    **deprecated** the logging utility outright.
+    """
 
     tools: dict[str, Any] | None = None
     resources: dict[str, Any] | None = None

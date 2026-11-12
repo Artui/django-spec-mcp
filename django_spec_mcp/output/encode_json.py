@@ -24,7 +24,15 @@ def _reading_order(payload: Any) -> Any:
 
 
 def encode_json(payload: Any) -> str:
-    """Encode ``payload`` as a stable, pretty JSON string."""
+    """Encode ``payload`` as a stable, pretty JSON string.
+
+    ``default=str`` renders a presented value containing ``Decimal``, ``UUID`` or
+    ``datetime`` without raising; keys are sorted so the output is
+    deterministic. A payload ``sort_keys`` can sort is written by it unchanged,
+    so its bytes and its nesting limit are ``json.dumps``'s own
+    (``test_encode_json_writes_what_sort_keys_writes_wherever_sort_keys_can``);
+    only one it refuses is put in order first.
+    """
     try:
         return json.dumps(payload, indent=2, sort_keys=True, default=str, ensure_ascii=False)
     except TypeError:
