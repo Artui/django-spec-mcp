@@ -27,7 +27,40 @@ _SESSION_ID_SHAPE = re.compile(r"\A[A-Za-z0-9_-]{1,128}\Z")
 
 
 class DjangoCacheSessionStore:
-    """Session store backed by ``django.core.cache``."""
+    """Session store backed by ``django.core.cache``.
+
+    Works across processes — the production-suitable default.
+
+    **Two windows, both configurable** (``SESSION_TTL_SECONDS`` /
+    ``SESSION_MAX_AGE_SECONDS``, or the constructor arguments here). The TTL is
+    an **idle** window that restarts on every successful ``owner`` read, so
+    a session in continuous use never lapses; the max age is the **absolute**
+    ceiling that stops a sliding window outliving a revoked principal.
+
+    **Neither window can promise more than the cache underneath.** An eviction
+    policy like Redis's ``allkeys-lru`` drops session keys well before any
+    timeout, and the client cannot tell that apart from expiry. If sessions
+    vanish early, check the eviction policy before these settings.
+
+    A value this store cannot read fails the ownership comparison and the
+    client transparently re-initializes. A bare principal string — the shape
+    older versions wrote — is honoured and rewritten in the current shape, so
+    an upgrade does not log every current holder out.
+
+    **Namespacing.** An instance built by
+    [`MCPServer`][django_spec_mcp.server.mcp_server.MCPServer] keys its entries under
+    the server's ``name``, so two servers in one project cannot see each other's
+    sessions. Without it they share one flat key space over the same Django cache: a
+    session minted at one satisfies the other's ownership check, and a ``DELETE``
+    against either destroys the other's session. The namespace is **hashed** into the
+    key (``spec-mcp:session:<digest>:<token>``) because ``name`` is free-form while cache
+    keys must survive backends like memcached, which reject spaces and control
+    characters and cap length at 250.
+
+    Constructing the store yourself means you own the namespace:
+
+        MCPServer(session_store=DjangoCacheSessionStore(namespace="internal"))
+    """
 
     def __init__(
         self,
@@ -66,11 +99,24 @@ class DjangoCacheSessionStore:
         return token
 
     def exists(self, session_id: str) -> bool:
-        """Whether a key is present — deliberately *not* ``owner() is not None``."""
+        """Whether a key is present — deliberately *not* ``owner() is not None``.
+
+        A value this store cannot read is present but ownerless, and the gate
+        keys on ``owner``. Reading through ``owner`` here would also
+        refresh the idle window, making a liveness probe extend what it probes.
+        """
         return self._readable(session_id) and cache.get(self._key(session_id)) is not None
 
     def owner(self, session_id: str) -> str | None:
-        """Resolve the owning principal, refreshing the idle window on the way."""
+        """Resolve the owning principal, refreshing the idle window on the way.
+
+        **Idle, not fixed.** The window restarts on every successful read, so
+        only a genuinely idle session lapses.
+
+        **Bounded by an absolute maximum age.** The principal binding is
+        checked once, at ``initialize``, so an unbounded sliding window would
+        keep a *revoked* principal alive for as long as it kept talking.
+        """
         if not self._readable(session_id):
             return None
         entry = cache.get(self._key(session_id))

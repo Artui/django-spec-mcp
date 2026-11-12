@@ -59,7 +59,42 @@ def _describe(error: Any) -> str:
 
 
 def assert_tool_result_conforms(tool: Mapping[str, Any], result: Mapping[str, Any]) -> None:
-    """Assert ``result``'s ``structuredContent`` satisfies ``tool``'s ``outputSchema``."""
+    """Assert ``result``'s ``structuredContent`` satisfies ``tool``'s ``outputSchema``.
+
+    Args:
+        tool: One entry from a ``tools/list`` response -- the dict carrying
+            ``name`` and ``outputSchema``, not the response that wraps them.
+        result: The ``tools/call`` result for that tool: the ``result`` member
+            of the JSON-RPC envelope, carrying ``structuredContent``.
+
+    Raises:
+        AssertionError: If the payload does not conform, naming every property
+            that disagrees, what the schema advertised, and what arrived. Also
+            if the tool advertises no schema, or advertises one and returns no
+            ``structuredContent`` -- both would otherwise make this assertion
+            pass for any result at all, which is the failure mode it exists to
+            remove.
+        ImportError: If ``jsonschema`` is not installed.
+
+    ```python
+    from django_spec_mcp.testing import assert_tool_result_conforms
+
+    page = server.list_tools(user=user)
+    tool = next(entry for entry in page["tools"] if entry["name"] == "invoices.list")
+    result = await server.acall_tool("invoices.list", {}, user=user)
+
+    assert_tool_result_conforms(tool, result)
+    ```
+
+    Both arguments are plain mappings straight off the wire, so this works
+    against any way of reaching a tool -- the in-process transport above, an
+    HTTP round trip, or a client library -- with no fixture of its own.
+
+    Formats are checked, not only types, and how thoroughly depends on the
+    install: jsonschema registers a format checker only when the library that
+    performs it is importable, so the ``test`` extra pulls those in. Without
+    them ``"format": "date-time"`` is not checked and this still passes.
+    """
     try:
         from jsonschema import FormatChecker
         from jsonschema.validators import Draft202012Validator, validator_for

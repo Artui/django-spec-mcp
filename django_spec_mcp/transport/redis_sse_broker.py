@@ -17,7 +17,42 @@ _DEFAULT_CHANNEL_PREFIX: str = "spec-mcp:sse"
 
 
 class RedisSSEBroker:
-    """Cross-process SSE broker backed by Redis pub/sub."""
+    """Cross-process SSE broker backed by Redis pub/sub.
+
+    Drop-in replacement for
+    [`InMemorySSEBroker`][django_spec_mcp.transport.in_memory_sse_broker.InMemorySSEBroker]
+    when running multiple ASGI workers behind a load balancer. The streaming GET handler
+    can land on any worker, and ``await server.notify(...)`` from a different worker
+    still reaches the right session because every worker subscribes to the same Redis
+    channel (``<prefix>:<session_id>``). JSON encode/decode happens at the broker
+    boundary, so app code pushes Python dicts and the streaming generator sees dicts
+    too.
+
+    Wire it into [`MCPServer`][django_spec_mcp.server.mcp_server.MCPServer]:
+
+    ```python
+    from redis.asyncio import Redis
+    from django_spec_mcp import MCPServer
+    from django_spec_mcp.transport.redis_sse_broker import RedisSSEBroker
+
+    broker = RedisSSEBroker(Redis.from_url("redis://localhost:6379/0"))
+    server = MCPServer(name="my-app", sse_broker=broker)
+    ```
+
+    Caveats:
+
+    - Same single-subscriber-per-session contract as the in-memory broker:
+      re-subscribing replaces the old subscriber's queue.
+    - Same bounded per-session queue, for the same reason: the listener task
+      pumps Redis into a local queue, so a client that stops reading the socket
+      would otherwise accumulate every published payload in this worker's
+      memory. Past ``max_queued_events`` the oldest is dropped.
+    - Replay is a separate, opt-in collaborator — pair this with
+      [`RedisSSEReplayBuffer`][django_spec_mcp.transport.redis_sse_replay_buffer.RedisSSEReplayBuffer]
+      for cross-worker ``Last-Event-ID`` resume.
+    - The Redis client's lifecycle is the consumer's: close it during ASGI
+      lifespan shutdown.
+    """
 
     def __init__(
         self,
@@ -64,18 +99,32 @@ class RedisSSEBroker:
             task.cancel()
 
     async def publish(self, session_id: str, payload: Any) -> bool:
-        """Publish to the session's channel and report whether anyone received it."""
+        """Publish to the session's channel and report whether anyone received it.
+
+        ``True`` when at least one listener was attached. ``False`` — zero
+        subscribers — can also mean the streaming task has not connected yet,
+        so a caller needing at-least-once delivery layers its own retry.
+        """
         message: bytes = json.dumps(payload).encode()
         receivers: int = await self._client.publish(self._channel(session_id), message)
         return receivers > 0
 
     def has_subscriber(self, session_id: str) -> bool:
-        """Local-only check: whether *this* worker has an active subscriber."""
+        """Local-only check: whether *this* worker has an active subscriber.
+
+        Cross-process visibility would cost an extra Redis round-trip and buy
+        nothing — the streaming generator only cares about its own queue.
+        """
         return session_id in self._queues
 
     @property
     def active_streams(self) -> int:
-        """Local subscribers only, matching what the cap protects."""
+        """Local subscribers only, matching what the cap protects.
+
+        The ceiling exists to stop one worker's task pool being exhausted, and
+        a cluster-wide count would neither measure that nor be worth a Redis
+        round-trip per GET.
+        """
         return len(self._queues)
 
     async def _listen(self, session_id: str, queue: asyncio.Queue[Any]) -> None:

@@ -4,7 +4,17 @@ from enum import Enum
 
 
 class NotificationKind(str, Enum):
-    """The notification types a client can opt in to, other than by URI or id."""
+    """The notification types a client can opt in to, other than by URI or id.
+
+    **Opt-in is a MUST**, not a courtesy: *"the server MUST NOT send
+    notification types the client has not explicitly requested."* So this is a
+    closed set, and anything outside the request's filter is not sent.
+
+    The values are the notification methods with the ``notifications/`` prefix
+    stripped, and the filter field names are their camelCase forms — kept
+    mechanically related so a new kind cannot be added to one and forgotten in
+    the other.
+    """
 
     TOOLS_LIST_CHANGED = "tools/list_changed"
     PROMPTS_LIST_CHANGED = "prompts/list_changed"

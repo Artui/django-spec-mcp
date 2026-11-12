@@ -23,7 +23,40 @@ def transition_task(
     input_round: int | None = None,
     broker: SubscriptionBroker | None = None,
 ) -> TaskRecord | None:
-    """Move a task to ``status``, refusing to reopen a finished one."""
+    """Move a task to ``status``, refusing to reopen a finished one.
+
+    Returns the record as it now stands, or ``None`` if there is no such task.
+
+    **The terminal guard is the whole reason this exists** rather than each
+    caller writing its own ``store.save``. Two writers race by construction —
+    the worker finishing the job and a ``tasks/cancel`` from the client — and
+    no backend here locks, so without a guard a cancel landing just after
+    completion would move a task from ``completed`` back to ``cancelled`` and
+    tell the client its finished work never ran. The state machine is one-way:
+    once ``completed`` / ``failed`` / ``cancelled``, a task stays there.
+
+    A refused transition is **not an error**: the caller asked for something
+    already decided, and the record it gets back says what was decided, which is
+    what a cancel-after-completion should report. Callers needing to know
+    whether they won compare the returned status to the one they asked for.
+
+    ``lastUpdatedAt`` moves only on a transition that happened, so it stays an
+    honest "when did this task last change".
+
+    ``input_round`` sets the record's round with the transition, in the same save,
+    and ``None`` (the default) keeps the round as it stands, where every other
+    keyword's ``None`` clears its field: the round counts a task's questions over
+    its lifetime, and a transition that does not ask one has nothing to say about
+    it. ``0`` sets it like any other round, and a refused transition sets none
+    (``test_a_transition_sets_the_round_only_when_asked_and_only_when_it_happens``).
+    A round set while a worker runs the task is overwritten when that run parks it,
+    since the park records the round after the one the worker claimed
+    (``test_a_round_set_while_the_worker_runs_is_overwritten_by_its_park``).
+
+    ``broker`` opts the transition into ``notifications/tasks``, published only
+    for a transition that *happened* — a refused one changed nothing, and
+    saying otherwise would have a subscriber re-read an unmoved status.
+    """
     record: TaskRecord | None = store.get(task_id)
     if record is None:
         return None

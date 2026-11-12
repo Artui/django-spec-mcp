@@ -5,7 +5,23 @@ from typing import Any
 
 
 class InMemorySubscriptionBroker:
-    """In-process topic fan-out, for development and tests."""
+    """In-process topic fan-out, for development and tests.
+
+    **A multi-worker deployment needs a cross-process broker.** The write that
+    triggers a notification lands on whichever worker served that request while
+    the subscriber's stream is parked on a different one, so an in-process
+    broker delivers to nobody, silently, and the failure looks exactly like "the
+    resource never changed". Subscriptions are a **single-worker feature** until
+    a cross-process broker is passed to ``MCPServer(subscription_broker=…)``.
+
+    **Not a default.** ``MCPServer`` constructs no broker at all when none is
+    given, precisely so this class cannot be reached by accident.
+
+    Unlike the session broker this keeps a *set* of queues per topic, and a
+    queue may sit under several topics at once — one subscription watching five
+    resources reads a single stream. Both directions of that mapping are kept so
+    ``unsubscribe`` does not have to walk every topic.
+    """
 
     def __init__(self) -> None:
         # Instance state, never module-level: two servers keep separate subscriptions.
@@ -37,7 +53,12 @@ class InMemorySubscriptionBroker:
         return len(self._topics_by_queue)
 
     async def publish(self, topic: str, payload: Any) -> int:
-        """Deliver to every subscriber of ``topic``; returns how many got it."""
+        """Deliver to every subscriber of ``topic``; returns how many got it.
+
+        ``0`` means nobody was listening, which is ordinary and not an error:
+        notifications are best-effort by design, and a client that missed one
+        re-reads the resource.
+        """
         subscribers = self._by_topic.get(topic)
         if not subscribers:
             return 0

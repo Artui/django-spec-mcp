@@ -8,7 +8,18 @@ from django_spec_mcp.types.notification_kind import NotificationKind
 
 @dataclass(frozen=True)
 class SubscriptionFilter:
-    """What a subscription asked for, and what the server agreed to."""
+    """What a subscription asked for, and what the server agreed to.
+
+    One type for both directions, because they are the same shape: the client
+    sends a filter on ``subscriptions/listen`` and the server answers with the
+    subset it will honour. Two types could drift, and the point of the
+    acknowledgement is that the client can compare them.
+
+    **Empty means nothing is delivered.** The spec makes every type opt-in and
+    says the server **MUST NOT** send what was not requested, so an absent field
+    is a refusal rather than a default: a client that sends ``{}`` is
+    acknowledged with nothing and its stream closes immediately.
+    """
 
     kinds: frozenset[NotificationKind] = frozenset()
     resource_uris: tuple[str, ...] = ()
@@ -16,7 +27,12 @@ class SubscriptionFilter:
 
     @classmethod
     def from_params(cls, raw: Any) -> SubscriptionFilter:
-        """Read a filter off the wire, ignoring anything unusable."""
+        """Read a filter off the wire, ignoring anything unusable.
+
+        A malformed entry is dropped rather than failing the request: the
+        acknowledgement reports what actually took effect, so the drop is
+        visible, which beats rejecting a subscription over one bad key.
+        """
         if not isinstance(raw, dict):
             return cls()
         kinds: set[NotificationKind] = {
@@ -29,7 +45,12 @@ class SubscriptionFilter:
         )
 
     def to_dict(self) -> dict[str, Any]:
-        """The wire form, omitting everything not asked for."""
+        """The wire form, omitting everything not asked for.
+
+        Only truthy entries appear: the acknowledgement reads as "these are the
+        things you will receive", so a ``false`` or an empty list in it would
+        read as a promise about something.
+        """
         out: dict[str, Any] = {kind.filter_field: True for kind in sorted(self.kinds, key=str)}
         if self.resource_uris:
             out["resourceSubscriptions"] = list(self.resource_uris)

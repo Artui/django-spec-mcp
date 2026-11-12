@@ -4,7 +4,12 @@ import secrets
 
 
 class InMemorySessionStore:
-    """Process-local session store."""
+    """Process-local session store. Useful for tests and single-process dev servers.
+
+    State lives on the instance, so each store is isolated. Multi-process deployments
+    should use
+    [`DjangoCacheSessionStore`][django_spec_mcp.transport.django_cache_session_store.DjangoCacheSessionStore]
+    instead — this class will not see sessions created in another process."""
 
     def __init__(self) -> None:
         self._sessions: dict[str, str] = {}

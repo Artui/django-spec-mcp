@@ -4,7 +4,19 @@ from enum import Enum
 
 
 class ResultType(str, Enum):
-    """The discriminator every result carries from ``2026-07-28`` onward."""
+    """The discriminator every result carries from ``2026-07-28`` onward.
+
+    A **MUST** for servers implementing that revision and harmless before it —
+    a legacy result object is an open shape, and a client on an older revision
+    reads an absent ``resultType`` as ``complete`` — so it is emitted
+    unconditionally rather than era-branched.
+
+    Attributes:
+        COMPLETE: The result is the answer.
+        INPUT_REQUIRED: The result asks the client for input and expects the
+            original request to be retried with the answers. Nothing here
+            produces one yet; the vocabulary is the spec's.
+    """
 
     COMPLETE = "complete"
     INPUT_REQUIRED = "input_required"
