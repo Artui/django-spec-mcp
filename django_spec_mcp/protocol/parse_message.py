@@ -11,7 +11,11 @@ from django_spec_mcp.types.jsonrpc_version import JSONRPC_VERSION
 
 
 def parse_message(payload: dict[str, Any]) -> JsonRpcMessage:
-    """Classify a parsed JSON object as request / notification / response."""
+    """Classify a parsed JSON object as request / notification / response.
+
+    Raises ``ValueError`` if the payload has no recognizable shape — caller
+    should translate that to a JSON-RPC ``-32600`` (Invalid Request) error.
+    """
     if not isinstance(payload, dict):
         raise ValueError("JSON-RPC message must be a JSON object")
     if payload.get("jsonrpc") != JSONRPC_VERSION:

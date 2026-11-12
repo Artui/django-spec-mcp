@@ -16,7 +16,25 @@ _DEFAULT_KEY_PREFIX: str = "spec-mcp:rl-tb"
 
 
 class TokenBucketRateLimit:
-    """Token-bucket rate limiter using Django cache for state."""
+    """Token-bucket rate limiter using Django cache for state.
+
+    A bucket holds at most ``capacity`` tokens, each accepted call consumes
+    one, and the bucket refills continuously at ``refill_per_second``. When
+    empty, the limiter returns the time until one token is available again.
+
+    Trade-offs against the sliding-window scheme:
+
+    - **Burst-friendly**: a full bucket absorbs ``capacity`` requests
+      instantly, then holds the steady state at ``refill_per_second``. Useful
+      when consumers naturally batch.
+    - **Read-modify-write**: like the sliding window, not strictly atomic
+      across workers, so a few extra tokens can slip through under contention.
+      For strict atomicity, back the limiter with a Redis-Lua script.
+
+    The cache **must** be a shared backend (Memcached or Redis) in
+    multi-process deployments; Django's ``locmem`` is fine for tests but shares
+    no state across workers.
+    """
 
     def __init__(
         self,

@@ -8,7 +8,26 @@ from django_spec_mcp.protocol.types.icon import Icon
 
 @dataclass(frozen=True)
 class Implementation:
-    """Identifies an MCP client or server: name + version, with an optional title."""
+    """Identifies an MCP client or server: name + version, with an optional title.
+
+    Mirrors the spec's ``Implementation extends BaseMetadata, Icons``.
+
+    Attributes:
+        name: *"Intended for programmatic or logical use"* — the stable
+            identifier. What distinguishes two servers to a client, and what
+            server-scoped state keys off. Not interchangeable with
+            ``title``; the split is the spec's own.
+        version: The implementation's version string.
+        title: *"Intended for UI and end-user contexts"* — the human-readable
+            label. Clients fall back to ``name`` when absent.
+        description: UI copy a client shows next to the server's name in a
+            connection list. **Not** the ``initialize`` ``instructions``
+            string, which tells the *model* how to use this server and is
+            consumed as context. ``MCPServer(description=...)`` sets
+            ``instructions``; this comes from the ``SERVER_INFO`` setting.
+        website_url: A link a client can offer alongside the name.
+        icons: Display icons, emitted only when non-empty.
+    """
 
     name: str
     version: str

@@ -13,7 +13,26 @@ _ALLOWED_SCHEMES: frozenset[str] = frozenset({"https", "data"})
 
 @dataclass(frozen=True)
 class Icon:
-    """One entry in a wire type's ``icons`` array."""
+    """One entry in a wire type's ``icons`` array.
+
+    Icons are pure display metadata: a client shows them beside a tool,
+    resource, prompt or the server itself. This package only *emits* them —
+    fetching, sanitising and rendering are the client's problem, and the spec
+    puts a long list of MUSTs on the consumer side precisely because icon bytes
+    are untrusted input.
+
+    Attributes:
+        src: URI pointing at the image. Must be ``https:`` or ``data:`` — the
+            spec requires clients to *reject* any other scheme, so an ``http:``
+            or ``file:`` icon would never render. Rejected at construction, so
+            the failure is a startup error rather than a silent no-op.
+        mime_type: Overrides the type the source serves, for a source that
+            serves a generic ``application/octet-stream``.
+        sizes: WxH strings — ``("48x48",)``, or ``("any",)`` for a scalable
+            format like SVG.
+        theme: Which background the icon was drawn for. Omit when it works on
+            both.
+    """
 
     src: str
     mime_type: str | None = None

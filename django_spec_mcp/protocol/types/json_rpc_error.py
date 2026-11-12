@@ -6,7 +6,11 @@ from typing import Any
 
 @dataclass(frozen=True)
 class JsonRpcError:
-    """JSON-RPC 2.0 error object."""
+    """JSON-RPC 2.0 error object.
+
+    ``code`` is typed as ``int`` so server-defined codes outside the
+    [`JsonRpcErrorCode`][django_spec_mcp.types.JsonRpcErrorCode] enum can still
+    be represented faithfully."""
 
     code: int
     message: str

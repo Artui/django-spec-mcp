@@ -9,7 +9,12 @@ from django_spec_mcp.protocol.types.prompt_argument import PromptArgument
 
 @dataclass(frozen=True)
 class Prompt:
-    """An MCP prompt descriptor as returned by ``prompts/list``."""
+    """An MCP prompt descriptor as returned by ``prompts/list``.
+
+    A server-defined template the client invokes by name to get back a sequence
+    of LLM messages. Arguments are filled in at ``prompts/get`` time and
+    threaded into the rendering callable as kwargs.
+    """
 
     name: str
     description: str | None = None
