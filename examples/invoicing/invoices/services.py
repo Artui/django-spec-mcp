@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import logging
 
+from django.db.models import QuerySet
 from django_service_specs import ServiceError, ServiceValidationError
 
 from invoices.models import Invoice
+from invoices.shapes import RepriceRow
 
 logger = logging.getLogger(__name__)
 
@@ -95,3 +97,13 @@ def apply_credit(*, instance: Invoice, credit_cents: int) -> Invoice | None:
     instance.amount_cents -= credit_cents
     instance.save(update_fields=["amount_cents"])
     return instance
+
+
+def reprice_invoices(*, collection: QuerySet[Invoice], data: list[RepriceRow]) -> list[Invoice]:
+    """Set the amount of each invoice in ``collection`` that a row in ``data`` names."""
+    amounts = {row.number: row.amount_cents for row in data}
+    repriced = [invoice for invoice in collection if invoice.number in amounts]
+    for invoice in repriced:
+        invoice.amount_cents = amounts[invoice.number]
+        invoice.save(update_fields=["amount_cents"])
+    return repriced

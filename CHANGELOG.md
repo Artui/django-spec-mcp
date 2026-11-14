@@ -11,6 +11,42 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-11-14
+
+### Added
+
+- **A many tool may edit a collection.** Kernel 0.33.0 lets a `many=True` service spec
+  declare a `collection_selector_spec`: the tool advertises the collection's lookup
+  parameters beside the list argument, and a `tools/call` hands the service the
+  resolved rows as `collection` beside the validated rows as `data`. An
+  `instance_selector_spec` beside `many=True` is still refused when the spec is built.
+- **File results.** A spec presenting through the kernel's `FilePresenter(content_type)`
+  serves a file. A resource over it is a `BLOB` of the presenter's type. A tool over it
+  answers an `image` block for `image/*`, an `audio` block for `audio/*`, and for any
+  other type an embedded `resource` block carrying the blob under a
+  `spec-mcp://files/<filename>` URI. A read or a block carries the file's own
+  `content_type`; a tool's file of another kind than its presenter's is refused. A file
+  is read off the event loop on the async transport, no further than the bytes whose
+  base64 fits the result ceiling, and is closed either way; one past it is refused,
+  never truncated. A `FileResult` from a spec presenting no file is refused on a tool
+  and on a resource alike.
+- **`ToolContentKind.RESOURCE`**, the embedded file a service tool answers.
+
+### Changed
+
+- **A file is declared on the spec, and a binding that says otherwise is refused at
+  registration.** `register_resource`'s `encoding` and `mime_type`, and `register_tool`'s
+  `content_kind` and `content_mime_type`, are derived from the spec's `FilePresenter`
+  when left out; given and disagreeing, they raise `ImproperlyConfigured`. **This breaks
+  a resource declaring `encoding=ResourceEncoding.BLOB`, or a tool declaring
+  `content_kind=ToolContentKind.IMAGE` or `AUDIO`, over a spec whose presenter returns
+  bytes**: registration now refuses it, since the spec presents no file. Make the
+  presenter a `FilePresenter` and drop the binding's `encoding` / `content_kind` and
+  mime type. A `SelectorSpec` whose file is neither image nor audio is refused as a tool;
+  register it with `register_resource`.
+- **The `django-service-specs` floor is 0.33.0**, which ships the many collection and
+  the file result this release serves.
+
 ### Documentation
 
 - **The API reference's docstrings are restored.** The comment-budget cut had reduced the
@@ -989,7 +1025,8 @@ carries; releases up to 0.54.0 are in
   running. The worker's run now enters below that decision. A client that did
   not declare the extension is still refused `-32021` by a `REQUIRED` tool.
 
-[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/Artui/django-spec-mcp/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/Artui/django-spec-mcp/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/Artui/django-spec-mcp/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/Artui/django-spec-mcp/compare/v0.9.1...v0.10.0

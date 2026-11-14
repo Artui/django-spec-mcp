@@ -653,6 +653,38 @@ What a caller should know:
   bare array; `items` is the key a paged list's envelope uses too, so a client
   reads the rows at one path either way.
 
+A `many=True` service may edit a set of existing rows: its spec declares a
+`collection_selector_spec`, a `LIST` `SelectorSpec`. The tool advertises the
+collection's reads beside the list, and the call hands the service the rows
+the lookup resolves as `collection`, beside the validated list as `data`:
+
+```python
+def reprice_invoices(*, collection, data):
+    return [reprice(invoice, row) for invoice, row in zip(collection, data)]
+
+
+server.register_tool(
+    ServiceSpec(
+        service=reprice_invoices,
+        validator=DataclassValidator(PriceInput),
+        many=True,
+        collection_selector_spec=SelectorSpec(
+            kind=SelectorKind.LIST,
+            selector=invoices_for_customer,
+            reads=Parameters([Parameter("customer", "integer", required=True)]),
+        ),
+        permissions=[IsBillingStaff()],
+    ),
+    name="invoices.bulk_reprice",
+    description="Reprice a customer's invoices.",
+)
+# inputSchema: {"properties": {"items": {"type": "array", ...}, "customer": {"type": "integer"}},
+#               "required": ["items", "customer"], ...}
+```
+
+An `instance_selector_spec` beside `many=True` is still refused when the spec is
+built, since a list of rows edits no single row.
+
 ### A resource is a `RETRIEVE` selector { #a-resource-is-a-retrieve-selector }
 
 `register_resource(spec, *, uri_template, name, ...)` takes a kernel
@@ -711,7 +743,9 @@ other than what was declared:
 | Refused | Why |
 | --- | --- |
 | A `LIST` spec | A resource reads one row by URI. Register a `LIST` as a selector tool, which paginates. |
-| `encoding=TEXT` or `BLOB` beside a spec declaring `affordances` or `allow_none` | The kernel adds affordances to a presented object, and under `allow_none` a missing row presents as `None` without the presenter running; neither is a document or bytes. Serve either as JSON. |
+| `encoding=TEXT` or `BLOB` beside a spec declaring `affordances` or `allow_none` | The kernel adds affordances to a presented object, and under `allow_none` a missing row presents as `None` without the presenter running; neither is a document or bytes. Serve either as JSON. A spec presenting a file is `BLOB`, so it cannot declare `allow_none` either. |
+| `encoding=BLOB` over a spec presenting no file | A file is declared on the spec. Present it through the kernel's `FilePresenter(content_type)`, and the resource is a blob of that type. |
+| `encoding=` or `mime_type=` disagreeing with the spec's `FilePresenter` | The file already says what it is: a blob of the presenter's type. Leave both out and they are derived. |
 | `permissions=` | `register_resource` takes no such keyword, so passing one is a `TypeError`: the spec's own `permissions` are the resource's guard. |
 | A URI variable no read or shape declares, or one the server fills | See above: every read would be refused, or would serve the server's value for any URI. |
 
@@ -720,14 +754,19 @@ other than what was declared:
 The read dispatches the spec, and **its presenter renders the body**: what the
 presenter's `present` returns is what `encoding=` turns into the `contents`
 entry. A spec with no presenter serves its selector's value the same way.
-`mime_type=` is advertised as given, on the read and in both listings, and is
-never inferred from the encoding or checked against the body:
+
+**A file is declared on the spec, not on the resource.** A spec presenting
+through the kernel's `FilePresenter(content_type)` is a `BLOB` resource of that
+type: `encoding` and `mime_type` are derived at registration, and either one
+given that disagrees is refused. Any other spec defaults to `JSON` and
+`application/json`, and its `mime_type=` is advertised as given, on the read
+and in both listings, and never checked against the body:
 
 | `encoding=` | The presenter returns | Served as |
 | --- | --- | --- |
 | `ResourceEncoding.JSON`, the default | anything JSON-encodable | `text`, the value as JSON |
 | `ResourceEncoding.TEXT` | a `str`: Markdown, CSV, HTML, plain text | `text`, the string as written |
-| `ResourceEncoding.BLOB` | `bytes`, `bytearray` or `memoryview`, a strided `memoryview` included | `blob`, base64, and no `text` |
+| `ResourceEncoding.BLOB`, derived from a `FilePresenter` | a `FileResult` | `blob`, base64, and no `text` |
 
 A `TEXT` resource whose presenter renders the row as Markdown:
 
@@ -767,50 +806,63 @@ server.register_resource(
 )
 ```
 
-A `BLOB` resource whose presenter renders the same row as a PDF:
+A `BLOB` resource whose spec presents the same row as a PDF, through the
+kernel's `FilePresenter`:
 
 ```python
-class InvoicePdf(Presenter):
-    def output(self) -> Output:
-        return Output()  # bytes, not an object of fields
-
-    def present(self, value):
-        return render_invoice_pdf(value)  # -> bytes
-
+from django_service_specs import FilePresenter
 
 server.register_resource(
     SelectorSpec(
         kind=SelectorKind.RETRIEVE,
         selector=get_invoice,
         reads=Parameters([Parameter("pk", "integer", required=True)]),
-        presenter=InvoicePdf(),
+        presenter=FilePresenter(
+            "application/pdf",
+            render=render_invoice_pdf,  # -> bytes
+            filename=lambda invoice: f"invoice-{invoice.number}.pdf",
+        ),
         permissions=[IsBillingStaff()],
     ),
     name="invoice-pdf",
     uri_template="invoices://{pk}/pdf",
-    mime_type="application/pdf",
-    encoding=ResourceEncoding.BLOB,
 )
 # resources/read of invoices://7/pdf answers a contents entry of
 # {"uri": "invoices://7/pdf", "mimeType": "application/pdf", "blob": "JVBERi0..."}
 ```
 
+The read carries the `FileResult`'s own `content_type` as `mimeType`, which the
+presenter fills only when the file has none: a `render` answering with
+`FileResult(..., content_type="image/jpeg")` under `FilePresenter("image/png")`
+is listed as `image/png` and read as `image/jpeg`. MCP's `resources/read` has
+no slot for a file name, so `filename` is not sent; a tool's embedded file
+carries it in its URI ([below](#non-text-tool-results)). A selector of a spec
+presenting no file that returns a `FileResult` anyway is answered `-32603`
+naming the resource. Before 0.13.0 a
+presenter returning bytes beside `encoding=ResourceEncoding.BLOB` was the way
+to serve a file. That pairing is refused now, since its spec presents no file:
+make the presenter a `FilePresenter`.
+
 A `TEXT` resource left at the default `application/json` is still served
 verbatim, since the mime type is never checked against the body.
 
 **A presenter returning the wrong type for its encoding is `-32603`.** A dict
-under `TEXT`, or a `str` under `BLOB`, can only be found out by a read, so the
-read answers a JSON-RPC error with code `-32603` rather than failing with a
-`500`. The message names the resource, its encoding and the type it got, and
-sends the reader to the code that produced it:
+under `TEXT` can only be found out by a read, so the read answers a JSON-RPC
+error with code `-32603` rather than failing with a `500`. The message names
+the resource, its encoding and the type it got, and sends the reader to the
+code that produced it:
 
 ```text
-Resource 'invoice-pdf' declares encoding=BLOB but produced str, not bytes. A BLOB
-resource's body is the binary itself, base64-encoded here, so the spec's
-presenter (or its selector, when it declares none) must return the bytes.
+Resource 'invoice-summary' declares encoding=TEXT but produced dict, not str. A
+TEXT resource's body is returned verbatim, so the spec's presenter (or its
+selector, when it declares none) must return the document itself.
 ```
 
-The result ceiling and the cache hints apply to every encoding alike. An HTML
+The result ceiling and the cache hints apply to every encoding alike. The
+ceiling bounds the encoded answer, so a file is read no further than the three
+quarters of the ceiling its base64 can fill, and a large one is never held
+whole. A file past that is answered `-32000` naming the resource and saying its
+base64 is over the ceiling, and nothing is truncated. An HTML
 view the host renders is [`register_ui_resource`](#interactive-views-mcp-apps),
 which sets both.
 
@@ -1378,29 +1430,62 @@ never contains, cannot be read two ways.
 ## Non-text tool results
 
 A tool result's `content` array is the same content vocabulary — text, image,
-audio, a link to a resource, or an embedded resource. A binding *declares* what
-it returns rather than having it guessed, because a
-base64 string and a text body are indistinguishable by inspection:
+audio, a link to a resource, or an embedded resource. What a tool returns is
+*declared* rather than guessed, because a base64 string and a text body are
+indistinguishable by inspection. **A file is declared on the spec**: a spec
+presenting through the kernel's `FilePresenter(content_type)` takes its
+`content_kind` and `content_mime_type` from that type at registration:
 
 ```python
-from django_service_specs import ServiceSpec
-
-from django_spec_mcp import ToolContentKind
+from django_service_specs import FilePresenter, ServiceSpec
 
 server.register_tool(
-    ServiceSpec(service=render_chart, atomic=False, permissions=[IsAnalyst()]),  # returns bytes
+    ServiceSpec(
+        service=render_chart,  # returns the PNG's bytes
+        atomic=False,
+        permissions=[IsAnalyst()],
+        presenter=FilePresenter("image/png", filename="chart.png"),
+    ),
     name="charts.render",
     description="Render a chart as a PNG.",
-    content_kind=ToolContentKind.IMAGE,
-    content_mime_type="image/png",
 )
+# tools/call answers {"content": [{"type": "image", "data": "iVBORw0...", "mimeType": "image/png"}]}
 ```
 
-`ToolContentKind.TEXT` (the default) renders the result as JSON and mirrors it
-in `structuredContent`. `IMAGE` and `AUDIO` take
-the media itself — `bytes`, or a `str` already in base64 — and carry **no**
-`structuredContent` or `outputSchema`, since neither can describe a PNG;
-registering one alongside those is refused rather than ignored.
+| The presenter's type | `content_kind` | The block |
+| --- | --- | --- |
+| `image/*` | `ToolContentKind.IMAGE` | `image`, base64 `data` |
+| `audio/*` | `ToolContentKind.AUDIO` | `audio`, base64 `data` |
+| anything else, from a `ServiceSpec` | `ToolContentKind.RESOURCE` | an embedded `resource` carrying the `blob` |
+| anything else, from a `SelectorSpec` | refused | register it with `register_resource` |
+
+A file a service generates has no resource of its own, so it is embedded, under
+a `spec-mcp://files/<filename>` URI (the file name percent-encoded) that names
+the file and is not readable: MCP's embedded block has no slot for a name, so
+the URI carries it. A row a selector reads can be a resource, so a selector's
+non-media file is refused as a tool and served through `register_resource`
+instead. The block carries the file's own `content_type`, which the presenter
+fills when the file has none; a file of another kind than the presenter's (a PDF
+from a `render` under `FilePresenter("image/png")`) is an `output_encoding`
+result naming the tool. A file whose result, base64 and the block's envelope together, is over the
+result ceiling is the `result_too_large` result, read no further than the ceiling allows. A spec
+declaring `allow_none` whose service returns `None` answers the empty object.
+
+`ToolContentKind.TEXT` (the default for a spec presenting no file) renders the
+result as JSON and mirrors it in `structuredContent`. A file's kinds carry
+**no** `structuredContent` or `outputSchema`, since neither can describe a
+PNG. Registration refuses, naming the tool:
+
+- `IMAGE`, `AUDIO` or `RESOURCE` over a spec presenting no file. Before 0.13.0 a
+  service returning bytes beside `content_kind=ToolContentKind.IMAGE` was the
+  way to serve one; make its presenter a `FilePresenter` instead.
+- A `content_kind` or `content_mime_type` disagreeing with the spec's
+  `FilePresenter`. Leave both out, and they are derived.
+- `include_structured_content=True` or `include_output_schema=True` beside a
+  file.
+- A `FilePresenter` on a spec whose result is many rows (a `LIST` output
+  selector, `many`, `returns_many`) or carries rendered `affordances`, which the
+  kernel's `file_output` refuses.
 
 `ToolContentKind.RESOURCE_LINK` is usually the better answer for anything
 large. The tool returns a mapping with `uri` and `name` (or a list of them),

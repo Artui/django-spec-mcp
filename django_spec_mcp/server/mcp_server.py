@@ -265,8 +265,8 @@ class MCPServer:
         annotations: dict[str, Any] | None = None,
         meta: dict[str, Any] | None = None,
         ui: UIToolMeta | None = None,
-        content_kind: ToolContentKind = ToolContentKind.TEXT,
-        content_mime_type: str | None = None,
+        content_kind: ToolContentKind | UnsetType = UNSET,
+        content_mime_type: str | None | UnsetType = UNSET,
         include_structured_content: bool | None = None,
         include_output_schema: bool | None = None,
         task_policy: TaskPolicy = TaskPolicy.FORBIDDEN,
@@ -315,6 +315,15 @@ class MCPServer:
 
         ``display_name`` and ``display_description`` are labels for in-process
         consumers, read off the binding and never sent on the wire.
+
+        ``content_kind`` and ``content_mime_type`` are derived from the spec when
+        left out. A spec presenting through the kernel's ``FilePresenter`` takes
+        ``IMAGE`` for an ``image/*`` type, ``AUDIO`` for ``audio/*`` and
+        ``RESOURCE`` (an embedded blob) for any other, with the presenter's type
+        as the mime type; any other spec takes ``TEXT`` and none. A value given
+        that disagrees with the presenter is refused, and so is a file's kind
+        over a spec presenting no file, and a ``SelectorSpec`` whose file is
+        neither image nor audio, which ``register_resource`` serves instead.
 
         ``scopes`` are the OAuth scopes the caller's token must carry, every one
         of them; a token missing one is answered ``-32006`` with every declared
@@ -383,8 +392,8 @@ class MCPServer:
         annotations: dict[str, Any] | None = None,
         meta: dict[str, Any] | None = None,
         ui: UIToolMeta | None = None,
-        content_kind: ToolContentKind = ToolContentKind.TEXT,
-        content_mime_type: str | None = None,
+        content_kind: ToolContentKind | UnsetType = UNSET,
+        content_mime_type: str | None | UnsetType = UNSET,
         include_structured_content: bool | None = None,
         include_output_schema: bool | None = None,
         task_policy: TaskPolicy = TaskPolicy.FORBIDDEN,
@@ -882,8 +891,8 @@ class MCPServer:
         description: str | None = None,
         title: str | None = None,
         icons: tuple[Icon, ...] = (),
-        mime_type: str = "application/json",
-        encoding: ResourceEncoding = ResourceEncoding.JSON,
+        mime_type: str | UnsetType = UNSET,
+        encoding: ResourceEncoding | UnsetType = UNSET,
         rate_limits: list[Any] | None = None,
         annotations: dict[str, Any] | None = None,
         meta: dict[str, Any] | None = None,
@@ -909,21 +918,27 @@ class MCPServer:
 
         ``encoding`` decides how what the presenter returns becomes the read
         body. ``JSON`` pretty-prints it; ``TEXT`` returns it verbatim, and it
-        must be a ``str``; ``BLOB`` base64-encodes it into the ``contents``
-        entry's ``blob`` instead of ``text``, and it must be ``bytes``,
-        ``bytearray`` or ``memoryview``. A value of the wrong type is answered
-        at read time as an ``INTERNAL_ERROR`` naming what produced it. Anything
-        whose ``mime_type`` is not JSON — Markdown, CSV, plain text — wants
-        ``TEXT``, or the document comes back wrapped in a quoted string literal,
-        and an image wants ``BLOB``: a presenter rendering the row as Markdown
-        pairs with ``encoding=TEXT`` and ``mime_type="text/markdown"``.
-        ``mime_type`` is advertised as given and never inferred from or checked
-        against the encoding, so ``TEXT`` left at the default
-        ``application/json`` serves a ``str`` that is already a JSON document as
-        it is. The view mime type (``UI_RESOURCE_MIME_TYPE``) with a templated
-        ``uri_template`` raises ``ValueError``, since a view must be one
-        concrete document; use ``register_ui_resource`` for a view. The result
-        ceiling and the cache hints apply to every encoding.
+        must be a ``str``; ``BLOB`` base64-encodes a file into the ``contents``
+        entry's ``blob`` instead of ``text``. A file is declared on the spec: a
+        spec presenting through the kernel's ``FilePresenter`` is ``BLOB`` with
+        the presenter's type as ``mime_type``, both derived when left out, and
+        either one given that disagrees is refused, as is ``BLOB`` over a spec
+        presenting no file. The read carries the file's own ``content_type``,
+        which the presenter fills when the file has none. Any other spec
+        defaults to ``JSON`` and ``application/json``. A value of the wrong type
+        is answered at read time as an ``INTERNAL_ERROR`` naming what produced
+        it. Anything whose ``mime_type`` is not JSON — Markdown, CSV, plain
+        text — wants ``TEXT``, or the document comes back wrapped in a quoted
+        string literal: a presenter rendering the row as Markdown pairs with
+        ``encoding=TEXT`` and ``mime_type="text/markdown"``. Short of a file,
+        ``mime_type`` is advertised as given and never checked against the
+        body, so ``TEXT`` left at the default ``application/json`` serves a
+        ``str`` that is already a JSON document as it is. The view mime type
+        (``UI_RESOURCE_MIME_TYPE``) with a templated ``uri_template`` raises
+        ``ValueError``, since a view must be one concrete document; use
+        ``register_ui_resource`` for a view. The result ceiling and the cache
+        hints apply to every encoding, and a file is read no further than the
+        ceiling.
         A ``TEXT`` or ``BLOB`` resource is refused, naming both, beside a spec
         declaring ``affordances``, which the kernel adds to a presented object,
         or ``allow_none``, under which a missing row presents as ``None``
@@ -962,7 +977,7 @@ class MCPServer:
             mime_type=mime_type,
             encoding=encoding,
         )
-        _check_kernel_resource_encoding(name, binding.spec, encoding)
+        _check_kernel_resource_encoding(name, binding.spec, binding.encoding)
         template_variables: tuple[str, ...] = _template_variables(uri_template)
         _refuse_reserved_template_variables(
             name, template_variables, reserved=self._pool_seeds.names | CALL_SEEDS
@@ -1525,7 +1540,8 @@ def _check_kernel_resource_encoding(
             f"Resource {name!r}: encoding={encoding.name} cannot sit beside allow_none. "
             "A missing row presents as None without the presenter running, which a "
             f"{encoding.name} body cannot be; drop allow_none so a missing row is "
-            "resource-not-found, or serve it as JSON."
+            "resource-not-found"
+            + ("." if encoding is ResourceEncoding.BLOB else ", or serve it as JSON.")
         )
 
 

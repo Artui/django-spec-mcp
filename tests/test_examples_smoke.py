@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import base64
 import json
 import os
 import subprocess
@@ -389,6 +390,40 @@ def test_invoicing_serves_its_resource_prompt_and_send_tool() -> None:
         "type": "service_error",
         "message": f"Invoice {pk} is already sent",
     }
+
+
+_INVOICING_FILE_AND_COLLECTION = _INVOICING_CLIENT + textwrap.dedent(
+    """
+    Invoice.objects.create(number="INV-C", amount_cents=300)
+    pk = Invoice.objects.get(number="INV-A").pk
+    print(json.dumps({
+        "receipt": post("resources/read", {"uri": f"invoices://{pk}/receipt", "_meta": META}),
+        "bulk": tools["invoices.bulk_reprice"]["inputSchema"],
+        "repriced": call(
+            "invoices.bulk_reprice",
+            {"prefix": "INV-", "items": [
+                {"number": "INV-A", "amount_cents": 111},
+                {"number": "INV-B", "amount_cents": 222},
+            ]},
+        ),
+        "amounts": dict(Invoice.objects.values_list("number", "amount_cents")),
+    }))
+    """
+)
+
+
+def test_invoicing_serves_a_receipt_file_and_reprices_a_collection() -> None:
+    """The ``invoice-receipt`` file resource and the ``invoices.bulk_reprice`` many tool."""
+    replies = json.loads(_run_in_example("invoicing", _INVOICING_FILE_AND_COLLECTION))
+
+    [contents] = replies["receipt"]["contents"]
+    assert contents["mimeType"] == "text/csv"
+    assert base64.b64decode(contents["blob"]) == b"number,amount_cents\r\nINV-A,100\r\n"
+
+    assert set(replies["bulk"]["required"]) == {"items", "prefix"}
+    assert replies["repriced"].get("isError") is not True, replies["repriced"]
+    assert [row["number"] for row in replies["repriced"]["structuredContent"]["items"]] == ["INV-A"]
+    assert replies["amounts"] == {"INV-A": 111, "INV-B": 50, "INV-C": 300}
 
 
 _INVOICING_PER_TRANSPORT = _INVOICING_CLIENT + textwrap.dedent(

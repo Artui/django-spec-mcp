@@ -13,7 +13,7 @@ transport built on the kernel.
 
 | Example                        | What it shows                                                     |
 |--------------------------------|-------------------------------------------------------------------|
-| [`invoicing/`](invoicing/)     | Service tools (one validated by a Django form; one targeted by lookup, declared idempotent; one with no Validator, its reads the service's keywords under a closed schema, declaring `allow_none`), selector tools with a `FilterSet` + ordering + pagination + a field-selection shape and with `allow_none`, a `pool_seeds=` seed, `server_arguments=`, a `conventions=` override of the model-facing wording, resource by PK, a prompt behind a `scopes=` gate, and a demo bearer backend of its own. |
+| [`invoicing/`](invoicing/)     | Service tools (one validated by a Django form; one targeted by lookup, declared idempotent; one with no Validator, its reads the service's keywords under a closed schema, declaring `allow_none`), selector tools with a `FilterSet` + ordering + pagination + a field-selection shape and with `allow_none`, a `pool_seeds=` seed, `server_arguments=`, a `conventions=` override of the model-facing wording, resource by PK, a receipt resource served as a file through a `FilePresenter`, a `many=True` tool editing the rows of a `collection_selector_spec`, a prompt behind a `scopes=` gate, and a demo bearer backend of its own. |
 | [`job_status/`](job_status/)   | A long-running job exposed as a templated resource, with SSE push notification on completion. |
 
 ## Running an example
