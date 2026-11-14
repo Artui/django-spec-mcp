@@ -65,7 +65,7 @@ dependencies = [
     # raise changes what the kernel refuses: the two routes reach one spec, and
     # with only one raised the same selector can be a not-found on one route and
     # an error on the other.
-    "django-service-specs>=0.31.0",
+    "django-service-specs>=0.33.0",
 ]
 
 [project.optional-dependencies]

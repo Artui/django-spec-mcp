@@ -11,6 +11,19 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+### Added
+
+- **A many tool may edit a collection.** Kernel 0.33.0 lets a `many=True` service spec
+  declare a `collection_selector_spec`: the tool advertises the collection's lookup
+  parameters beside the list argument, and a `tools/call` hands the service the
+  resolved rows as `collection` beside the validated rows as `data`. An
+  `instance_selector_spec` beside `many=True` is still refused when the spec is built.
+
+### Changed
+
+- **The `django-service-specs` floor is 0.33.0**, which ships the many collection and
+  the file result this release serves.
+
 ### Documentation
 
 - **The API reference's docstrings are restored.** The comment-budget cut had reduced the
