@@ -1467,8 +1467,8 @@ non-media file is refused as a tool and served through `register_resource`
 instead. The block carries the file's own `content_type`, which the presenter
 fills when the file has none; a file of another kind than the presenter's (a PDF
 from a `render` under `FilePresenter("image/png")`) is an `output_encoding`
-result naming the tool. A file whose base64 is over the result ceiling is the
-`result_too_large` result, read no further than the ceiling allows. A spec
+result naming the tool. A file whose result, base64 and the block's envelope together, is over the
+result ceiling is the `result_too_large` result, read no further than the ceiling allows. A spec
 declaring `allow_none` whose service returns `None` answers the empty object.
 
 `ToolContentKind.TEXT` (the default for a spec presenting no file) renders the

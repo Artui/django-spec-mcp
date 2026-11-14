@@ -61,7 +61,7 @@ whose `SelectorSpec` declares `permissions`: the service's own `permissions`
 decide the call, so a seat leaves `permissions` at its default, `None`.
 `register_tool` also refuses, with `ImproperlyConfigured` at registration, a spec
 whose precondition or condition names a seed nothing fills, which already failed on
-every call. The kernel's changelog for 0.21.0 to 0.31.0 has the rest: a `parameters`
+every call. The kernel's changelog for 0.21.0 to 0.33.0 has the rest: a `parameters`
 override on a spec subclass must accept `call_context`, `PydanticValidator` hands a
 service declaring `data` the model instance rather than a dict of its fields, a read
 a provider requires itself is asked of the caller (`tools/list` marks it required, and
