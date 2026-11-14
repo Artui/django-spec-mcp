@@ -38,7 +38,10 @@ classifiers = [
 dependencies = [
     "django>=4.2",
     # The kernel this package serves, and the one it imports its own names from.
-    # 0.31.0 is the floor: from it ``seeded_pool``, which the view read and
+    # 0.33.0 is the floor: from it ``FilePresenter``, ``FileResult``, ``FileTooLarge`` and
+    # ``file_output``, which file results import from the root, are there, and a
+    # ``many`` service spec may declare a ``collection_selector_spec``. From 0.31.0
+    # ``seeded_pool``, which the view read and
     # ``tools/list``'s conditioned-tool pool import from the root, is there, and a
     # labelled filter is advertised as ``anyOf``, the shape the docs show. From 0.30.0
     # ``spec_input_schema`` and ``spec_caller_input_schema`` take ``call_context=``,

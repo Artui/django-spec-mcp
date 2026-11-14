@@ -21,12 +21,15 @@ carries; releases up to 0.54.0 are in
   resolved rows as `collection` beside the validated rows as `data`. An
   `instance_selector_spec` beside `many=True` is still refused when the spec is built.
 - **File results.** A spec presenting through the kernel's `FilePresenter(content_type)`
-  serves a file. A resource over it is a `BLOB` of the presenter's type; the read carries
-  the file's own `content_type`. A tool over it answers an `image` block for `image/*`,
-  an `audio` block for `audio/*`, and for any other type an embedded `resource` block
-  carrying the blob under a `spec-mcp://files/<filename>` URI. A file is read no further
-  than the result ceiling and is closed either way; one over it is refused, never
-  truncated.
+  serves a file. A resource over it is a `BLOB` of the presenter's type. A tool over it
+  answers an `image` block for `image/*`, an `audio` block for `audio/*`, and for any
+  other type an embedded `resource` block carrying the blob under a
+  `spec-mcp://files/<filename>` URI. A read or a block carries the file's own
+  `content_type`; a tool's file of another kind than its presenter's is refused. A file
+  is read off the event loop on the async transport, no further than the bytes whose
+  base64 fits the result ceiling, and is closed either way; one past it is refused,
+  never truncated. A `FileResult` from a spec presenting no file is refused on a tool
+  and on a resource alike.
 - **`ToolContentKind.RESOURCE`**, the embedded file a service tool answers.
 
 ### Changed
@@ -41,7 +44,6 @@ carries; releases up to 0.54.0 are in
   presenter a `FilePresenter` and drop the binding's `encoding` / `content_kind` and
   mime type. A `SelectorSpec` whose file is neither image nor audio is refused as a tool;
   register it with `register_resource`.
-
 - **The `django-service-specs` floor is 0.33.0**, which ships the many collection and
   the file result this release serves.
 

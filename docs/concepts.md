@@ -653,6 +653,38 @@ What a caller should know:
   bare array; `items` is the key a paged list's envelope uses too, so a client
   reads the rows at one path either way.
 
+A `many=True` service may edit a set of existing rows: its spec declares a
+`collection_selector_spec`, a `LIST` `SelectorSpec`. The tool advertises the
+collection's reads beside the list, and the call hands the service the rows
+the lookup resolves as `collection`, beside the validated list as `data`:
+
+```python
+def reprice_invoices(*, collection, data):
+    return [reprice(invoice, row) for invoice, row in zip(collection, data)]
+
+
+server.register_tool(
+    ServiceSpec(
+        service=reprice_invoices,
+        validator=DataclassValidator(PriceInput),
+        many=True,
+        collection_selector_spec=SelectorSpec(
+            kind=SelectorKind.LIST,
+            selector=invoices_for_customer,
+            reads=Parameters([Parameter("customer", "integer", required=True)]),
+        ),
+        permissions=[IsBillingStaff()],
+    ),
+    name="invoices.bulk_reprice",
+    description="Reprice a customer's invoices.",
+)
+# inputSchema: {"properties": {"items": {"type": "array", ...}, "customer": {"type": "integer"}},
+#               "required": ["items", "customer"], ...}
+```
+
+An `instance_selector_spec` beside `many=True` is still refused when the spec is
+built, since a list of rows edits no single row.
+
 ### A resource is a `RETRIEVE` selector { #a-resource-is-a-retrieve-selector }
 
 `register_resource(spec, *, uri_template, name, ...)` takes a kernel
@@ -804,7 +836,9 @@ presenter fills only when the file has none: a `render` answering with
 `FileResult(..., content_type="image/jpeg")` under `FilePresenter("image/png")`
 is listed as `image/png` and read as `image/jpeg`. MCP's `resources/read` has
 no slot for a file name, so `filename` is not sent; a tool's embedded file
-carries it in its URI ([below](#non-text-tool-results)). Before 0.13.0 a
+carries it in its URI ([below](#non-text-tool-results)). A selector of a spec
+presenting no file that returns a `FileResult` anyway is answered `-32603`
+naming the resource. Before 0.13.0 a
 presenter returning bytes beside `encoding=ResourceEncoding.BLOB` was the way
 to serve a file. That pairing is refused now, since its spec presents no file:
 make the presenter a `FilePresenter`.
@@ -824,11 +858,11 @@ TEXT resource's body is returned verbatim, so the spec's presenter (or its
 selector, when it declares none) must return the document itself.
 ```
 
-The result ceiling and the cache hints apply to every encoding alike. A file
-is read no further than the ceiling, so a large one is never held whole, and
-the ceiling bounds the encoded answer, so its base64, a third larger than the
-file, must fit too. Either way the read is answered `-32000` naming the
-resource, and nothing is truncated. An HTML
+The result ceiling and the cache hints apply to every encoding alike. The
+ceiling bounds the encoded answer, so a file is read no further than the three
+quarters of the ceiling its base64 can fill, and a large one is never held
+whole. A file past that is answered `-32000` naming the resource and saying its
+base64 is over the ceiling, and nothing is truncated. An HTML
 view the host renders is [`register_ui_resource`](#interactive-views-mcp-apps),
 which sets both.
 
@@ -1430,8 +1464,11 @@ a `spec-mcp://files/<filename>` URI (the file name percent-encoded) that names
 the file and is not readable: MCP's embedded block has no slot for a name, so
 the URI carries it. A row a selector reads can be a resource, so a selector's
 non-media file is refused as a tool and served through `register_resource`
-instead. A file over the result ceiling is the `result_too_large` result, and
-the ceiling bounds the encoded result, so a file's base64 must fit too. A spec
+instead. The block carries the file's own `content_type`, which the presenter
+fills when the file has none; a file of another kind than the presenter's (a PDF
+from a `render` under `FilePresenter("image/png")`) is an `output_encoding`
+result naming the tool. A file whose base64 is over the result ceiling is the
+`result_too_large` result, read no further than the ceiling allows. A spec
 declaring `allow_none` whose service returns `None` answers the empty object.
 
 `ToolContentKind.TEXT` (the default for a spec presenting no file) renders the

@@ -47,8 +47,10 @@ The root still exports what it exported from `constants`, apart from four names
 that are gone: `UnknownArguments` (import it from the kernel), and
 `ArgumentBinding`, `OutputFormat` and `ToolKind`, which the sections below
 cover.
-`django-service-specs` **0.31.0** is the kernel release the package
-requires: it ships `seeded_pool`, which a view read and `tools/list`'s
+`django-service-specs` **0.33.0** is the kernel release the package
+requires: it ships the file result (`FilePresenter`, `FileResult`) this package
+serves, lets a `many` service spec declare a `collection_selector_spec`, and,
+from 0.31.0, `seeded_pool`, which a view read and `tools/list`'s
 conditioned-tool pool build their pool through, and it advertises a labelled filter
 as `anyOf` rather than `enum`. It reserves `shapes` as a pool name, so a
 `PoolSeeds` entry named `shapes` is refused with a `ValueError` when it is built, as

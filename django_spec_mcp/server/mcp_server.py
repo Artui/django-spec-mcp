@@ -1540,7 +1540,8 @@ def _check_kernel_resource_encoding(
             f"Resource {name!r}: encoding={encoding.name} cannot sit beside allow_none. "
             "A missing row presents as None without the presenter running, which a "
             f"{encoding.name} body cannot be; drop allow_none so a missing row is "
-            "resource-not-found, or serve it as JSON."
+            "resource-not-found"
+            + ("." if encoding is ResourceEncoding.BLOB else ", or serve it as JSON.")
         )
 
 

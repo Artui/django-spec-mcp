@@ -321,11 +321,21 @@ def test_a_file_beside_affordances_is_refused_naming_the_resource() -> None:
         )
 
 
-@_NOT_JSON
-def test_a_non_json_encoding_beside_allow_none_is_refused(encoding: ResourceEncoding) -> None:
-    # A missing row presents as ``None`` without running the presenter, so it
+@pytest.mark.parametrize(
+    ("encoding", "advice"),
+    [
+        (ResourceEncoding.TEXT, "resource-not-found, or serve it as JSON\\.$"),
+        (ResourceEncoding.BLOB, "resource-not-found\\.$"),
+    ],
+    ids=["text", "blob"],
+)
+def test_a_non_json_encoding_beside_allow_none_is_refused(
+    encoding: ResourceEncoding, advice: str
+) -> None:
+    # A file cannot be served as JSON, so its refusal does not advise it.
     with pytest.raises(
-        ImproperlyConfigured, match=f"encoding={encoding.name} cannot sit beside allow_none"
+        ImproperlyConfigured,
+        match=f"encoding={encoding.name} cannot sit beside allow_none.*{advice}",
     ):
         _server().register_resource(
             _retrieve(

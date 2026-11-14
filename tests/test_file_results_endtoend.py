@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import io
 import json
@@ -209,8 +210,8 @@ def test_a_file_from_a_tool_presenting_no_file_is_an_encoding_error(is_async: bo
 # ----- a file past the ceiling answers the ceiling's error, and is closed -----
 
 
-def _sized(opened: _Opened, *, declared: bool) -> FileResult:
-    data = b"x" * (CEILING * 4)
+def _sized(opened: _Opened, *, declared: bool, size: int = CEILING * 4) -> FileResult:
+    data = b"x" * size
     return FileResult(opened(data), filename="big.pdf", size=len(data) if declared else None)
 
 
@@ -227,7 +228,7 @@ def test_a_tool_file_past_the_ceiling_is_result_too_large(is_async: bool, declar
 
     assert result["isError"] is True
     assert json.loads(result["content"][0]["text"])["error"]["type"] == "result_too_large"
-    assert "produced a file over this server's 1024 byte ceiling" in result["content"][0]["text"]
+    assert "base64 is over this server's 1024 byte ceiling" in result["content"][0]["text"]
     assert opened.files[0].closed
 
 
@@ -246,7 +247,7 @@ def test_a_tools_own_ceiling_bounds_its_file(is_async: bool) -> None:
     result = _call(server, is_async, "big")
 
     assert json.loads(result["content"][0]["text"])["error"]["type"] == "result_too_large"
-    assert "produced a file over" in result["content"][0]["text"]
+    assert "produced a file whose base64 is over" in result["content"][0]["text"]
     assert opened.files[0].closed
 
 
@@ -309,3 +310,168 @@ def test_media_bytes_handed_to_the_result_builder_by_hand_are_an_image_block(raw
     assert result["content"] == [
         {"type": "image", "data": _b64(PNG_BYTES), "mimeType": "image/png"}
     ]
+
+
+# ----- a file under the ceiling whose base64 is over it answers the file's wording -----
+
+
+@_SYNC_AND_ASYNC
+def test_a_tool_file_whose_base64_is_over_the_ceiling_is_refused_as_a_file(is_async: bool) -> None:
+    opened = _Opened()
+    server = _server(config=build_mcp_config(max_result_bytes=CEILING))
+    big = lambda: _sized(opened, declared=False, size=900)  # noqa: E731
+    _tool(server, "big", big, FilePresenter("application/pdf"))
+
+    result = _call(server, is_async, "big")
+
+    assert "produced a file whose base64 is over" in result["content"][0]["text"]
+    assert opened.files[0].closed
+
+
+@_SYNC_AND_ASYNC
+def test_a_resource_file_whose_base64_is_over_the_ceiling_is_refused_as_a_file(
+    is_async: bool,
+) -> None:
+    opened = _Opened()
+    server = _server(config=build_mcp_config(max_result_bytes=CEILING))
+    server.register_resource(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=lambda: _sized(opened, declared=False, size=900),
+            presenter=FilePresenter("application/pdf"),
+            permissions=OPEN,
+        ),
+        name="big",
+        uri_template="big://",
+    )
+
+    error = _resource_answer(server, is_async, "big://")["error"]
+
+    assert error["code"] == -32000
+    assert "produced a file whose base64 is over" in error["message"]
+    assert opened.files[0].closed
+
+
+# ----- a file the binding cannot carry is refused, and closed -----
+
+
+@_SYNC_AND_ASYNC
+def test_a_tool_file_of_another_kind_than_its_presenters_is_refused(is_async: bool) -> None:
+    opened = _Opened()
+    render = lambda raw: FileResult(opened(raw), filename="x.pdf", content_type="application/pdf")  # noqa: E731
+    server = _server()
+    _tool(server, "chart", lambda: PNG_BYTES, FilePresenter("image/png", render=render))
+
+    result = _call(server, is_async, "chart")
+
+    assert result["isError"] is True
+    assert "'application/pdf' file, which a tool serves as RESOURCE" in result["content"][0]["text"]
+    assert opened.files[0].closed
+
+
+@_SYNC_AND_ASYNC
+def test_a_file_from_a_resource_presenting_no_file_is_an_internal_error(is_async: bool) -> None:
+    opened = _Opened()
+    server = _server()
+    server.register_resource(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=lambda: FileResult(opened(PDF_BYTES), filename="a.pdf"),
+            permissions=OPEN,
+        ),
+        name="bare",
+        uri_template="bare://",
+    )
+
+    error = _resource_answer(server, is_async, "bare://")["error"]
+
+    assert error["code"] == -32603
+    assert (
+        "Resource 'bare' produced a FileResult, and its spec presents no file" in error["message"]
+    )
+    assert opened.files[0].closed
+
+
+def _text_chunks() -> FileResult:
+    return FileResult(iter(["not bytes"]), filename="a.pdf")
+
+
+@_SYNC_AND_ASYNC
+def test_a_tool_file_yielding_text_is_an_encoding_error(is_async: bool) -> None:
+    server = _server()
+    _tool(server, "text", _text_chunks, FilePresenter("application/pdf"))
+
+    result = _call(server, is_async, "text")
+
+    assert json.loads(result["content"][0]["text"])["error"]["type"] == "output_encoding"
+    assert "Tool 'text': FileResult.content gave a str" in result["content"][0]["text"]
+
+
+@_SYNC_AND_ASYNC
+def test_a_resource_file_yielding_text_is_an_internal_error(is_async: bool) -> None:
+    server = _server()
+    server.register_resource(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=_text_chunks,
+            presenter=FilePresenter("application/pdf"),
+            permissions=OPEN,
+        ),
+        name="text",
+        uri_template="text://",
+    )
+
+    error = _resource_answer(server, is_async, "text://")["error"]
+
+    assert error["code"] == -32603
+    assert "Resource 'text://': FileResult.content gave a str" in error["message"]
+
+
+# ----- on the async route a file is read off the event loop -----
+
+
+class _LoopProbe:
+    """A file object recording whether each read ran on a running event loop."""
+
+    def __init__(self) -> None:
+        self.on_loop: list[bool] = []
+        self._data = io.BytesIO(PDF_BYTES)
+
+    def read(self, size: int = -1) -> bytes:
+        try:
+            asyncio.get_running_loop()
+            self.on_loop.append(True)
+        except RuntimeError:
+            self.on_loop.append(False)
+        return self._data.read(size)
+
+
+def test_an_async_tool_reads_its_file_off_the_event_loop() -> None:
+    probe = _LoopProbe()
+    server = _server()
+    _tool(
+        server, "doc", lambda: FileResult(probe, filename="a.pdf"), FilePresenter("application/pdf")
+    )
+
+    _call(server, True, "doc")
+
+    assert probe.on_loop and not any(probe.on_loop)
+
+
+def test_an_async_resource_reads_its_file_off_the_event_loop() -> None:
+    probe = _LoopProbe()
+    server = _server()
+    server.register_resource(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=lambda: FileResult(probe, filename="a.pdf"),
+            presenter=FilePresenter("application/pdf"),
+            permissions=OPEN,
+        ),
+        name="doc",
+        uri_template="doc://",
+    )
+
+    _resource_answer(server, True, "doc://")
+
+    assert probe.on_loop and not any(probe.on_loop)

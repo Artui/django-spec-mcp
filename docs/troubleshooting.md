@@ -154,12 +154,13 @@ ServiceSpec(
 )
 ```
 
-### "ServiceSpec declares a collection_selector_spec with many=True"
+### "ServiceSpec declares an instance_selector_spec with many=True"
 
-The kernel raises this when the spec is built, before any registration, and
-the same for an `instance_selector_spec` beside `many=True`. A list of rows
-resolves no target, so dispatch would never run the lookup. Declare no target
-lookup, or drop `many=True`.
+The kernel raises this when the spec is built, before any registration. A list
+of rows edits no single row, so dispatch would never run the lookup. Drop the
+`instance_selector_spec`, or drop `many=True`. To edit a set of existing rows,
+declare a `collection_selector_spec` instead: the service receives its rows as
+`collection` ([A list payload](concepts.md#list-payload)).
 
 ## Refused when registering a resource
 
