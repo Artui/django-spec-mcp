@@ -166,6 +166,17 @@ def test_an_image_tool_answers_an_image_block(is_async: bool) -> None:
 
 
 @_SYNC_AND_ASYNC
+def test_a_tool_files_own_type_is_the_one_its_block_carries(is_async: bool) -> None:
+    render = lambda raw: FileResult(raw, filename="c.jpg", content_type="image/jpeg")  # noqa: E731
+    server = _server()
+    _tool(server, "chart", lambda: PNG_BYTES, FilePresenter("image/png", render=render))
+
+    (block,) = _call(server, is_async, "chart")["content"]
+
+    assert block["mimeType"] == "image/jpeg"
+
+
+@_SYNC_AND_ASYNC
 def test_a_file_tool_presenting_nothing_answers_the_empty_object(is_async: bool) -> None:
     server = _server()
     _tool(server, "maybe", lambda: None, FilePresenter("image/png"), spec={"allow_none": True})

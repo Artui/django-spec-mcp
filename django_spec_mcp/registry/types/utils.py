@@ -75,7 +75,7 @@ def file_presenter(label: str, spec: Any) -> FilePresenter | None:
 
 def file_content_kind(content_type: str) -> ToolContentKind:
     """The kind a file of ``content_type`` takes on a tool, by its top-level type."""
-    top = content_type.split(";", 1)[0].strip().lower().split("/", 1)[0]
+    top = content_type.strip().lower().split("/", 1)[0]
     if top == "image":
         return ToolContentKind.IMAGE
     if top == "audio":

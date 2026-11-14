@@ -18,8 +18,27 @@ carries; releases up to 0.54.0 are in
   parameters beside the list argument, and a `tools/call` hands the service the
   resolved rows as `collection` beside the validated rows as `data`. An
   `instance_selector_spec` beside `many=True` is still refused when the spec is built.
+- **File results.** A spec presenting through the kernel's `FilePresenter(content_type)`
+  serves a file. A resource over it is a `BLOB` of the presenter's type; the read carries
+  the file's own `content_type`. A tool over it answers an `image` block for `image/*`,
+  an `audio` block for `audio/*`, and for any other type an embedded `resource` block
+  carrying the blob under a `spec-mcp://files/<filename>` URI. A file is read no further
+  than the result ceiling and is closed either way; one over it is refused, never
+  truncated.
+- **`ToolContentKind.RESOURCE`**, the embedded file a service tool answers.
 
 ### Changed
+
+- **A file is declared on the spec, and a binding that says otherwise is refused at
+  registration.** `register_resource`'s `encoding` and `mime_type`, and `register_tool`'s
+  `content_kind` and `content_mime_type`, are derived from the spec's `FilePresenter`
+  when left out; given and disagreeing, they raise `ImproperlyConfigured`. **This breaks
+  a resource declaring `encoding=ResourceEncoding.BLOB`, or a tool declaring
+  `content_kind=ToolContentKind.IMAGE` or `AUDIO`, over a spec whose presenter returns
+  bytes**: registration now refuses it, since the spec presents no file. Make the
+  presenter a `FilePresenter` and drop the binding's `encoding` / `content_kind` and
+  mime type. A `SelectorSpec` whose file is neither image nor audio is refused as a tool;
+  register it with `register_resource`.
 
 - **The `django-service-specs` floor is 0.33.0**, which ships the many collection and
   the file result this release serves.
