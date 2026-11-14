@@ -7,6 +7,7 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django_service_specs import (
     DataclassPresenter,
+    FilePresenter,
     Parameter,
     Parameters,
     RegisteredSpec,
@@ -240,8 +241,13 @@ def test_register_tools_refuses_an_override_for_a_name_it_does_not_hold() -> Non
 
 
 def test_the_content_knobs_reach_the_binding() -> None:
+    # Knobs agreeing with the spec's file still register: the migration path for a bytes tool.
     binding = _server().register_tool(
-        _service(),
+        ServiceSpec(
+            service=lambda: b"",
+            permissions=OPEN,
+            presenter=FilePresenter("image/png", filename="p.png"),
+        ),
         name="t",
         content_kind=ToolContentKind.IMAGE,
         content_mime_type="image/png",
@@ -282,6 +288,9 @@ def test_the_kernel_form_takes_a_mime_type_and_an_encoding() -> None:
     assert (binding.mime_type, binding.encoding) == ("text/markdown", ResourceEncoding.TEXT)
 
 
+_PNG_FILE = FilePresenter("image/png", filename="logo.png")
+
+
 def _retrieve(**fields: Any) -> SelectorSpec:
     return replace(_selector(SelectorKind.RETRIEVE), **fields)
 
@@ -291,17 +300,24 @@ _NOT_JSON = pytest.mark.parametrize(
 )
 
 
-@_NOT_JSON
-def test_a_non_json_encoding_beside_affordances_is_refused(encoding: ResourceEncoding) -> None:
+def test_a_text_encoding_beside_affordances_is_refused() -> None:
     # The kernel projects each affordance into the presented object, so a
-    with pytest.raises(
-        ImproperlyConfigured, match=f"encoding={encoding.name} cannot sit beside affordances"
-    ):
+    with pytest.raises(ImproperlyConfigured, match="encoding=TEXT cannot sit beside affordances"):
         _server().register_resource(
             _retrieve(presenter=DataclassPresenter(_Row), affordances={"cancel": CANCEL_ORDER}),
             name="r",
             uri_template="r://{pk}",
-            encoding=encoding,
+            encoding=ResourceEncoding.TEXT,
+        )
+
+
+def test_a_file_beside_affordances_is_refused_naming_the_resource() -> None:
+    # The kernel's file_output refuses it; the refusal is prefixed with the resource.
+    with pytest.raises(ImproperlyConfigured, match="Resource 'r': .*affordances"):
+        _server().register_resource(
+            _retrieve(presenter=_PNG_FILE, affordances={"cancel": CANCEL_ORDER}),
+            name="r",
+            uri_template="r://{pk}",
         )
 
 
@@ -312,7 +328,13 @@ def test_a_non_json_encoding_beside_allow_none_is_refused(encoding: ResourceEnco
         ImproperlyConfigured, match=f"encoding={encoding.name} cannot sit beside allow_none"
     ):
         _server().register_resource(
-            _retrieve(allow_none=True), name="r", uri_template="r://{pk}", encoding=encoding
+            _retrieve(
+                allow_none=True,
+                presenter=_PNG_FILE if encoding is ResourceEncoding.BLOB else None,
+            ),
+            name="r",
+            uri_template="r://{pk}",
+            encoding=encoding,
         )
 
 
@@ -359,11 +381,11 @@ def test_a_kernel_resource_defaults_to_json() -> None:
 def test_both_listings_report_a_kernel_resources_mime_type() -> None:
     server = _server()
     server.register_resource(
-        SelectorSpec(kind=SelectorKind.RETRIEVE, selector=lambda: b"", permissions=OPEN),
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE, selector=lambda: b"", permissions=OPEN, presenter=_PNG_FILE
+        ),
         name="logo",
         uri_template="brand://logo",
-        mime_type="image/png",
-        encoding=ResourceEncoding.BLOB,
     )
     server.register_resource(
         _selector(SelectorKind.RETRIEVE),

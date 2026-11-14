@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from django_service_specs import DispatchError, ServiceError, adispatch
+from django_service_specs import DispatchError, FileResult, ServiceError, adispatch
 
 from django_spec_mcp._compat.acall import acall
 from django_spec_mcp.elicitation.types.resolved_input import ResolvedInput
@@ -87,6 +87,9 @@ async def run_kernel_tool_async(
     )
     if isinstance(payload, ToolResult):
         return payload.to_dict()
+    if isinstance(payload, FileResult):
+        answer = await acall(tool_result, binding, payload, config=context.config)
+        return answer.to_dict()
     return tool_result(binding, payload, config=context.config).to_dict()
 
 

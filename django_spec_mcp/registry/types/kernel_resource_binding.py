@@ -6,6 +6,7 @@ from typing import Any
 from django_service_specs import PermissionCheck, SelectorSpec
 
 from django_spec_mcp.registry.types.resource_binding import ResourceBinding
+from django_spec_mcp.registry.types.utils import check_resource_file
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -18,9 +19,12 @@ class KernelResourceBinding(ResourceBinding[Any]):
     ``dispatch`` / ``adispatch`` instead of calling ``selector`` directly, so the
     spec's own permissions, reads, shaping and presenter answer the read.
     ``mime_type`` and ``encoding`` are a resource's as on any binding, applied
-    to what the presenter returns: ``TEXT`` serves its ``str`` verbatim and
-    ``BLOB`` base64-encodes its bytes, on a binding built by hand as on a
-    registered one.
+    to what the presenter returns: ``JSON`` encodes it and ``TEXT`` serves its
+    ``str`` verbatim. A file is declared on the spec: one presenting through
+    ``FilePresenter`` is ``BLOB`` of the presenter's type, its ``FileResult``
+    read under the result ceiling and base64-encoded, and a binding declaring
+    otherwise, or ``BLOB`` over a spec presenting no file, is refused when it is
+    built, by hand or by ``register_resource``, which derives both.
 
     ``selector`` is the spec's, set at registration, and nothing on this path
     calls it itself. ``scopes`` is normalised when the binding is built, so one
@@ -46,6 +50,10 @@ class KernelResourceBinding(ResourceBinding[Any]):
     it at construction: a binding built by hand stays unmarked, and the kernel's
     dispatch refuses its unguarded spec
     (``test_a_handbuilt_unguarded_kernel_resource_is_never_read``)."""
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        check_resource_file(f"Resource {self.name!r}", self.spec, self.encoding, self.mime_type)
 
 
 __all__ = ["KernelResourceBinding"]

@@ -13,6 +13,7 @@ from django.test import Client, override_settings
 from django_service_specs import (
     DataclassPresenter,
     DataclassValidator,
+    FilePresenter,
     Parameter,
     Parameters,
     SelectorKind,
@@ -31,7 +32,6 @@ from django_spec_mcp import (
     Icon,
     IconTheme,
     MCPServer,
-    ToolContentKind,
     UIToolMeta,
     UIVisibility,
 )
@@ -84,7 +84,7 @@ def _maybe_invoices() -> list[Invoice] | None:
 
 
 def _chart() -> bytes:
-    """A service whose result is an image rather than JSON text."""
+    """A service whose result is a file rather than JSON text."""
     return b""
 
 
@@ -213,13 +213,20 @@ def _server() -> MCPServer:
     server.register_tool(
         ServiceSpec(
             service=_chart,
-            presenter=DataclassPresenter(InvoiceOutput),
+            presenter=FilePresenter("image/png", filename="chart.png"),
             permissions=[Unrestricted()],
         ),
         name="invoices.chart",
         description="Draw a chart.",
-        content_kind=ToolContentKind.IMAGE,
-        content_mime_type="image/png",
+    )
+    server.register_tool(
+        ServiceSpec(
+            service=_chart,
+            presenter=FilePresenter("application/pdf", filename="report.pdf"),
+            permissions=[Unrestricted()],
+        ),
+        name="invoices.report",
+        description="Render a report.",
     )
     server.register_ui_resource(name="table", uri="ui://invoices/table.html", html="<h1>x</h1>")
     server.register_tool(

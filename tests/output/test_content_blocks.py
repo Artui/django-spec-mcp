@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 import base64
+import io
 from typing import Any
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest
-from django_service_specs import SelectorKind, SelectorSpec, ServiceSpec, Unrestricted
+from django_service_specs import (
+    FilePresenter,
+    SelectorKind,
+    SelectorSpec,
+    ServiceSpec,
+    Unrestricted,
+)
 
 from django_spec_mcp import (
     MCPServer,
@@ -19,6 +26,7 @@ from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
 from django_spec_mcp.handlers.types.context import MCPCallContext
+from django_spec_mcp.output.tool_result import build_tool_result
 from django_spec_mcp.transport.in_memory_session_store import InMemorySessionStore
 from tests.utils import make_server
 
@@ -27,8 +35,14 @@ PNG_B64 = base64.b64encode(PNG).decode("ascii")
 IMAGE_BLOCK = {"type": "image", "data": PNG_B64, "mimeType": "image/png"}
 
 
-def _spec(service: Any) -> ServiceSpec:
-    return ServiceSpec(service=service, permissions=[Unrestricted()], atomic=False)
+def _spec(service: Any, *, presenter: Any = None) -> ServiceSpec:
+    return ServiceSpec(
+        service=service, permissions=[Unrestricted()], atomic=False, presenter=presenter
+    )
+
+
+def _file(content_type: str) -> FilePresenter:
+    return FilePresenter(content_type, filename="media.bin")
 
 
 def _ctx(server: MCPServer) -> MCPCallContext:
@@ -109,37 +123,37 @@ def test_prompt_message_accepts_any_block() -> None:
 # ----- tool results -----
 
 
-def _selector(payload: Any) -> SelectorSpec:
+def _selector(payload: Any, content_type: str) -> SelectorSpec:
     return SelectorSpec(
-        kind=SelectorKind.RETRIEVE, selector=lambda: payload, permissions=[Unrestricted()]
+        kind=SelectorKind.RETRIEVE,
+        selector=lambda: payload,
+        permissions=[Unrestricted()],
+        presenter=_file(content_type),
     )
 
 
 @pytest.mark.parametrize(
-    ("spec", "kind", "mime_type", "block"),
+    ("spec", "block"),
     [
-        (_spec(lambda: PNG), ToolContentKind.IMAGE, "image/png", IMAGE_BLOCK),
-        # Django's file/image handling hands back buffers, not always ``bytes``.
-        (_spec(lambda: bytearray(PNG)), ToolContentKind.IMAGE, "image/png", IMAGE_BLOCK),
+        (_spec(lambda: PNG, presenter=_file("image/png")), IMAGE_BLOCK),
+        (_spec(lambda: io.BytesIO(PNG), presenter=_file("image/png")), IMAGE_BLOCK),
         (
-            _spec(lambda: b"RIFF"),
-            ToolContentKind.AUDIO,
-            "audio/wav",
+            _spec(lambda: b"RIFF", presenter=_file("audio/wav")),
             {
                 "type": "audio",
                 "data": base64.b64encode(b"RIFF").decode("ascii"),
                 "mimeType": "audio/wav",
             },
         ),
-        (_selector(PNG), ToolContentKind.IMAGE, "image/png", IMAGE_BLOCK),
+        (_selector(PNG, "image/png"), IMAGE_BLOCK),
     ],
-    ids=["image", "bytearray", "audio", "selector"],
+    ids=["image", "file-object", "audio", "selector"],
 )
 def test_a_media_tool_emits_one_block_and_no_structured_content(
-    spec: Any, kind: ToolContentKind, mime_type: str, block: dict[str, Any]
+    spec: Any, block: dict[str, Any]
 ) -> None:
     server = make_server(session_store=InMemorySessionStore())
-    server.register_tool(spec, name="media.get", content_kind=kind, content_mime_type=mime_type)
+    server.register_tool(spec, name="media.get")
     result = handle_tools_call({"name": "media.get", "arguments": {}}, _ctx(server))
     assert result["content"] == [block]
     assert "structuredContent" not in result
@@ -147,12 +161,7 @@ def test_a_media_tool_emits_one_block_and_no_structured_content(
 
 def test_image_tool_does_not_advertise_an_output_schema() -> None:
     server = make_server(session_store=InMemorySessionStore())
-    server.register_tool(
-        _spec(lambda: PNG),
-        name="chart.render",
-        content_kind=ToolContentKind.IMAGE,
-        content_mime_type="image/png",
-    )
+    server.register_tool(_spec(lambda: PNG, presenter=_file("image/png")), name="chart.render")
     assert "outputSchema" not in handle_tools_list(None, _ctx(server))["tools"][0]
 
 
@@ -187,7 +196,6 @@ def test_a_single_mapping_is_accepted_as_one_link() -> None:
 @pytest.mark.parametrize(
     ("kind", "payload", "says"),
     [
-        (ToolContentKind.IMAGE, {"not": "bytes"}, "content_kind=IMAGE but produced dict"),
         (
             ToolContentKind.RESOURCE_LINK,
             "just a string",
@@ -195,7 +203,7 @@ def test_a_single_mapping_is_accepted_as_one_link() -> None:
         ),
         (ToolContentKind.RESOURCE_LINK, [{"name": "Invoice 1"}], "missing 'uri' and/or 'name'"),
     ],
-    ids=["media-given-json", "link-given-a-string", "link-without-a-uri"],
+    ids=["link-given-a-string", "link-without-a-uri"],
 )
 def test_a_payload_the_declared_kind_cannot_carry_is_a_tool_level_error(
     kind: ToolContentKind, payload: Any, says: str
@@ -206,12 +214,29 @@ def test_a_payload_the_declared_kind_cannot_carry_is_a_tool_level_error(
         _spec(lambda: payload),
         name="media.get",
         content_kind=kind,
-        content_mime_type="image/png" if kind is ToolContentKind.IMAGE else None,
     )
     result = handle_tools_call({"name": "media.get", "arguments": {}}, _ctx(server))
     assert result["isError"] is True
     assert says in result["content"][0]["text"]
     assert "'media.get'" in result["content"][0]["text"]
+
+
+@pytest.mark.parametrize(
+    ("kind", "payload", "says"),
+    [
+        (ToolContentKind.IMAGE, {"not": "bytes"}, "content_kind=IMAGE but produced dict"),
+        (ToolContentKind.RESOURCE, PNG, "content_kind=RESOURCE but produced bytes"),
+    ],
+    ids=["media-given-json", "embedded-given-bytes"],
+)
+def test_a_media_payload_built_by_hand_that_its_kind_cannot_carry_is_an_error(
+    kind: ToolContentKind, payload: Any, says: str
+) -> None:
+    result = build_tool_result(
+        payload, content_kind=kind, content_mime_type="image/png", binding_name="m"
+    ).to_dict()
+    assert result["isError"] is True
+    assert says in result["content"][0]["text"]
 
 
 # ----- registration-time refusals -----

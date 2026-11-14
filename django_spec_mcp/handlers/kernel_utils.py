@@ -14,6 +14,8 @@ from django_service_specs import (
     CallSeeds,
     DispatchError,
     DispatchResult,
+    FileResult,
+    FileTooLarge,
     Grant,
     InvalidArguments,
     NotPermitted,
@@ -58,6 +60,7 @@ from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.protocol.types.tool_result import ToolResult
 from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
+from django_spec_mcp.types.file_content_kinds import FILE_CONTENT_KINDS
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from django_spec_mcp.types.mcp_transport import MCP_TRANSPORT
 
@@ -466,7 +469,24 @@ def not_found_result(binding: KernelToolBinding) -> ToolResult:
 
 
 def tool_result(binding: KernelToolBinding, payload: Any, *, config: MCPConfig) -> ToolResult:
-    """The successful ``tools/call`` result for ``payload``."""
+    """The successful ``tools/call`` result for ``payload``; a file is read under the ceiling."""
+    if isinstance(payload, FileResult):
+        if binding.content_kind not in FILE_CONTENT_KINDS:
+            payload.close()
+            return build_error_tool_result(
+                f"Tool {binding.name!r} produced a FileResult, and its spec presents no file. "
+                "Present it through FilePresenter(content_type), which declares the file.",
+                error_type="output_encoding",
+            )
+        label = f"Tool {binding.name!r}"
+        read = _read_file(payload, resolve_bound(binding.max_result_bytes, config.max_result_bytes))
+        if isinstance(read, FileTooLarge):
+            return build_error_tool_result(
+                _over_file_ceiling(label, read), error_type="result_too_large"
+            )
+        payload = read
+    elif payload is None and binding.content_kind in FILE_CONTENT_KINDS:
+        return build_tool_result(None, include_structured_content=False)
     _emit_output_schema, emit_structured_content = resolve_structured_output(
         include_output_schema_override=binding.include_output_schema,
         include_structured_content_override=binding.include_structured_content,
@@ -504,10 +524,43 @@ def resource_read_result(
             f"Resource not found: {uri!r}",
             data={"uri": uri},
         )
+    media_type: str | None = None
+    if isinstance(payload, FileResult):
+        media_type = payload.content_type
+        payload = _read_file(payload, context.config.max_result_bytes)
+        if isinstance(payload, FileTooLarge):
+            return JsonRpcError(
+                JsonRpcErrorCode.SERVER_ERROR, _over_file_ceiling(f"Resource {uri!r}", payload)
+            )
+        payload = payload.content
     contents = encode_resource_contents(payload, binding=binding, uri=uri, producer=_PRESENTED_BY)
     if isinstance(contents, JsonRpcError):
         return contents
+    if media_type is not None:
+        contents = replace(contents, mime_type=media_type)
     return resource_read_answer(contents, binding, uri, context)
+
+
+def _read_file(file: FileResult, max_bytes: int | None) -> FileResult | FileTooLarge:
+    """``file`` read into memory under ``max_bytes``, or the refusal; either way it is closed."""
+    try:
+        return FileResult(
+            file.read(max_bytes), filename=file.filename, content_type=file.content_type
+        )
+    except FileTooLarge as exc:
+        return exc
+
+
+def _over_file_ceiling(label: str, exc: FileTooLarge) -> str:
+    """The ceiling refusal for a file, worded as ``enforce_result_bytes`` words a payload's."""
+    logger.warning(
+        "Result bound exceeded: %s produced a file over a %d byte ceiling", label, exc.max_bytes
+    )
+    return (
+        f"{label} produced a file over this server's {exc.max_bytes} byte ceiling. Narrow "
+        "the request and call again. The file was not truncated: a partial file would "
+        "look complete."
+    )
 
 
 def resource_refusal(exc: DispatchError | ServiceError, scene: KernelRefusalScene) -> JsonRpcError:

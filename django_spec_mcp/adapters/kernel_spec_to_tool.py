@@ -20,7 +20,7 @@ from django_spec_mcp.adapters.utils import merge_tool_annotations
 from django_spec_mcp.handlers.kernel_utils import call_context
 from django_spec_mcp.protocol.types.icon import Icon
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
-from django_spec_mcp.registry.types.utils import scope_names
+from django_spec_mcp.registry.types.utils import derived_tool_content, scope_names
 from django_spec_mcp.types.task_policy import TaskPolicy
 from django_spec_mcp.types.tool_content_kind import ToolContentKind
 
@@ -36,8 +36,8 @@ def kernel_spec_to_tool(
     icons: tuple[Icon, ...],
     annotations: dict[str, Any] | None,
     meta: dict[str, Any],
-    content_kind: ToolContentKind,
-    content_mime_type: str | None,
+    content_kind: ToolContentKind | UnsetType,
+    content_mime_type: str | None | UnsetType,
     include_structured_content: bool | None,
     include_output_schema: bool | None,
     task_policy: TaskPolicy,
@@ -69,6 +69,9 @@ def kernel_spec_to_tool(
         spec, unknown_arguments=unknown_arguments, call_context=call_context(None, name)
     )
     spec_output_schema(spec, paginate=paginate)
+    content_kind, content_mime_type = derived_tool_content(
+        f"Tool {name!r}", spec, content_kind, content_mime_type
+    )
     return KernelToolBinding(
         name=name,
         description=description,

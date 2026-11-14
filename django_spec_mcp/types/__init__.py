@@ -5,6 +5,8 @@ from django_spec_mcp.types.elicit_action import ElicitAction
 from django_spec_mcp.types.elicitation_create_method import ELICITATION_CREATE_METHOD
 from django_spec_mcp.types.elicitation_key import ELICITATION_KEY
 from django_spec_mcp.types.elicitation_scalar_types import ELICITATION_SCALAR_TYPES
+from django_spec_mcp.types.file_block_uri_prefix import FILE_BLOCK_URI_PREFIX
+from django_spec_mcp.types.file_content_kinds import FILE_CONTENT_KINDS
 from django_spec_mcp.types.icon_theme import IconTheme
 from django_spec_mcp.types.internal_error_message import INTERNAL_ERROR_MESSAGE
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
@@ -52,6 +54,8 @@ __all__ = [
     "ELICITATION_KEY",
     "ELICITATION_SCALAR_TYPES",
     "ElicitAction",
+    "FILE_BLOCK_URI_PREFIX",
+    "FILE_CONTENT_KINDS",
     "INTERNAL_ERROR_MESSAGE",
     "IconTheme",
     "JSONRPC_VERSION",

@@ -72,7 +72,10 @@ from django_spec_mcp.registry.types.prompt_binding import PromptBinding
 from django_spec_mcp.registry.types.resource_binding import ResourceBinding
 from django_spec_mcp.registry.types.ui_resource_meta import UIResourceMeta
 from django_spec_mcp.registry.types.ui_tool_meta import UIToolMeta
-from django_spec_mcp.registry.types.utils import binding_checks, scope_names
+from django_spec_mcp.registry.types.utils import (
+    binding_checks,
+    scope_names,
+)
 from django_spec_mcp.schema.types.agent_conventions import AgentConventions
 from django_spec_mcp.server.utils import (
     build_ui_tool_meta,
@@ -265,8 +268,8 @@ class MCPServer:
         annotations: dict[str, Any] | None = None,
         meta: dict[str, Any] | None = None,
         ui: UIToolMeta | None = None,
-        content_kind: ToolContentKind = ToolContentKind.TEXT,
-        content_mime_type: str | None = None,
+        content_kind: ToolContentKind | UnsetType = UNSET,
+        content_mime_type: str | None | UnsetType = UNSET,
         include_structured_content: bool | None = None,
         include_output_schema: bool | None = None,
         task_policy: TaskPolicy = TaskPolicy.FORBIDDEN,
@@ -383,8 +386,8 @@ class MCPServer:
         annotations: dict[str, Any] | None = None,
         meta: dict[str, Any] | None = None,
         ui: UIToolMeta | None = None,
-        content_kind: ToolContentKind = ToolContentKind.TEXT,
-        content_mime_type: str | None = None,
+        content_kind: ToolContentKind | UnsetType = UNSET,
+        content_mime_type: str | None | UnsetType = UNSET,
         include_structured_content: bool | None = None,
         include_output_schema: bool | None = None,
         task_policy: TaskPolicy = TaskPolicy.FORBIDDEN,
@@ -882,8 +885,8 @@ class MCPServer:
         description: str | None = None,
         title: str | None = None,
         icons: tuple[Icon, ...] = (),
-        mime_type: str = "application/json",
-        encoding: ResourceEncoding = ResourceEncoding.JSON,
+        mime_type: str | UnsetType = UNSET,
+        encoding: ResourceEncoding | UnsetType = UNSET,
         rate_limits: list[Any] | None = None,
         annotations: dict[str, Any] | None = None,
         meta: dict[str, Any] | None = None,
@@ -962,7 +965,7 @@ class MCPServer:
             mime_type=mime_type,
             encoding=encoding,
         )
-        _check_kernel_resource_encoding(name, binding.spec, encoding)
+        _check_kernel_resource_encoding(name, binding.spec, binding.encoding)
         template_variables: tuple[str, ...] = _template_variables(uri_template)
         _refuse_reserved_template_variables(
             name, template_variables, reserved=self._pool_seeds.names | CALL_SEEDS
