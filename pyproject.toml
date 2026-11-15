@@ -38,7 +38,10 @@ classifiers = [
 dependencies = [
     "django>=4.2",
     # The kernel this package serves, and the one it imports its own names from.
-    # 0.31.0 is the floor: from it ``seeded_pool``, which the view read and
+    # 0.33.0 is the floor: from it ``FilePresenter``, ``FileResult``, ``FileTooLarge`` and
+    # ``file_output``, which file results import from the root, are there, and a
+    # ``many`` service spec may declare a ``collection_selector_spec``. From 0.31.0
+    # ``seeded_pool``, which the view read and
     # ``tools/list``'s conditioned-tool pool import from the root, is there, and a
     # labelled filter is advertised as ``anyOf``, the shape the docs show. From 0.30.0
     # ``spec_input_schema`` and ``spec_caller_input_schema`` take ``call_context=``,
@@ -65,7 +68,7 @@ dependencies = [
     # raise changes what the kernel refuses: the two routes reach one spec, and
     # with only one raised the same selector can be a not-found on one route and
     # an error on the other.
-    "django-service-specs>=0.31.0",
+    "django-service-specs>=0.33.0",
 ]
 
 [project.optional-dependencies]
@@ -234,7 +237,7 @@ root = ["./django_spec_mcp"]
 # block under a new dated heading. Run via `uvx bump-my-version` (no
 # permanent dependency added to the project).
 [tool.bumpversion]
-current_version = "0.12.0"
+current_version = "0.13.0"
 allow_dirty = false
 commit = false
 tag = false

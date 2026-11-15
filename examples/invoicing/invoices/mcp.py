@@ -15,6 +15,8 @@ from __future__ import annotations
 from django_service_specs import (
     DEFAULT_POOL_SEEDS,
     DataclassPresenter,
+    DataclassValidator,
+    FilePresenter,
     FormValidator,
     Parameter,
     Parameters,
@@ -43,19 +45,22 @@ from invoices.selectors import (
     find_invoice,
     get_invoice,
     invoice_by_number,
+    invoice_receipt,
     invoices_by_sent,
     list_invoices,
     outstanding_total,
+    unsent_invoices_numbered,
 )
 from invoices.services import (
     InvoiceAlreadySent,
     apply_credit,
     create_invoice,
     mark_invoice_sent,
+    reprice_invoices,
     set_invoice_amount,
     write_off_invoice,
 )
-from invoices.shapes import InvoiceOutput, OutstandingTotal
+from invoices.shapes import InvoiceOutput, OutstandingTotal, RepriceRow
 from invoices.validators import WriteOffValidator
 
 # Permissions are **required**: a spec declaring none is refused at
@@ -290,6 +295,44 @@ def build_server() -> MCPServer:
         name="invoice",
         uri_template="invoices://{pk}",
         description="A single invoice by primary key.",
+    )
+
+    # ----- Resource (an invoice's receipt as a file) -----
+
+    server.register_resource(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=get_invoice,
+            reads=Parameters([Parameter("pk", "integer", required=True)]),
+            presenter=FilePresenter(
+                "text/csv",
+                render=invoice_receipt,
+                filename=lambda invoice: f"{invoice.number}.csv",
+            ),
+            permissions=OPEN,
+        ),
+        name="invoice-receipt",
+        uri_template="invoices://{pk}/receipt",
+        description="An invoice's receipt, as a CSV file.",
+    )
+
+    # ----- Many tool over a collection (reprice a set of unsent invoices) -----
+
+    server.register_tool(
+        ServiceSpec(
+            service=reprice_invoices,
+            validator=DataclassValidator(RepriceRow),
+            many=True,
+            collection_selector_spec=SelectorSpec(
+                kind=SelectorKind.LIST,
+                selector=unsent_invoices_numbered,
+                reads=Parameters([Parameter("prefix", "string", required=True)]),
+            ),
+            presenter=INVOICE,
+            permissions=OPEN,
+        ),
+        name="invoices.bulk_reprice",
+        description="Set the amounts of the unsent invoices whose number has a prefix.",
     )
 
     # ----- Prompt (renders an email body for an invoice) -----

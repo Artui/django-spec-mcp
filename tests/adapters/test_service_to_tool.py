@@ -5,6 +5,7 @@ from typing import Any
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
+from django.test import override_settings
 from django_service_specs import (
     DataclassValidator,
     Parameter,
@@ -18,7 +19,8 @@ from django_service_specs import (
 
 from django_spec_mcp import MCPServer
 from tests.testapp.kernel_shapes import InvoiceInput
-from tests.utils import make_server, tool_error
+from tests.testapp.urlconf_for import urlconf_for
+from tests.utils import LEGACY, make_server, post_in_era, tool_error
 
 _ROWS = [{"number": "A"}, {"number": "B", "amount_cents": 3}]
 
@@ -28,13 +30,11 @@ def _numbers(*, data: list[InvoiceInput]) -> list[str]:
 
 
 def _many(**declared: Any) -> ServiceSpec:
+    defaults: dict[str, Any] = {"service": _numbers, "atomic": False, "many": True}
     return ServiceSpec(
-        service=_numbers,
-        atomic=False,
         permissions=[Unrestricted()],
         validator=DataclassValidator(InvoiceInput),
-        many=True,
-        **declared,
+        **{**defaults, **declared},
     )
 
 
@@ -128,22 +128,49 @@ def test_a_single_item_spec_may_read_an_argument_named_items() -> None:
     assert json.loads(out["content"][0]["text"]) == "x"
 
 
-@pytest.mark.parametrize(
-    ("declared", "named"),
-    [
-        (
-            {"instance_selector_spec": SelectorSpec(kind=SelectorKind.RETRIEVE, selector=dict)},
-            "instance_selector_spec",
+def test_an_instance_lookup_beside_the_list_is_refused_when_the_spec_is_built() -> None:
+    lookup = SelectorSpec(kind=SelectorKind.RETRIEVE, selector=dict)
+
+    with pytest.raises(ImproperlyConfigured, match=r"instance_selector_spec with many=True"):
+        _many(instance_selector_spec=lookup)
+
+
+def _numbers_into(*, collection: list[str], data: list[InvoiceInput]) -> list[str]:
+    return [*collection, *(row.number for row in data)]
+
+
+def _shelf(*, shelf: str) -> list[str]:
+    return [f"{shelf}-0"]
+
+
+def _many_over_a_collection() -> ServiceSpec:
+    return _many(
+        service=_numbers_into,
+        collection_selector_spec=SelectorSpec(
+            kind=SelectorKind.LIST,
+            selector=_shelf,
+            reads=Parameters([Parameter("shelf", "string", required=True)]),
         ),
-        (
-            {"collection_selector_spec": SelectorSpec(kind=SelectorKind.LIST, selector=list)},
-            "collection_selector_spec",
-        ),
-    ],
-)
-def test_a_lookup_beside_the_list_is_refused_when_the_spec_is_built(
-    declared: dict[str, Any], named: str
-) -> None:
-    # A list of rows resolves no target, so dispatch would never run the lookup.
-    with pytest.raises(ImproperlyConfigured, match=f"declares a {named} with many=True"):
-        _many(**declared)
+    )
+
+
+def test_a_many_tool_over_a_collection_advertises_the_lookup_beside_the_list() -> None:
+    listed: Any = _registered(_many_over_a_collection()).list_tools(user=None)
+
+    schema = listed["tools"][0]["inputSchema"]
+
+    assert set(schema["properties"]) == {"items", "shelf"}
+    assert set(schema["required"]) == {"items", "shelf"}
+    assert schema["properties"]["shelf"] == {"type": "string"}
+
+
+@pytest.mark.parametrize("is_async", [False, True], ids=["sync", "async"])
+def test_a_many_tool_over_a_collection_hands_the_service_the_collection(is_async: bool) -> None:
+    server = _registered(_many_over_a_collection())
+    arguments = {"shelf": "s", "items": _ROWS}
+
+    with override_settings(ROOT_URLCONF=urlconf_for(server, is_async=is_async)):
+        out = post_in_era(LEGACY, is_async, "tools/call", {"name": "t", "arguments": arguments})
+
+    assert out.get("isError") is not True, out
+    assert out["structuredContent"] == {"items": ["s-0", "A", "B"]}

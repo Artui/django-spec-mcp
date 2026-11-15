@@ -18,7 +18,11 @@ from django_service_specs import (
 )
 
 from django_spec_mcp.protocol.types.icon import Icon
-from django_spec_mcp.registry.types.utils import scope_names, validate_content_kind
+from django_spec_mcp.registry.types.utils import (
+    check_tool_file,
+    scope_names,
+    validate_content_kind,
+)
 from django_spec_mcp.types.task_policy import TaskPolicy
 from django_spec_mcp.types.tool_content_kind import ToolContentKind
 
@@ -59,6 +63,12 @@ class KernelToolBinding:
     # A free-form dict, because ``_meta`` is MCP's open extension namespace.
     meta: dict[str, Any] = field(default_factory=dict)
     content_kind: ToolContentKind = ToolContentKind.TEXT
+    """What the result's ``content`` holds; a file's kind is its spec's, checked here.
+
+    A spec presenting through ``FilePresenter`` takes ``IMAGE``, ``AUDIO`` or
+    ``RESOURCE`` with the presenter's type as ``content_mime_type``; a
+    disagreeing declaration, or a file kind over a spec presenting no file, is
+    refused when the binding is built. ``register_tool`` derives both."""
     content_mime_type: str | None = None
     include_structured_content: bool | None = None
     include_output_schema: bool | None = None
@@ -157,6 +167,7 @@ class KernelToolBinding:
             include_structured_content=self.include_structured_content,
             include_output_schema=self.include_output_schema,
         )
+        check_tool_file(f"Tool {self.name!r}", self.spec, self.content_kind, self.content_mime_type)
         object.__setattr__(self, "scopes", scope_names(f"Tool {self.name!r}", self.scopes))
 
     @property

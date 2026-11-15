@@ -76,3 +76,13 @@ def invoices_by_sent(*, sent: bool) -> QuerySet[Invoice]:
     its value dropped (and logged by name) rather than reading sent invoices.
     """
     return Invoice.objects.filter(sent=sent).order_by("number")
+
+
+def unsent_invoices_numbered(*, prefix: str) -> QuerySet[Invoice]:
+    """Backs ``invoices.bulk_reprice``'s collection: the unsent invoices whose number starts so."""
+    return Invoice.objects.filter(sent=False, number__startswith=prefix).order_by("number")
+
+
+def invoice_receipt(invoice: Invoice) -> bytes:
+    """The ``invoice-receipt`` resource's file: one invoice as a CSV row under a header."""
+    return f"number,amount_cents\r\n{invoice.number},{invoice.amount_cents}\r\n".encode()

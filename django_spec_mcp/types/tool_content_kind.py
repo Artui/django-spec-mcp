@@ -10,11 +10,13 @@ class ToolContentKind(str, Enum):
     [`ResourceEncoding`][django_spec_mcp.types.ResourceEncoding]: a base64
     ``str`` and a text body are indistinguishable by inspection.
 
-    Embedded (``resource``) blocks have no kind here on purpose — inlining contents
-    means producing them, which ``resources/read`` already does, so a tool returns a
-    ``RESOURCE_LINK`` and lets the client decide whether to spend context on the body.
-    [`ToolContentBlock.embedded_resource`][django_spec_mcp.protocol.types.tool_content_block.ToolContentBlock.embedded_resource]
-    remains available for a caller building blocks by hand.
+    A file is declared on the spec, never here: a spec presenting through the
+    kernel's ``FilePresenter`` takes ``IMAGE``, ``AUDIO`` or ``RESOURCE`` by its
+    content type, derived at registration, and any other declaration beside it is
+    refused. A media or ``RESOURCE`` kind over a spec presenting no file is refused
+    too. A row that already has a URI is still better linked (``RESOURCE_LINK``),
+    so the client decides whether to spend context on the body; a file a service
+    generates has no resource to link to, so it is embedded.
 
     Attributes:
         TEXT: One text block carrying the payload as JSON, mirrored in
@@ -24,6 +26,12 @@ class ToolContentKind(str, Enum):
             not JSON, and an ``outputSchema`` over it would describe a shape
             that never arrives.
         AUDIO: As ``IMAGE``.
+        RESOURCE: A ``ServiceSpec``'s file whose type is neither ``image/*``
+            nor ``audio/*``, embedded as a ``resource`` block carrying the blob
+            under a ``spec-mcp://files/<filename>`` URI that names it and is not
+            readable. No ``structuredContent``, as ``IMAGE``. A ``SelectorSpec``
+            reads a row that can be a resource, so its non-media file is refused
+            as a tool: register it with ``register_resource``.
         RESOURCE_LINK: The payload names resources rather than containing them
             — one mapping with ``uri`` / ``name`` (plus optional
             ``description`` / ``mimeType``), or a list of them.
@@ -34,3 +42,4 @@ class ToolContentKind(str, Enum):
     IMAGE = "image"
     AUDIO = "audio"
     RESOURCE_LINK = "resource_link"
+    RESOURCE = "resource"

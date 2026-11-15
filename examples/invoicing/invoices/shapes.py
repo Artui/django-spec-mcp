@@ -28,3 +28,11 @@ class OutstandingTotal:
 
     amount_cents: int
     currency: str
+
+
+@dataclass
+class RepriceRow:
+    """One row of ``invoices.bulk_reprice``: an invoice's number and its new amount."""
+
+    number: str
+    amount_cents: int

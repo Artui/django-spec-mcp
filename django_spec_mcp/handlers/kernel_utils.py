@@ -14,6 +14,8 @@ from django_service_specs import (
     CallSeeds,
     DispatchError,
     DispatchResult,
+    FileResult,
+    FileTooLarge,
     Grant,
     InvalidArguments,
     NotPermitted,
@@ -58,8 +60,11 @@ from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.protocol.types.tool_result import ToolResult
 from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
+from django_spec_mcp.registry.types.utils import file_content_kind
+from django_spec_mcp.types.file_content_kinds import FILE_CONTENT_KINDS
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from django_spec_mcp.types.mcp_transport import MCP_TRANSPORT
+from django_spec_mcp.types.resource_encoding import ResourceEncoding
 
 logger = get_logger(__name__)
 
@@ -466,7 +471,36 @@ def not_found_result(binding: KernelToolBinding) -> ToolResult:
 
 
 def tool_result(binding: KernelToolBinding, payload: Any, *, config: MCPConfig) -> ToolResult:
-    """The successful ``tools/call`` result for ``payload``."""
+    """The successful ``tools/call`` result for ``payload``; a file is read under the ceiling."""
+    if isinstance(payload, FileResult):
+        if binding.content_kind not in FILE_CONTENT_KINDS:
+            payload.close()
+            return build_error_tool_result(
+                f"Tool {binding.name!r} produced a FileResult, and its spec presents no file. "
+                "Present it through FilePresenter(content_type), which declares the file.",
+                error_type="output_encoding",
+            )
+        label = f"Tool {binding.name!r}"
+        kind = file_content_kind(payload.content_type or binding.content_mime_type or "")
+        if kind is not binding.content_kind:
+            payload.close()
+            return build_error_tool_result(
+                f"{label} produced a {payload.content_type!r} file, which a tool serves as "
+                f"{kind.name}, where its FilePresenter declares {binding.content_kind.name}. "
+                "Return a file of the presenter's kind.",
+                error_type="output_encoding",
+            )
+        ceiling = resolve_bound(binding.max_result_bytes, config.max_result_bytes)
+        read = _read_file(payload, ceiling)
+        if isinstance(read, FileTooLarge):
+            return build_error_tool_result(
+                _over_file_ceiling(label, ceiling), error_type="result_too_large"
+            )
+        if isinstance(read, TypeError):
+            return build_error_tool_result(f"{label}: {read}", error_type="output_encoding")
+        payload = read
+    elif binding.content_kind in FILE_CONTENT_KINDS:
+        return build_tool_result(None, include_structured_content=False)
     _emit_output_schema, emit_structured_content = resolve_structured_output(
         include_output_schema_override=binding.include_output_schema,
         include_structured_content_override=binding.include_structured_content,
@@ -504,10 +538,55 @@ def resource_read_result(
             f"Resource not found: {uri!r}",
             data={"uri": uri},
         )
+    media_type: str | None = None
+    if isinstance(payload, FileResult):
+        if binding.encoding is not ResourceEncoding.BLOB:
+            payload.close()
+            return JsonRpcError(
+                JsonRpcErrorCode.INTERNAL_ERROR,
+                f"Resource {binding.name!r} produced a FileResult, and its spec presents no "
+                "file. Present it through FilePresenter(content_type), which declares the file.",
+            )
+        media_type = payload.content_type
+        ceiling = context.config.max_result_bytes
+        payload = _read_file(payload, ceiling)
+        if isinstance(payload, FileTooLarge):
+            return JsonRpcError(
+                JsonRpcErrorCode.SERVER_ERROR, _over_file_ceiling(f"Resource {uri!r}", ceiling)
+            )
+        if isinstance(payload, TypeError):
+            return JsonRpcError(JsonRpcErrorCode.INTERNAL_ERROR, f"Resource {uri!r}: {payload}")
+        payload = payload.content
     contents = encode_resource_contents(payload, binding=binding, uri=uri, producer=_PRESENTED_BY)
     if isinstance(contents, JsonRpcError):
         return contents
+    if media_type is not None:
+        contents = replace(contents, mime_type=media_type)
     return resource_read_answer(contents, binding, uri, context)
+
+
+def _read_file(file: FileResult, ceiling: int | None) -> FileResult | FileTooLarge | TypeError:
+    """``file`` read under the bytes whose base64 fits ``ceiling``, or the refusal; it is closed."""
+    try:
+        return FileResult(
+            file.read(None if ceiling is None else ceiling * 3 // 4),
+            filename=file.filename,
+            content_type=file.content_type,
+        )
+    except (FileTooLarge, TypeError) as exc:
+        return exc
+
+
+def _over_file_ceiling(label: str, ceiling: int | None) -> str:
+    """The ceiling refusal for a file, worded as ``enforce_result_bytes`` words a payload's."""
+    logger.warning(
+        "Result bound exceeded: %s produced a file over a %s byte ceiling", label, ceiling
+    )
+    return (
+        f"{label} produced a file whose base64 is over this server's {ceiling} byte ceiling. "
+        "Narrow the request and call again. The file was not truncated: a partial file "
+        "would look complete."
+    )
 
 
 def resource_refusal(exc: DispatchError | ServiceError, scene: KernelRefusalScene) -> JsonRpcError:

@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import base64
 import re
 from collections.abc import Mapping
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
+from django_service_specs import FileResult
+
+from django_spec_mcp.protocol.types.resource_contents import ResourceContents
 from django_spec_mcp.protocol.types.tool_content_block import ToolContentBlock
+from django_spec_mcp.types.file_block_uri_prefix import FILE_BLOCK_URI_PREFIX
 from django_spec_mcp.types.tool_content_kind import ToolContentKind
 
 # RFC 3986 §3.1 scheme syntax. A resource link is a URI a host resolves, so it
@@ -39,6 +44,13 @@ def build_content_blocks(
     """Project a rendered tool payload into non-text ``content`` blocks."""
     if content_kind is ToolContentKind.RESOURCE_LINK:
         return _resource_links(payload)
+    if isinstance(payload, FileResult):
+        return [_file_block(payload, content_kind=content_kind, mime_type=mime_type)]
+    if content_kind is ToolContentKind.RESOURCE:
+        return (
+            f"declares content_kind=RESOURCE but produced {type(payload).__name__}. "
+            "An embedded file is a FileResult, which the spec's FilePresenter makes."
+        )
     if not isinstance(payload, bytes | bytearray | memoryview | str):
         return (
             f"declares content_kind={content_kind.name} but produced "
@@ -50,6 +62,24 @@ def build_content_blocks(
         ToolContentBlock.image if content_kind is ToolContentKind.IMAGE else ToolContentBlock.audio
     )
     return [factory(_as_bytes(payload), mime_type=mime_type or "")]
+
+
+def _file_block(
+    file: FileResult, *, content_kind: ToolContentKind, mime_type: str | None
+) -> ToolContentBlock:
+    """One block carrying ``file``, typed by its own content type before the binding's."""
+    data = file.read()
+    media_type = file.content_type or mime_type or ""
+    if content_kind is ToolContentKind.RESOURCE:
+        contents = ResourceContents(
+            uri=FILE_BLOCK_URI_PREFIX + quote(file.filename, safe=""),
+            mime_type=media_type,
+            blob=base64.b64encode(data).decode("ascii"),
+        )
+        return ToolContentBlock.embedded_resource(contents)
+    if content_kind is ToolContentKind.AUDIO:
+        return ToolContentBlock.audio(data, mime_type=media_type)
+    return ToolContentBlock.image(data, mime_type=media_type)
 
 
 def _as_bytes(payload: bytes | bytearray | memoryview | str) -> bytes | str:

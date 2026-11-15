@@ -8,7 +8,7 @@ from django_service_specs import SelectorKind, SelectorSpec, UnsetType
 
 from django_spec_mcp.protocol.types.icon import Icon
 from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
-from django_spec_mcp.registry.types.utils import scope_names
+from django_spec_mcp.registry.types.utils import derived_resource_body, scope_names
 from django_spec_mcp.types.resource_encoding import ResourceEncoding
 
 
@@ -27,8 +27,8 @@ def kernel_selector_to_resource(
     cache_ttl_ms: int | UnsetType,
     completions: dict[str, Callable[..., Any]] | None,
     scopes: str | Sequence[str] | None,
-    mime_type: str,
-    encoding: ResourceEncoding,
+    mime_type: str | UnsetType,
+    encoding: ResourceEncoding | UnsetType,
 ) -> KernelResourceBinding:
     """Build the binding ``MCPServer.register_resource`` registers for a kernel spec."""
     if not isinstance(spec, SelectorSpec):
@@ -41,6 +41,7 @@ def kernel_selector_to_resource(
             f"Resource {name!r}: a kernel resource reads one row, so its SelectorSpec "
             f"is a RETRIEVE, not a {spec.kind.name}. Register a LIST as a selector tool."
         )
+    encoding, mime_type = derived_resource_body(f"Resource {name!r}", spec, encoding, mime_type)
     return KernelResourceBinding(
         name=name,
         uri_template=uri_template,

@@ -388,6 +388,19 @@
       "name": "invoices.chart"
     },
     {
+      "annotations": {
+        "destructiveHint": true,
+        "readOnlyHint": false
+      },
+      "description": "Render a report.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "invoices.report"
+    },
+    {
       "_meta": {
         "ui": {
           "resourceUri": "ui://invoices/table.html",

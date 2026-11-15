@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import base64
+import io
 from dataclasses import dataclass, replace
 from typing import Any
 
 import pytest
 from asgiref.sync import async_to_sync
 from django_service_specs import (
+    UNSET,
+    FilePresenter,
     Output,
     Parameter,
     Parameters,
@@ -23,8 +26,10 @@ from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.handlers.handle_resources_read import handle_resources_read
 from django_spec_mcp.handlers.handle_resources_read_async import handle_resources_read_async
 from django_spec_mcp.handlers.utils import resource_not_found_code
+from django_spec_mcp.output.encode_resource_contents import encode_resource_contents
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
+from django_spec_mcp.registry.types.resource_binding import ResourceBinding
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from django_spec_mcp.types.resource_encoding import ResourceEncoding
 
@@ -70,6 +75,16 @@ class _RefusesShape(_Document):
 
     def present(self, value: Any) -> Any:
         raise ServiceValidationError("No such style.")
+
+
+def _file(content: Any, content_type: str = "image/png") -> FilePresenter:
+    return FilePresenter(content_type, filename="note.bin", render=lambda _row: content)
+
+
+def _view(encoding: ResourceEncoding) -> ResourceBinding[Any]:
+    return ResourceBinding(
+        name="view", uri_template="view://", description=None, selector=dict, encoding=encoding
+    )
 
 
 def _server(
@@ -167,26 +182,41 @@ class TestText:
 
 
 class TestBlob:
-    # Each member of the isinstance tuple is held by its own case: the tuple is
-    @pytest.mark.parametrize("kind", [bytes, bytearray, memoryview])
-    def test_bytes_like_are_base64_in_blob_with_no_text(self, kind: type, is_async: bool) -> None:
-        server = _server(_Answers(kind(PNG)), mime_type="image/png", encoding=ResourceEncoding.BLOB)
-        block = _block(server, "notes://1", is_async=is_async)
+    @pytest.mark.parametrize(
+        "content",
+        [lambda: PNG, lambda: io.BytesIO(PNG), lambda: iter([PNG[:4], PNG[4:]])],
+        ids=["bytes", "file-object", "iterable"],
+    )
+    def test_a_file_is_base64_in_blob_of_the_presenters_type(
+        self, content: Any, is_async: bool
+    ) -> None:
+        presenter = FilePresenter("image/png", filename="n.png", render=lambda _row: content())
+        block = _block(_server(presenter), "notes://1", is_async=is_async)
         assert block == {
             "uri": "notes://1",
             "mimeType": "image/png",
             "blob": base64.b64encode(PNG).decode("ascii"),
         }
 
-    def test_a_non_contiguous_memoryview_is_encoded_as_its_bytes(self, is_async: bool) -> None:
-        # A strided view is bytes-like but not a buffer base64 can read in place.
-        server = _server(
-            _Answers(memoryview(b"abcdef")[::2]),
-            mime_type="application/octet-stream",
-            encoding=ResourceEncoding.BLOB,
+    # Each member of the isinstance tuple is held by its own case: a view's selector
+    @pytest.mark.parametrize("kind", [bytes, bytearray, memoryview])
+    def test_a_views_bytes_like_are_base64_in_blob(self, kind: type) -> None:
+        contents = encode_resource_contents(
+            kind(PNG), binding=_view(ResourceEncoding.BLOB), uri="view://", producer="it"
         )
-        block = _block(server, "notes://1", is_async=is_async)
-        assert base64.b64decode(block["blob"]) == b"ace"
+        assert not isinstance(contents, JsonRpcError)
+        assert contents.blob == base64.b64encode(PNG).decode("ascii")
+
+    def test_a_non_contiguous_memoryview_is_encoded_as_its_bytes(self) -> None:
+        # A strided view is bytes-like but not a buffer base64 can read in place.
+        contents = encode_resource_contents(
+            memoryview(b"abcdef")[::2],
+            binding=_view(ResourceEncoding.BLOB),
+            uri="view://",
+            producer="it",
+        )
+        assert not isinstance(contents, JsonRpcError)
+        assert base64.b64decode(contents.blob or "") == b"ace"
 
 
 class TestWrongType:
@@ -198,9 +228,8 @@ class TestWrongType:
                 {"not": "a document"},
                 "encoding=TEXT but produced dict, not str",
             ),
-            (ResourceEncoding.BLOB, "not bytes", "encoding=BLOB but produced str, not bytes"),
         ],
-        ids=["text", "blob"],
+        ids=["text"],
     )
     def test_is_an_internal_error_naming_the_presenter(
         self, encoding: ResourceEncoding, value: Any, says: str, is_async: bool
@@ -213,18 +242,26 @@ class TestWrongType:
         # The message must not send its reader to a knob this form lacks.
         assert "output_serializer" not in error.message
 
+    def test_a_views_str_under_blob_is_an_internal_error(self) -> None:
+        error = encode_resource_contents(
+            "not bytes", binding=_view(ResourceEncoding.BLOB), uri="view://", producer="it"
+        )
+        assert isinstance(error, JsonRpcError)
+        assert error.code == JsonRpcErrorCode.INTERNAL_ERROR
+        assert "encoding=BLOB but produced str, not bytes" in error.message
+
 
 class TestEnvelope:
     @pytest.mark.parametrize(
-        ("encoding", "value"),
-        [(ResourceEncoding.TEXT, "x" * 500), (ResourceEncoding.BLOB, b"x" * 500)],
+        ("presenter", "encoding"),
+        [(_Answers("x" * 500), ResourceEncoding.TEXT), (_file(b"x" * 500), UNSET)],
         ids=["text", "blob"],
     )
     def test_a_body_over_the_ceiling_is_refused_as_json_is(
-        self, encoding: ResourceEncoding, value: Any, is_async: bool
+        self, presenter: Presenter, encoding: Any, is_async: bool
     ) -> None:
         error = _read(
-            _server(_Answers(value), encoding=encoding),
+            _server(presenter, encoding=encoding),
             "notes://1",
             is_async=is_async,
             max_result_bytes=200,
@@ -239,12 +276,12 @@ class TestEnvelope:
         ("presenter", "encoding"),
         [
             (_MarkdownPresenter(), ResourceEncoding.TEXT),
-            (_Answers(PNG), ResourceEncoding.BLOB),
+            (_file(PNG), UNSET),
         ],
         ids=["text", "blob"],
     )
     def test_the_cache_hints_and_meta_ride_beside_the_body(
-        self, presenter: Presenter, encoding: ResourceEncoding, is_async: bool
+        self, presenter: Presenter, encoding: Any, is_async: bool
     ) -> None:
         server = _server(presenter, encoding=encoding, cache_ttl_ms=60_000, meta={"x": 1})
         answer = _read(server, "notes://2", is_async=is_async)

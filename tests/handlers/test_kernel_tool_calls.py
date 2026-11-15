@@ -10,6 +10,7 @@ from django.test import Client, override_settings
 from django_service_specs import (
     AdditionalInputRequired,
     DataclassValidator,
+    FilePresenter,
     NotPermitted,
     PermissionCheck,
     SelectorKind,
@@ -27,7 +28,6 @@ from django_spec_mcp.handlers.kernel_refusals import KERNEL_REFUSALS
 from django_spec_mcp.handlers.types.kernel_refusal_scene import KernelRefusalScene
 from django_spec_mcp.protocol.types.tool_result import ToolResult
 from django_spec_mcp.schema.types.agent_conventions import AgentConventions
-from django_spec_mcp.types.tool_content_kind import ToolContentKind
 from tests.kernel_client import KernelClient
 from tests.testapp.auth_backend import HeaderAuthBackend
 from tests.testapp.mcp import build_kernel_server
@@ -89,10 +89,12 @@ def _build() -> MCPServer:
         server_arguments=ServerArguments(values={"tenant": "acme"}),
     )
     server.register_tool(
-        ServiceSpec(service=lambda: None, permissions=OPEN),
+        ServiceSpec(
+            service=lambda: b"\x89PNG",
+            permissions=OPEN,
+            presenter=FilePresenter("image/png", filename="pixel.png"),
+        ),
         name="pixel",
-        content_kind=ToolContentKind.IMAGE,
-        content_mime_type="image/png",
     )
     server.register_tool(
         ServiceSpec(service=lambda: None, permissions=OPEN),

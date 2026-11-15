@@ -4,6 +4,7 @@ from typing import Any
 
 from django_service_specs import (
     DispatchError,
+    FileResult,
     ServiceError,
     ServiceValidationError,
     adispatch,
@@ -11,6 +12,7 @@ from django_service_specs import (
     coerce_flat,
 )
 
+from django_spec_mcp._compat.acall import acall
 from django_spec_mcp.handlers.kernel_utils import (
     KernelAdmission,
     resource_read_result,
@@ -56,6 +58,8 @@ async def read_kernel_resource_async(
             payload = await apresent(binding.spec, result)
         except ServiceValidationError as exc:
             return resource_presentation_refusal(exc, binding, variables, context.config)
+    if isinstance(payload, FileResult):
+        return await acall(resource_read_result, binding, uri, result, payload, context)
     return resource_read_result(binding, uri, result, payload, context)
 
 
