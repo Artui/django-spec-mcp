@@ -673,10 +673,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#servicespec-declares-a-collection_selector_spec-with-manytrue" class="md-nav__link">
+  <a href="#servicespec-declares-an-instance_selector_spec-with-manytrue" class="md-nav__link">
     <span class="md-ellipsis">
       
-        "ServiceSpec declares a collection_selector_spec with many=True"
+        "ServiceSpec declares an instance_selector_spec with many=True"
       
     </span>
   </a>
@@ -1691,10 +1691,10 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#servicespec-declares-a-collection_selector_spec-with-manytrue" class="md-nav__link">
+  <a href="#servicespec-declares-an-instance_selector_spec-with-manytrue" class="md-nav__link">
     <span class="md-ellipsis">
       
-        "ServiceSpec declares a collection_selector_spec with many=True"
+        "ServiceSpec declares an instance_selector_spec with many=True"
       
     </span>
   </a>
@@ -1928,11 +1928,12 @@ spec:</p>
 </span><span id="__span-4-8"><a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>    <span class="n">permissions</span><span class="o">=</span><span class="p">[</span><span class="n">Unrestricted</span><span class="p">()],</span>
 </span><span id="__span-4-9"><a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="p">)</span>
 </span></code></pre></div>
-<h3 id="servicespec-declares-a-collection_selector_spec-with-manytrue">"ServiceSpec declares a collection_selector_spec with many=True"<a class="headerlink" href="#servicespec-declares-a-collection_selector_spec-with-manytrue" title="Permanent link">&para;</a></h3>
-<p>The kernel raises this when the spec is built, before any registration, and
-the same for an <code>instance_selector_spec</code> beside <code>many=True</code>. A list of rows
-resolves no target, so dispatch would never run the lookup. Declare no target
-lookup, or drop <code>many=True</code>.</p>
+<h3 id="servicespec-declares-an-instance_selector_spec-with-manytrue">"ServiceSpec declares an instance_selector_spec with many=True"<a class="headerlink" href="#servicespec-declares-an-instance_selector_spec-with-manytrue" title="Permanent link">&para;</a></h3>
+<p>The kernel raises this when the spec is built, before any registration. A list
+of rows edits no single row, so dispatch would never run the lookup. Drop the
+<code>instance_selector_spec</code>, or drop <code>many=True</code>. To edit a set of existing rows,
+declare a <code>collection_selector_spec</code> instead: the service receives its rows as
+<code>collection</code> (<a href="../concepts/#list-payload">A list payload</a>).</p>
 <h2 id="refused-when-registering-a-resource">Refused when registering a resource<a class="headerlink" href="#refused-when-registering-a-resource" title="Permanent link">&para;</a></h2>
 <h3 id="a-kernel-resource-reads-one-row">"a kernel resource reads one row"<a class="headerlink" href="#a-kernel-resource-reads-one-row" title="Permanent link">&para;</a></h3>
 <p><code>register_resource</code> takes a <code>RETRIEVE</code> <code>SelectorSpec</code>: a resource names one
@@ -1975,6 +1976,10 @@ this <code>500</code> into a tool result of the project's own.</p>
 not a server fault, so it is answered <code>-32006</code> under <code>403</code> with the
 <code>WWW-Authenticate</code> challenge, exactly like a permission check that answered
 no, and nothing is logged at <code>ERROR</code>.</p>
+<p>Only Django's <code>PermissionDenied</code> is a refusal. An exception that merely carries a
+403, such as an upstream service's <code>Forbidden</code> error, is a server fault: it is
+logged at <code>ERROR</code> and answered as an internal error (<code>-32603</code>). Raise
+<code>PermissionDenied</code> where a refusal is meant.</p>
 <p>A progress-carrying call (one sent with a <code>progressToken</code>) has committed its
 <code>200</code> before the dispatch runs, so the same failure arrives as its last frame,
 a <code>-32603</code> whose message is <code>Internal error</code> too.</p>

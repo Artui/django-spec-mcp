@@ -1238,6 +1238,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#django_spec_mcp.registry.types.kernel_tool_binding.KernelToolBinding.content_kind" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        content_kind
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#django_spec_mcp.registry.types.kernel_tool_binding.KernelToolBinding.invalidates" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2418,6 +2429,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#django_spec_mcp.registry.types.kernel_tool_binding.KernelToolBinding.content_kind" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        content_kind
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#django_spec_mcp.registry.types.kernel_tool_binding.KernelToolBinding.invalidates" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -3565,6 +3587,35 @@ never emitted on the MCP wire.</p>
 
 
 
+<h3 id="django_spec_mcp.registry.types.kernel_tool_binding.KernelToolBinding.content_kind" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">content_kind</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+  </span>
+
+<a href="#django_spec_mcp.registry.types.kernel_tool_binding.KernelToolBinding.content_kind" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">content_kind</span><span class="p">:</span> <span class="n">ToolContentKind</span> <span class="o">=</span> <span class="n">TEXT</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>What the result's <code>content</code> holds; a file's kind is its spec's, checked here.</p>
+<p>A spec presenting through <code>FilePresenter</code> takes <code>IMAGE</code>, <code>AUDIO</code> or
+<code>RESOURCE</code> with the presenter's type as <code>content_mime_type</code>; a
+disagreeing declaration, or a file kind over a spec presenting no file, is
+refused when the binding is built. <code>register_tool</code> derives both.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
 <h3 id="django_spec_mcp.registry.types.kernel_tool_binding.KernelToolBinding.invalidates" class="doc doc-heading">
             <span class="doc doc-object-name doc-attribute-name">invalidates</span>
 
@@ -3955,9 +4006,12 @@ read any other. <code>resources/read</code> runs <code>spec</code> through the k
 <code>dispatch</code> / <code>adispatch</code> instead of calling <code>selector</code> directly, so the
 spec's own permissions, reads, shaping and presenter answer the read.
 <code>mime_type</code> and <code>encoding</code> are a resource's as on any binding, applied
-to what the presenter returns: <code>TEXT</code> serves its <code>str</code> verbatim and
-<code>BLOB</code> base64-encodes its bytes, on a binding built by hand as on a
-registered one.</p>
+to what the presenter returns: <code>JSON</code> encodes it and <code>TEXT</code> serves its
+<code>str</code> verbatim. A file is declared on the spec: one presenting through
+<code>FilePresenter</code> is <code>BLOB</code> of the presenter's type, its <code>FileResult</code>
+read under the result ceiling and base64-encoded, and a binding declaring
+otherwise, or <code>BLOB</code> over a spec presenting no file, is refused when it is
+built, by hand or by <code>register_resource</code>, which derives both.</p>
 <p><code>selector</code> is the spec's, set at registration, and nothing on this path
 calls it itself. <code>scopes</code> is normalised when the binding is built, so one
 built by hand and passed to <code>server.resources.register</code> gates its reads
@@ -4134,7 +4188,7 @@ refuses a parameter a registered seed occupies.</p>
 
     <div class="doc doc-contents ">
 
-        <p>Add <code>binding</code>, refusing a duplicate name or a binding of server values that cannot hold.</p>
+        <p>Add <code>binding</code>, refusing a duplicate name or server values that cannot hold.</p>
 <p>The <code>server_arguments</code> check is made here rather than in the
 registrars alone, because a binding built by hand and handed straight to
 <code>server.tools.register</code> would otherwise reach every <code>tools/call</code>
@@ -4214,9 +4268,9 @@ of <code>resources/read</code>.</p>
 <p>One built by hand and passed straight to <code>server.resources.register</code> is
 registered unchecked: the registrars' refusals (an undeclared permission
 under <code>REQUIRE_TOOL_PERMISSIONS</code>, a template variable naming a seed or
-one of the kernel's <code>CALL_SEEDS</code>, a completer for no variable) are not asked, and no kernel spec stands behind
-it to refuse an unguarded call, so it carries its own <code>permissions</code> and
-<code>scopes</code>. A
+one of the kernel's <code>CALL_SEEDS</code>, a completer for no variable) are not asked, and
+no kernel spec stands behind it to refuse an unguarded call, so it carries its own
+<code>permissions</code> and <code>scopes</code>. A
 bare callable meant to be served with those checks is a <code>RETRIEVE</code>
 <code>SelectorSpec</code> registered with <code>register_resource</code>.</p>
 <p>The generic parameter is purely informational, letting callers pin the
@@ -5851,8 +5905,8 @@ each row of a <code>many</code> service, by what <code>input_data</code> reaches
 <code>test_a_rows_relaxing_stays_out_of_the_top_level</code>). What it adds is the
 transport's own:</p>
 <ul>
-<li>a paginated <code>LIST</code> tool advertises <code>page</code> and <code>limit</code>, <code>limit</code> bounded by <code>max_page_size</code>
-  when there is one, and each of its <code>shapes</code> says it applies to every
+<li>a paginated <code>LIST</code> tool advertises <code>page</code> and <code>limit</code>, <code>limit</code> bounded by
+  <code>max_page_size</code> when there is one, and each of its <code>shapes</code> says it applies to every
   item rather than to the envelope the <code>outputSchema</code> describes, in the
   words of <code>query_param_on_pages</code> (the server's
   <code>AgentConventions.query_param_on_pages</code>, already rendered; <code>None</code>

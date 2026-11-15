@@ -2376,8 +2376,8 @@ signature and called directly.</p>
 </span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">annotations</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">meta</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">ui</span><span class="p">:</span> <span class="n">UIToolMeta</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">content_kind</span><span class="p">:</span> <span class="n">ToolContentKind</span> <span class="o">=</span> <span class="n">ToolContentKind</span><span class="o">.</span><span class="n">TEXT</span><span class="p">,</span>
-</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="n">content_mime_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">content_kind</span><span class="p">:</span> <span class="n">ToolContentKind</span> <span class="o">|</span> <span class="n">UnsetType</span> <span class="o">=</span> <span class="n">UNSET</span><span class="p">,</span>
+</span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="n">content_mime_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">|</span> <span class="n">UnsetType</span> <span class="o">=</span> <span class="n">UNSET</span><span class="p">,</span>
 </span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    <span class="n">include_structured_content</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    <span class="n">include_output_schema</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>    <span class="n">task_policy</span><span class="p">:</span> <span class="n">TaskPolicy</span> <span class="o">=</span> <span class="n">TaskPolicy</span><span class="o">.</span><span class="n">FORBIDDEN</span><span class="p">,</span>
@@ -2400,8 +2400,8 @@ signature and called directly.</p>
 <p><code>spec</code> is a <code>django_service_specs</code> spec, and its class says which kind
 of tool this is. A service tool's arguments are the spec's parameters at
 the top level of <code>arguments</code>, as the kernel's
-<code>spec_caller_input_schema</code> advertises them; a selector tool reads, and a <code>LIST</code> one paginates
-under <code>paginate=True</code>. The call runs through the kernel's <code>dispatch</code>
+<code>spec_caller_input_schema</code> advertises them; a selector tool reads, and a <code>LIST</code>
+one paginates under <code>paginate=True</code>. The call runs through the kernel's <code>dispatch</code>
 / <code>adispatch</code>, which asks the spec's own <code>permissions</code> of the
 principal the auth backend resolved for the request.</p>
 <p>Anything that is not a kernel spec is refused with a <code>TypeError</code>. A
@@ -2425,6 +2425,14 @@ optional read over a keyword the callable requires. A read
 never refused as optional.</p>
 <p><code>display_name</code> and <code>display_description</code> are labels for in-process
 consumers, read off the binding and never sent on the wire.</p>
+<p><code>content_kind</code> and <code>content_mime_type</code> are derived from the spec when
+left out. A spec presenting through the kernel's <code>FilePresenter</code> takes
+<code>IMAGE</code> for an <code>image/*</code> type, <code>AUDIO</code> for <code>audio/*</code> and
+<code>RESOURCE</code> (an embedded blob) for any other, with the presenter's type
+as the mime type; any other spec takes <code>TEXT</code> and none. A value given
+that disagrees with the presenter is refused, and so is a file's kind
+over a spec presenting no file, and a <code>SelectorSpec</code> whose file is
+neither image nor audio, which <code>register_resource</code> serves instead.</p>
 <p><code>scopes</code> are the OAuth scopes the caller's token must carry, every one
 of them; a token missing one is answered <code>-32006</code> with every declared
 scope in <code>requiredScopes</code>, as a prompt's or a view's scope gate
@@ -2649,8 +2657,8 @@ thread-sensitive executor.</p>
         <p>The tools <code>list_tools</code> leaves out for this caller right now, and why.</p>
 <p>Maps each omitted tool's name to the operation-scope <code>Affordance</code> whose
 condition is unmet: its <code>code</code> and its <code>reason</code>, the sentence written
-for people and models alike. The answer comes from the same pass <code>tools/list</code> makes, over the
-same tools the caller may see (<code>FILTER_LISTINGS_BY_PERMISSIONS</code>
+for people and models alike. The answer comes from the same pass <code>tools/list</code> makes,
+over the same tools the caller may see (<code>FILTER_LISTINGS_BY_PERMISSIONS</code>
 included), so a name is here exactly when the listing omits it, and a
 tool hidden from this caller is never named with its reason.</p>
 <p>For an in-process consumer that lists once with
@@ -2876,8 +2884,8 @@ caller listening, the same two things <code>listChanged</code> is advertised on.
 </span><span id="__span-0-7"><a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>    <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-8"><a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>    <span class="n">title</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-9"><a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a>    <span class="n">icons</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">Icon</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">(),</span>
-</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">mime_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;application/json&quot;</span><span class="p">,</span>
-</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">encoding</span><span class="p">:</span> <span class="n">ResourceEncoding</span> <span class="o">=</span> <span class="n">ResourceEncoding</span><span class="o">.</span><span class="n">JSON</span><span class="p">,</span>
+</span><span id="__span-0-10"><a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>    <span class="n">mime_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">UnsetType</span> <span class="o">=</span> <span class="n">UNSET</span><span class="p">,</span>
+</span><span id="__span-0-11"><a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a>    <span class="n">encoding</span><span class="p">:</span> <span class="n">ResourceEncoding</span> <span class="o">|</span> <span class="n">UnsetType</span> <span class="o">=</span> <span class="n">UNSET</span><span class="p">,</span>
 </span><span id="__span-0-12"><a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a>    <span class="n">rate_limits</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-13"><a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a>    <span class="n">annotations</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="n">meta</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
@@ -2904,21 +2912,27 @@ entry — <code>resources/list</code> for a concrete URI,
 block <code>resources/read</code> returns.</p>
 <p><code>encoding</code> decides how what the presenter returns becomes the read
 body. <code>JSON</code> pretty-prints it; <code>TEXT</code> returns it verbatim, and it
-must be a <code>str</code>; <code>BLOB</code> base64-encodes it into the <code>contents</code>
-entry's <code>blob</code> instead of <code>text</code>, and it must be <code>bytes</code>,
-<code>bytearray</code> or <code>memoryview</code>. A value of the wrong type is answered
-at read time as an <code>INTERNAL_ERROR</code> naming what produced it. Anything
-whose <code>mime_type</code> is not JSON — Markdown, CSV, plain text — wants
-<code>TEXT</code>, or the document comes back wrapped in a quoted string literal,
-and an image wants <code>BLOB</code>: a presenter rendering the row as Markdown
-pairs with <code>encoding=TEXT</code> and <code>mime_type="text/markdown"</code>.
-<code>mime_type</code> is advertised as given and never inferred from or checked
-against the encoding, so <code>TEXT</code> left at the default
-<code>application/json</code> serves a <code>str</code> that is already a JSON document as
-it is. The view mime type (<code>UI_RESOURCE_MIME_TYPE</code>) with a templated
-<code>uri_template</code> raises <code>ValueError</code>, since a view must be one
-concrete document; use <code>register_ui_resource</code> for a view. The result
-ceiling and the cache hints apply to every encoding.
+must be a <code>str</code>; <code>BLOB</code> base64-encodes a file into the <code>contents</code>
+entry's <code>blob</code> instead of <code>text</code>. A file is declared on the spec: a
+spec presenting through the kernel's <code>FilePresenter</code> is <code>BLOB</code> with
+the presenter's type as <code>mime_type</code>, both derived when left out, and
+either one given that disagrees is refused, as is <code>BLOB</code> over a spec
+presenting no file. The read carries the file's own <code>content_type</code>,
+which the presenter fills when the file has none. Any other spec
+defaults to <code>JSON</code> and <code>application/json</code>. A value of the wrong type
+is answered at read time as an <code>INTERNAL_ERROR</code> naming what produced
+it. Anything whose <code>mime_type</code> is not JSON — Markdown, CSV, plain
+text — wants <code>TEXT</code>, or the document comes back wrapped in a quoted
+string literal: a presenter rendering the row as Markdown pairs with
+<code>encoding=TEXT</code> and <code>mime_type="text/markdown"</code>. Short of a file,
+<code>mime_type</code> is advertised as given and never checked against the
+body, so <code>TEXT</code> left at the default <code>application/json</code> serves a
+<code>str</code> that is already a JSON document as it is. The view mime type
+(<code>UI_RESOURCE_MIME_TYPE</code>) with a templated <code>uri_template</code> raises
+<code>ValueError</code>, since a view must be one concrete document; use
+<code>register_ui_resource</code> for a view. The result ceiling and the cache
+hints apply to every encoding, and a file is read no further than the
+ceiling.
 A <code>TEXT</code> or <code>BLOB</code> resource is refused, naming both, beside a spec
 declaring <code>affordances</code>, which the kernel adds to a presented object,
 or <code>allow_none</code>, under which a missing row presents as <code>None</code>
@@ -3401,9 +3415,9 @@ placeholders.</p>
     <div class="doc doc-contents ">
 
         <p>What a read-shaping parameter, one of a spec's <code>shapes</code>, applies to on
-a tool that returns a page. Appended to the param's description in the tool's <code>inputSchema</code>, and
-to the <code>isError</code> message when a value it supplied is refused while that
-tool's result is rendered. <code>None</code> drops it from both. No placeholders.</p>
+a tool that returns a page. Appended to the param's description in the tool's
+<code>inputSchema</code>, and to the <code>isError</code> message for a supplied value refused at render.
+<code>None</code> drops it from both. No placeholders.</p>
 
     </div>
 
@@ -3430,8 +3444,8 @@ tool's result is rendered. <code>None</code> drops it from both. No placeholders
 
         <p>The message of a <code>validation_error</code> result for a call that left out
 arguments the tool's selectors cannot run without: a selector parameter
-with no default or a service tool's target lookup. <code>{names}</code> is the missing names, sorted, each
-in backticks, joined with <code>", "</code>; the <code>detail</code> stays keyed by each name.
+with no default or a service tool's target lookup. <code>{names}</code> is the missing names, sorted,
+each in backticks, joined with <code>", "</code>; the <code>detail</code> stays keyed by each name.
 A validator's own refusal, a missing field included, keeps
 <code>"Invalid arguments"</code>. Never <code>None</code>, empty or only whitespace: it is
 the result's whole message.</p>

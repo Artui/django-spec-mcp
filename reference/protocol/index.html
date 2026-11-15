@@ -3941,8 +3941,7 @@ unconditionally rather than era-branched.</p>
             <td>
               <div class="doc-md-description">
                 <p>The result asks the client for input and expects the
-original request to be retried with the answers. Nothing here
-produces one yet; the vocabulary is the spec's.</p>
+original request to be retried with the answers.</p>
               </div>
             </td>
           </tr>
@@ -4884,16 +4883,13 @@ need.</p>
 <p>Declared per binding rather than sniffed from the payload, for the same reason as
 <a class="autorefs autorefs-internal" title="ResourceEncoding" href="../registries/#django_spec_mcp.types.ResourceEncoding"><code>ResourceEncoding</code></a>: a base64
 <code>str</code> and a text body are indistinguishable by inspection.</p>
-<p>Embedded (<code>resource</code>) blocks have no kind here on purpose — inlining contents
-means producing them, which <code>resources/read</code> already does, so a tool returns a
-<code>RESOURCE_LINK</code> and lets the client decide whether to spend context on the body.
-<a class="autorefs autorefs-internal" title="embedded_resource
-
-
-  
-      classmethod
-  " href="#django_spec_mcp.protocol.types.tool_content_block.ToolContentBlock.embedded_resource"><code>ToolContentBlock.embedded_resource</code></a>
-remains available for a caller building blocks by hand.</p>
+<p>A file is declared on the spec, never here: a spec presenting through the
+kernel's <code>FilePresenter</code> takes <code>IMAGE</code>, <code>AUDIO</code> or <code>RESOURCE</code> by its
+content type, derived at registration, and any other declaration beside it is
+refused. A media or <code>RESOURCE</code> kind over a spec presenting no file is refused
+too. A row that already has a URI is still better linked (<code>RESOURCE_LINK</code>),
+so the client decides whether to spend context on the body; a file a service
+generates has no resource to link to, so it is embedded.</p>
 
 
 <p><span class="doc-section-title">Attributes:</span></p>
@@ -4937,6 +4933,21 @@ that never arrives.</p>
             <td>
               <div class="doc-md-description">
                 <p>As <code>IMAGE</code>.</p>
+              </div>
+            </td>
+          </tr>
+          <tr class="doc-section-item">
+            <td><code><span title="django_spec_mcp.types.ToolContentKind.RESOURCE">RESOURCE</span></code></td>
+            <td>
+            </td>
+            <td>
+              <div class="doc-md-description">
+                <p>A <code>ServiceSpec</code>'s file whose type is neither <code>image/*</code>
+nor <code>audio/*</code>, embedded as a <code>resource</code> block carrying the blob
+under a <code>spec-mcp://files/&lt;filename&gt;</code> URI that names it and is not
+readable. No <code>structuredContent</code>, as <code>IMAGE</code>. A <code>SelectorSpec</code>
+reads a row that can be a resource, so its non-media file is refused
+as a tool: register it with <code>register_resource</code>.</p>
               </div>
             </td>
           </tr>

@@ -1607,7 +1607,7 @@ derivation follows it to <code>private</code>.</p>
 <tr>
 <td><code>TASK_TTL_MS</code></td>
 <td><code>86400000</code> (24 h)</td>
-<td>How long a created task stays readable, reported to the client as <code>ttlMs</code>. Both a promise and a bound: after it elapses the record may be dropped, and a client still politely polling gets "unknown task" — which looks exactly like work that vanished, hence the generous default. <code>None</code> disables expiry, which is only sound for a store that evicts on its own (the cache-backed one falls back to a week so an un-polled task cannot pin memory).</td>
+<td>How long a created task stays readable, reported to the client as <code>ttlMs</code>. Both a promise and a bound: after it elapses the record may be dropped, and a client still politely polling gets "unknown task" — which looks exactly like work that vanished, hence the generous default. A token revoked or narrowed after a task was created keeps the scopes that task stored until this lapses. <code>None</code> disables expiry, which is only sound for a store that evicts on its own (the cache-backed one falls back to a week so an un-polled task cannot pin memory).</td>
 </tr>
 <tr>
 <td><code>TASK_POLL_INTERVAL_MS</code></td>

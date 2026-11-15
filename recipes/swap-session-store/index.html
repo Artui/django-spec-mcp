@@ -1495,7 +1495,7 @@ store, or write it <code>def</code> and use it under both.</p>
 <div class="admonition note">
 <p class="admonition-title">Namespace it if you mount more than one server</p>
 <p>The default <code>DjangoCacheSessionStore</code> keys its entries under the server's
-<code>url_namespace</code>, so two mounts can't see each other's sessions. A store you
+<code>name</code>, so two servers of different names can't see each other's sessions. A store you
 build yourself is yours to namespace — give each server its own key space,
 or a session minted at <code>/public/mcp</code> will satisfy <code>/internal/mcp</code>.</p>
 </div>

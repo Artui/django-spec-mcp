@@ -1852,6 +1852,13 @@ on either side. Pass the URL the server's <code>protected-resource-metadata</cod
 answers at (<code>https://example.com/internal/mcp/.well-known/oauth-protected-resource</code>
 for a server whose resource URL is <code>https://example.com/internal/mcp/</code>), or
 <code>None</code> when the backend publishes no metadata.</p>
+<p>The token's <code>user</code> decides who owns each session and task. An authenticated user
+with a primary key becomes the principal <code>user:&lt;pk&gt;</code>. An authenticated user with no
+<code>pk</code> is refused with <code>ImproperlyConfigured</code>, because every such caller would
+otherwise share one principal and could present the others' session ids and read
+their task results. A <code>None</code> user, or one that reports <code>is_authenticated</code> as false,
+maps to the shared <code>"anonymous"</code> principal, so return <code>AnonymousUser</code> only for a
+caller who is genuinely unauthenticated.</p>
 <h3 id="where-a-client-finds-the-metadata">Where a client finds the metadata<a class="headerlink" href="#where-a-client-finds-the-metadata" title="Permanent link">&para;</a></h3>
 <p>A client looks for the RFC 9728 document in two places, in this order:</p>
 <ol>
