@@ -103,18 +103,21 @@ class _PerTransport(Validator):
         return dict(arguments)
 
 
+_CREATE = ServiceSpec(
+    service=record_invoice,
+    validator=DataclassValidator(InvoiceInput),
+    presenter=DataclassPresenter(InvoiceOutput),
+    permissions=[Unrestricted()],
+)
+
+
 def _server() -> MCPServer:
     server = MCPServer(
         name="tool-schemas", auth_backend=AllowAnyBackend(), session_store=InMemorySessionStore()
     )
     # A service: a required field, a defaulted one, and the registration's
     server.register_tool(
-        ServiceSpec(
-            service=record_invoice,
-            validator=DataclassValidator(InvoiceInput),
-            presenter=DataclassPresenter(InvoiceOutput),
-            permissions=[Unrestricted()],
-        ),
+        _CREATE,
         name="invoices.create",
         description="Create an invoice.",
         title="Create invoice",
@@ -264,6 +267,17 @@ def _server() -> MCPServer:
         ),
         name="invoices.create_per_transport",
         description="Create an invoice, naming the session it came from.",
+    )
+    server.register_tool(
+        SelectorSpec(
+            kind=SelectorKind.RETRIEVE,
+            selector=lambda: Invoice.objects.get(),
+            presenter=DataclassPresenter(InvoiceOutput),
+            affordances={"create": _CREATE},
+            permissions=[Unrestricted()],
+        ),
+        name="invoices.linked",
+        description="Read an invoice, linking to the create tool.",
     )
     return server
 

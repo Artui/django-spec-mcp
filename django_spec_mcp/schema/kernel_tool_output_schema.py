@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from django_service_specs import spec_output_schema
+from django.core.exceptions import ImproperlyConfigured
+from django_service_specs import link_bindings, spec_output_schema
 
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from django_spec_mcp.types.affordances_key import AFFORDANCES_KEY
@@ -35,7 +36,7 @@ def kernel_tool_output_schema(
     )
     if schema is None:
         return None
-    schema = _with_link_entries(schema)
+    schema = _with_link_entries(schema, binding)
     if schema.get("type") == _OBJECT_OR_NULL:
         return _admitting_nothing(schema)
     if schema.get("type") == _ARRAY_OR_NULL:
@@ -52,25 +53,35 @@ _OBJECT_OR_NULL: list[str] = ["object", "null"]
 _ARRAY_OR_NULL: list[str] = ["array", "null"]
 
 
-def _with_link_entries(schema: Any) -> Any:
-    """``schema`` with an optional ``tool`` and ``arguments`` on every affordance entry."""
-    if isinstance(schema, list):
-        return [_with_link_entries(child) for child in schema]
-    if not isinstance(schema, dict):
+def _with_link_entries(schema: dict[str, Any], binding: KernelToolBinding) -> dict[str, Any]:
+    """``schema`` with an optional ``tool`` and ``arguments`` on each answer of its rows."""
+    try:
+        linked = frozenset(link_bindings(binding.spec))
+    except ImproperlyConfigured:
         return schema
-    walked = {key: _with_link_entries(child) for key, child in schema.items()}
-    properties = walked.get("properties")
-    if isinstance(properties, dict) and AFFORDANCES_KEY in properties:
-        answers = properties[AFFORDANCES_KEY]
-        entries = {
-            name: {**entry, "properties": {**entry["properties"], **_link_properties()}}
-            for name, entry in answers["properties"].items()
-        }
-        walked["properties"] = {
-            **properties,
-            AFFORDANCES_KEY: {**answers, "properties": entries},
-        }
-    return walked
+    if not linked:
+        return schema
+    if binding.paginate:
+        envelope = schema["properties"]["items"]
+        rows = {**envelope, "items": _row_with_links(envelope["items"], linked)}
+        return {**schema, "properties": {**schema["properties"], "items": rows}}
+    if "items" in schema:
+        return {**schema, "items": _row_with_links(schema["items"], linked)}
+    return _row_with_links(schema, linked)
+
+
+def _row_with_links(row: dict[str, Any], linked: frozenset[str]) -> dict[str, Any]:
+    answers = row["properties"][AFFORDANCES_KEY]
+    entries = {
+        name: {**entry, "properties": {**entry["properties"], **_link_properties()}}
+        if name in linked
+        else entry
+        for name, entry in answers["properties"].items()
+    }
+    return {
+        **row,
+        "properties": {**row["properties"], AFFORDANCES_KEY: {**answers, "properties": entries}},
+    }
 
 
 def _link_properties() -> dict[str, Any]:

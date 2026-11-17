@@ -2670,9 +2670,13 @@ next tool with them as they are:
   the affordance names, or a spec a `SpecRegistry.replace` displaced from the entry
   `register_tools` registered. `server.tools.binding_of(spec)` answers it, and raises
   `ValueError` for a spec registered as two tools, which no one name can stand for.
-- **No tool, no link.** An operation this server does not expose, or an answer that is
-  not available, keeps its answer (`available`, and `code` and `reason` when refused)
-  with no `tool` or `arguments`.
+- **No tool, no link.** An operation this server does not expose, one registered as two
+  tools (logged as a warning), or an answer that is not available, keeps its answer
+  (`available`, and `code` and `reason` when refused) with no `tool` or `arguments`.
+- **A link that cannot bind fails the call**, as the kernel's `link_bindings` refuses it
+  at first use (`ImproperlyConfigured`, naming the link). Run the kernel's `check_links`
+  as a system check to refuse it at startup instead.
+- **Tool results only.** A resource read presents the same answers with no links.
 - **The values are read before the agent projection**, so a formatted field binds its
   raw value; a `HIDDEN` field is never bound (the kernel refuses that link).
 - **A read the target tool answers itself is left out**: its `server_arguments` would

@@ -32,10 +32,12 @@ carries; releases up to 0.54.0 are in
   `structuredContent` or the text block of such a tool (an agent runtime, a UI host)
   see the two new keys on available answers that name a registered tool. Additive:
   nothing is renamed or removed, and a tool whose spec declares no affordances is
-  unchanged. An affordance naming a spec registered as two tools has no one tool to
-  name, and the call presenting it raises `ValueError`, as the kernel's
-  `SpecRegistry.name_of` does: register the operation once, or link to the variant
-  one tool holds.
+  unchanged, as is an output field of its own named `affordances`. An affordance
+  naming a spec registered as two tools has no one tool to name: its answer carries
+  neither key, and a warning names both tools. A link the kernel cannot bind (a
+  required read with no field to read it from) now fails the call presenting it with
+  `ImproperlyConfigured`, the kernel's first-use refusal; `check_links` reports it at
+  startup.
 - **Requires `django-service-specs>=0.34.0`.**
 
 ## [0.14.0] — 2026-11-17

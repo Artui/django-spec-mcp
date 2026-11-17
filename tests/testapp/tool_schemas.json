@@ -549,6 +549,67 @@
         ],
         "type": "object"
       }
+    },
+    {
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "description": "Read an invoice, linking to the create tool.",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "name": "invoices.linked",
+      "outputSchema": {
+        "properties": {
+          "affordances": {
+            "properties": {
+              "create": {
+                "properties": {
+                  "arguments": {
+                    "type": "object"
+                  },
+                  "available": {
+                    "type": "boolean"
+                  },
+                  "tool": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "available"
+                ],
+                "type": "object"
+              }
+            },
+            "required": [
+              "create"
+            ],
+            "type": "object"
+          },
+          "amount_cents": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "integer"
+          },
+          "number": {
+            "type": "string"
+          },
+          "sent": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "amount_cents",
+          "sent",
+          "affordances"
+        ],
+        "type": "object"
+      }
     }
   ]
 }
