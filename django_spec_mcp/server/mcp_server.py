@@ -45,6 +45,7 @@ from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.config.build_mcp_config import build_mcp_config
 from django_spec_mcp.config.types.mcp_config import MCPConfig
 from django_spec_mcp.handlers.call_kernel_tool import call_kernel_tool
+from django_spec_mcp.handlers.handle_resources_read_async import handle_resources_read_async
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.handle_tools_list import handle_tools_list
 from django_spec_mcp.handlers.kernel_utils import copy_request
@@ -725,6 +726,34 @@ class MCPServer:
         params = {"name": name, "arguments": arguments or {}}
         return await handle_tools_call_async(
             params, self._call_context(user=user, request=request, scopes=scopes)
+        )
+
+    async def aread_resource(
+        self,
+        uri: str,
+        *,
+        user: Any,
+        request: Any = None,
+        scopes: Sequence[str] | None = None,
+    ) -> dict[str, Any] | JsonRpcError:
+        """Read a resource off the HTTP path with full transport semantics (async).
+
+        The in-process twin of a ``resources/read`` request, as ``acall_tool`` is of
+        ``tools/call``: it routes through the same async handler the wire uses, so
+        the resource's permissions, the ``scopes=`` gate and the rate limits apply.
+        Returns the wire's result payload (a ``dict`` whose ``contents`` carry the
+        body and each entry's ``_meta``), or a
+        [`JsonRpcError`][django_spec_mcp.protocol.types.json_rpc_error.JsonRpcError]
+        for a protocol fault (unknown URI, denied permission or scope, a spent
+        rate limit).
+
+        This is what an app host reads an interactive view's ``ui://`` document
+        through, beside the ``acall_tool`` its view's own calls go through.
+        ``user``, ``request`` and ``scopes`` are handled as ``acall_tool``
+        handles them.
+        """
+        return await handle_resources_read_async(
+            {"uri": uri}, self._call_context(user=user, request=request, scopes=scopes)
         )
 
     def _call_context(

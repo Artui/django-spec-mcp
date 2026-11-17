@@ -22,7 +22,8 @@ class UIResourceMeta:
         csp: Origins the view needs; see
             [`UICsp`][django_spec_mcp.registry.types.ui_csp.UICsp].
         permissions: Browser capabilities the view would use. The host decides
-            whether to grant them.
+            whether to grant them. On the wire each is a key holding an empty
+            object (``{"camera": {}}``), as the Apps extension's schema reads it.
         domain: A stable identity for the view's origin, letting a host group
             views from one publisher — for a single consent prompt, say —
             rather than treating every URI as unrelated.
@@ -43,7 +44,7 @@ class UIResourceMeta:
             if csp:
                 out["csp"] = csp
         if self.permissions:
-            out["permissions"] = [p.value for p in self.permissions]
+            out["permissions"] = {p.value: {} for p in self.permissions}
         if self.domain is not None:
             out["domain"] = self.domain
         if self.prefers_border is not None:

@@ -1036,7 +1036,7 @@ wire says which tools were left out or why. An in-process consumer can ask:
 `MCPServer.unavailable_tools` names each tool the listing omits with the
 `Affordance` that omitted it, from the same pass, so a model can be told the
 operation exists and why it cannot run now rather than guessing (see
-[Full in-process transport](#full-in-process-transport-acall_tool-list_tools)).
+[Full in-process transport](#full-in-process-transport-acall_tool-aread_resource-list_tools)).
 
 ### Tool annotations
 
@@ -1162,10 +1162,10 @@ bearing `user=` is synthesised. The spec finds the copy, or the synthesised
 request, as `call_context["request"]`, with no `mcp_token` on it, even when
 the handed request carried one: `call_tool` has no token.
 
-### Full in-process transport: `acall_tool` / `list_tools`
+### Full in-process transport: `acall_tool` / `aread_resource` / `list_tools`
 
 `call_tool` is the spec **core**. When an in-process consumer needs the *whole*
-transport — exactly what a remote MCP client sees — `MCPServer` exposes two
+transport — exactly what a remote MCP client sees — `MCPServer` exposes three
 async-friendly siblings that route through the same wire handlers:
 
 ```python
@@ -1190,12 +1190,18 @@ result["structuredContent"]  # the wire's result payload (dict, not ToolResult)
   returns the wire's `dict` payload (`content` / `structuredContent` /
   `isError`) or a `JsonRpcError` for a protocol fault (unknown tool, malformed
   `arguments` shape, denied permission).
+- `aread_resource(uri, *, user, request=None, scopes=None)` reads a resource the
+  same way, through the `resources/read` handler: its permissions, the `scopes=`
+  gate and the rate limits apply. It returns the wire's `dict` payload
+  (`contents`, each entry with its `_meta`) or a `JsonRpcError`. An app host reads
+  an interactive view's `ui://` document through it.
 
-Both build the call context internally from `user` + `request`, handling a
+All three build the call context internally from `user` + `request`, handling a
 handed request as `call_tool` does: a copy bearing the call's user, or a
-minimal request synthesised when `request` is `None`. `acall_tool` carries a
-token built from `user=` and `scopes=` on that request as `mcp_token`, so a
-tool gated by `scopes=` is invokable in-process just as it is on the wire.
+minimal request synthesised when `request` is `None`. `acall_tool` and
+`aread_resource` carry a token built from `user=` and `scopes=` on that request as
+`mcp_token`, so a tool or resource gated by `scopes=` is reachable in-process just
+as it is on the wire.
 `JsonRpcError` and `JsonRpcErrorCode` are re-exported from the package root so
 a consumer can branch on faults. This is the surface an in-process MCP bridge
 consumes to run this server's tools with HTTP-equivalent semantics.

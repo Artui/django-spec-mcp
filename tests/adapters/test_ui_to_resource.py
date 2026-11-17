@@ -170,13 +170,24 @@ class TestUIMetadata:
         binding = _register(_make(), ui=UIResourceMeta(csp=UICsp(), prefers_border=True))
         assert binding.meta[UI_META_KEY] == {"prefersBorder": True}
 
-    def test_permissions_serialise_as_their_wire_values(self) -> None:
+    def test_permissions_serialise_as_the_schemas_object_of_empty_objects(self) -> None:
+        """ext-apps v2.1.0 ``McpUiResourcePermissionsSchema``: optional keys, each ``{}``."""
         binding = _register(
             _make(),
             ui=UIResourceMeta(permissions=(UIPermission.CAMERA, UIPermission.CLIPBOARD_WRITE)),
         )
 
-        assert binding.meta[UI_META_KEY]["permissions"] == ["camera", "clipboardWrite"]
+        assert binding.meta[UI_META_KEY]["permissions"] == {"camera": {}, "clipboardWrite": {}}
+
+    def test_every_permission_is_a_key_the_schema_declares(self) -> None:
+        binding = _register(_make(), ui=UIResourceMeta(permissions=tuple(UIPermission)))
+
+        assert binding.meta[UI_META_KEY]["permissions"] == {
+            "camera": {},
+            "microphone": {},
+            "geolocation": {},
+            "clipboardWrite": {},
+        }
 
     def test_prefers_border_false_is_declared_not_dropped(self) -> None:
         """``False`` is a real preference; only ``None`` means "didn't say"."""
