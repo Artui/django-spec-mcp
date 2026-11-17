@@ -11,6 +11,8 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+## [0.15.0] — 2026-11-17
+
 ### Added
 
 - **An available affordance names the tool to call next.** Each presented row's
@@ -1069,7 +1071,8 @@ carries; releases up to 0.54.0 are in
   running. The worker's run now enters below that decision. A client that did
   not declare the extension is still refused `-32021` by a `REQUIRED` tool.
 
-[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/Artui/django-spec-mcp/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/Artui/django-spec-mcp/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/Artui/django-spec-mcp/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/Artui/django-spec-mcp/compare/v0.11.0...v0.12.0
