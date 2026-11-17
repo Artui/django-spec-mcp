@@ -979,6 +979,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#hosting-the-view-in-your-own-app" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hosting the view in your own app
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#keep-tenant-data-out" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1468,6 +1479,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#hosting-the-view-in-your-own-app" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hosting the view in your own app
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#keep-tenant-data-out" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1633,6 +1655,18 @@ rather than reaching the host as a dangling reference.</p>
   <code>body_template_name=</code>. The <em>host</em> half — the iframe, CSP enforcement, and the
   host's end of the protocol — is the host's and is not implemented here.</li>
 </ul>
+<h2 id="hosting-the-view-in-your-own-app">Hosting the view in your own app<a class="headerlink" href="#hosting-the-view-in-your-own-app" title="Permanent link">&para;</a></h2>
+<p>An MCP client such as Claude draws the view itself. To draw it in your own app's
+chat, a host of your own needs two things from this server, on its server side:
+the view's document, and a way to forward the view's own tool calls. Both run
+in-process, through the same handlers the wire uses:</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">document</span> <span class="o">=</span> <span class="k">await</span> <span class="n">server</span><span class="o">.</span><span class="n">aread_resource</span><span class="p">(</span><span class="s2">&quot;ui://invoices/table.html&quot;</span><span class="p">,</span> <span class="n">user</span><span class="o">=</span><span class="n">request</span><span class="o">.</span><span class="n">user</span><span class="p">)</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">server</span><span class="o">.</span><span class="n">acall_tool</span><span class="p">(</span><span class="s2">&quot;list_invoices&quot;</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;page&quot;</span><span class="p">:</span> <span class="mi">2</span><span class="p">},</span> <span class="n">user</span><span class="o">=</span><span class="n">request</span><span class="o">.</span><span class="n">user</span><span class="p">)</span>
+</span></code></pre></div>
+<p><code>aread_resource</code> answers the <code>resources/read</code> payload, its <code>contents</code> carrying the
+document and the view's <code>_meta</code>, or a <code>JsonRpcError</code>; the view's permissions,
+<code>scopes=</code> gate and rate limits apply as they do on the wire. The browser half,
+the sandboxed iframe and the host's end of the <code>ui/*</code> protocol, is the host's.</p>
 <h2 id="keep-tenant-data-out">Keep tenant data out<a class="headerlink" href="#keep-tenant-data-out" title="Permanent link">&para;</a></h2>
 <div class="admonition warning">
 <p class="admonition-title">Warning</p>
@@ -1701,12 +1735,12 @@ digest taken over the template file alone does not move when you upgrade the
 package, so the host keeps serving what it cached against the old bridge — the
 same false negative this section exists to warn about, reintroduced at the
 upgrade boundary.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">document</span> <span class="o">=</span> <span class="n">build_app_document</span><span class="p">(</span><span class="n">render_to_string</span><span class="p">(</span><span class="s2">&quot;mcp/invoices_table.html&quot;</span><span class="p">),</span> <span class="n">title</span><span class="o">=</span><span class="s2">&quot;Invoices&quot;</span><span class="p">)</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">digest</span> <span class="o">=</span> <span class="n">hashlib</span><span class="o">.</span><span class="n">sha256</span><span class="p">(</span><span class="n">document</span><span class="o">.</span><span class="n">encode</span><span class="p">())</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()[:</span><span class="mi">8</span><span class="p">]</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">uri</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;ui://invoices/table.</span><span class="si">{</span><span class="n">digest</span><span class="si">}</span><span class="s2">.html&quot;</span>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="n">server</span><span class="o">.</span><span class="n">register_ui_resource</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;invoices_table&quot;</span><span class="p">,</span> <span class="n">uri</span><span class="o">=</span><span class="n">uri</span><span class="p">,</span> <span class="n">body_template_name</span><span class="o">=...</span><span class="p">)</span>
-</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">server</span><span class="o">.</span><span class="n">register_tool</span><span class="p">(</span><span class="n">spec</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;list_invoices&quot;</span><span class="p">,</span> <span class="n">paginate</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">ui</span><span class="o">=</span><span class="n">UIToolMeta</span><span class="p">(</span><span class="n">resource_uri</span><span class="o">=</span><span class="n">uri</span><span class="p">))</span>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">document</span> <span class="o">=</span> <span class="n">build_app_document</span><span class="p">(</span><span class="n">render_to_string</span><span class="p">(</span><span class="s2">&quot;mcp/invoices_table.html&quot;</span><span class="p">),</span> <span class="n">title</span><span class="o">=</span><span class="s2">&quot;Invoices&quot;</span><span class="p">)</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">digest</span> <span class="o">=</span> <span class="n">hashlib</span><span class="o">.</span><span class="n">sha256</span><span class="p">(</span><span class="n">document</span><span class="o">.</span><span class="n">encode</span><span class="p">())</span><span class="o">.</span><span class="n">hexdigest</span><span class="p">()[:</span><span class="mi">8</span><span class="p">]</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">uri</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;ui://invoices/table.</span><span class="si">{</span><span class="n">digest</span><span class="si">}</span><span class="s2">.html&quot;</span>
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
+</span><span id="__span-4-5"><a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="n">server</span><span class="o">.</span><span class="n">register_ui_resource</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;invoices_table&quot;</span><span class="p">,</span> <span class="n">uri</span><span class="o">=</span><span class="n">uri</span><span class="p">,</span> <span class="n">body_template_name</span><span class="o">=...</span><span class="p">)</span>
+</span><span id="__span-4-6"><a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="n">server</span><span class="o">.</span><span class="n">register_tool</span><span class="p">(</span><span class="n">spec</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">&quot;list_invoices&quot;</span><span class="p">,</span> <span class="n">paginate</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">ui</span><span class="o">=</span><span class="n">UIToolMeta</span><span class="p">(</span><span class="n">resource_uri</span><span class="o">=</span><span class="n">uri</span><span class="p">))</span>
 </span></code></pre></div>
 <p>Both registrations have to name the same URI, which is the reason this is a
 recipe rather than a parameter: the tool link is checked against the resource

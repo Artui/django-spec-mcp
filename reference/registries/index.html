@@ -5084,7 +5084,8 @@ shape on the way in.</p>
             <td>
               <div class="doc-md-description">
                 <p>Browser capabilities the view would use. The host decides
-whether to grant them.</p>
+whether to grant them. On the wire each is a key holding an empty
+object (<code>{"camera": {}}</code>), as the Apps extension's schema reads it.</p>
               </div>
             </td>
           </tr>

@@ -1314,6 +1314,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.aread_resource" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        aread_resource
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#django_spec_mcp.server.mcp_server.MCPServer.run_task" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1870,6 +1881,17 @@
     <span class="md-ellipsis">
       
         acall_tool
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.server.mcp_server.MCPServer.aread_resource" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        aread_resource
       
     </span>
   </a>
@@ -2750,6 +2772,49 @@ and never writes its user to the handed request. A minimal one is
 synthesised otherwise.
 <code>scopes</code> populate the synthetic token so a tool registered with
 <code>scopes=</code> is invokable in-process just as it is on the wire.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.server.mcp_server.MCPServer.aread_resource" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">aread_resource</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-async"><code>async</code></small>
+  </span>
+
+<a href="#django_spec_mcp.server.mcp_server.MCPServer.aread_resource" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">aread_resource</span><span class="p">(</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">uri</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">user</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span> <span class="n">request</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">scopes</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="n">JsonRpcError</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>Read a resource off the HTTP path with full transport semantics (async).</p>
+<p>The in-process twin of a <code>resources/read</code> request, as <code>acall_tool</code> is of
+<code>tools/call</code>: it routes through the same async handler the wire uses, so
+the resource's permissions, the <code>scopes=</code> gate and the rate limits apply.
+Returns the wire's result payload (a <code>dict</code> whose <code>contents</code> carry the
+body and each entry's <code>_meta</code>), or a
+<a class="autorefs autorefs-internal" title="JsonRpcError
+
+
+  
+      dataclass
+  " href="../protocol/#django_spec_mcp.protocol.types.json_rpc_error.JsonRpcError"><code>JsonRpcError</code></a>
+for a protocol fault (unknown URI, denied permission or scope, a spent
+rate limit).</p>
+<p>This is what an app host reads an interactive view's <code>ui://</code> document
+through, beside the <code>acall_tool</code> its view's own calls go through.
+<code>user</code>, <code>request</code> and <code>scopes</code> are handled as <code>acall_tool</code>
+handles them.</p>
 
 
     </div>

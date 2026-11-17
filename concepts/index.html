@@ -655,10 +655,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#full-in-process-transport-acall_tool-list_tools" class="md-nav__link">
+  <a href="#full-in-process-transport-acall_tool-aread_resource-list_tools" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Full in-process transport: acall_tool / list_tools
+        Full in-process transport: acall_tool / aread_resource / list_tools
       
     </span>
   </a>
@@ -2330,10 +2330,10 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#full-in-process-transport-acall_tool-list_tools" class="md-nav__link">
+  <a href="#full-in-process-transport-acall_tool-aread_resource-list_tools" class="md-nav__link">
     <span class="md-ellipsis">
       
-        Full in-process transport: acall_tool / list_tools
+        Full in-process transport: acall_tool / aread_resource / list_tools
       
     </span>
   </a>
@@ -3862,7 +3862,7 @@ wire says which tools were left out or why. An in-process consumer can ask:
 <code>MCPServer.unavailable_tools</code> names each tool the listing omits with the
 <code>Affordance</code> that omitted it, from the same pass, so a model can be told the
 operation exists and why it cannot run now rather than guessing (see
-<a href="#full-in-process-transport-acall_tool-list_tools">Full in-process transport</a>).</p>
+<a href="#full-in-process-transport-acall_tool-aread_resource-list_tools">Full in-process transport</a>).</p>
 <h3 id="tool-annotations">Tool annotations<a class="headerlink" href="#tool-annotations" title="Permanent link">&para;</a></h3>
 <p>Every tool advertises the MCP-standard <code>ToolAnnotations</code> hints, derived
 from what the server already knows about the tool's mutation profile —
@@ -3965,9 +3965,9 @@ request handed, a minimal <code>POST</code> <code>HttpRequest</code>
 bearing <code>user=</code> is synthesised. The spec finds the copy, or the synthesised
 request, as <code>call_context["request"]</code>, with no <code>mcp_token</code> on it, even when
 the handed request carried one: <code>call_tool</code> has no token.</p>
-<h3 id="full-in-process-transport-acall_tool-list_tools">Full in-process transport: <code>acall_tool</code> / <code>list_tools</code><a class="headerlink" href="#full-in-process-transport-acall_tool-list_tools" title="Permanent link">&para;</a></h3>
+<h3 id="full-in-process-transport-acall_tool-aread_resource-list_tools">Full in-process transport: <code>acall_tool</code> / <code>aread_resource</code> / <code>list_tools</code><a class="headerlink" href="#full-in-process-transport-acall_tool-aread_resource-list_tools" title="Permanent link">&para;</a></h3>
 <p><code>call_tool</code> is the spec <strong>core</strong>. When an in-process consumer needs the <em>whole</em>
-transport — exactly what a remote MCP client sees — <code>MCPServer</code> exposes two
+transport — exactly what a remote MCP client sees — <code>MCPServer</code> exposes three
 async-friendly siblings that route through the same wire handlers:</p>
 <div class="language-python highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="n">page</span> <span class="o">=</span> <span class="n">server</span><span class="o">.</span><span class="n">list_tools</span><span class="p">(</span><span class="n">user</span><span class="o">=</span><span class="n">request</span><span class="o">.</span><span class="n">user</span><span class="p">,</span> <span class="n">request</span><span class="o">=</span><span class="n">request</span><span class="p">)</span>  <span class="c1"># one tools/list page</span>
 </span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="n">page</span><span class="p">[</span><span class="s2">&quot;tools&quot;</span><span class="p">]</span>  <span class="c1"># the inputSchema per tool</span>
@@ -3990,12 +3990,18 @@ async-friendly siblings that route through the same wire handlers:</p>
   returns the wire's <code>dict</code> payload (<code>content</code> / <code>structuredContent</code> /
   <code>isError</code>) or a <code>JsonRpcError</code> for a protocol fault (unknown tool, malformed
   <code>arguments</code> shape, denied permission).</li>
+<li><code>aread_resource(uri, *, user, request=None, scopes=None)</code> reads a resource the
+  same way, through the <code>resources/read</code> handler: its permissions, the <code>scopes=</code>
+  gate and the rate limits apply. It returns the wire's <code>dict</code> payload
+  (<code>contents</code>, each entry with its <code>_meta</code>) or a <code>JsonRpcError</code>. An app host reads
+  an interactive view's <code>ui://</code> document through it.</li>
 </ul>
-<p>Both build the call context internally from <code>user</code> + <code>request</code>, handling a
+<p>All three build the call context internally from <code>user</code> + <code>request</code>, handling a
 handed request as <code>call_tool</code> does: a copy bearing the call's user, or a
-minimal request synthesised when <code>request</code> is <code>None</code>. <code>acall_tool</code> carries a
-token built from <code>user=</code> and <code>scopes=</code> on that request as <code>mcp_token</code>, so a
-tool gated by <code>scopes=</code> is invokable in-process just as it is on the wire.
+minimal request synthesised when <code>request</code> is <code>None</code>. <code>acall_tool</code> and
+<code>aread_resource</code> carry a token built from <code>user=</code> and <code>scopes=</code> on that request as
+<code>mcp_token</code>, so a tool or resource gated by <code>scopes=</code> is reachable in-process just
+as it is on the wire.
 <code>JsonRpcError</code> and <code>JsonRpcErrorCode</code> are re-exported from the package root so
 a consumer can branch on faults. This is the surface an in-process MCP bridge
 consumes to run this server's tools with HTTP-equivalent semantics.</p>
