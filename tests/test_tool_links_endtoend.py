@@ -384,6 +384,7 @@ class TestADisplacedSpecSource:
         assert entry["tool"] == "cancel_order"
 
 
+@pytest.mark.django_db
 def test_a_served_tools_call_carries_the_link(client: Client) -> None:
     Invoice.objects.create(number="A-1")
     cancel = _target()
@@ -403,11 +404,6 @@ def test_a_served_tools_call_carries_the_link(client: Client) -> None:
         "tool": "cancel_order",
         "arguments": {"number": "A-1"},
     }
-
-
-test_a_served_tools_call_carries_the_link = pytest.mark.django_db(
-    test_a_served_tools_call_carries_the_link
-)
 
 
 @pytest.mark.django_db
