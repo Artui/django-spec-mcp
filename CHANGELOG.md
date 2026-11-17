@@ -18,8 +18,8 @@ carries; releases up to 0.54.0 are in
 - **`MCPServer.aread_resource(uri, *, user, request=None, scopes=None)`**, the
   in-process twin of `resources/read` beside `acall_tool`. It runs the wire's handler,
   so the resource's permissions, the `scopes=` gate and the rate limits apply, and
-  answers the wire's payload or a `JsonRpcError`. An app host such as
-  agents-web-components reads an interactive view's `ui://` document through it.
+  answers the wire's payload or a `JsonRpcError`. An app host's server side reads an
+  interactive view's `ui://` document through it.
 
 ### Fixed
 
@@ -29,6 +29,7 @@ carries; releases up to 0.54.0 are in
   permissions, each holding an empty object (`{"camera": {}}`). A host validating
   against the schema refused the list, and one reading keys granted nothing. The
   Python side is unchanged: `permissions` still takes `UIPermission` members.
+
 ## [0.13.0] — 2026-11-14
 
 ### Added

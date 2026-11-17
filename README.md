@@ -110,8 +110,8 @@ See the [quickstart](docs/quickstart.md) for the full end-to-end recipe.
 - **Prompts** — `prompts/list`, `prompts/get` against render callables
   returning strings, `PromptMessage`s, or async coroutines.
 - **In-process transport surface** — call tools without an HTTP round-trip:
-  `MCPServer.call_tool` / `acall_tool` and `list_tools` / `alist_tools`
-  drive the same dispatch and permission checks as the wire path, for
+  `MCPServer.call_tool` / `acall_tool`, `aread_resource` and `list_tools` /
+  `alist_tools` drive the same dispatch and permission checks as the wire path, for
   embedding in agent bridges, toolsets, or management commands.
   `unavailable_tools` / `aunavailable_tools` name each tool the listing leaves
   out with the reason, so a bridge can tell its model why one is missing.

@@ -114,13 +114,10 @@ rather than reaching the host as a dangling reference.
 
 ## Hosting the view in your own app
 
-An MCP client such as Claude draws the view itself. To draw it in your own Django
-app's chat, the
-[agents-web-components](https://github.com/Artui/agents-web-components) element
-is the host: it builds the sandboxed iframe, enforces the view's `csp` and
-`permissions`, and speaks the host's end of the `ui/*` protocol. Its server side
-reads the view and forwards the view's own tool calls in-process, through the same
-handlers the wire uses:
+An MCP client such as Claude draws the view itself. To draw it in your own app's
+chat, a host of your own needs two things from this server, on its server side:
+the view's document, and a way to forward the view's own tool calls. Both run
+in-process, through the same handlers the wire uses:
 
 ```python
 document = await server.aread_resource("ui://invoices/table.html", user=request.user)
@@ -129,7 +126,8 @@ result = await server.acall_tool("list_invoices", {"page": 2}, user=request.user
 
 `aread_resource` answers the `resources/read` payload, its `contents` carrying the
 document and the view's `_meta`, or a `JsonRpcError`; the view's permissions,
-`scopes=` gate and rate limits apply as they do on the wire.
+`scopes=` gate and rate limits apply as they do on the wire. The browser half,
+the sandboxed iframe and the host's end of the `ui/*` protocol, is the host's.
 
 ## Keep tenant data out
 

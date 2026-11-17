@@ -19,6 +19,23 @@ class _Deny(PermissionCheck):
         return False
 
 
+class _OnlyFor(PermissionCheck):
+    def __init__(self, user: object) -> None:
+        self.user = user
+
+    def has_permission(self, principal: Any, *args: Any, **kwargs: Any) -> bool:
+        return principal is self.user
+
+
+class _Marks:
+    def __init__(self) -> None:
+        self.marks: list[str] = []
+
+    def consume(self, request: HttpRequest, token: TokenInfo) -> int | None:
+        self.marks.append(request.META.get("HTTP_X_MARK", ""))
+        return None
+
+
 class _Spent:
     def __init__(self) -> None:
         self.asked = 0
@@ -64,7 +81,10 @@ async def test_aread_resource_scopes_open_a_scope_gated_view() -> None:
     server = _server(scopes=("views:read",))
     denied = await server.aread_resource(URI, user=None)
     assert isinstance(denied, JsonRpcError)
-    assert denied.code == JsonRpcErrorCode.FORBIDDEN
+    assert (denied.code, denied.data) == (
+        JsonRpcErrorCode.FORBIDDEN,
+        {"requiredScopes": ["views:read"]},
+    )
     allowed = await server.aread_resource(URI, user=None, scopes=["views:read"])
     assert isinstance(allowed, dict)
 
@@ -76,3 +96,21 @@ async def test_aread_resource_past_its_rate_limit_is_refused() -> None:
     assert isinstance(out, JsonRpcError)
     assert (out.code, out.data) == (JsonRpcErrorCode.RATE_LIMITED, {"retryAfter": 9})
     assert limiter.asked == 1
+
+
+@pytest.mark.django_db(transaction=True)
+async def test_aread_resource_reads_as_the_user_it_is_handed() -> None:
+    clerk = object()
+    server = _server(permissions=[_OnlyFor(clerk)])
+    assert isinstance(await server.aread_resource(URI, user=clerk), dict)
+    assert isinstance(await server.aread_resource(URI, user=None), JsonRpcError)
+
+
+@pytest.mark.django_db(transaction=True)
+async def test_aread_resource_works_on_the_request_it_is_handed() -> None:
+    seen = _Marks()
+    request = HttpRequest()
+    request.META["HTTP_X_MARK"] = "m"
+    out = await _server(rate_limits=[seen]).aread_resource(URI, user=None, request=request)
+    assert isinstance(out, dict)
+    assert seen.marks == ["m"]
