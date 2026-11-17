@@ -3,11 +3,16 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from django_service_specs import SelectorSpec, ServiceSpec, link_bindings, row_links
+from django_service_specs import (
+    AFFORDANCES_KEY,
+    SelectorSpec,
+    ServiceSpec,
+    link_bindings,
+    row_links,
+)
 
 from django_spec_mcp.observability import get_logger
 from django_spec_mcp.registry.tool_registry import ToolRegistry
-from django_spec_mcp.types.affordances_key import AFFORDANCES_KEY
 
 logger = get_logger(__name__)
 

@@ -38,7 +38,7 @@ carries; releases up to 0.54.0 are in
   required read with no field to read it from) now fails the call presenting it with
   `ImproperlyConfigured`, the kernel's first-use refusal; `check_links` reports it at
   startup.
-- **Requires `django-service-specs>=0.34.0`.**
+- **Requires `django-service-specs>=0.34.1`**, which exports `AFFORDANCES_KEY`.
 
 ## [0.14.0] — 2026-11-17
 

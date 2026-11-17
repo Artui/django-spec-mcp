@@ -1,4 +1,3 @@
-from django_spec_mcp.types.affordances_key import AFFORDANCES_KEY
 from django_spec_mcp.types.cache_scope import CacheScope
 from django_spec_mcp.types.client_capabilities_meta_key import CLIENT_CAPABILITIES_META_KEY
 from django_spec_mcp.types.client_info_meta_key import CLIENT_INFO_META_KEY
@@ -48,7 +47,6 @@ from django_spec_mcp.types.ui_resource_mime_type import UI_RESOURCE_MIME_TYPE
 from django_spec_mcp.types.ui_visibility import UIVisibility
 
 __all__ = [
-    "AFFORDANCES_KEY",
     "CLIENT_CAPABILITIES_META_KEY",
     "CLIENT_INFO_META_KEY",
     "CacheScope",

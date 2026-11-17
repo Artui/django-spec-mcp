@@ -3,10 +3,9 @@ from __future__ import annotations
 from typing import Any
 
 from django.core.exceptions import ImproperlyConfigured
-from django_service_specs import link_bindings, spec_output_schema
+from django_service_specs import AFFORDANCES_KEY, link_bindings, spec_output_schema
 
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
-from django_spec_mcp.types.affordances_key import AFFORDANCES_KEY
 from django_spec_mcp.types.tool_content_kind import ToolContentKind
 
 
