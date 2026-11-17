@@ -142,6 +142,9 @@ class KernelToolBinding:
     [`TaskPolicy`][django_spec_mcp.types.TaskPolicy]. Read by ``maybe_create_task``, which asks
     a kernel spec's own checks before it creates the task; the worker runs the
     call, under either policy, through the same ``dispatch`` an inline call takes."""
+    displaced: tuple[ServiceSpec | SelectorSpec, ...] = ()
+    """The specs a ``SpecRegistry.replace`` displaced from this tool's entry, oldest first,
+    so a link to one of them names this tool (``register_tools`` sets it)."""
     unguarded: bool = field(default=False, init=False)
     """Whether a call runs the spec without a permission check.
 

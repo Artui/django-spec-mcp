@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from django_service_specs import spec_output_schema
+from django.core.exceptions import ImproperlyConfigured
+from django_service_specs import AFFORDANCES_KEY, link_bindings, spec_output_schema
 
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from django_spec_mcp.types.tool_content_kind import ToolContentKind
@@ -34,6 +35,7 @@ def kernel_tool_output_schema(
     )
     if schema is None:
         return None
+    schema = _with_link_entries(schema, binding)
     if schema.get("type") == _OBJECT_OR_NULL:
         return _admitting_nothing(schema)
     if schema.get("type") == _ARRAY_OR_NULL:
@@ -48,6 +50,41 @@ def kernel_tool_output_schema(
 # ``returns_many`` service's rows or ``None``.
 _OBJECT_OR_NULL: list[str] = ["object", "null"]
 _ARRAY_OR_NULL: list[str] = ["array", "null"]
+
+
+def _with_link_entries(schema: dict[str, Any], binding: KernelToolBinding) -> dict[str, Any]:
+    """``schema`` with an optional ``tool`` and ``arguments`` on each answer of its rows."""
+    try:
+        linked = frozenset(link_bindings(binding.spec))
+    except ImproperlyConfigured:
+        return schema
+    if not linked:
+        return schema
+    if binding.paginate:
+        envelope = schema["properties"]["items"]
+        rows = {**envelope, "items": _row_with_links(envelope["items"], linked)}
+        return {**schema, "properties": {**schema["properties"], "items": rows}}
+    if "items" in schema:
+        return {**schema, "items": _row_with_links(schema["items"], linked)}
+    return _row_with_links(schema, linked)
+
+
+def _row_with_links(row: dict[str, Any], linked: frozenset[str]) -> dict[str, Any]:
+    answers = row["properties"][AFFORDANCES_KEY]
+    entries = {
+        name: {**entry, "properties": {**entry["properties"], **_link_properties()}}
+        if name in linked
+        else entry
+        for name, entry in answers["properties"].items()
+    }
+    return {
+        **row,
+        "properties": {**row["properties"], AFFORDANCES_KEY: {**answers, "properties": entries}},
+    }
+
+
+def _link_properties() -> dict[str, Any]:
+    return {"tool": {"type": "string"}, "arguments": {"type": "object"}}
 
 
 def _a_list(schema: dict[str, Any]) -> dict[str, Any]:

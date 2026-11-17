@@ -12,6 +12,7 @@ from django_spec_mcp.handlers.kernel_utils import KernelPageRequest, present_too
 from django_spec_mcp.handlers.types.exception_handler import ExceptionHandler
 from django_spec_mcp.handlers.utils import rendering_refusal_result
 from django_spec_mcp.protocol.types.tool_result import ToolResult
+from django_spec_mcp.registry.tool_registry import ToolRegistry
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from django_spec_mcp.schema.types.agent_conventions import AgentConventions
 
@@ -25,11 +26,12 @@ def present_kernel_result(
     config: MCPConfig,
     conventions: AgentConventions,
     exception_map: Mapping[type[Exception], ExceptionHandler],
+    tools: ToolRegistry,
     span: Any = None,
 ) -> Any:
     """``present_tool_result``, or the caller's ``validation_error`` when a shape is refused."""
     try:
-        return present_tool_result(binding, result, page)
+        return present_tool_result(binding, result, page, tools)
     except Exception as exc:
         handler = exception_handler_for(exc, exception_map)
         if handler is not None:

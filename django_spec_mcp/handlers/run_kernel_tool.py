@@ -79,6 +79,7 @@ def run_kernel_tool(
         config=context.config,
         conventions=context.conventions,
         exception_map=context.exception_map,
+        tools=context.tools,
         span=otel_span,
     )
     if isinstance(payload, ToolResult):

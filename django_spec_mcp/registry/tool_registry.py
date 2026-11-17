@@ -1,7 +1,15 @@
 from __future__ import annotations
 
 from django.core.exceptions import ImproperlyConfigured
-from django_service_specs import DEFAULT_POOL_SEEDS, PoolSeeds, check_server_arguments
+from django_service_specs import (
+    DEFAULT_POOL_SEEDS,
+    PoolSeeds,
+    SelectorSpec,
+    ServiceSpec,
+    SpecSource,
+    check_server_arguments,
+    kernel_spec,
+)
 
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 
@@ -51,6 +59,22 @@ class ToolRegistry:
         one.
         """
         return list(self._bindings.values())
+
+    def binding_of(self, spec: ServiceSpec | SelectorSpec | SpecSource) -> KernelToolBinding | None:
+        """The tool holding ``spec`` or one it displaced, by identity; two raise ``ValueError``."""
+        wanted = kernel_spec(spec)
+        found = [
+            binding
+            for binding in self._bindings.values()
+            if any(held is wanted for held in (binding.spec, *binding.displaced))
+        ]
+        if len(found) > 1:
+            raise ValueError(
+                f"The spec is registered as the tools {[binding.name for binding in found]}; a "
+                "link to it has no one tool name. Register each operation once, or link to the "
+                "variant a tool holds."
+            )
+        return found[0] if found else None
 
     def __len__(self) -> int:
         return len(self._bindings)

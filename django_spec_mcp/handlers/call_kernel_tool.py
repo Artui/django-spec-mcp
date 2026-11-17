@@ -26,6 +26,7 @@ from django_spec_mcp.handlers.types.exception_handler import ExceptionHandler
 from django_spec_mcp.handlers.types.kernel_refusal_scene import KernelRefusalScene
 from django_spec_mcp.handlers.utils import apply_tool_server_arguments
 from django_spec_mcp.protocol.types.tool_result import ToolResult
+from django_spec_mcp.registry.tool_registry import ToolRegistry
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from django_spec_mcp.schema.types.agent_conventions import AgentConventions
 
@@ -41,6 +42,7 @@ def call_kernel_tool(
     pool_seeds: PoolSeeds,
     request_classes: dict[tuple[type, frozenset[str]], type],
     exception_map: Mapping[type[Exception], ExceptionHandler],
+    tools: ToolRegistry,
 ) -> ToolResult:
     """The in-process ``call_tool`` of a kernel tool, through ``dispatch``."""
     if request is not None:
@@ -98,6 +100,7 @@ def call_kernel_tool(
         config=config,
         conventions=conventions,
         exception_map=exception_map,
+        tools=tools,
     )
     if isinstance(payload, ToolResult):
         return payload

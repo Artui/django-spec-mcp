@@ -28,6 +28,7 @@ from django_service_specs import (
     UnknownArguments,
     UnsetType,
     check_seeds,
+    kernel_spec,
     server_owned_keys,
 )
 from django_service_specs import SelectorSpec as KernelSelectorSpec
@@ -511,6 +512,9 @@ class MCPServer:
             )
             for entry in registry.all()
         )
+        for binding, entry in zip(bindings, registry.all(), strict=True):
+            displaced = tuple(kernel_spec(spec) for spec in entry.displaced)
+            object.__setattr__(binding, "displaced", displaced)
         trial = ToolRegistry(pool_seeds=self._pool_seeds)
         for binding in bindings:
             trial.register(binding)
@@ -577,6 +581,7 @@ class MCPServer:
             pool_seeds=self._pool_seeds,
             request_classes=self._request_classes,
             exception_map=self._exception_map,
+            tools=self._tools,
         )
 
     def list_tools(

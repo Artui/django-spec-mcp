@@ -31,7 +31,8 @@ from django_service_specs import (
     coerce_flat,
     is_queryset,
     paginate_output,
-    present_for_audience,
+    present,
+    project_payload,
     server_owned_keys,
     spec_output_schema,
 )
@@ -51,6 +52,7 @@ from django_spec_mcp.handlers.utils import (
     resource_read_answer,
     validation_error_data,
 )
+from django_spec_mcp.handlers.with_tool_links import with_tool_links
 from django_spec_mcp.observability import get_logger
 from django_spec_mcp.output.encode_resource_contents import encode_resource_contents
 from django_spec_mcp.output.error_tool_result import build_error_tool_result
@@ -58,6 +60,7 @@ from django_spec_mcp.output.resolve_structured_output import resolve_structured_
 from django_spec_mcp.output.tool_result import build_tool_result
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.protocol.types.tool_result import ToolResult
+from django_spec_mcp.registry.tool_registry import ToolRegistry
 from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from django_spec_mcp.registry.types.utils import file_content_kind
@@ -390,23 +393,30 @@ def page_request(
 
 
 def present_tool_result(
-    binding: KernelToolBinding, result: DispatchResult, page: KernelPageRequest | None
+    binding: KernelToolBinding,
+    result: DispatchResult,
+    page: KernelPageRequest | None,
+    tools: ToolRegistry,
 ) -> Any:
     """``result`` presented for an agent, as one page when the tool paginates."""
     if page is None:
-        presented = present_for_audience(
-            binding.spec, result, projection=binding.audience_projection
-        )
+        presented = _present_for_agent(binding, result, tools)
         if presented is None and _presents_a_list(binding):
             return []
         return presented
     output: OutputPage = paginate_output(
         result.value, page=page.page, limit=page.limit, max_page_size=page.max_page_size
     )
-    rows = present_for_audience(
-        binding.spec, replace(result, value=output.items), projection=binding.audience_projection
-    )
+    rows = _present_for_agent(binding, replace(result, value=output.items), tools)
     return output.envelope(rows)
+
+
+def _present_for_agent(
+    binding: KernelToolBinding, result: DispatchResult, tools: ToolRegistry
+) -> Any:
+    """``present_for_audience``, with each row's tool links added before the projection."""
+    presented = with_tool_links(binding.spec, present(binding.spec, result), tools)
+    return project_payload(presented, binding.audience_projection)
 
 
 def _presents_a_list(binding: KernelToolBinding) -> bool:
