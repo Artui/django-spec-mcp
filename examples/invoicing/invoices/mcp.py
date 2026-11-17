@@ -33,6 +33,8 @@ from django_spec_mcp import (
     MCPServer,
     PromptArgument,
     PromptMessage,
+    UIPermission,
+    UIResourceMeta,
 )
 from django_spec_mcp.output import build_error_tool_result
 from django_spec_mcp.protocol import ToolResult
@@ -314,6 +316,16 @@ def build_server() -> MCPServer:
         name="invoice-receipt",
         uri_template="invoices://{pk}/receipt",
         description="An invoice's receipt, as a CSV file.",
+    )
+
+    # ----- Interactive view (a document a host draws inline) -----
+
+    server.register_ui_resource(
+        name="invoices-table",
+        uri="ui://invoices/table.html",
+        html="<table id='invoices'></table>",
+        description="Invoices, as a table a host draws inline.",
+        ui=UIResourceMeta(permissions=(UIPermission.CLIPBOARD_WRITE,)),
     )
 
     # ----- Many tool over a collection (reprice a set of unsent invoices) -----

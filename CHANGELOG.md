@@ -11,6 +11,25 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+## [0.14.0] — 2026-11-17
+
+### Added
+
+- **`MCPServer.aread_resource(uri, *, user, request=None, scopes=None)`**, the
+  in-process twin of `resources/read` beside `acall_tool`. It runs the wire's handler,
+  so the resource's permissions, the `scopes=` gate and the rate limits apply, and
+  answers the wire's payload or a `JsonRpcError`. An app host's server side reads an
+  interactive view's `ui://` document through it.
+
+### Fixed
+
+- **A view's `permissions` reach the host in the Apps extension's shape.**
+  `UIResourceMeta(permissions=...)` serialised a list (`["camera"]`) into
+  `_meta.ui.permissions`; the extension's schema reads an object whose keys are the
+  permissions, each holding an empty object (`{"camera": {}}`). A host validating
+  against the schema refused the list, and one reading keys granted nothing. The
+  Python side is unchanged: `permissions` still takes `UIPermission` members.
+
 ## [0.13.0] — 2026-11-14
 
 ### Added
@@ -1025,7 +1044,8 @@ carries; releases up to 0.54.0 are in
   running. The worker's run now enters below that decision. A client that did
   not declare the extension is still refused `-32021` by a `REQUIRED` tool.
 
-[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/Artui/django-spec-mcp/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/Artui/django-spec-mcp/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/Artui/django-spec-mcp/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/Artui/django-spec-mcp/compare/v0.10.0...v0.11.0

@@ -53,7 +53,7 @@ conform to the 'outputSchema' it advertises (2 problems):
 
 Both arguments are plain mappings off the wire — one `tools/list` entry and one
 `tools/call` result — so the same call works against
-[`list_tools` / `acall_tool`](../concepts.md#full-in-process-transport-acall_tool-list_tools),
+[`list_tools` / `acall_tool`](../concepts.md#full-in-process-transport-acall_tool-aread_resource-list_tools),
 an HTTP round trip, or a client library.
 
 A tool that advertises no schema is a **failure**, not a pass: there would be

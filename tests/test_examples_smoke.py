@@ -392,6 +392,30 @@ def test_invoicing_serves_its_resource_prompt_and_send_tool() -> None:
     }
 
 
+_INVOICING_VIEW_IN_PROCESS = textwrap.dedent(
+    """
+    import asyncio
+    import json
+
+    import django
+
+    django.setup()
+
+    from invoices.mcp import build_server
+
+    read = asyncio.run(build_server().aread_resource("ui://invoices/table.html", user=None))
+    print(json.dumps(read))
+    """
+)
+
+
+def test_invoicing_reads_its_view_in_process_with_the_schemas_permissions() -> None:
+    [contents] = json.loads(_run_in_example("invoicing", _INVOICING_VIEW_IN_PROCESS))["contents"]
+    assert contents["uri"] == "ui://invoices/table.html"
+    assert "<table id='invoices'></table>" in contents["text"]
+    assert contents["_meta"]["ui"]["permissions"] == {"clipboardWrite": {}}
+
+
 _INVOICING_FILE_AND_COLLECTION = _INVOICING_CLIENT + textwrap.dedent(
     """
     Invoice.objects.create(number="INV-C", amount_cents=300)
