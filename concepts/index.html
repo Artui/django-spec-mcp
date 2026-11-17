@@ -1110,6 +1110,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#the-next-tool-to-call-links-on-affordances" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The next tool to call: links on affordances
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#omitting-structuredcontent-and-outputschema" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2783,6 +2794,17 @@
   
     <nav class="md-nav" aria-label="Tool results">
       <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-next-tool-to-call-links-on-affordances" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The next tool to call: links on affordances
+      
+    </span>
+  </a>
+  
+</li>
         
           <li class="md-nav__item">
   <a href="#omitting-structuredcontent-and-outputschema" class="md-nav__link">
@@ -5561,6 +5583,34 @@ optional <code>structuredContent</code>:</p>
   scalar result (a presenter-less service returning a bool, a number or a
   string) has none, since it is not an object.</li>
 <li><code>content[0]</code> is a text block carrying the same payload encoded as JSON.</li>
+</ul>
+<h3 id="the-next-tool-to-call-links-on-affordances">The next tool to call: links on affordances<a class="headerlink" href="#the-next-tool-to-call-links-on-affordances" title="Permanent link">&para;</a></h3>
+<p>A selector spec's <code>affordances</code> name other operations and answer, on each presented
+row, whether each is <code>available</code> now. When the operation an available answer names is
+registered on this server as a tool, the answer also carries <code>tool</code>, that tool's name,
+and <code>arguments</code>, the values the kernel's link binding reads off the row (by the
+target's read names, a <code>HANDLE</code> field, or what a <code>SpecLink</code> names). A model can call the
+next tool with them as they are:</p>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-54-1"><a id="__codelineno-54-1" name="__codelineno-54-1" href="#__codelineno-54-1"></a><span class="p">{</span><span class="nt">&quot;number&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;A-1&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;affordances&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;cancel&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-54-2"><a id="__codelineno-54-2" name="__codelineno-54-2" href="#__codelineno-54-2"></a><span class="w">  </span><span class="nt">&quot;available&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;tool&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;orders.cancel&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;arguments&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;number&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;A-1&quot;</span><span class="p">}}}}</span>
+</span></code></pre></div>
+<ul>
+<li><strong>The tool is found by identity</strong>, never by equality: the binding holding the very spec
+  the affordance names, or a spec a <code>SpecRegistry.replace</code> displaced from the entry
+  <code>register_tools</code> registered. <code>server.tools.binding_of(spec)</code> answers it, and raises
+  <code>ValueError</code> for a spec registered as two tools, which no one name can stand for.</li>
+<li><strong>No tool, no link.</strong> An operation this server does not expose, one registered as two
+  tools (logged as a warning), or an answer that is not available, keeps its answer
+  (<code>available</code>, and <code>code</code> and <code>reason</code> when refused) with no <code>tool</code> or <code>arguments</code>.</li>
+<li><strong>A link that cannot bind fails the call</strong>, as the kernel's <code>link_bindings</code> refuses it
+  at first use (<code>ImproperlyConfigured</code>, naming the link). Run the kernel's <code>check_links</code>
+  as a system check to refuse it at startup instead.</li>
+<li><strong>Tool results only.</strong> A resource read presents the same answers with no links.</li>
+<li><strong>The values are read before the agent projection</strong>, so a formatted field binds its
+  raw value; a <code>HIDDEN</code> field is never bound (the kernel refuses that link).</li>
+<li><strong>A read the target tool answers itself is left out</strong>: its <code>server_arguments</code> would
+  drop the caller's value.</li>
+<li>The advertised <code>outputSchema</code> describes both keys, optional on every answer.</li>
 </ul>
 <h3 id="omitting-structuredcontent-and-outputschema">Omitting <code>structuredContent</code> and <code>outputSchema</code><a class="headerlink" href="#omitting-structuredcontent-and-outputschema" title="Permanent link">&para;</a></h3>
 <p><code>structuredContent</code> and <code>outputSchema</code> are independently toggleable. The MCP

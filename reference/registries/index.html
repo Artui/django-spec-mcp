@@ -1337,6 +1337,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#django_spec_mcp.registry.types.kernel_tool_binding.KernelToolBinding.displaced" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        displaced
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#django_spec_mcp.registry.types.kernel_tool_binding.KernelToolBinding.unguarded" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1463,6 +1474,17 @@
     <span class="md-ellipsis">
       
         all
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.registry.tool_registry.ToolRegistry.binding_of" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        binding_of
       
     </span>
   </a>
@@ -2528,6 +2550,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#django_spec_mcp.registry.types.kernel_tool_binding.KernelToolBinding.displaced" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        displaced
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#django_spec_mcp.registry.types.kernel_tool_binding.KernelToolBinding.unguarded" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2654,6 +2687,17 @@
     <span class="md-ellipsis">
       
         all
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.registry.tool_registry.ToolRegistry.binding_of" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        binding_of
       
     </span>
   </a>
@@ -3861,6 +3905,32 @@ call, under either policy, through the same <code>dispatch</code> an inline call
 
 
 
+<h3 id="django_spec_mcp.registry.types.kernel_tool_binding.KernelToolBinding.displaced" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">displaced</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+  </span>
+
+<a href="#django_spec_mcp.registry.types.kernel_tool_binding.KernelToolBinding.displaced" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">displaced</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">ServiceSpec</span> <span class="o">|</span> <span class="n">SelectorSpec</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="p">()</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The specs a <code>SpecRegistry.replace</code> displaced from this tool's entry, oldest first,
+so a link to one of them names this tool (<code>register_tools</code> sets it).</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
 <h3 id="django_spec_mcp.registry.types.kernel_tool_binding.KernelToolBinding.unguarded" class="doc doc-heading">
             <span class="doc doc-object-name doc-attribute-name">unguarded</span>
 
@@ -4221,6 +4291,26 @@ and cursor pagination stays stable, which dict insertion order already
 gives. Deliberately not sorted by name: registration order is authored
 order, which is a better first page for a model than an alphabetical
 one.</p>
+
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-function">
+
+
+<h3 id="django_spec_mcp.registry.tool_registry.ToolRegistry.binding_of" class="doc doc-heading">
+            <span class="doc doc-object-name doc-function-name">binding_of</span>
+
+
+<a href="#django_spec_mcp.registry.tool_registry.ToolRegistry.binding_of" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">binding_of</span><span class="p">(</span><span class="n">spec</span><span class="p">:</span> <span class="n">ServiceSpec</span> <span class="o">|</span> <span class="n">SelectorSpec</span> <span class="o">|</span> <span class="n">SpecSource</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">KernelToolBinding</span> <span class="o">|</span> <span class="kc">None</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>The tool holding <code>spec</code> or one it displaced, by identity; two raise <code>ValueError</code>.</p>
 
 
     </div>
