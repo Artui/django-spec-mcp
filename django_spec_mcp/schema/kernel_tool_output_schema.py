@@ -5,6 +5,7 @@ from typing import Any
 from django_service_specs import spec_output_schema
 
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
+from django_spec_mcp.types.affordances_key import AFFORDANCES_KEY
 from django_spec_mcp.types.tool_content_kind import ToolContentKind
 
 
@@ -34,6 +35,7 @@ def kernel_tool_output_schema(
     )
     if schema is None:
         return None
+    schema = _with_link_entries(schema)
     if schema.get("type") == _OBJECT_OR_NULL:
         return _admitting_nothing(schema)
     if schema.get("type") == _ARRAY_OR_NULL:
@@ -48,6 +50,31 @@ def kernel_tool_output_schema(
 # ``returns_many`` service's rows or ``None``.
 _OBJECT_OR_NULL: list[str] = ["object", "null"]
 _ARRAY_OR_NULL: list[str] = ["array", "null"]
+
+
+def _with_link_entries(schema: Any) -> Any:
+    """``schema`` with an optional ``tool`` and ``arguments`` on every affordance entry."""
+    if isinstance(schema, list):
+        return [_with_link_entries(child) for child in schema]
+    if not isinstance(schema, dict):
+        return schema
+    walked = {key: _with_link_entries(child) for key, child in schema.items()}
+    properties = walked.get("properties")
+    if isinstance(properties, dict) and AFFORDANCES_KEY in properties:
+        answers = properties[AFFORDANCES_KEY]
+        entries = {
+            name: {**entry, "properties": {**entry["properties"], **_link_properties()}}
+            for name, entry in answers["properties"].items()
+        }
+        walked["properties"] = {
+            **properties,
+            AFFORDANCES_KEY: {**answers, "properties": entries},
+        }
+    return walked
+
+
+def _link_properties() -> dict[str, Any]:
+    return {"tool": {"type": "string"}, "arguments": {"type": "object"}}
 
 
 def _a_list(schema: dict[str, Any]) -> dict[str, Any]:

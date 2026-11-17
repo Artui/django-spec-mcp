@@ -11,6 +11,31 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+### Added
+
+- **An available affordance names the tool to call next.** Each presented row's
+  `affordances[name]` answer gains `tool`, the name of the tool on this server holding
+  the operation the affordance names, and `arguments`, the values bound off the row by
+  the kernel's link binding (`django-service-specs` 0.34.0), whenever the answer is
+  available and such a tool exists. The tool is found by identity, through specs a
+  `SpecRegistry.replace` displaced; an operation with no tool, or an unavailable
+  answer, carries neither key. A read the target fills through its `server_arguments`
+  is left out. The `outputSchema` describes both, optional. New
+  `ToolRegistry.binding_of(spec)` answers the lookup, and `KernelToolBinding.displaced`
+  holds what `register_tools` carried over.
+
+### Changed
+
+- **The result shape of a tool presenting affordances.** Callers that read
+  `structuredContent` or the text block of such a tool (an agent runtime, a UI host)
+  see the two new keys on available answers that name a registered tool. Additive:
+  nothing is renamed or removed, and a tool whose spec declares no affordances is
+  unchanged. An affordance naming a spec registered as two tools has no one tool to
+  name, and the call presenting it raises `ValueError`, as the kernel's
+  `SpecRegistry.name_of` does: register the operation once, or link to the variant
+  one tool holds.
+- **Requires `django-service-specs>=0.34.0`.**
+
 ## [0.14.0] — 2026-11-17
 
 ### Added
