@@ -316,6 +316,7 @@ def build_server() -> MCPServer:
         name="invoice-receipt",
         uri_template="invoices://{pk}/receipt",
         description="An invoice's receipt, as a CSV file.",
+        max_result_bytes=1_048_576,
     )
 
     # ----- Interactive view (a document a host draws inline) -----

@@ -932,6 +932,7 @@ class MCPServer:
         meta: dict[str, Any] | None = None,
         always_listed: bool = False,
         cache_ttl_ms: int | UnsetType = UNSET,
+        max_result_bytes: int | None | UnsetType = UNSET,
         completions: dict[str, Callable[..., Any]] | None = None,
         scopes: str | Sequence[str] | None = None,
     ) -> KernelResourceBinding:
@@ -971,8 +972,12 @@ class MCPServer:
         (``UI_RESOURCE_MIME_TYPE``) with a templated ``uri_template`` raises
         ``ValueError``, since a view must be one concrete document; use
         ``register_ui_resource`` for a view. The result ceiling and the cache
-        hints apply to every encoding, and a file is read no further than the
-        ceiling.
+        hints apply to every encoding. ``max_result_bytes`` is this resource's
+        own ceiling, as ``register_tool`` takes one: ``UNSET`` defers to the
+        server's ``MAX_RESULT_BYTES`` and ``None`` lifts it. A file is read no
+        further than its base64 fits the ceiling with the answer around it, and
+        one past that is answered as a ``text/plain`` description of the file
+        (its name, type, size and the ceiling), never truncated.
         A ``TEXT`` or ``BLOB`` resource is refused, naming both, beside a spec
         declaring ``affordances``, which the kernel adds to a presented object,
         or ``allow_none``, under which a missing row presents as ``None``
@@ -1006,6 +1011,7 @@ class MCPServer:
             meta=merge_meta(meta),
             always_listed=always_listed,
             cache_ttl_ms=cache_ttl_ms,
+            max_result_bytes=max_result_bytes,
             completions=completions,
             scopes=scopes,
             mime_type=mime_type,

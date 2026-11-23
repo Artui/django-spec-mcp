@@ -871,11 +871,19 @@ TEXT resource's body is returned verbatim, so the spec's presenter (or its
 selector, when it declares none) must return the document itself.
 ```
 
-The result ceiling and the cache hints apply to every encoding alike. The
-ceiling bounds the encoded answer, so a file is read no further than the three
-quarters of the ceiling its base64 can fill, and a large one is never held
-whole. A file past that is answered `-32000` naming the resource and saying its
-base64 is over the ceiling, and nothing is truncated. An HTML
+The result ceiling and the cache hints apply to every encoding alike. A file
+shares the result ceiling, `MAX_RESULT_BYTES`, with every other answer, and the
+ceiling bounds the encoded answer: a file is read no further than its base64
+fits the ceiling with the answer around it, so a large one is never held whole.
+A file past that is not refused and never truncated. The read succeeds with a
+`text/plain` description of the file in its place, naming the file, its type,
+its size and the ceiling that fired, and saying it was described rather than
+sent; a tool answers the same note as its one text block. A host raises the
+bound for one file without raising it for every answer: `register_tool(...,
+max_result_bytes=...)` for a tool, and `register_resource(...,
+max_result_bytes=...)` for a resource, where `None` lifts it. The note is held
+to the ceiling too, so a ceiling of a few hundred bytes, smaller than the note,
+refuses the answer as it refuses any other. An HTML
 view the host renders is [`register_ui_resource`](#interactive-views-mcp-apps),
 which sets both.
 
@@ -1486,8 +1494,9 @@ non-media file is refused as a tool and served through `register_resource`
 instead. The block carries the file's own `content_type`, which the presenter
 fills when the file has none; a file of another kind than the presenter's (a PDF
 from a `render` under `FilePresenter("image/png")`) is an `output_encoding`
-result naming the tool. A file whose result, base64 and the block's envelope together, is over the
-result ceiling is the `result_too_large` result, read no further than the ceiling allows. A spec
+result naming the tool. A file whose result, base64 and the block's envelope together, would be over the
+result ceiling is read no further than the ceiling allows and is not sent: the call
+succeeds with one text block describing it (name, type, size and the ceiling). A spec
 declaring `allow_none` whose service returns `None` answers the empty object.
 
 `ToolContentKind.TEXT` (the default for a spec presenting no file) renders the
