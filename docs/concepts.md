@@ -881,7 +881,9 @@ its size and the ceiling that fired, and saying it was described rather than
 sent; a tool answers the same note as its one text block. A host raises the
 bound for one file without raising it for every answer: `register_tool(...,
 max_result_bytes=...)` for a tool, and `register_resource(...,
-max_result_bytes=...)` for a resource, where `None` lifts it. An HTML
+max_result_bytes=...)` for a resource, where `None` lifts it. The note is held
+to the ceiling too, so a ceiling of a few hundred bytes, smaller than the note,
+refuses the answer as it refuses any other. An HTML
 view the host renders is [`register_ui_resource`](#interactive-views-mcp-apps),
 which sets both.
 
@@ -1492,8 +1494,9 @@ non-media file is refused as a tool and served through `register_resource`
 instead. The block carries the file's own `content_type`, which the presenter
 fills when the file has none; a file of another kind than the presenter's (a PDF
 from a `render` under `FilePresenter("image/png")`) is an `output_encoding`
-result naming the tool. A file whose result, base64 and the block's envelope together, is over the
-result ceiling is the `result_too_large` result, read no further than the ceiling allows. A spec
+result naming the tool. A file whose result, base64 and the block's envelope together, would be over the
+result ceiling is read no further than the ceiling allows and is not sent: the call
+succeeds with one text block describing it (name, type, size and the ceiling). A spec
 declaring `allow_none` whose service returns `None` answers the empty object.
 
 `ToolContentKind.TEXT` (the default for a spec presenting no file) renders the

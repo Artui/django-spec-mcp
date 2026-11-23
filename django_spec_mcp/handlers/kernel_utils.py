@@ -509,8 +509,7 @@ def tool_result(binding: KernelToolBinding, payload: Any, *, config: MCPConfig) 
         envelope = _presented(binding, _emptied(payload), config).to_dict()
         read = _read_file(payload, _file_budget(ceiling, envelope))
         if isinstance(read, FileTooLarge):
-            mime = payload.content_type or binding.content_mime_type or ""
-            note = _file_not_sent(label, payload, mime, ceiling, read)
+            note = _file_not_sent(label, payload, ceiling, read)
             return ToolResult(content=[ToolContentBlock.text_block(note)])
         if isinstance(read, TypeError):
             return build_error_tool_result(f"{label}: {read}", error_type="output_encoding")
@@ -574,9 +573,7 @@ def resource_read_result(
         envelope = resource_answer_body(empty, binding, context)
         read = _read_file(payload, _file_budget(ceiling, envelope))
         if isinstance(read, FileTooLarge):
-            note = _file_not_sent(
-                f"Resource {uri!r}", payload, media_type or binding.mime_type, ceiling, read
-            )
+            note = _file_not_sent(f"Resource {uri!r}", payload, ceiling, read)
             text = ResourceContents(uri=uri, mime_type="text/plain", text=note, meta=empty.meta)
             return resource_read_answer(text, binding, uri, context)
         if isinstance(read, TypeError):
@@ -595,7 +592,7 @@ def _blob_contents(
 ) -> ResourceContents:
     """The ``contents`` block a file resource answers for ``data``."""
     contents = encode_resource_contents(data, binding=binding, uri=uri, producer=_PRESENTED_BY)
-    assert isinstance(contents, ResourceContents)
+    assert isinstance(contents, ResourceContents)  # noqa: S101 — bytes under BLOB always encode
     return contents if media_type is None else replace(contents, mime_type=media_type)
 
 
@@ -620,17 +617,16 @@ def _read_file(file: FileResult, budget: int | None) -> FileResult | FileTooLarg
         return exc
 
 
-def _file_not_sent(
-    label: str, file: FileResult, mime: str, ceiling: int | None, exc: FileTooLarge
-) -> str:
+def _file_not_sent(label: str, file: FileResult, ceiling: int | None, exc: FileTooLarge) -> str:
     """The note for a file over the ceiling, worded as django-spec-agents words its own."""
     size = f"{file.size} bytes" if file.size is not None else f"at least {exc.max_bytes + 1} bytes"
     logger.warning(
         "Result bound exceeded: %s produced a %s file over a %s byte ceiling", label, size, ceiling
     )
     return (
-        f"[{file.filename}] is a {mime} file ({size}), over the {ceiling}-byte limit for "
-        "returning a file's contents once base64-encoded; it was described rather than sent."
+        f"[{file.filename}] is a {file.content_type} file ({size}), over the {ceiling}-byte "
+        "limit for returning a file's contents once base64-encoded; it was described rather "
+        "than sent."
     )
 
 

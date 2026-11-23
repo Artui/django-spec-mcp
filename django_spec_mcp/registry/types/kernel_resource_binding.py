@@ -39,9 +39,11 @@ class KernelResourceBinding(ResourceBinding[Any]):
 
     spec: SelectorSpec
     scopes: tuple[str, ...] | None = None
-    max_result_bytes: int | None | UnsetType = UNSET
     """See ``KernelToolBinding.scopes``. A bare string is one scope, and ``()`` is
     refused, since it reads as a gate and admits every caller."""
+    max_result_bytes: int | None | UnsetType = UNSET
+    """This resource's result ceiling: ``UNSET`` defers to the server's
+    ``MAX_RESULT_BYTES``, ``None`` lifts it. A file past it is described, not sent."""
     permissions: tuple[PermissionCheck, ...] = field(default=(), init=False)
     """Always empty, so no check can sit beside the spec's own, which ``dispatch``
     asks: a view's checks are asked by the transport, a spec's by the kernel."""

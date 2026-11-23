@@ -272,6 +272,17 @@ def test_a_tools_own_ceiling_bounds_its_file(is_async: bool) -> None:
     assert opened.files[0].closed
 
 
+def test_an_in_process_call_under_a_ceiling_below_the_envelope_reads_nothing() -> None:
+    server = _server(config=build_mcp_config(max_result_bytes=100))
+    _tool(
+        server, "big", lambda: _sized(_Opened(), declared=False), FilePresenter("application/pdf")
+    )
+
+    result = server.call_tool("big", {}, user=None).to_dict()
+
+    assert _described_tool(result) == _note("at least 1 bytes", ceiling=100)
+
+
 def test_an_in_process_call_describes_a_file_past_the_ceiling() -> None:
     server = _server(config=build_mcp_config(max_result_bytes=CEILING))
     _tool(server, "big", lambda: _sized(_Opened(), declared=True), FilePresenter("application/pdf"))
@@ -331,6 +342,16 @@ def test_a_resource_file_past_the_ceiling_is_described(is_async: bool, declared:
     else:
         assert text.startswith("[big.pdf] is a application/pdf file (at least ")
     assert opened.files[0].closed
+
+
+def test_a_resource_files_note_carries_the_bindings_meta() -> None:
+    server = _server(config=build_mcp_config(max_result_bytes=CEILING))
+    _big_resource(server, lambda: _sized(_Opened(), declared=True), meta={"k": 1})
+
+    (contents,) = _resource_answer(server, False, "big://")["result"]["contents"]
+
+    assert contents["_meta"] == {"k": 1}
+    assert contents["text"] == _note("4096 bytes")
 
 
 @_SYNC_AND_ASYNC
@@ -617,3 +638,25 @@ def test_an_async_resource_reads_its_file_off_the_event_loop() -> None:
     _resource_answer(server, True, "doc://")
 
     assert probe.on_loop and not any(probe.on_loop)
+
+
+DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+
+def test_a_resource_file_of_its_own_longer_type_is_sent_whole_or_described() -> None:
+    server = _server(config=build_mcp_config(max_result_bytes=CEILING))
+    held: list[int] = [0]
+    file = lambda: FileResult(io.BytesIO(b"x" * held[0]), filename="big.pdf", content_type=DOCX)  # noqa: E731
+    _big_resource(server, file)
+
+    sent: list[bool] = []
+    for size in range(450, 700):
+        held[0] = size
+        (contents,) = _resource_answer(server, False, "big://")["result"]["contents"]
+        if "blob" in contents:
+            assert contents["mimeType"] == DOCX
+        else:
+            assert contents["text"].startswith(f"[big.pdf] is a {DOCX} file (at least "), size
+        sent.append("blob" in contents)
+
+    assert sent[0] and not sent[-1]
