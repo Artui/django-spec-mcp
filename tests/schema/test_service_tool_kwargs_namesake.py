@@ -9,6 +9,10 @@ from django.http import HttpRequest
 from django_service_specs import (
     DataclassPresenter,
     DataclassValidator,
+    Parameter,
+    Parameters,
+    SelectorKind,
+    SelectorSpec,
     ServiceSpec,
     Unrestricted,
 )
@@ -19,6 +23,8 @@ from django_spec_mcp.auth.types.token_info import TokenInfo
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.handlers.types.context import MCPCallContext
+from tests.testapp.kernel_shapes import InvoiceOutput
+from tests.testapp.models import Invoice
 from tests.utils import make_server
 
 ROUTES = ["handler", "async_handler", "call_tool", "acall_tool"]
@@ -173,3 +179,72 @@ async def test_each_row_keeps_the_callers_value_and_the_service_the_providers(
         {"number": "A", "row_customer": 5, "service_customer": 999},
         {"number": "B", "row_customer": 6, "service_customer": 999},
     ]
+
+
+@dataclass
+class _Rename:
+    number: str
+
+
+class _LookupScope(TypedDict):
+    number: str
+    note: str
+
+
+def _lookup_scope() -> _LookupScope:
+    return {"number": "SRV", "note": "SRV"}
+
+
+def _rename(*, instance: Invoice, number: str, note: str) -> Invoice:
+    instance.number = f"{number}/{note}"
+    instance.save(update_fields=["number"])
+    return instance
+
+
+def _lookup_server(seen: list[tuple[str, str]]) -> MCPServer:
+    def by_pk(*, pk: int, number: str, note: str) -> Any:
+        seen.append((number, note))
+        return Invoice.objects.filter(pk=pk)
+
+    server = make_server()
+    server.register_tool(
+        ServiceSpec(
+            service=_rename,
+            validator=DataclassValidator(_Rename),
+            presenter=DataclassPresenter(InvoiceOutput),
+            reads=Parameters([Parameter("note", "string", required=True)]),
+            instance_selector_spec=SelectorSpec(
+                kind=SelectorKind.RETRIEVE,
+                selector=by_pk,
+                reads=Parameters([Parameter("pk", "integer", required=True)]),
+                kwargs=_lookup_scope,
+            ),
+            atomic=False,
+            permissions=[Unrestricted()],
+        ),
+        name="rename",
+        description="Rename an invoice.",
+    )
+    return server
+
+
+def test_a_target_lookups_kwargs_namesakes_are_asked_of_the_caller() -> None:
+    schema = _input_schema(_lookup_server([]), "rename")
+
+    assert set(schema["properties"]) == {"pk", "number", "note"}
+    assert set(schema["required"]) == {"pk", "number", "note"}
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("route", ROUTES)
+async def test_a_target_lookups_kwargs_reach_the_selector_and_the_service_the_callers(
+    route: str,
+) -> None:
+    invoice = await Invoice.objects.acreate(number="OLD", amount_cents=1)
+    seen: list[tuple[str, str]] = []
+    arguments = {"pk": invoice.pk, "number": "CALLER", "note": "SENT"}
+
+    out = await _served(_lookup_server(seen), route, "rename", arguments)
+
+    assert out["number"] == "CALLER/SENT"
+    assert seen == [("SRV", "SRV")]

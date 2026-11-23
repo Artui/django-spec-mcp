@@ -379,8 +379,11 @@ someone, and the server leaves out of the schema what it answers itself:
   `required` as the caller's, and the provider's value reaches only the
   service keyword
   ([a namesake](https://artui.github.io/django-service-specs/dispatching/#the-services-pool)).
-  A key named like one of the spec's `reads`, and any `input_data=` key, is
-  still the server's;
+  A target lookup's typed `kwargs=` key named like a Validator field or one of
+  the spec's `reads` is a namesake too: the caller sends it, and the
+  provider's value reaches only the selector. A key the spec's own `kwargs=`
+  fills named like one of its `reads`, and a key a typed `input_data=` always
+  fills, is still the server's;
 - a parameter a provider may fill is offered and not required, because
   dispatch does not demand it of the caller (the kernel's
   `provider_reached`). A key whose `TypedDict` value admits `UnsetType` is one

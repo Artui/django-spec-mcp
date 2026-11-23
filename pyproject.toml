@@ -38,8 +38,9 @@ classifiers = [
 dependencies = [
     "django>=4.2",
     # The kernel this package serves, and the one it imports its own names from.
-    # 0.35.0 is the floor: from it a typed ``kwargs`` key named like a Validator field is a
-    # namesake the caller still sends, where 0.34.1 refused the spec at ``register_tool``;
+    # 0.35.0 is the floor: from it a typed ``kwargs`` key named like a Validator field (or,
+    # on a target lookup, a spec read) is a namesake the caller still sends, where 0.34.1
+    # refused the spec at ``register_tool``;
     # ``tests/schema/test_service_tool_kwargs_namesake.py`` holds it. From 0.33.0
     # ``FilePresenter``, ``FileResult``, ``FileTooLarge`` and
     # ``file_output``, which file results import from the root, are there, and a

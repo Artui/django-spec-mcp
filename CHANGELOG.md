@@ -19,8 +19,11 @@ carries; releases up to 0.54.0 are in
   registers, where 0.34.1 refused it. The field stays in the tool's `inputSchema`,
   `properties` and `required`, and is validated into `data` from the caller's value; the
   service keyword of that name takes the provider's. Every route serves it the same way
-  (`tools/call` on both transports, `call_tool`, `acall_tool`). A key named like a spec
-  `reads` name, and any `input_data=` key, stays server-owned, and a resource's
+  (`tools/call` on both transports, `call_tool`, `acall_tool`). A target lookup's typed
+  `kwargs=` key named like a Validator field or one of the spec's `reads` is a namesake
+  too, where 0.34.1 refused it: the caller sends it, and the provider's value reaches only
+  the selector. A key the spec's own `kwargs=` fills named like one of its `reads`, and a
+  key a typed `input_data=` always fills, stays server-owned, and a resource's
   `uri_template` variable is still refused when the server fills it. The
   `django-service-specs` floor rises to `>=0.35.0`.
 
