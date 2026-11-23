@@ -1655,8 +1655,8 @@ per tool at registration:</p>
 <tr>
 <td>Result size</td>
 <td><code>MAX_RESULT_BYTES</code> (5 MiB)</td>
-<td><code>max_result_bytes=</code></td>
-<td><code>isError</code> result naming the remedy</td>
+<td><code>max_result_bytes=</code> (tools and resources)</td>
+<td><code>isError</code> result naming the remedy; a file is described instead</td>
 </tr>
 <tr>
 <td>Page size</td>
@@ -1706,6 +1706,14 @@ the model can act on ("narrow the filter, lower <code>limit</code>") rather than
 a shortened payload. A clipped list looks complete to a model, which then
 reasons from it — a wrong answer delivered confidently is worse than a failed
 call.</p>
+<p><strong>A file is bounded by the same ceiling, and described past it.</strong> A file a
+<code>FilePresenter</code> tool or resource returns is read only as far as its base64 fits
+<code>MAX_RESULT_BYTES</code> with the answer around it. A narrower request cannot shrink
+a file, so past that the call succeeds with a text note in the file's place:
+its name, type and size, the ceiling that fired, and that it was described
+rather than sent. To send one large file without raising the ceiling for every
+answer, raise it for that binding: <code>max_result_bytes=</code> on <code>register_tool</code> for a
+tool, and on <code>register_resource</code> for a resource.</p>
 <h3 id="what-is-not-bounded">What is <em>not</em> bounded<a class="headerlink" href="#what-is-not-bounded" title="Permanent link">&para;</a></h3>
 <ul>
 <li><strong>Query cost.</strong> Nothing here stops a selector from issuing an expensive join;

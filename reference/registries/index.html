@@ -1420,6 +1420,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#django_spec_mcp.registry.types.kernel_resource_binding.KernelResourceBinding.max_result_bytes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        max_result_bytes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#django_spec_mcp.registry.types.kernel_resource_binding.KernelResourceBinding.permissions" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2626,6 +2637,17 @@
     <span class="md-ellipsis">
       
         scopes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.registry.types.kernel_resource_binding.KernelResourceBinding.max_result_bytes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        max_result_bytes
       
     </span>
   </a>
@@ -4079,7 +4101,9 @@ spec's own permissions, reads, shaping and presenter answer the read.
 to what the presenter returns: <code>JSON</code> encodes it and <code>TEXT</code> serves its
 <code>str</code> verbatim. A file is declared on the spec: one presenting through
 <code>FilePresenter</code> is <code>BLOB</code> of the presenter's type, its <code>FileResult</code>
-read under the result ceiling and base64-encoded, and a binding declaring
+read under the result ceiling (<code>max_result_bytes</code>, <code>UNSET</code> deferring to
+the server's <code>MAX_RESULT_BYTES</code>) and base64-encoded, or described in text
+when its answer would be over it, and a binding declaring
 otherwise, or <code>BLOB</code> over a spec presenting no file, is refused when it is
 built, by hand or by <code>register_resource</code>, which derives both.</p>
 <p><code>selector</code> is the spec's, set at registration, and nothing on this path
@@ -4129,6 +4153,32 @@ spec's <code>permissions</code> are the kernel's and <code>dispatch</code> asks 
 
         <p>See <code>KernelToolBinding.scopes</code>. A bare string is one scope, and <code>()</code> is
 refused, since it reads as a gate and admits every caller.</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="django_spec_mcp.registry.types.kernel_resource_binding.KernelResourceBinding.max_result_bytes" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">max_result_bytes</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+  </span>
+
+<a href="#django_spec_mcp.registry.types.kernel_resource_binding.KernelResourceBinding.max_result_bytes" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">max_result_bytes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">|</span> <span class="n">UnsetType</span> <span class="o">=</span> <span class="n">UNSET</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p>This resource's result ceiling: <code>UNSET</code> defers to the server's
+<code>MAX_RESULT_BYTES</code>, <code>None</code> lifts it. A file past it is described, not sent.</p>
 
     </div>
 

@@ -2956,9 +2956,10 @@ caller listening, the same two things <code>listChanged</code> is advertised on.
 </span><span id="__span-0-14"><a id="__codelineno-0-14" name="__codelineno-0-14" href="#__codelineno-0-14"></a>    <span class="n">meta</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 </span><span id="__span-0-15"><a id="__codelineno-0-15" name="__codelineno-0-15" href="#__codelineno-0-15"></a>    <span class="n">always_listed</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
 </span><span id="__span-0-16"><a id="__codelineno-0-16" name="__codelineno-0-16" href="#__codelineno-0-16"></a>    <span class="n">cache_ttl_ms</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="n">UnsetType</span> <span class="o">=</span> <span class="n">UNSET</span><span class="p">,</span>
-</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>    <span class="n">completions</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Callable</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>    <span class="n">scopes</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">KernelResourceBinding</span>
+</span><span id="__span-0-17"><a id="__codelineno-0-17" name="__codelineno-0-17" href="#__codelineno-0-17"></a>    <span class="n">max_result_bytes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">|</span> <span class="n">UnsetType</span> <span class="o">=</span> <span class="n">UNSET</span><span class="p">,</span>
+</span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>    <span class="n">completions</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Callable</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>    <span class="n">scopes</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">KernelResourceBinding</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -2996,8 +2997,12 @@ body, so <code>TEXT</code> left at the default <code>application/json</code> ser
 (<code>UI_RESOURCE_MIME_TYPE</code>) with a templated <code>uri_template</code> raises
 <code>ValueError</code>, since a view must be one concrete document; use
 <code>register_ui_resource</code> for a view. The result ceiling and the cache
-hints apply to every encoding, and a file is read no further than the
-ceiling.
+hints apply to every encoding. <code>max_result_bytes</code> is this resource's
+own ceiling, as <code>register_tool</code> takes one: <code>UNSET</code> defers to the
+server's <code>MAX_RESULT_BYTES</code> and <code>None</code> lifts it. A file is read no
+further than its base64 fits the ceiling with the answer around it, and
+one past that is answered as a <code>text/plain</code> description of the file
+(its name, type, size and the ceiling), never truncated.
 A <code>TEXT</code> or <code>BLOB</code> resource is refused, naming both, beside a spec
 declaring <code>affordances</code>, which the kernel adds to a presented object,
 or <code>allow_none</code>, under which a missing row presents as <code>None</code>

@@ -3731,11 +3731,19 @@ code that produced it:</p>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>TEXT resource&#39;s body is returned verbatim, so the spec&#39;s presenter (or its
 </span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>selector, when it declares none) must return the document itself.
 </span></code></pre></div>
-<p>The result ceiling and the cache hints apply to every encoding alike. The
-ceiling bounds the encoded answer, so a file is read no further than the three
-quarters of the ceiling its base64 can fill, and a large one is never held
-whole. A file past that is answered <code>-32000</code> naming the resource and saying its
-base64 is over the ceiling, and nothing is truncated. An HTML
+<p>The result ceiling and the cache hints apply to every encoding alike. A file
+shares the result ceiling, <code>MAX_RESULT_BYTES</code>, with every other answer, and the
+ceiling bounds the encoded answer: a file is read no further than its base64
+fits the ceiling with the answer around it, so a large one is never held whole.
+A file past that is not refused and never truncated. The read succeeds with a
+<code>text/plain</code> description of the file in its place, naming the file, its type,
+its size and the ceiling that fired, and saying it was described rather than
+sent; a tool answers the same note as its one text block. A host raises the
+bound for one file without raising it for every answer: <code>register_tool(...,
+max_result_bytes=...)</code> for a tool, and <code>register_resource(...,
+max_result_bytes=...)</code> for a resource, where <code>None</code> lifts it. The note is held
+to the ceiling too, so a ceiling of a few hundred bytes, smaller than the note,
+refuses the answer as it refuses any other. An HTML
 view the host renders is <a href="#interactive-views-mcp-apps"><code>register_ui_resource</code></a>,
 which sets both.</p>
 <h3 id="registering-a-whole-specregistry">Registering a whole <code>SpecRegistry</code><a class="headerlink" href="#registering-a-whole-specregistry" title="Permanent link">&para;</a></h3>
@@ -4356,8 +4364,9 @@ non-media file is refused as a tool and served through <code>register_resource</
 instead. The block carries the file's own <code>content_type</code>, which the presenter
 fills when the file has none; a file of another kind than the presenter's (a PDF
 from a <code>render</code> under <code>FilePresenter("image/png")</code>) is an <code>output_encoding</code>
-result naming the tool. A file whose result, base64 and the block's envelope together, is over the
-result ceiling is the <code>result_too_large</code> result, read no further than the ceiling allows. A spec
+result naming the tool. A file whose result, base64 and the block's envelope together, would be over the
+result ceiling is read no further than the ceiling allows and is not sent: the call
+succeeds with one text block describing it (name, type, size and the ceiling). A spec
 declaring <code>allow_none</code> whose service returns <code>None</code> answers the empty object.</p>
 <p><code>ToolContentKind.TEXT</code> (the default for a spec presenting no file) renders the
 result as JSON and mirrors it in <code>structuredContent</code>. A file's kinds carry
