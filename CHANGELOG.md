@@ -11,6 +11,24 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+## [0.15.1] — 2026-11-23
+
+### Changed
+
+- **A `kwargs=` key named like a Validator field is the caller's.** Adopting
+  django-service-specs 0.35.0's namesake rule: a `ServiceSpec` whose typed `kwargs=`
+  provider fills a key named like one of its Validator fields (or a `many` row's field)
+  registers, where 0.34.1 refused it. The field stays in the tool's `inputSchema`,
+  `properties` and `required`, and is validated into `data` from the caller's value; the
+  service keyword of that name takes the provider's. Every route serves it the same way
+  (`tools/call` on both transports, `call_tool`, `acall_tool`). A target lookup's typed
+  `kwargs=` key named like a Validator field or one of the spec's `reads` is a namesake
+  too, where 0.34.1 refused it: the caller sends it, and the provider's value reaches only
+  the selector. A key the spec's own `kwargs=` fills named like one of its `reads`, and a
+  key a typed `input_data=` always fills, stays server-owned, and a resource's
+  `uri_template` variable is still refused when the server fills it. The
+  `django-service-specs` floor rises to `>=0.35.0`.
+
 ## [0.15.0] — 2026-11-17
 
 ### Added
@@ -1073,7 +1091,8 @@ carries; releases up to 0.54.0 are in
   running. The worker's run now enters below that decision. A client that did
   not declare the extension is still refused `-32021` by a `REQUIRED` tool.
 
-[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/Artui/django-spec-mcp/compare/v0.15.1...HEAD
+[0.15.1]: https://github.com/Artui/django-spec-mcp/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/Artui/django-spec-mcp/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/Artui/django-spec-mcp/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/Artui/django-spec-mcp/compare/v0.12.0...v0.13.0
