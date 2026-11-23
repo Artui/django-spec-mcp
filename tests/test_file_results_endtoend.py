@@ -17,6 +17,7 @@ from django_service_specs import (
     SelectorSpec,
     ServiceSpec,
     Unrestricted,
+    UnsetType,
 )
 
 from django_spec_mcp import MCPServer, ToolContentKind
@@ -207,7 +208,7 @@ def test_a_file_from_a_tool_presenting_no_file_is_an_encoding_error(is_async: bo
     assert opened.files[0].closed
 
 
-# ----- a file past the ceiling answers the ceiling's error, and is closed -----
+# ----- a file past the ceiling is described rather than sent, and closed -----
 
 
 def _sized(opened: _Opened, *, declared: bool, size: int = CEILING * 4) -> FileResult:
@@ -215,20 +216,43 @@ def _sized(opened: _Opened, *, declared: bool, size: int = CEILING * 4) -> FileR
     return FileResult(opened(data), filename="big.pdf", size=len(data) if declared else None)
 
 
+def _note(size: str, ceiling: int = CEILING, mime: str = "application/pdf") -> str:
+    return (
+        f"[big.pdf] is a {mime} file ({size}), over the {ceiling}-byte limit for returning "
+        "a file's contents once base64-encoded; it was described rather than sent."
+    )
+
+
+def _no_remedy(text: str) -> None:
+    assert "'limit'" not in text
+    assert "filter" not in text
+    assert "Narrow" not in text
+
+
+def _described_tool(result: dict[str, Any]) -> str:
+    assert result.get("isError") is not True
+    (block,) = result["content"]
+    assert block["type"] == "text"
+    _no_remedy(block["text"])
+    return block["text"]
+
+
 @_SYNC_AND_ASYNC
 @pytest.mark.parametrize("declared", [False, True], ids=["read-past", "declared-size"])
-def test_a_tool_file_past_the_ceiling_is_result_too_large(is_async: bool, declared: bool) -> None:
+def test_a_tool_file_past_the_ceiling_is_described(is_async: bool, declared: bool) -> None:
     opened = _Opened()
     server = _server(config=build_mcp_config(max_result_bytes=CEILING))
     _tool(
         server, "big", lambda: _sized(opened, declared=declared), FilePresenter("application/pdf")
     )
 
-    result = _call(server, is_async, "big")
+    text = _described_tool(_call(server, is_async, "big"))
 
-    assert result["isError"] is True
-    assert json.loads(result["content"][0]["text"])["error"]["type"] == "result_too_large"
-    assert "base64 is over this server's 1024 byte ceiling" in result["content"][0]["text"]
+    if declared:
+        assert text == _note("4096 bytes")
+    else:
+        assert text.startswith("[big.pdf] is a application/pdf file (at least ")
+        assert text.endswith("it was described rather than sent.")
     assert opened.files[0].closed
 
 
@@ -239,16 +263,22 @@ def test_a_tools_own_ceiling_bounds_its_file(is_async: bool) -> None:
     _tool(
         server,
         "big",
-        lambda: _sized(opened, declared=False),
+        lambda: _sized(opened, declared=True),
         FilePresenter("application/pdf"),
         max_result_bytes=CEILING,
     )
 
-    result = _call(server, is_async, "big")
-
-    assert json.loads(result["content"][0]["text"])["error"]["type"] == "result_too_large"
-    assert "produced a file whose base64 is over" in result["content"][0]["text"]
+    assert _described_tool(_call(server, is_async, "big")) == _note("4096 bytes")
     assert opened.files[0].closed
+
+
+def test_an_in_process_call_describes_a_file_past_the_ceiling() -> None:
+    server = _server(config=build_mcp_config(max_result_bytes=CEILING))
+    _tool(server, "big", lambda: _sized(_Opened(), declared=True), FilePresenter("application/pdf"))
+
+    result = server.call_tool("big", {}, user=None).to_dict()
+
+    assert _described_tool(result) == _note("4096 bytes")
 
 
 def _resource_answer(server: MCPServer, is_async: bool, uri: str) -> dict[str, Any]:
@@ -264,29 +294,94 @@ def _resource_answer(server: MCPServer, is_async: bool, uri: str) -> dict[str, A
     return json.loads(response.content)
 
 
-@_SYNC_AND_ASYNC
-@pytest.mark.parametrize("declared", [False, True], ids=["read-past", "declared-size"])
-def test_a_resource_file_past_the_ceiling_is_the_servers_ceiling_error(
-    is_async: bool, declared: bool
-) -> None:
-    opened = _Opened()
-    server = _server(config=build_mcp_config(max_result_bytes=CEILING))
-    server.register_resource(
+def _big_resource(server: MCPServer, selector: Any, **knobs: Any) -> Any:
+    return server.register_resource(
         SelectorSpec(
             kind=SelectorKind.RETRIEVE,
-            selector=lambda: _sized(opened, declared=declared),
+            selector=selector,
             presenter=FilePresenter("application/pdf"),
             permissions=OPEN,
         ),
         name="big",
         uri_template="big://",
+        **knobs,
     )
 
-    error = _resource_answer(server, is_async, "big://")["error"]
 
-    assert error["code"] == -32000
-    assert "Resource 'big://' produced a file" in error["message"]
+def _described_resource(answer: dict[str, Any]) -> str:
+    (contents,) = answer["result"]["contents"]
+    assert contents["uri"] == "big://"
+    assert contents["mimeType"] == "text/plain"
+    assert "blob" not in contents
+    _no_remedy(contents["text"])
+    return contents["text"]
+
+
+@_SYNC_AND_ASYNC
+@pytest.mark.parametrize("declared", [False, True], ids=["read-past", "declared-size"])
+def test_a_resource_file_past_the_ceiling_is_described(is_async: bool, declared: bool) -> None:
+    opened = _Opened()
+    server = _server(config=build_mcp_config(max_result_bytes=CEILING))
+    _big_resource(server, lambda: _sized(opened, declared=declared))
+
+    text = _described_resource(_resource_answer(server, is_async, "big://"))
+
+    if declared:
+        assert text == _note("4096 bytes")
+    else:
+        assert text.startswith("[big.pdf] is a application/pdf file (at least ")
     assert opened.files[0].closed
+
+
+@_SYNC_AND_ASYNC
+def test_a_resources_own_ceiling_bounds_its_file(is_async: bool) -> None:
+    opened = _Opened()
+    server = _server()
+    _big_resource(server, lambda: _sized(opened, declared=True), max_result_bytes=CEILING)
+
+    text = _described_resource(_resource_answer(server, is_async, "big://"))
+
+    assert text == _note("4096 bytes")
+    assert opened.files[0].closed
+
+
+@_SYNC_AND_ASYNC
+def test_a_resources_own_ceiling_raises_the_servers_for_its_file(is_async: bool) -> None:
+    server = _server(config=build_mcp_config(max_result_bytes=CEILING))
+    _big_resource(
+        server, lambda: _sized(_Opened(), declared=True, size=2000), max_result_bytes=8192
+    )
+
+    (contents,) = _resource_answer(server, is_async, "big://")["result"]["contents"]
+
+    assert contents["blob"] == _b64(b"x" * 2000)
+
+
+@_SYNC_AND_ASYNC
+def test_a_tool_whose_own_ceiling_is_none_sends_its_file_whole(is_async: bool) -> None:
+    server = _server(config=build_mcp_config(max_result_bytes=CEILING))
+    file = lambda: _sized(_Opened(), declared=False)  # noqa: E731
+    _tool(server, "big", file, FilePresenter("application/pdf"), max_result_bytes=None)
+
+    (block,) = _call(server, is_async, "big")["content"]
+
+    assert block["resource"]["blob"] == _b64(b"x" * CEILING * 4)
+
+
+@_SYNC_AND_ASYNC
+def test_a_resource_whose_own_ceiling_is_none_sends_its_file_whole(is_async: bool) -> None:
+    server = _server(config=build_mcp_config(max_result_bytes=CEILING))
+    _big_resource(server, lambda: _sized(_Opened(), declared=False), max_result_bytes=None)
+
+    (contents,) = _resource_answer(server, is_async, "big://")["result"]["contents"]
+
+    assert contents["blob"] == _b64(b"x" * CEILING * 4)
+
+
+def test_a_resource_registered_without_a_ceiling_defers_to_the_servers() -> None:
+    binding = _big_resource(_server(), lambda: b"")
+
+    assert isinstance(binding.max_result_bytes, UnsetType)
 
 
 def test_a_file_handed_to_the_result_builder_by_hand_takes_the_bindings_type() -> None:
@@ -312,44 +407,91 @@ def test_media_bytes_handed_to_the_result_builder_by_hand_are_an_image_block(raw
     ]
 
 
-# ----- a file under the ceiling whose base64 is over it answers the file's wording -----
+# ----- a file whose answer is over the ceiling, envelope included, is described too -----
 
 
 @_SYNC_AND_ASYNC
-def test_a_tool_file_whose_base64_is_over_the_ceiling_is_refused_as_a_file(is_async: bool) -> None:
+def test_a_tool_file_in_the_envelope_band_is_described_not_refused(is_async: bool) -> None:
     opened = _Opened()
     server = _server(config=build_mcp_config(max_result_bytes=CEILING))
-    big = lambda: _sized(opened, declared=False, size=900)  # noqa: E731
-    _tool(server, "big", big, FilePresenter("application/pdf"))
-
-    result = _call(server, is_async, "big")
-
-    assert "produced a file whose base64 is over" in result["content"][0]["text"]
-    assert opened.files[0].closed
-
-
-@_SYNC_AND_ASYNC
-def test_a_resource_file_whose_base64_is_over_the_ceiling_is_refused_as_a_file(
-    is_async: bool,
-) -> None:
-    opened = _Opened()
-    server = _server(config=build_mcp_config(max_result_bytes=CEILING))
-    server.register_resource(
-        SelectorSpec(
-            kind=SelectorKind.RETRIEVE,
-            selector=lambda: _sized(opened, declared=False, size=900),
-            presenter=FilePresenter("application/pdf"),
-            permissions=OPEN,
-        ),
-        name="big",
-        uri_template="big://",
+    _tool(
+        server,
+        "big",
+        lambda: _sized(opened, declared=False, size=760),
+        FilePresenter("application/pdf"),
     )
 
-    error = _resource_answer(server, is_async, "big://")["error"]
+    text = _described_tool(_call(server, is_async, "big"))
 
-    assert error["code"] == -32000
-    assert "produced a file whose base64 is over" in error["message"]
+    assert text.startswith("[big.pdf] is a application/pdf file (at least ")
     assert opened.files[0].closed
+
+
+@_SYNC_AND_ASYNC
+def test_a_resource_file_in_the_envelope_band_is_described_not_refused(is_async: bool) -> None:
+    opened = _Opened()
+    server = _server(config=build_mcp_config(max_result_bytes=CEILING))
+    _big_resource(server, lambda: _sized(opened, declared=False, size=700))
+
+    text = _described_resource(_resource_answer(server, is_async, "big://"))
+
+    assert text.startswith("[big.pdf] is a application/pdf file (at least ")
+    assert opened.files[0].closed
+
+
+def _sweep(answer: Any) -> list[bool]:
+    sent: list[bool] = []
+    for size in range(560, 800):
+        served, text = answer(size)
+        if not served:
+            assert text.startswith("[big.pdf] is a application/pdf file (at least "), size
+        sent.append(served)
+    return sent
+
+
+def test_every_tool_file_size_is_either_sent_whole_or_described() -> None:
+    server = _server(config=build_mcp_config(max_result_bytes=CEILING))
+    held: list[int] = [0]
+    _tool(
+        server,
+        "big",
+        lambda: FileResult(io.BytesIO(b"x" * held[0]), filename="big.pdf"),
+        FilePresenter("application/pdf"),
+    )
+
+    def answer(size: int) -> tuple[bool, str]:
+        held[0] = size
+        result = _call(server, False, "big")
+        assert result.get("isError") is not True, size
+        (block,) = result["content"]
+        if block["type"] == "resource":
+            assert block["resource"]["blob"] == _b64(b"x" * size)
+            return True, ""
+        return False, block["text"]
+
+    sent = _sweep(answer)
+
+    assert sent[0] and not sent[-1]
+    assert sent == sorted(sent, reverse=True)
+
+
+def test_every_resource_file_size_is_either_sent_whole_or_described() -> None:
+    server = _server(config=build_mcp_config(max_result_bytes=CEILING))
+    held: list[int] = [0]
+    _big_resource(server, lambda: FileResult(io.BytesIO(b"x" * held[0]), filename="big.pdf"))
+
+    def answer(size: int) -> tuple[bool, str]:
+        held[0] = size
+        (contents,) = _resource_answer(server, False, "big://")["result"]["contents"]
+        if "blob" in contents:
+            assert contents["blob"] == _b64(b"x" * size)
+            return True, ""
+        return False, contents["text"]
+
+    sent = _sweep(answer)
+
+    assert sent[0] and not sent[-1]
+    assert sent == sorted(sent, reverse=True)
 
 
 # ----- a file the binding cannot carry is refused, and closed -----

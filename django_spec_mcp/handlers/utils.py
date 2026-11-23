@@ -6,6 +6,7 @@ from typing import Any
 
 from django.http import HttpRequest
 from django_service_specs import (
+    UNSET,
     ActionUnavailable,
     ServiceError,
     ServiceValidationError,
@@ -27,6 +28,7 @@ from django_spec_mcp.protocol.types.get_prompt_result import GetPromptResult
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
 from django_spec_mcp.protocol.types.resource_contents import ResourceContents
 from django_spec_mcp.protocol.types.tool_result import ToolResult
+from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourceBinding
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from django_spec_mcp.registry.types.prompt_binding import PromptBinding
 from django_spec_mcp.registry.types.resource_binding import ResourceBinding
@@ -381,18 +383,31 @@ def resource_cache_hints(ttl_ms: int) -> dict[str, Any]:
     return {"ttlMs": ttl_ms, "cacheScope": CacheScope.PRIVATE.value}
 
 
-def resource_read_answer(
-    contents: ResourceContents, binding: ResourceBinding[Any], uri: str, context: MCPCallContext
-) -> dict[str, Any] | JsonRpcError:
-    """The ``resources/read`` answer around one encoded ``contents`` block."""
-    answer: dict[str, Any] = {
+def resource_ceiling(binding: ResourceBinding[Any], config: MCPConfig) -> int | None:
+    """The result ceiling a read of ``binding`` is held to: its own, else the server's."""
+    own = binding.max_result_bytes if isinstance(binding, KernelResourceBinding) else UNSET
+    return resolve_bound(own, config.max_result_bytes)
+
+
+def resource_answer_body(
+    contents: ResourceContents, binding: ResourceBinding[Any], context: MCPCallContext
+) -> dict[str, Any]:
+    """The ``resources/read`` result around one encoded ``contents`` block, before its ceiling."""
+    return {
         "contents": [contents.to_dict()],
         **resource_cache_hints(
             resolve_bound(binding.cache_ttl_ms, context.config.resource_cache_ttl_ms)
         ),
     }
+
+
+def resource_read_answer(
+    contents: ResourceContents, binding: ResourceBinding[Any], uri: str, context: MCPCallContext
+) -> dict[str, Any] | JsonRpcError:
+    """The ``resources/read`` answer around one encoded ``contents`` block."""
+    answer: dict[str, Any] = resource_answer_body(contents, binding, context)
     oversize: str | None = enforce_result_bytes(
-        answer, context.config.max_result_bytes, label=f"Resource {uri!r}"
+        answer, resource_ceiling(binding, context.config), label=f"Resource {uri!r}"
     )
     if oversize is not None:
         return JsonRpcError(JsonRpcErrorCode.SERVER_ERROR, oversize)

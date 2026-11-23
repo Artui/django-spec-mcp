@@ -11,6 +11,34 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+### Added
+
+- **`register_resource(max_result_bytes=)`.** A resource takes its own result ceiling, as
+  a tool does: `UNSET` (the default) defers to `MAX_RESULT_BYTES`, `None` lifts it. It
+  bounds the resource's whole answer, file or not, so a host can send one large file
+  without raising the ceiling for every answer. `KernelResourceBinding` gains the field.
+
+### Changed
+
+- **A file over the result ceiling is described, not refused.** A `FileResult` a tool or a
+  resource returns whose answer would be over `max_result_bytes` is now a successful
+  answer: one text block on `tools/call`, a `text/plain` contents entry on
+  `resources/read`, reading `[name] is a <type> file (<size>), over the <N>-byte limit for
+  returning a file's contents once base64-encoded; it was described rather than sent.`
+  The file is never truncated. Until now a tool answered `isError` with
+  `result_too_large` and a resource `-32000`, both telling the caller to narrow a request
+  that cannot shrink a file. The note follows django-spec-agents' over-limit note, so the
+  two packages describe an oversized file the same way. A host or test that matched the
+  old error text or code matches the note instead.
+
+### Fixed
+
+- **A file just under the ceiling no longer gets the list remedy.** The file was read up
+  to three quarters of the ceiling, leaving no room for the answer around it, so a file
+  in the last couple of hundred bytes below that was refused by the whole-answer check
+  with "add or tighten a filter, lower 'limit'". The read is now budgeted against the
+  answer built around an empty file, so every file is either sent whole or described.
+
 ## [0.15.1] — 2026-11-23
 
 ### Changed

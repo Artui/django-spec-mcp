@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from django_service_specs import PermissionCheck, SelectorSpec
+from django_service_specs import UNSET, PermissionCheck, SelectorSpec, UnsetType
 
 from django_spec_mcp.registry.types.resource_binding import ResourceBinding
 from django_spec_mcp.registry.types.utils import check_resource_file
@@ -22,7 +22,9 @@ class KernelResourceBinding(ResourceBinding[Any]):
     to what the presenter returns: ``JSON`` encodes it and ``TEXT`` serves its
     ``str`` verbatim. A file is declared on the spec: one presenting through
     ``FilePresenter`` is ``BLOB`` of the presenter's type, its ``FileResult``
-    read under the result ceiling and base64-encoded, and a binding declaring
+    read under the result ceiling (``max_result_bytes``, ``UNSET`` deferring to
+    the server's ``MAX_RESULT_BYTES``) and base64-encoded, or described in text
+    when its answer would be over it, and a binding declaring
     otherwise, or ``BLOB`` over a spec presenting no file, is refused when it is
     built, by hand or by ``register_resource``, which derives both.
 
@@ -37,6 +39,7 @@ class KernelResourceBinding(ResourceBinding[Any]):
 
     spec: SelectorSpec
     scopes: tuple[str, ...] | None = None
+    max_result_bytes: int | None | UnsetType = UNSET
     """See ``KernelToolBinding.scopes``. A bare string is one scope, and ``()`` is
     refused, since it reads as a gate and admits every caller."""
     permissions: tuple[PermissionCheck, ...] = field(default=(), init=False)

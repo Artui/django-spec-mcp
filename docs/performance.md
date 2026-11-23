@@ -89,7 +89,7 @@ per tool at registration:
 
 | Bound | Setting | Per-tool | Behaviour over the bound |
 |---|---|---|---|
-| Result size | `MAX_RESULT_BYTES` (5 MiB) | `max_result_bytes=` | `isError` result naming the remedy |
+| Result size | `MAX_RESULT_BYTES` (5 MiB) | `max_result_bytes=` (tools and resources) | `isError` result naming the remedy; a file is described instead |
 | Page size | `MAX_PAGE_SIZE` (100) | `max_page_size=` | `limit` clamped down; `hasNext` says there's more |
 | Row count | `MAX_PAGE_SIZE` (100) | `max_page_size=` | unpaginated: `isError` result; paginated: `page` clamped to the last that exists |
 | Duration | `DISPATCH_TIMEOUT` (60 s) | `dispatch_timeout=` | `isError` result; ASGI only |
@@ -127,6 +127,15 @@ the model can act on ("narrow the filter, lower `limit`") rather than returning
 a shortened payload. A clipped list looks complete to a model, which then
 reasons from it — a wrong answer delivered confidently is worse than a failed
 call.
+
+**A file is bounded by the same ceiling, and described past it.** A file a
+`FilePresenter` tool or resource returns is read only as far as its base64 fits
+`MAX_RESULT_BYTES` with the answer around it. A narrower request cannot shrink
+a file, so past that the call succeeds with a text note in the file's place:
+its name, type and size, the ceiling that fired, and that it was described
+rather than sent. To send one large file without raising the ceiling for every
+answer, raise it for that binding: `max_result_bytes=` on `register_tool` for a
+tool, and on `register_resource` for a resource.
 
 ### What is *not* bounded
 
