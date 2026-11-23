@@ -2948,7 +2948,11 @@ transport what it means on any other:</p>
   through the keyword pool, so it declares the entries it needs by name
   (<code>user</code>, the call's <code>request</code>, a registered <a href="#pool-seeds">seed</a>). A key a
   provider whose return annotation is a <code>TypedDict</code> always fills is the
-  server's, and is left out of the <code>inputSchema</code>.</li>
+  server's, and is left out of the <code>inputSchema</code>, with one exception: a key
+  named like a Validator field (or a <code>many</code> row's field) is a namesake. The
+  field stays the caller's, asked for and validated into <code>data</code>, and the
+  provider's value goes to the service keyword of that name
+  (<a href="https://artui.github.io/django-service-specs/dispatching/#the-services-pool">the kernel's pool order</a>).</li>
 <li><strong><code>idempotent</code></strong> reaches the tool's annotations
   (<a href="#tool-annotations">Tool annotations</a>).</li>
 </ul>
@@ -3236,7 +3240,16 @@ someone, and the server leaves out of the schema what it answers itself:</p>
   <code>properties</code> and <code>required</code>: the tool's
   <a href="#server-arguments"><code>server_arguments</code></a>, a registered
   <a href="#pool-seeds">seed</a>, and a key a typed <code>kwargs=</code> or <code>input_data=</code> provider
-  always fills (the kernel's <code>server_owned_keys</code>);</li>
+  always fills (the kernel's <code>server_owned_keys</code>). A <code>kwargs=</code> key named like
+  a Validator field is not one: the field stays in <code>properties</code> and
+  <code>required</code> as the caller's, and the provider's value reaches only the
+  service keyword
+  (<a href="https://artui.github.io/django-service-specs/dispatching/#the-services-pool">a namesake</a>).
+  A target lookup's typed <code>kwargs=</code> key named like a Validator field or one of
+  the spec's <code>reads</code> is a namesake too: the caller sends it, and the
+  provider's value reaches only the selector. A key the spec's own <code>kwargs=</code>
+  fills named like one of its <code>reads</code>, and a key a typed <code>input_data=</code> always
+  fills, is still the server's;</li>
 <li>a parameter a provider may fill is offered and not required, because
   dispatch does not demand it of the caller (the kernel's
   <code>provider_reached</code>). A key whose <code>TypedDict</code> value admits <code>UnsetType</code> is one
