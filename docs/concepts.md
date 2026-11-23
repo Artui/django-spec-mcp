@@ -97,7 +97,11 @@ transport what it means on any other:
   through the keyword pool, so it declares the entries it needs by name
   (`user`, the call's `request`, a registered [seed](#pool-seeds)). A key a
   provider whose return annotation is a `TypedDict` always fills is the
-  server's, and is left out of the `inputSchema`.
+  server's, and is left out of the `inputSchema`, with one exception: a key
+  named like a Validator field (or a `many` row's field) is a namesake. The
+  field stays the caller's, asked for and validated into `data`, and the
+  provider's value goes to the service keyword of that name
+  ([the kernel's pool order](https://artui.github.io/django-service-specs/dispatching/#the-services-pool)).
 - **`idempotent`** reaches the tool's annotations
   ([Tool annotations](#tool-annotations)).
 
@@ -370,7 +374,13 @@ someone, and the server leaves out of the schema what it answers itself:
   `properties` and `required`: the tool's
   [`server_arguments`](#server-arguments), a registered
   [seed](#pool-seeds), and a key a typed `kwargs=` or `input_data=` provider
-  always fills (the kernel's `server_owned_keys`);
+  always fills (the kernel's `server_owned_keys`). A `kwargs=` key named like
+  a Validator field is not one: the field stays in `properties` and
+  `required` as the caller's, and the provider's value reaches only the
+  service keyword
+  ([a namesake](https://artui.github.io/django-service-specs/dispatching/#the-services-pool)).
+  A key named like one of the spec's `reads`, and any `input_data=` key, is
+  still the server's;
 - a parameter a provider may fill is offered and not required, because
   dispatch does not demand it of the caller (the kernel's
   `provider_reached`). A key whose `TypedDict` value admits `UnsetType` is one

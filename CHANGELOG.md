@@ -11,6 +11,19 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+### Changed
+
+- **A `kwargs=` key named like a Validator field is the caller's.** Adopting
+  django-service-specs 0.35.0's namesake rule: a `ServiceSpec` whose typed `kwargs=`
+  provider fills a key named like one of its Validator fields (or a `many` row's field)
+  registers, where 0.34.1 refused it. The field stays in the tool's `inputSchema`,
+  `properties` and `required`, and is validated into `data` from the caller's value; the
+  service keyword of that name takes the provider's. Every route serves it the same way
+  (`tools/call` on both transports, `call_tool`, `acall_tool`). A key named like a spec
+  `reads` name, and any `input_data=` key, stays server-owned, and a resource's
+  `uri_template` variable is still refused when the server fills it. The
+  `django-service-specs` floor rises to `>=0.35.0`.
+
 ## [0.15.0] — 2026-11-17
 
 ### Added
