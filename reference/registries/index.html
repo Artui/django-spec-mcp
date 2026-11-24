@@ -1282,6 +1282,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#django_spec_mcp.registry.types.kernel_tool_binding.KernelToolBinding.include_total" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        include_total
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#django_spec_mcp.registry.types.kernel_tool_binding.KernelToolBinding.always_listed" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2499,6 +2510,17 @@
     <span class="md-ellipsis">
       
         max_page_size
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#django_spec_mcp.registry.types.kernel_tool_binding.KernelToolBinding.include_total" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        include_total
       
     </span>
   </a>
@@ -3767,6 +3789,33 @@ serves any <code>limit</code> the model asks for.</p>
 <p>Only meaningful with <code>paginate=True</code>: an unpaginated selector has no
 <code>limit</code> to clamp, and clamping its result would drop rows with nothing in
 the payload to say so (see <code>UnboundedListWarning</code>).</p>
+
+    </div>
+
+</div>
+
+<div class="doc doc-object doc-attribute">
+
+
+
+<h3 id="django_spec_mcp.registry.types.kernel_tool_binding.KernelToolBinding.include_total" class="doc doc-heading">
+            <span class="doc doc-object-name doc-attribute-name">include_total</span>
+
+
+  <span class="doc doc-labels">
+      <small class="doc doc-label doc-label-class-attribute"><code>class-attribute</code></small>
+      <small class="doc doc-label doc-label-instance-attribute"><code>instance-attribute</code></small>
+  </span>
+
+<a href="#django_spec_mcp.registry.types.kernel_tool_binding.KernelToolBinding.include_total" class="headerlink" title="Permanent link">&para;</a></h3>
+<div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">include_total</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="n">UnsetType</span> <span class="o">=</span> <span class="n">UNSET</span>
+</span></code></pre></div>
+
+    <div class="doc doc-contents ">
+
+        <p><code>paginate=True</code> tools only: whether the page carries <code>total</code>, the rows
+matched across every page, and the <code>outputSchema</code> requires it. <code>UNSET</code>
+defers to the server's <code>INCLUDE_TOTAL</code>.</p>
 
     </div>
 
@@ -6077,15 +6126,19 @@ caller builds it. <code>None</code>, the default, reads the declaration made to 
 
 <a href="#django_spec_mcp.schema.kernel_tool_output_schema.kernel_tool_output_schema" class="headerlink" title="Permanent link">&para;</a></h2>
 <div class="language-python doc-signature highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nf">kernel_tool_output_schema</span><span class="p">(</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">binding</span><span class="p">:</span> <span class="n">KernelToolBinding</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">handle_description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="n">binding</span><span class="p">:</span> <span class="n">KernelToolBinding</span><span class="p">,</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    <span class="o">*</span><span class="p">,</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    <span class="n">handle_description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    <span class="n">include_total</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-0-6"><a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents first">
 
         <p>The <code>outputSchema</code> a kernel tool can advertise, before the binding's
 <code>include_output_schema</code> decides whether it does.</p>
-<p>The kernel's <code>spec_output_schema</code>, enveloped when the tool paginates and
+<p>The kernel's <code>spec_output_schema</code>, enveloped when the tool paginates (with
+<code>total</code> under <code>include_total</code>) and
 projected through the binding's audience markings, so it names the fields
 the presented payload carries, and with the <code>"null"</code> the kernel admits for
 a spec that can present nothing restated as what this transport serves in

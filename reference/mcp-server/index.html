@@ -2406,14 +2406,15 @@ signature and called directly.</p>
 </span><span id="__span-0-18"><a id="__codelineno-0-18" name="__codelineno-0-18" href="#__codelineno-0-18"></a>    <span class="n">invalidates</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">(),</span>
 </span><span id="__span-0-19"><a id="__codelineno-0-19" name="__codelineno-0-19" href="#__codelineno-0-19"></a>    <span class="n">paginate</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
 </span><span id="__span-0-20"><a id="__codelineno-0-20" name="__codelineno-0-20" href="#__codelineno-0-20"></a>    <span class="n">max_page_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">|</span> <span class="n">UnsetType</span> <span class="o">=</span> <span class="n">UNSET</span><span class="p">,</span>
-</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>    <span class="n">max_result_bytes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">|</span> <span class="n">UnsetType</span> <span class="o">=</span> <span class="n">UNSET</span><span class="p">,</span>
-</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>    <span class="n">dispatch_timeout</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">|</span> <span class="n">UnsetType</span> <span class="o">=</span> <span class="n">UNSET</span><span class="p">,</span>
-</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>    <span class="n">always_listed</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>    <span class="n">rate_limits</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>    <span class="n">scopes</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>    <span class="n">unknown_arguments</span><span class="p">:</span> <span class="n">UnknownArguments</span> <span class="o">=</span> <span class="n">UnknownArguments</span><span class="o">.</span><span class="n">REJECT</span><span class="p">,</span>
-</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>    <span class="n">server_arguments</span><span class="p">:</span> <span class="n">ServerArguments</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">KernelToolBinding</span>
+</span><span id="__span-0-21"><a id="__codelineno-0-21" name="__codelineno-0-21" href="#__codelineno-0-21"></a>    <span class="n">include_total</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="n">UnsetType</span> <span class="o">=</span> <span class="n">UNSET</span><span class="p">,</span>
+</span><span id="__span-0-22"><a id="__codelineno-0-22" name="__codelineno-0-22" href="#__codelineno-0-22"></a>    <span class="n">max_result_bytes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">|</span> <span class="n">UnsetType</span> <span class="o">=</span> <span class="n">UNSET</span><span class="p">,</span>
+</span><span id="__span-0-23"><a id="__codelineno-0-23" name="__codelineno-0-23" href="#__codelineno-0-23"></a>    <span class="n">dispatch_timeout</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">|</span> <span class="n">UnsetType</span> <span class="o">=</span> <span class="n">UNSET</span><span class="p">,</span>
+</span><span id="__span-0-24"><a id="__codelineno-0-24" name="__codelineno-0-24" href="#__codelineno-0-24"></a>    <span class="n">always_listed</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+</span><span id="__span-0-25"><a id="__codelineno-0-25" name="__codelineno-0-25" href="#__codelineno-0-25"></a>    <span class="n">rate_limits</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-26"><a id="__codelineno-0-26" name="__codelineno-0-26" href="#__codelineno-0-26"></a>    <span class="n">scopes</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-27"><a id="__codelineno-0-27" name="__codelineno-0-27" href="#__codelineno-0-27"></a>    <span class="n">unknown_arguments</span><span class="p">:</span> <span class="n">UnknownArguments</span> <span class="o">=</span> <span class="n">UnknownArguments</span><span class="o">.</span><span class="n">REJECT</span><span class="p">,</span>
+</span><span id="__span-0-28"><a id="__codelineno-0-28" name="__codelineno-0-28" href="#__codelineno-0-28"></a>    <span class="n">server_arguments</span><span class="p">:</span> <span class="n">ServerArguments</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+</span><span id="__span-0-29"><a id="__codelineno-0-29" name="__codelineno-0-29" href="#__codelineno-0-29"></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">KernelToolBinding</span>
 </span></code></pre></div>
 
     <div class="doc doc-contents ">
@@ -2430,6 +2431,10 @@ principal the auth backend resolved for the request.</p>
 knob of the other kind of tool is
 refused: <code>paginate</code> / <code>max_page_size</code> on a service tool,
 <code>invalidates</code> on a selector tool.</p>
+<p><code>include_total</code> puts <code>total</code>, the rows matched across every page, after
+<code>hasNext</code> on each page of a <code>paginate=True</code> tool, and into its
+<code>outputSchema</code>; <code>UNSET</code> defers to <code>INCLUDE_TOTAL</code>. Given on any other
+tool, it is refused.</p>
 <p>A <code>LIST</code> selector tool registered without <code>paginate=True</code> warns
 <code>UnboundedListWarning</code>, and <code>REQUIRE_LIST_PAGINATION</code> refuses it. A
 paginated one whose spec declares a read named <code>page</code> or <code>limit</code> is
@@ -3361,8 +3366,8 @@ toolset's rule for its <code>AgentConventions</code>, so one template reads the 
 on both transports.</p>
 <p>Some of these sentences state facts about how the server behaves: that a
 selection applies to each item and never to the envelope, that the
-envelope's keys are <code>items</code>, <code>page</code>, <code>totalPages</code> and <code>hasNext</code>.
-Wording you supply owns keeping those facts true.</p>
+envelope's keys are <code>items</code>, <code>page</code>, <code>totalPages</code> and <code>hasNext</code>, and
+<code>total</code> on a tool that sends it. Wording you supply owns keeping those facts true.</p>
 
 
 <p><span class="doc-section-title">Raises:</span></p>

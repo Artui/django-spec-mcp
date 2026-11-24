@@ -3346,6 +3346,9 @@ shape's description in the <code>inputSchema</code> ends with:</p>
 <p>On a paged result it applies to each item in <code>items</code>, never to the page
 envelope (<code>items</code>, <code>page</code>, <code>totalPages</code>, <code>hasNext</code>).</p>
 </blockquote>
+<p>A tool whose pages <a href="#a-paged-list-can-report-its-count">carry <code>total</code></a> names it
+last in the parenthesis (<code>PAGED_QUERY_PARAM_SCOPE_WITH_TOTAL</code>), while the
+server's wording is still the default; wording a project supplies stands.</p>
 <p>A service tool and an unpaginated list have no page envelope, and get no
 sentence: an unpaginated list's <code>{"items": [...]}</code> holds only the rows.
 The words are the server's <a href="#agent-conventions"><code>conventions.query_param_on_pages</code></a>,
@@ -3776,7 +3779,7 @@ registration order.</p>
 operation: <code>title</code>, <code>icons</code>, <code>annotations</code>, <code>meta</code>, <code>ui</code>,
 <code>content_kind</code>, <code>content_mime_type</code>, <code>include_structured_content</code>,
 <code>include_output_schema</code>, <code>task_policy</code>, <code>invalidates</code> (service tools),
-<code>paginate</code> and <code>max_page_size</code> (selector tools), <code>max_result_bytes</code>,
+<code>paginate</code>, <code>max_page_size</code> and <code>include_total</code> (selector tools), <code>max_result_bytes</code>,
 <code>dispatch_timeout</code>, <code>always_listed</code>, <code>rate_limits</code> and <code>unknown_arguments</code>.
 <code>display_name</code> and <code>display_description</code> are labels for in-process consumers,
 read off the binding and never sent on the wire. Each is also a key
@@ -4197,7 +4200,8 @@ applies to its own <code>AgentConventions</code>, so a template one transport ac
 the same on the other.</p>
 <p>Two of these sentences state facts: that a selection applies to each item and
 never to the envelope, and that the envelope's keys are <code>items</code>, <code>page</code>,
-<code>totalPages</code> and <code>hasNext</code>. Wording you supply owns keeping those facts true.</p>
+<code>totalPages</code> and <code>hasNext</code> (and <code>total</code>, on a tool that sends it). Wording you
+supply owns keeping those facts true.</p>
 <p>The default handle description and missing-argument message are word for word
 the ones the agent toolset in <code>django-spec-agents</code> writes for the same specs, and the handle line gives the same advice as its instructions,
 so a spec served both ways tells the model the same thing on both routes until
@@ -5504,6 +5508,20 @@ is served <code>{"items": [...]}</code> too. The text block carries the same JSO
 with <code>structuredContent</code> turned off, and a <code>RESOURCE_LINK</code> tool's link blocks
 are still one per row; only its <code>structuredContent</code> is wrapped. A list that
 presents nothing is <code>{"items": []}</code>.</p>
+<p><strong id="a-paged-list-can-report-its-count">A paged list can report its count.</strong>
+<code>totalPages</code> says how many pages there are, not how many rows. A client that needs
+the count turns on <code>include_total</code>: per tool with
+<code>register_tool(..., paginate=True, include_total=True)</code>, or for every paged tool with
+<code>SPEC_MCP["INCLUDE_TOTAL"] = True</code>, which a tool's <code>include_total=False</code> overrides.
+Each page then carries <code>total</code>, the rows matched across every page, after <code>hasNext</code>,
+and the tool's <code>outputSchema</code> lists it in <code>properties</code> and <code>required</code>, so a
+validating client sees what it is sent. The number is the count the page already
+takes to work out <code>totalPages</code>, so it costs no query. Off, the default, the envelope
+and its schema are unchanged. <code>include_total</code> given on a service tool, a <code>RETRIEVE</code>
+or a LIST registered without <code>paginate=True</code> is refused at registration: only a page
+has a total to report.</p>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-53-1"><a id="__codelineno-53-1" name="__codelineno-53-1" href="#__codelineno-53-1"></a><span class="p">{</span><span class="nt">&quot;items&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">},</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">}],</span><span class="w"> </span><span class="nt">&quot;page&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;totalPages&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;hasNext&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;total&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">5</span><span class="p">}</span>
+</span></code></pre></div>
 <p><strong>A scalar result is the text block alone.</strong> A tool whose spec has no
 presenter and whose service returns a bool, a number or a string advertises no
 <code>outputSchema</code>, and a scalar has no object form, so its result carries the
@@ -5523,11 +5541,11 @@ keeps its object root and its <code>properties</code> while its <code>required</
 beside the empty object. Which tools can is the kernel's <code>can_present_nothing</code>,
 the question its own output schema asks before admitting <code>null</code>, so this server
 admits <code>{}</code> exactly where the kernel admits <code>null</code>:</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-53-1"><a id="__codelineno-53-1" name="__codelineno-53-1" href="#__codelineno-53-1"></a><span class="p">{</span>
-</span><span id="__span-53-2"><a id="__codelineno-53-2" name="__codelineno-53-2" href="#__codelineno-53-2"></a><span class="w">  </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;object&quot;</span><span class="p">,</span>
-</span><span id="__span-53-3"><a id="__codelineno-53-3" name="__codelineno-53-3" href="#__codelineno-53-3"></a><span class="w">  </span><span class="nt">&quot;properties&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;integer&quot;</span><span class="p">},</span><span class="w"> </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;string&quot;</span><span class="p">}},</span>
-</span><span id="__span-53-4"><a id="__codelineno-53-4" name="__codelineno-53-4" href="#__codelineno-53-4"></a><span class="w">  </span><span class="nt">&quot;anyOf&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">&quot;required&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;id&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;title&quot;</span><span class="p">]},</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;maxProperties&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">}]</span>
-</span><span id="__span-53-5"><a id="__codelineno-53-5" name="__codelineno-53-5" href="#__codelineno-53-5"></a><span class="p">}</span>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-54-1"><a id="__codelineno-54-1" name="__codelineno-54-1" href="#__codelineno-54-1"></a><span class="p">{</span>
+</span><span id="__span-54-2"><a id="__codelineno-54-2" name="__codelineno-54-2" href="#__codelineno-54-2"></a><span class="w">  </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;object&quot;</span><span class="p">,</span>
+</span><span id="__span-54-3"><a id="__codelineno-54-3" name="__codelineno-54-3" href="#__codelineno-54-3"></a><span class="w">  </span><span class="nt">&quot;properties&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;integer&quot;</span><span class="p">},</span><span class="w"> </span><span class="nt">&quot;title&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;string&quot;</span><span class="p">}},</span>
+</span><span id="__span-54-4"><a id="__codelineno-54-4" name="__codelineno-54-4" href="#__codelineno-54-4"></a><span class="w">  </span><span class="nt">&quot;anyOf&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">&quot;required&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;id&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;title&quot;</span><span class="p">]},</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;maxProperties&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">}]</span>
+</span><span id="__span-54-5"><a id="__codelineno-54-5" name="__codelineno-54-5" href="#__codelineno-54-5"></a><span class="p">}</span>
 </span></code></pre></div>
 <p>A full row satisfies the first branch and <code>{}</code> the second, while a non-empty
 row missing a required field satisfies neither. Every other tool keeps a strict
@@ -5613,8 +5631,8 @@ registered on this server as a tool, the answer also carries <code>tool</code>, 
 and <code>arguments</code>, the values the kernel's link binding reads off the row (by the
 target's read names, a <code>HANDLE</code> field, or what a <code>SpecLink</code> names). A model can call the
 next tool with them as they are:</p>
-<div class="language-json highlight"><pre><span></span><code><span id="__span-54-1"><a id="__codelineno-54-1" name="__codelineno-54-1" href="#__codelineno-54-1"></a><span class="p">{</span><span class="nt">&quot;number&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;A-1&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;affordances&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;cancel&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
-</span><span id="__span-54-2"><a id="__codelineno-54-2" name="__codelineno-54-2" href="#__codelineno-54-2"></a><span class="w">  </span><span class="nt">&quot;available&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;tool&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;orders.cancel&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;arguments&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;number&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;A-1&quot;</span><span class="p">}}}}</span>
+<div class="language-json highlight"><pre><span></span><code><span id="__span-55-1"><a id="__codelineno-55-1" name="__codelineno-55-1" href="#__codelineno-55-1"></a><span class="p">{</span><span class="nt">&quot;number&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;A-1&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;affordances&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;cancel&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+</span><span id="__span-55-2"><a id="__codelineno-55-2" name="__codelineno-55-2" href="#__codelineno-55-2"></a><span class="w">  </span><span class="nt">&quot;available&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;tool&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;orders.cancel&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;arguments&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;number&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;A-1&quot;</span><span class="p">}}}}</span>
 </span></code></pre></div>
 <ul>
 <li><strong>The tool is found by identity</strong>, never by equality: the binding holding the very spec

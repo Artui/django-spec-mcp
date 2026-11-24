@@ -1714,6 +1714,11 @@ derivation follows it to <code>private</code>.</p>
 <td>Include the offending <code>arguments</code> dict under <code>value</code> in validation errors: beside <code>detail</code> in a <code>tools/call</code> <code>validation_error</code> result's <code>error</code> object, and in the <code>-32602</code> <code>data</code> that <code>prompts/get</code> and a kernel <code>resources/read</code> answer (for a read, the URI's variables as sent). Off by default — that dict can carry PII or secrets, which would then flow back to the client and into its logs.</td>
 </tr>
 <tr>
+<td><code>INCLUDE_TOTAL</code></td>
+<td><code>False</code></td>
+<td>Every <code>paginate=True</code> tool's page carries <code>total</code>, the rows matched across every page, after <code>hasNext</code>, and its <code>outputSchema</code> requires it. The count is the one the page already takes for <code>totalPages</code>, so it costs no query. A tool's <code>include_total=</code> at registration wins. Off, the page envelope and its schema are unchanged; see <a href="../../concepts/#a-paged-list-can-report-its-count">A paged list can report its count</a>.</td>
+</tr>
+<tr>
 <td><code>PAGE_SIZE</code></td>
 <td><code>100</code></td>
 <td>Maximum items returned by one <strong>listing</strong> call (<code>tools/list</code>, <code>resources/list</code>, <code>resources/templates/list</code>, <code>prompts/list</code>). Clients page with the opaque <code>cursor</code> echoed in the response.</td>
