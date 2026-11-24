@@ -302,7 +302,7 @@ class _OldStyle:
 
 
 class _Awaiting(PermissionCheck):
-    async def has_permission(self, principal: Any, spec: Any) -> bool:  # ty: ignore[invalid-method-override]
+    async def has_permission(self, principal: Any, spec: Any) -> bool:  # ty: ignore[incompatible-method-override]
         return True
 
 

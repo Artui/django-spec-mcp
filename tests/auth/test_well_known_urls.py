@@ -36,7 +36,7 @@ def _root_urlconf(*mounts: tuple[str, MCPServer]) -> types.ModuleType:
     patterns: list[URLPattern] = []
     for prefix, server in mounts:
         patterns += [path(prefix, server.urls), *server.well_known_urls()]
-    module.urlpatterns = patterns  # ty: ignore[unresolved-attribute]
+    module.urlpatterns = patterns  # ty: ignore[missing-attribute]
     return module
 
 

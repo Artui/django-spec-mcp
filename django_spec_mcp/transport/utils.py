@@ -52,8 +52,8 @@ def allowed_methods(view: View) -> list[str]:
 
 def exempt_endpoint(view: Callable[..., Any]) -> Any:
     """Mark a view function as opting out of CSRF and of ``LoginRequiredMiddleware``."""
-    view.csrf_exempt = True  # ty: ignore[unresolved-attribute]
-    view.login_required = False  # ty: ignore[unresolved-attribute]
+    view.csrf_exempt = True  # ty: ignore[missing-attribute]
+    view.login_required = False  # ty: ignore[missing-attribute]
     return view
 
 

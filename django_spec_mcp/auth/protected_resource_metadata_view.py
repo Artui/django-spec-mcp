@@ -56,8 +56,8 @@ class ProtectedResourceMetadataView(View):
         the middleware reads them off the resolved callable.
         """
         view = super().as_view(**initkwargs)
-        view.csrf_exempt = True  # ty: ignore[unresolved-attribute]
-        view.login_required = False  # ty: ignore[unresolved-attribute]
+        view.csrf_exempt = True  # ty: ignore[missing-attribute]
+        view.login_required = False  # ty: ignore[missing-attribute]
         return view
 
     @staticmethod
