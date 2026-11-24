@@ -47,8 +47,9 @@ The root still exports what it exported from `constants`, apart from four names
 that are gone: `UnknownArguments` (import it from the kernel), and
 `ArgumentBinding`, `OutputFormat` and `ToolKind`, which the sections below
 cover.
-`django-service-specs` **0.35.0** is the kernel release the package
-requires: from 0.35.0 a typed `kwargs` key named like a Validator field is a
+`django-service-specs` **0.37.0** is the kernel release the package
+requires: from 0.37.0 `paginate_output` and `spec_output_schema` take `include_total`,
+from 0.35.0 a typed `kwargs` key named like a Validator field is a
 namesake the caller still sends, from 0.34.0 it binds an affordance's link to the row (`link_bindings`, `row_links`),
 which names the next tool on each affordance answer, and, from 0.33.0, ships the file result (`FilePresenter`, `FileResult`) this package
 serves, lets a `many` service spec declare a `collection_selector_spec`, and,

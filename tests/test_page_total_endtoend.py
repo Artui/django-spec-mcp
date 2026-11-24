@@ -118,7 +118,9 @@ def test_a_tool_turns_the_server_wide_switch_off(client: Client) -> None:
 
 
 @pytest.mark.django_db
-def test_the_server_wide_switch_leaves_an_unpaged_list_alone(client: Client) -> None:
+def test_the_configured_switch_reaches_a_paged_list_and_leaves_an_unpaged_one(
+    client: Client,
+) -> None:
     _seed(1)
     server = MCPServer(
         name="t",
@@ -129,11 +131,15 @@ def test_the_server_wide_switch_leaves_an_unpaged_list_alone(client: Client) -> 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         server.register_tool(_list_spec(), name="invoices.list")
+        server.register_tool(_list_spec(), name="invoices.paged", paginate=True)
     with override_settings(ROOT_URLCONF=urlconf_for(server)):
         caller = KernelClient(client)
         caller.initialize()
-        (tool,) = caller.post("tools/list", {}).json()["result"]["tools"]
-        result = caller.call("invoices.list")["result"]
+        tools = {t["name"]: t for t in caller.post("tools/list", {}).json()["result"]["tools"]}
+        unpaged = caller.call("invoices.list")["result"]["structuredContent"]
+        paged = caller.call("invoices.paged")["result"]["structuredContent"]
 
-    assert "total" not in tool["outputSchema"]["properties"]
-    assert list(result["structuredContent"]) == ["items"]
+    assert "total" not in tools["invoices.list"]["outputSchema"]["properties"]
+    assert list(unpaged) == ["items"]
+    assert "total" in tools["invoices.paged"]["outputSchema"]["required"]
+    assert paged["total"] == 1
