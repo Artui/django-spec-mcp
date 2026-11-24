@@ -397,7 +397,7 @@ def test_a_subscription_hands_the_check_the_call_context_the_read_does() -> None
     request = HttpRequest()
     request.method = "POST"
     request.user = None
-    request.marked = True  # ty: ignore[unresolved-attribute]
+    request.marked = True  # ty: ignore[missing-attribute]
     granted, _ = grant_subscription(
         SubscriptionFilter(resource_uris=("marked://1",)),
         call_context(server, http_request=request),

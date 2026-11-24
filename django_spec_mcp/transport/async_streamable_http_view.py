@@ -141,7 +141,7 @@ class AsyncStreamableHttpView(View):
         """Build the view function, opted out of CSRF and of the login redirect."""
         return exempt_endpoint(super().as_view(**initkwargs))
 
-    async def dispatch(  # ty: ignore[invalid-method-override]
+    async def dispatch(  # ty: ignore[incompatible-method-override]
         self, request: HttpRequest, *args: Any, **kwargs: Any
     ) -> HttpResponseBase:
         refused: JsonResponse | None = not_acceptable(request, _ANSWERS_WITH)
