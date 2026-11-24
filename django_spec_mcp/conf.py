@@ -52,6 +52,7 @@ DEFAULTS: dict[str, Any] = {
     # database statement timeout.
     "DISPATCH_TIMEOUT": 60.0,
     "PAGE_SIZE": 100,
+    "INCLUDE_TOTAL": False,
     # Off by default: the arguments dict can carry PII or secrets.
     "INCLUDE_VALIDATION_VALUE": False,
     # ``ServiceValidationError`` is never recorded — it is client input

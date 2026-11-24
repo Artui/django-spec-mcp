@@ -97,6 +97,33 @@ def test_a_retrieve_tool_refuses_each_page_knob(knob: dict[str, Any]) -> None:
         _server().register_tool(_selector(SelectorKind.RETRIEVE), name="t", **knob)
 
 
+_OFF_A_PAGE = "include_total belongs to a LIST selector tool registered with paginate=True"
+
+
+@pytest.mark.parametrize("value", [True, False])
+@pytest.mark.parametrize(
+    "spec",
+    [_service(), _selector(SelectorKind.RETRIEVE), _selector()],
+    ids=["service", "retrieve", "unpaged-list"],
+)
+def test_include_total_is_refused_off_a_paged_list(spec: Any, value: bool) -> None:
+    with pytest.raises(ImproperlyConfigured, match=_OFF_A_PAGE):
+        _server().register_tool(spec, name="t", include_total=value)
+
+
+def test_register_tools_refuses_include_total_off_a_paged_list() -> None:
+    registry = SpecRegistry()
+    registry.register("t", _selector())
+    with pytest.raises(ImproperlyConfigured, match=_OFF_A_PAGE):
+        _server().register_tools(registry, overrides={"t": {"include_total": True}})
+
+
+def test_a_paged_list_tool_takes_include_total() -> None:
+    binding = _server().register_tool(_selector(), name="t", paginate=True, include_total=True)
+
+    assert binding.include_total is True
+
+
 def test_a_list_tool_takes_the_page_knobs() -> None:
     binding = _server().register_tool(_selector(), name="t", paginate=True, max_page_size=5)
     assert (binding.paginate, binding.max_page_size, binding.kind) == (True, 5, SelectorKind.LIST)

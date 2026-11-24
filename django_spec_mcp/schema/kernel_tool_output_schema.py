@@ -10,12 +10,13 @@ from django_spec_mcp.types.tool_content_kind import ToolContentKind
 
 
 def kernel_tool_output_schema(
-    binding: KernelToolBinding, *, handle_description: str | None
+    binding: KernelToolBinding, *, handle_description: str | None, include_total: bool = False
 ) -> dict[str, Any] | None:
     """The ``outputSchema`` a kernel tool can advertise, before the binding's
     ``include_output_schema`` decides whether it does.
 
-    The kernel's ``spec_output_schema``, enveloped when the tool paginates and
+    The kernel's ``spec_output_schema``, enveloped when the tool paginates (with
+    ``total`` under ``include_total``) and
     projected through the binding's audience markings, so it names the fields
     the presented payload carries, and with the ``"null"`` the kernel admits for
     a spec that can present nothing restated as what this transport serves in
@@ -32,6 +33,7 @@ def kernel_tool_output_schema(
         paginate=binding.paginate,
         projection=binding.audience_projection,
         handle_description=handle_description,
+        include_total=include_total,
     )
     if schema is None:
         return None

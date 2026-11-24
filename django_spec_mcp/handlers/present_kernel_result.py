@@ -51,6 +51,7 @@ def present_kernel_result(
             paginated=binding.paginate,
             config=config,
             conventions=conventions,
+            include_total=page is not None and page.include_total,
         )
         return refusal
 

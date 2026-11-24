@@ -494,6 +494,10 @@ shape's description in the `inputSchema` ends with:
 > On a paged result it applies to each item in `items`, never to the page
 > envelope (`items`, `page`, `totalPages`, `hasNext`).
 
+A tool whose pages [carry `total`](#a-paged-list-can-report-its-count) names it
+last in the parenthesis (`PAGED_QUERY_PARAM_SCOPE_WITH_TOTAL`), while the
+server's wording is still the default; wording a project supplies stands.
+
 A service tool and an unpaginated list have no page envelope, and get no
 sentence: an unpaginated list's `{"items": [...]}` holds only the rows.
 The words are the server's [`conventions.query_param_on_pages`](#agent-conventions),
@@ -923,7 +927,7 @@ Beyond `description=`, `scopes=` and [`server_arguments=`](#server-arguments),
 operation: `title`, `icons`, `annotations`, `meta`, `ui`,
 `content_kind`, `content_mime_type`, `include_structured_content`,
 `include_output_schema`, `task_policy`, `invalidates` (service tools),
-`paginate` and `max_page_size` (selector tools), `max_result_bytes`,
+`paginate`, `max_page_size` and `include_total` (selector tools), `max_result_bytes`,
 `dispatch_timeout`, `always_listed`, `rate_limits` and `unknown_arguments`.
 `display_name` and `display_description` are labels for in-process consumers,
 read off the binding and never sent on the wire. Each is also a key
@@ -1368,7 +1372,8 @@ the same on the other.
 
 Two of these sentences state facts: that a selection applies to each item and
 never to the envelope, and that the envelope's keys are `items`, `page`,
-`totalPages` and `hasNext`. Wording you supply owns keeping those facts true.
+`totalPages` and `hasNext` (and `total`, on a tool that sends it). Wording you
+supply owns keeping those facts true.
 
 The default handle description and missing-argument message are word for word
 the ones the agent toolset in `django-spec-agents` writes for the same specs, and the handle line gives the same advice as its instructions,
@@ -2563,6 +2568,23 @@ is served `{"items": [...]}` too. The text block carries the same JSON, even
 with `structuredContent` turned off, and a `RESOURCE_LINK` tool's link blocks
 are still one per row; only its `structuredContent` is wrapped. A list that
 presents nothing is `{"items": []}`.
+
+**A paged list can report its count.**{ #a-paged-list-can-report-its-count }
+`totalPages` says how many pages there are, not how many rows. A client that needs
+the count turns on `include_total`: per tool with
+`register_tool(..., paginate=True, include_total=True)`, or for every paged tool with
+`SPEC_MCP["INCLUDE_TOTAL"] = True`, which a tool's `include_total=False` overrides.
+Each page then carries `total`, the rows matched across every page, after `hasNext`,
+and the tool's `outputSchema` lists it in `properties` and `required`, so a
+validating client sees what it is sent. The number is the count the page already
+takes to work out `totalPages`, so it costs no query. Off, the default, the envelope
+and its schema are unchanged. `include_total` given on a service tool, a `RETRIEVE`
+or a LIST registered without `paginate=True` is refused at registration: only a page
+has a total to report.
+
+```json
+{"items": [{"id": 1}, {"id": 2}], "page": 1, "totalPages": 3, "hasNext": true, "total": 5}
+```
 
 **A scalar result is the text block alone.** A tool whose spec has no
 presenter and whose service returns a bool, a number or a string advertises no

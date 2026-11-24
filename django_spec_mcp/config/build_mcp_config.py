@@ -43,6 +43,7 @@ def build_mcp_config(
     max_page_size: int | None | UnsetType = UNSET,
     dispatch_timeout: float | None | UnsetType = UNSET,
     page_size: int | None = None,
+    include_total: bool | None = None,
     include_validation_value: bool | None = None,
     record_service_exceptions: bool | None = None,
     filter_listings_by_permissions: bool | None = None,
@@ -84,6 +85,7 @@ def build_mcp_config(
         max_page_size=_nullable_int(_bound(max_page_size, "MAX_PAGE_SIZE")),
         dispatch_timeout=_nullable_float(_bound(dispatch_timeout, "DISPATCH_TIMEOUT")),
         page_size=int(_given(page_size, "PAGE_SIZE")),
+        include_total=bool(_given(include_total, "INCLUDE_TOTAL")),
         include_validation_value=bool(_given(include_validation_value, "INCLUDE_VALIDATION_VALUE")),
         record_service_exceptions=bool(
             _given(record_service_exceptions, "RECORD_SERVICE_EXCEPTIONS")

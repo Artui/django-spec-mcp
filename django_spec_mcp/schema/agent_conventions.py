@@ -40,6 +40,15 @@ sees. Written here rather than supplied by the kernel for the reason the module
 docstring gives: it is a prompt, and the wording belongs to the transport that
 knows a model is reading."""
 
+PAGED_QUERY_PARAM_SCOPE_WITH_TOTAL = (
+    "On a paged result it applies to each item in `items`, never to the page "
+    "envelope (`items`, `page`, `totalPages`, `hasNext`, `total`)."
+)
+"""``PAGED_QUERY_PARAM_SCOPE`` for a tool whose pages carry ``total``.
+
+Served in its place when the tool's ``include_total`` is on and the server's
+``query_param_on_pages`` is still the default; wording a project supplies stands."""
+
 HANDLE_LINE = (
     "Fields described as opaque identifiers are for other tool calls, not for the "
     "reader: pass them to other tools that ask for one; refer to records by their "

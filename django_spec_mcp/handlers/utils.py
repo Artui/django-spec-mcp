@@ -32,6 +32,10 @@ from django_spec_mcp.registry.types.kernel_resource_binding import KernelResourc
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
 from django_spec_mcp.registry.types.prompt_binding import PromptBinding
 from django_spec_mcp.registry.types.resource_binding import ResourceBinding
+from django_spec_mcp.schema.agent_conventions import (
+    PAGED_QUERY_PARAM_SCOPE,
+    PAGED_QUERY_PARAM_SCOPE_WITH_TOTAL,
+)
 from django_spec_mcp.schema.types.agent_conventions import AgentConventions
 from django_spec_mcp.schema.utils import end_sentence
 from django_spec_mcp.types.cache_scope import CacheScope
@@ -142,6 +146,19 @@ def render_convention(template: str | None) -> str | None:
     return None if template is None else template.format()
 
 
+def includes_total(binding: KernelToolBinding, config: MCPConfig) -> bool:
+    """Whether ``binding``'s pages carry ``total``: one answer for the schema and the payload."""
+    return bool(resolve_bound(binding.include_total, config.include_total))
+
+
+def paged_scope(conventions: AgentConventions, *, include_total: bool) -> str | None:
+    """The scope sentence of a paged tool, naming ``total`` when the default wording stands."""
+    template = conventions.query_param_on_pages
+    if include_total and template == PAGED_QUERY_PARAM_SCOPE:
+        return PAGED_QUERY_PARAM_SCOPE_WITH_TOTAL
+    return render_convention(template)
+
+
 def missing_arguments_message(names: Iterable[str], conventions: AgentConventions) -> str:
     """The server's ``missing_arguments`` sentence for a call that left ``names`` out."""
     listed = ", ".join(f"`{name}`" for name in names)
@@ -180,6 +197,7 @@ def rendering_refusal_result(
     paginated: bool,
     config: MCPConfig,
     conventions: AgentConventions,
+    include_total: bool = False,
 ) -> ToolResult:
     """The ``validation_error`` result for a refusal of ``supplied`` while rendering."""
     if not supplied:
@@ -190,7 +208,7 @@ def rendering_refusal_result(
         f"{_name_list(supplied)} was rejected while rendering the result: "
         f"{_readable_detail(detail)}"
     )
-    scope = render_convention(conventions.query_param_on_pages)
+    scope = paged_scope(conventions, include_total=include_total)
     if paginated and scope is not None:
         message = f"{message} {scope}"
     return build_error_tool_result(
@@ -449,8 +467,10 @@ __all__ = [
     "consume_rate_limits",
     "effective_rate_limits",
     "enforce_result_ceiling",
+    "includes_total",
     "judge_tool_permissions",
     "missing_arguments_message",
+    "paged_scope",
     "prompt_get_answer",
     "rate_limited",
     "render_convention",

@@ -100,6 +100,7 @@ it wrong is a cross-tenant disclosure with a cache in front of it.
 | `INCLUDE_STRUCTURED_CONTENT` | `True` | Emit `structuredContent` on tool results. |
 | `INCLUDE_OUTPUT_SCHEMA` | `True` | Advertise `outputSchema` on tool definitions. |
 | `INCLUDE_VALIDATION_VALUE` | `False` | Include the offending `arguments` dict under `value` in validation errors: beside `detail` in a `tools/call` `validation_error` result's `error` object, and in the `-32602` `data` that `prompts/get` and a kernel `resources/read` answer (for a read, the URI's variables as sent). Off by default — that dict can carry PII or secrets, which would then flow back to the client and into its logs. |
+| `INCLUDE_TOTAL` | `False` | Every `paginate=True` tool's page carries `total`, the rows matched across every page, after `hasNext`, and its `outputSchema` requires it. The count is the one the page already takes for `totalPages`, so it costs no query. A tool's `include_total=` at registration wins. Off, the page envelope and its schema are unchanged; see [A paged list can report its count](../concepts.md#a-paged-list-can-report-its-count). |
 | `PAGE_SIZE` | `100` | Maximum items returned by one **listing** call (`tools/list`, `resources/list`, `resources/templates/list`, `prompts/list`). Clients page with the opaque `cursor` echoed in the response. |
 
 !!! warning "One combination is a spec violation"

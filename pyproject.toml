@@ -72,7 +72,7 @@ dependencies = [
     # raise changes what the kernel refuses: the two routes reach one spec, and
     # with only one raised the same selector can be a not-found on one route and
     # an error on the other.
-    "django-service-specs>=0.35.0",
+    "django-service-specs>=0.37.0",
 ]
 
 [project.optional-dependencies]
@@ -241,7 +241,7 @@ root = ["./django_spec_mcp"]
 # block under a new dated heading. Run via `uvx bump-my-version` (no
 # permanent dependency added to the project).
 [tool.bumpversion]
-current_version = "0.16.0"
+current_version = "0.17.0"
 allow_dirty = false
 commit = false
 tag = false

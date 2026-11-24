@@ -17,7 +17,11 @@ from django_service_specs import (
 
 from django_spec_mcp import MCPServer
 from django_spec_mcp.auth.backends.allow_any_backend import AllowAnyBackend
-from django_spec_mcp.schema.agent_conventions import PAGED_QUERY_PARAM_SCOPE
+from django_spec_mcp.schema.agent_conventions import (
+    PAGED_QUERY_PARAM_SCOPE,
+    PAGED_QUERY_PARAM_SCOPE_WITH_TOTAL,
+)
+from django_spec_mcp.schema.types.agent_conventions import AgentConventions
 
 OPEN = [Unrestricted()]
 
@@ -30,8 +34,13 @@ class _Widget:
 _QUERY = Parameter("query", "string", help="django-restql fieldset, e.g. {id, name}")
 
 
-def _schema(spec: Any, **knobs: Any) -> dict[str, Any]:
-    server = MCPServer(name="t", auth_backend=AllowAnyBackend(), session_store=None)
+def _schema(spec: Any, conventions: AgentConventions | None = None, **knobs: Any) -> dict[str, Any]:
+    server = MCPServer(
+        name="t",
+        auth_backend=AllowAnyBackend(),
+        session_store=None,
+        **({"conventions": conventions} if conventions is not None else {}),
+    )
     server.register_tool(spec, name="t", description="A tool.", **knobs)
     listed: Any = server.list_tools(user=None)
     (tool,) = listed["tools"]
@@ -81,6 +90,24 @@ def test_the_sentence_stands_alone_when_nothing_was_declared() -> None:
     schema = _schema(_selector(SelectorKind.LIST, shapes=Parameters([bare])), paginate=True)
 
     assert schema["properties"]["fields"]["description"] == PAGED_QUERY_PARAM_SCOPE
+
+
+@pytest.mark.parametrize(
+    ("conventions", "expected"),
+    [
+        (None, PAGED_QUERY_PARAM_SCOPE_WITH_TOTAL),
+        (AgentConventions(query_param_on_pages="Per row."), "Per row."),
+    ],
+    ids=["default", "custom"],
+)
+def test_a_tool_sending_total_names_it_in_the_default_sentence(
+    conventions: AgentConventions | None, expected: str
+) -> None:
+    spec = _selector(SelectorKind.LIST, shapes=Parameters([Parameter("fields", "string")]))
+
+    schema = _schema(spec, conventions, paginate=True, include_total=True)
+
+    assert schema["properties"]["fields"]["description"] == expected
 
 
 def test_a_paged_tools_reads_are_advertised_as_declared() -> None:

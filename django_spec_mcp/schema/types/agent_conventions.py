@@ -42,8 +42,8 @@ class AgentConventions:
 
     Some of these sentences state facts about how the server behaves: that a
     selection applies to each item and never to the envelope, that the
-    envelope's keys are ``items``, ``page``, ``totalPages`` and ``hasNext``.
-    Wording you supply owns keeping those facts true.
+    envelope's keys are ``items``, ``page``, ``totalPages`` and ``hasNext``, and
+    ``total`` on a tool that sends it. Wording you supply owns keeping those facts true.
 
     Raises:
         ImproperlyConfigured: A field uses a placeholder it does not accept, is
