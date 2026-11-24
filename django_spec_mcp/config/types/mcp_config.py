@@ -139,6 +139,12 @@ class MCPConfig:
     """How many elicitation rounds one call may take before it fails instead of
     asking again, for a service whose condition the answer never clears."""
 
+    include_total: bool = False
+    """Whether a ``paginate=True`` tool's page carries ``total``, the rows matched
+    across every page, after ``hasNext``, and its ``outputSchema`` requires it.
+    From the count the page already takes, so it costs no query. Off by default;
+    per-binding overrides win."""
+
     @property
     def modern_protocol_versions(self) -> tuple[str, ...]:
         """The configured versions that carry per-request metadata."""

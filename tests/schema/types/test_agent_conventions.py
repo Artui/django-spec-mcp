@@ -7,7 +7,11 @@ import pytest
 from django.core.exceptions import ImproperlyConfigured
 
 from django_spec_mcp import AgentConventions
-from django_spec_mcp.schema import HANDLE_DESCRIPTION, PAGED_QUERY_PARAM_SCOPE
+from django_spec_mcp.schema import (
+    HANDLE_DESCRIPTION,
+    PAGED_QUERY_PARAM_SCOPE,
+    PAGED_QUERY_PARAM_SCOPE_WITH_TOTAL,
+)
 from django_spec_mcp.schema.types import agent_conventions
 
 _FIELDS = [field.name for field in fields(AgentConventions)]
@@ -41,6 +45,13 @@ def test_the_paged_scope_sentence_is_unchanged_byte_for_byte() -> None:
 
     assert AgentConventions().query_param_on_pages == expected
     assert expected == PAGED_QUERY_PARAM_SCOPE
+
+
+def test_the_scope_sentence_with_total_names_it_last() -> None:
+    assert PAGED_QUERY_PARAM_SCOPE_WITH_TOTAL == (
+        "On a paged result it applies to each item in `items`, never to the page "
+        "envelope (`items`, `page`, `totalPages`, `hasNext`, `total`)."
+    )
 
 
 def test_the_missing_arguments_message_is_the_toolsets() -> None:

@@ -44,6 +44,7 @@ def kernel_spec_to_tool(
     invalidates: tuple[str, ...],
     paginate: bool,
     max_page_size: int | None | UnsetType,
+    include_total: bool | UnsetType,
     max_result_bytes: int | None | UnsetType,
     dispatch_timeout: float | None | UnsetType,
     always_listed: bool,
@@ -59,6 +60,7 @@ def kernel_spec_to_tool(
             f"SelectorSpec, not {type(spec).__module__}.{type(spec).__qualname__}."
         )
     _refuse_other_kinds_knobs(name, spec, invalidates, paginate, max_page_size)
+    _refuse_total_off_a_page(name, paginate, include_total)
     if unknown_arguments is UnknownArguments.PASSTHROUGH:
         raise ImproperlyConfigured(
             f"Tool {name!r}: UnknownArguments.PASSTHROUGH is not honoured by the kernel, "
@@ -94,6 +96,7 @@ def kernel_spec_to_tool(
         invalidates=invalidates,
         paginate=paginate,
         max_page_size=max_page_size,
+        include_total=include_total,
         max_result_bytes=max_result_bytes,
         dispatch_timeout=dispatch_timeout,
         always_listed=always_listed,
@@ -129,6 +132,15 @@ def _refuse_other_kinds_knobs(
         raise ImproperlyConfigured(
             f"Tool {name!r}: paginate and max_page_size belong to a LIST selector "
             "tool; a RETRIEVE answers one row."
+        )
+
+
+def _refuse_total_off_a_page(name: str, paginate: bool, include_total: bool | UnsetType) -> None:
+    """Refuse ``include_total`` on a tool with no page to count; ``paginate`` is LIST-only."""
+    if include_total is not UNSET and not paginate:
+        raise ImproperlyConfigured(
+            f"Tool {name!r}: include_total belongs to a LIST selector tool registered "
+            "with paginate=True; only a page carries a total."
         )
 
 

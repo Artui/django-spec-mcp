@@ -101,6 +101,10 @@ class KernelToolBinding:
     Only meaningful with ``paginate=True``: an unpaginated selector has no
     ``limit`` to clamp, and clamping its result would drop rows with nothing in
     the payload to say so (see ``UnboundedListWarning``)."""
+    include_total: bool | UnsetType = UNSET
+    """``paginate=True`` tools only: whether the page carries ``total``, the rows
+    matched across every page, and the ``outputSchema`` requires it. ``UNSET``
+    defers to the server's ``INCLUDE_TOTAL``."""
     max_result_bytes: int | None | UnsetType = UNSET
     dispatch_timeout: float | None | UnsetType = UNSET
     always_listed: bool = False

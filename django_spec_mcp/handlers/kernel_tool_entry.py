@@ -4,7 +4,12 @@ from typing import Any
 
 from django_spec_mcp.handlers.kernel_utils import call_context
 from django_spec_mcp.handlers.types.context import MCPCallContext
-from django_spec_mcp.handlers.utils import render_convention, resolve_bound
+from django_spec_mcp.handlers.utils import (
+    includes_total,
+    paged_scope,
+    render_convention,
+    resolve_bound,
+)
 from django_spec_mcp.output.resolve_structured_output import resolve_structured_output
 from django_spec_mcp.protocol.types.tool import Tool
 from django_spec_mcp.registry.types.kernel_tool_binding import KernelToolBinding
@@ -15,6 +20,7 @@ from django_spec_mcp.schema.kernel_tool_output_schema import kernel_tool_output_
 
 def kernel_tool_entry(binding: KernelToolBinding, context: MCPCallContext) -> dict[str, Any]:
     """A kernel tool's ``tools/list`` entry."""
+    include_total = includes_total(binding, context.config)
     emit_output_schema, _emit_structured_content = resolve_structured_output(
         include_output_schema_override=binding.include_output_schema,
         include_structured_content_override=binding.include_structured_content,
@@ -26,6 +32,7 @@ def kernel_tool_entry(binding: KernelToolBinding, context: MCPCallContext) -> di
         kernel_tool_output_schema(
             binding,
             handle_description=render_convention(context.conventions.handle_field_description),
+            include_total=include_total,
         )
         if emit_output_schema
         else None
@@ -43,7 +50,7 @@ def kernel_tool_entry(binding: KernelToolBinding, context: MCPCallContext) -> di
             binding,
             max_page_size=resolve_bound(binding.max_page_size, context.config.max_page_size),
             pool_seeds=context.pool_seeds,
-            query_param_on_pages=render_convention(context.conventions.query_param_on_pages),
+            query_param_on_pages=paged_scope(context.conventions, include_total=include_total),
             call_context=call_context(None, binding.name),
         ),
         output_schema=output_schema,

@@ -275,6 +275,7 @@ class MCPServer:
         invalidates: tuple[str, ...] | list[str] = (),
         paginate: bool = False,
         max_page_size: int | None | UnsetType = UNSET,
+        include_total: bool | UnsetType = UNSET,
         max_result_bytes: int | None | UnsetType = UNSET,
         dispatch_timeout: float | None | UnsetType = UNSET,
         always_listed: bool = False,
@@ -297,6 +298,11 @@ class MCPServer:
         knob of the other kind of tool is
         refused: ``paginate`` / ``max_page_size`` on a service tool,
         ``invalidates`` on a selector tool.
+
+        ``include_total`` puts ``total``, the rows matched across every page, after
+        ``hasNext`` on each page of a ``paginate=True`` tool, and into its
+        ``outputSchema``; ``UNSET`` defers to ``INCLUDE_TOTAL``. Given on any other
+        tool, it is refused.
 
         A ``LIST`` selector tool registered without ``paginate=True`` warns
         ``UnboundedListWarning``, and ``REQUIRE_LIST_PAGINATION`` refuses it. A
@@ -370,6 +376,7 @@ class MCPServer:
             invalidates=invalidates,
             paginate=paginate,
             max_page_size=max_page_size,
+            include_total=include_total,
             max_result_bytes=max_result_bytes,
             dispatch_timeout=dispatch_timeout,
             always_listed=always_listed,
@@ -402,6 +409,7 @@ class MCPServer:
         invalidates: tuple[str, ...] | list[str] = (),
         paginate: bool = False,
         max_page_size: int | None | UnsetType = UNSET,
+        include_total: bool | UnsetType = UNSET,
         max_result_bytes: int | None | UnsetType = UNSET,
         dispatch_timeout: float | None | UnsetType = UNSET,
         always_listed: bool = False,
@@ -437,6 +445,7 @@ class MCPServer:
             invalidates=tuple(invalidates),
             paginate=paginate,
             max_page_size=max_page_size,
+            include_total=include_total,
             max_result_bytes=max_result_bytes,
             dispatch_timeout=dispatch_timeout,
             always_listed=always_listed,

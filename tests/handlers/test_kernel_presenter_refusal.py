@@ -23,6 +23,7 @@ from django_spec_mcp.handlers.handle_resources_read_async import handle_resource
 from django_spec_mcp.handlers.handle_tools_call import handle_tools_call
 from django_spec_mcp.handlers.handle_tools_call_async import handle_tools_call_async
 from django_spec_mcp.protocol.types.json_rpc_error import JsonRpcError
+from django_spec_mcp.schema.agent_conventions import PAGED_QUERY_PARAM_SCOPE_WITH_TOTAL
 from django_spec_mcp.schema.types.agent_conventions import AgentConventions
 from django_spec_mcp.types.json_rpc_error_code import JsonRpcErrorCode
 from tests.utils import make_server, tool_error
@@ -148,6 +149,26 @@ def test_on_a_paged_tool_the_servers_conventions_word_the_sentence(
         "message": f"`fields` was rejected while rendering the result: {REFUSAL}{suffix}",
         "detail": {"fields": [REFUSAL]},
     }
+
+
+@_PATHS
+@pytest.mark.parametrize(
+    ("conventions", "suffix"),
+    [
+        (None, f" {PAGED_QUERY_PARAM_SCOPE_WITH_TOTAL}"),
+        (AgentConventions(query_param_on_pages="Per row."), " Per row."),
+        (AgentConventions(query_param_on_pages=None), ""),
+    ],
+    ids=["default", "custom", "none-drops-it"],
+)
+def test_a_tool_sending_total_names_it_unless_the_wording_is_the_projects(
+    path: str, conventions: AgentConventions | None, suffix: str
+) -> None:
+    server = _server(paginate=True, include_total=True, conventions=conventions)
+    error = tool_error(_call(server, {"fields": ["total"]}, path))
+    assert error["message"] == (
+        f"`fields` was rejected while rendering the result: {REFUSAL}{suffix}"
+    )
 
 
 @_PATHS

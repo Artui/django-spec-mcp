@@ -47,6 +47,7 @@ from django_spec_mcp.handlers.types.exception_handler import ExceptionHandler
 from django_spec_mcp.handlers.types.kernel_input_round import KernelInputRound
 from django_spec_mcp.handlers.types.kernel_refusal_scene import KernelRefusalScene
 from django_spec_mcp.handlers.utils import (
+    includes_total,
     resolve_bound,
     resource_answer_body,
     resource_ceiling,
@@ -113,6 +114,7 @@ class KernelPageRequest:
     page: int
     limit: int
     max_page_size: int | None
+    include_total: bool = False
 
 
 def call_context(request: Any, action: str) -> dict[str, Any]:
@@ -394,6 +396,7 @@ def page_request(
         page=_coerce_int(arguments.get("page"), default=1),
         limit=_coerce_int(arguments.get("limit"), default=DEFAULT_PAGE_SIZE),
         max_page_size=resolve_bound(binding.max_page_size, config.max_page_size),
+        include_total=includes_total(binding, config),
     )
 
 
@@ -410,7 +413,11 @@ def present_tool_result(
             return []
         return presented
     output: OutputPage = paginate_output(
-        result.value, page=page.page, limit=page.limit, max_page_size=page.max_page_size
+        result.value,
+        page=page.page,
+        limit=page.limit,
+        max_page_size=page.max_page_size,
+        include_total=page.include_total,
     )
     rows = _present_for_agent(binding, replace(result, value=output.items), tools)
     return output.envelope(rows)

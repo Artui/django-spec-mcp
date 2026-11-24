@@ -11,6 +11,29 @@ carries; releases up to 0.54.0 are in
 
 ## [Unreleased]
 
+### Added
+
+- **A paged LIST tool can report `total`.** `register_tool(..., include_total=)` and the
+  new `INCLUDE_TOTAL` setting (default `False`) put `total`, the rows matched across every
+  page, after `hasNext` on each page of a `paginate=True` tool, and list it in the tool's
+  `outputSchema` `properties` and `required`. The count is the one the page already takes
+  for `totalPages`, so it costs no query. A tool's `include_total` (`UNSET` by default)
+  defers to the setting, which `MCPConfig.include_total` and
+  `build_mcp_config(include_total=)` carry; `KernelToolBinding` gains the field and
+  `register_tools` takes it in `overrides`. Given on a service tool, a `RETRIEVE` or a
+  LIST without `paginate=True`, it is refused with `ImproperlyConfigured`. Off, every
+  schema and payload is unchanged.
+- **`PAGED_QUERY_PARAM_SCOPE_WITH_TOTAL`**, exported from `django_spec_mcp.schema`: the
+  scope sentence with `total` last in its parenthesis. A tool sending `total` is served it
+  in place of `PAGED_QUERY_PARAM_SCOPE`, in its `inputSchema` and in the render-time
+  `validation_error`, while `conventions.query_param_on_pages` is the default; wording a
+  project supplies stands. `PAGED_QUERY_PARAM_SCOPE` keeps its bytes.
+
+### Changed
+
+- **The `django-service-specs` floor is `>=0.37.0`**, the release whose `paginate_output`
+  and `spec_output_schema` take `include_total`.
+
 ## [0.16.0] — 2026-11-23
 
 ### Added
